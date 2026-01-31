@@ -1,7 +1,7 @@
 """Interactive prompts for CLI workflows (legacy functionality)."""
 
 from typing import List, Dict, Optional
-from helpers_logging import print_info, print_success, print_warning, print_error, print_header, Colors
+from cdc_generator.helpers.helpers_logging import print_info, print_success, print_warning, print_error, print_header, Colors
 
 
 def prompt_select(prompt: str, options: List[str], allow_empty: bool = False) -> Optional[str]:

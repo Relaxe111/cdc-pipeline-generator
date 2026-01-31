@@ -11,15 +11,45 @@ ENV PATH="/opt/mssql-tools18/bin:/workspace:${PATH}"
 # Set working directory
 WORKDIR /workspace
 
-# Install Python dependencies
-# Note: pyproject.toml and setup.py will be available via volume mount
-RUN pip install --no-cache-dir     pyyaml     ruamel.yaml     pyodbc     pgcli     jinja2     pytest     black     mypy     pylint
+# Copy package files for installation
+COPY pyproject.toml setup.py ./
+COPY cdc_generator/ ./cdc_generator/
+
+# Install Python dependencies and the cdc-pipeline-generator package
+# This includes all runtime dependencies, dev dependencies, and type stubs
+RUN pip install --no-cache-dir \
+    # Core dependencies (from pyproject.toml)
+    pyyaml>=6.0 \
+    jinja2>=3.1 \
+    pymssql>=2.2 \
+    psycopg2-binary>=2.9 \
+    # Additional utilities
+    ruamel.yaml \
+    pyodbc \
+    pgcli \
+    # Development tools
+    pytest>=7.0 \
+    black>=23.0 \
+    ruff>=0.1 \
+    mypy>=1.0 \
+    pylint \
+    # Type stubs for static type checking
+    types-PyYAML \
+    types-pymssql \
+    && pip install -e .
 
 # Set Python to unbuffered mode for better logging
 ENV PYTHONUNBUFFERED=1
 
 # Create Fish config directory
 RUN mkdir -p /root/.config/fish/completions
+
+# Copy Fish completions for cdc command
+COPY cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set Fish as default shell for root user
 RUN chsh -s /usr/bin/fish root
@@ -30,6 +60,9 @@ RUN echo 'exec fish' >> /root/.bashrc
 # Set Fish as default shell
 ENV SHELL=/usr/bin/fish
 SHELL ["/usr/bin/fish", "-c"]
+
+# Set entrypoint to ensure package is always installed
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Default command - keep container running
 CMD ["tail", "-f", "/dev/null"]

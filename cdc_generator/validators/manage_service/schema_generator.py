@@ -6,8 +6,9 @@ import re
 import yaml
 from pathlib import Path
 from typing import Optional, List, Dict
-from helpers_logging import print_header, print_info, print_success, print_error, Colors
-from service_config import load_service_config, load_customer_config
+from cdc_generator.helpers.helpers_logging import print_header, print_info, print_success, print_error, Colors
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVICES_DIR = PROJECT_ROOT / '2-services'
@@ -953,7 +954,13 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
         user = expand_env(mssql.get('user', 'sa'))
         password = expand_env(mssql.get('password', ''))
         
-        conn = pymssql.connect(server=host, port=port, database=database, user=user, password=password)
+        conn = create_mssql_connection(
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password
+        )
         cursor = conn.cursor()
         
         for i, table in enumerate(tables, 1):

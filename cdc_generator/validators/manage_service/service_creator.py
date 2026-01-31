@@ -2,7 +2,7 @@
 
 import yaml
 from pathlib import Path
-from helpers_logging import print_header, print_success
+from cdc_generator.helpers.helpers_logging import print_header, print_success
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 

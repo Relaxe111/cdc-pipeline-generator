@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List, Dict, Optional
 from ruamel.yaml import YAML
-from helpers_logging import print_error
+from cdc_generator.helpers.helpers_logging import print_error
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVICES_DIR = PROJECT_ROOT / "2-services"
@@ -58,7 +58,7 @@ def detect_service_mode(service: str) -> str:
     - New: server_group field (adopus=db-per-tenant, asma=db-shared)
     - Legacy: mode field (direct value)
     """
-    from service_config import load_service_config
+    from cdc_generator.helpers.service_config import load_service_config
     try:
         config = load_service_config(service)
         

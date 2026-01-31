@@ -2,8 +2,8 @@
 
 import os
 from typing import Dict, Optional, Any
-from helpers_logging import print_error
-from service_config import load_service_config, load_customer_config
+from cdc_generator.helpers.helpers_logging import print_error
+from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 
 
 def expand_env_vars(value: Any) -> Any:
@@ -22,7 +22,7 @@ def expand_env_vars(value: Any) -> Any:
     return os.path.expandvars(value)
 
 
-def get_service_db_config(service: str, env: str = 'nonprod') -> Optional[Dict]:
+def get_service_db_config(service: str, env: str = 'nonprod') -> Optional[Dict[str, Any]]:
     """Get database connection configuration for a service.
     
     Args:
@@ -67,7 +67,7 @@ def get_service_db_config(service: str, env: str = 'nonprod') -> Optional[Dict]:
         return None
 
 
-def get_connection_params(db_config: Dict, db_type: str) -> Optional[Dict]:
+def get_connection_params(db_config: Dict[str, Any], db_type: str) -> Optional[Dict[str, Any]]:
     """Extract connection parameters from database config.
     
     Args:

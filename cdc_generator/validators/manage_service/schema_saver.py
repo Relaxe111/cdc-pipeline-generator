@@ -3,8 +3,9 @@
 import os
 import yaml
 from pathlib import Path
-from typing import List, Dict
-from helpers_logging import print_info, print_error, print_success
+from typing import Any, List, Dict
+from cdc_generator.helpers.helpers_logging import print_info, print_error, print_success
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from .db_inspector_common import get_service_db_config, get_connection_params
 
 try:
@@ -23,7 +24,7 @@ except ImportError:
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
-def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: List[Dict], conn_params: Dict) -> Dict:
+def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: List[Dict[str, Any]], conn_params: Dict[str, Any]) -> Dict[str, Any]:
     """Save detailed MSSQL table schema to YAML.
     
     Args:
@@ -40,8 +41,8 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: List
         print_error("pymssql not installed")
         return {}
     
-    conn = pymssql.connect(
-        server=conn_params['host'],
+    conn = create_mssql_connection(
+        host=conn_params['host'],
         port=conn_params['port'],
         database=conn_params['database'],
         user=conn_params['user'],
@@ -105,7 +106,7 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: List
     return tables_data
 
 
-def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: List[Dict], conn_params: Dict) -> Dict:
+def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: List[Dict[str, Any]], conn_params: Dict[str, Any]) -> Dict[str, Any]:
     """Save detailed PostgreSQL table schema to YAML.
     
     Args:
@@ -187,7 +188,7 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: L
     return tables_data
 
 
-def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict], db_type: str) -> bool:
+def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict[str, Any]], db_type: str) -> bool:
     """Save detailed table schema information to YAML file.
     
     Args:

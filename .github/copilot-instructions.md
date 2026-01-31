@@ -4,15 +4,23 @@
 
 **Abstract, reusable library** for generating Redpanda Connect CDC pipelines.
 
-**CRITICAL:** Must remain **pattern-agnostic** to support both implementations:
+**CRITICAL:** All scripts and logic live here. Implementations (adopus/asma) contain ONLY YAML files and generated artifacts.
+
+**Generator provides:**
+- All `cdc` CLI commands (`manage-service`, `manage-server-group`, etc.)
+- Pipeline generation and validation
+- Database inspection and schema management
+- Configuration helpers and utilities
+
+**Must remain pattern-agnostic** to support both implementations:
 
 | server_group_type | Architecture | Example |
 |-------------------|--------------|---------|
 | `db-per-tenant` | One server → N pipelines (1 per customer) | adopus-cdc-pipeline |
 | `db-shared` | One server → 1 pipeline (all customers) | asma-cdc-pipeline |
 
-**Generator scope:** Pipeline generation logic  
-**Implementation scope:** Connections, credentials, infrastructure  
+**Generator scope:** ALL scripts, pipeline generation logic, CLI commands  
+**Implementation scope:** YAML configuration files, generated artifacts, .env files  
 **Detailed architecture:** See `docs/ARCHITECTURE.md`
 
 ---
@@ -63,6 +71,60 @@ if service.name == "adopus":  # Never check service names!
 - Docstrings for public APIs
 - Descriptive error handling
 - Logging (not print, except CLI output)
+
+### Python Type Safety (CRITICAL)
+**⚠️ NEVER use `# type: ignore` or suppression patterns**
+
+When Pylance reports type errors:
+1. ✅ **Fix source functions first (our code):** If the error comes from importing our own functions, fix the type hints in the source file
+2. ✅ **Add proper type hints:** Use `list[str]`, `Dict[str, Any]`, `Optional[List[Dict[str, Any]]]`, etc.
+3. ✅ **Use `cast()` for external libraries only:** Only use `cast()` when dealing with third-party code you can't modify
+4. ✅ **Install type stubs:** `types-PyYAML`, `types-pymssql`, etc. for third-party libraries
+5. ✅ **Fix import paths:** Use proper package imports (e.g., `from cdc_generator.helpers.helpers_logging import`)
+6. ❌ **NEVER suppress errors:** Don't use `type: ignore`, `# noqa`, or try/except ImportError just to silence warnings
+
+**Resolution Priority (most preferred to least):**
+1. **Fix our source code** - Update function signatures with proper types (`Dict[str, Any]` instead of `Dict`)
+2. **Install type stubs** - For third-party packages (`types-PyYAML`, `types-pymssql`)
+3. **Use `cast()` sparingly** - Only for external library return values you can't control
+4. **NEVER suppress** - Never use `type: ignore` or similar suppressions
+
+**Benefits of proper typing:**
+- Catches bugs at development time
+- Better IDE support and autocomplete
+- Safer refactoring
+- Self-documenting code
+
+**Example:**
+```python
+# ❌ WRONG - Casting our own function's return type
+from cdc_generator.helpers.service_config import load_service_config
+config = cast(Dict[str, Any], load_service_config(service))  # Bad - we own this code!
+
+# ✅ CORRECT - Fix the source function instead
+# In service_config.py:
+def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:  # Fixed at source
+
+# ❌ WRONG - Suppressing type errors
+from helpers_logging import print_error  # type: ignore
+
+# ✅ CORRECT - Proper import path
+from cdc_generator.helpers.helpers_logging import print_error
+
+# ✅ ACCEPTABLE - Using cast for third-party library (when type stub unavailable)
+from typing import cast, Any
+import some_external_lib
+result = cast(dict[str, Any], some_external_lib.get_data())
+```
+
+**Type stubs in Dockerfile:**
+All type stubs must be in `Dockerfile.dev`:
+```dockerfile
+RUN pip install --no-cache-dir \
+    types-PyYAML \
+    types-pymssql \
+    ...
+```
 
 ---
 

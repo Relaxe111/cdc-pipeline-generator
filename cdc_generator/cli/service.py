@@ -9,61 +9,46 @@ Usage:
     cdc manage-service --service adopus --add-table Actor         # Add table to service
     cdc manage-service --service adopus --remove-table Test       # Remove table from service
     cdc manage-service --service adopus --generate-validation --all  # Generate JSON schema
-
-Package Structure:
-    manage-service.py (CLI - 170 lines)
-    └── manage_service/ (package - 1,700+ lines)
-        ├── __init__.py               - Package exports
-        ├── config.py                 - Service config loading/saving
-        ├── mssql_inspector.py        - MSSQL database inspection
-        ├── table_operations.py       - Add/remove table operations
-        ├── validation.py             - Config & hierarchy validation
-        ├── service_creator.py        - Scaffold new services
-        ├── schema_generator.py       - JSON Schema generation from DB
-        ├── interactive.py            - CLI prompts (legacy)
-        └── interactive_mode.py       - Full interactive workflow (legacy)
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
-import yaml
-from typing import List, Dict, Optional
-from helpers import load_env_file
-from helpers_logging import Colors, print_info, print_success, print_warning, print_error, print_header
-from cdc_generator.helpers.service_config import load_service_config, load_customer_config
+from typing import Any
 
-# Import modular functions from manage_service package
-sys.path.insert(0, str(Path(__file__).parent))
-from manage_service import (
-    inspect_mssql_schema,
-    inspect_postgres_schema,
+try:
+    import yaml 
+except ImportError:
+    yaml = None  
+
+from cdc_generator.helpers.helpers_logging import (
+    Colors,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
+    print_error,
+)
+from cdc_generator.validators.manage_service.mssql_inspector import inspect_mssql_schema  
+from cdc_generator.validators.manage_service.postgres_inspector import inspect_postgres_schema  
+from cdc_generator.validators.manage_service.table_operations import (
     add_table_to_service,
     remove_table_from_service,
+)
+from cdc_generator.validators.manage_service.validation import (
     validate_service_config,
     validate_hierarchy_no_duplicates,
-    create_service,
-    generate_service_validation_schema,
-    run_interactive_mode
 )
-from manage_service.schema_saver import save_detailed_schema
-
-# Load environment variables
-load_env_file()
-
-# Try to import pymssql
-try:
-    import pymssql
-    HAS_PYMSSQL = True
-except ImportError:
-    HAS_PYMSSQL = False
+from cdc_generator.validators.manage_service.service_creator import create_service
+from cdc_generator.validators.manage_service.schema_generator import generate_service_validation_schema
+from cdc_generator.validators.manage_service.interactive_mode import run_interactive_mode  
+from cdc_generator.validators.manage_service.schema_saver import save_detailed_schema  
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Interactive CDC table mapping manager")
     parser.add_argument("--service", help="Service name")
     parser.add_argument("--create-service", action="store_true", help="Create a new service configuration file")
@@ -102,8 +87,7 @@ def main():
         # Auto-detect server-group from server-groups.yaml
         server_group = None
         server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
-        if server_groups_file.exists():
-            import yaml
+        if server_groups_file.exists() and yaml is not None:
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
                 for sg in server_groups_data.get('server_groups', []):
@@ -158,16 +142,15 @@ def main():
     # Handle inspect operation (auto-detect database type)
     if args.service and args.inspect:
         # Load service config to detect database type
-        from cdc_generator.helpers.service_config import load_service_config
-        config = load_service_config(args.service)
-        server_group = config.get('server_group')
+        from cdc_generator.helpers.service_config import load_service_config  
+        config: dict[str, Any] = load_service_config(args.service)  
+        server_group: str | None = config.get('server_group')  
         
         # Determine database type from server group
         db_type = None
         if server_group:
             server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
-            if server_groups_file.exists():
-                import yaml
+            if server_groups_file.exists() and yaml is not None:
                 with open(server_groups_file) as f:
                     server_groups_data = yaml.safe_load(f)
                     for sg in server_groups_data.get('server_groups', []):
@@ -189,7 +172,7 @@ def main():
         server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
         allowed_schemas = None
         
-        if server_groups_file.exists():
+        if server_groups_file.exists() and yaml is not None:
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
                 for sg in server_groups_data.get('server_groups', []):
@@ -227,9 +210,9 @@ def main():
         
         # Call appropriate inspector based on database type
         if db_type == 'mssql':
-            tables = inspect_mssql_schema(args.service, args.env)
+            tables = inspect_mssql_schema(args.service, args.env)  
         elif db_type == 'postgres':
-            tables = inspect_postgres_schema(args.service, args.env)
+            tables = inspect_postgres_schema(args.service, args.env)  
         else:
             print_error(f"Unsupported database type: {db_type}")
             return 1
@@ -238,10 +221,10 @@ def main():
             # Filter by allowed schemas from server-groups.yaml
             if args.all:
                 # When --all, filter to only allowed schemas
-                tables = [t for t in tables if t['TABLE_SCHEMA'] in allowed_schemas]
+                tables = [t for t in tables if t['TABLE_SCHEMA'] in allowed_schemas]  
             else:
                 # When specific schema, filter to that schema only
-                tables = [t for t in tables if t['TABLE_SCHEMA'] == schema]
+                tables = [t for t in tables if t['TABLE_SCHEMA'] == schema]  
             
             if not tables:
                 if args.all:
@@ -252,19 +235,19 @@ def main():
             
             if args.save:
                 # Save detailed schema using modular function
-                if save_detailed_schema(args.service, args.env, schema, tables, db_type):
+                if save_detailed_schema(args.service, args.env, schema, tables, db_type):  
                     return 0
                 return 1
             else:
                 # Just list tables
-                print_success(f"Found {len(tables)} tables:\n")
+                print_success(f"Found {len(tables)} tables:\n")  
                 current_schema = None
-                for table in tables:
-                    tbl_schema = table['TABLE_SCHEMA']
+                for table in tables:  # type: ignore[union-attr]
+                    tbl_schema = table['TABLE_SCHEMA']  
                     if tbl_schema != current_schema:
                         print(f"\n{Colors.CYAN}[{tbl_schema}]{Colors.RESET}")
-                        current_schema = tbl_schema
-                    print(f"  {table['TABLE_NAME']} ({table['COLUMN_COUNT']} columns)")
+                        current_schema = tbl_schema  
+                    print(f"  {table['TABLE_NAME']} ({table['COLUMN_COUNT']} columns)")  
         return 0 if tables else 1
     
     # Handle add-source-tables (bulk) operation

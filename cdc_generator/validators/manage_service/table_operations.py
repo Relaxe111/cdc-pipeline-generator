@@ -3,8 +3,8 @@
 from typing import List, Optional
 import yaml
 from pathlib import Path
-from helpers_logging import print_success, print_warning, print_error, print_info
-from service_config import load_service_config
+from cdc_generator.helpers.helpers_logging import print_success, print_warning, print_error, print_info
+from cdc_generator.helpers.service_config import load_service_config
 from .config import save_service_config
 
 

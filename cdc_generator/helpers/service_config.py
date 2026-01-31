@@ -6,7 +6,7 @@ Supports both new service-based format (2-services/) and legacy format (2-custom
 
 from pathlib import Path
 from ruamel.yaml import YAML
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Initialize ruamel.yaml to preserve comments
 yaml = YAML()
@@ -19,7 +19,7 @@ def get_project_root() -> Path:
     return Path(__file__).parent.parent
 
 
-def load_service_config(service_name: str = "adopus") -> dict:
+def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:
     """Load service configuration from 2-services/, preserving comments."""
     services_dir = get_project_root() / "2-services"
     service_path = services_dir / f"{service_name}.yaml"
@@ -131,7 +131,7 @@ def merge_customer_config(service_config: dict, customer_name: str) -> dict:
     return merged
 
 
-def load_customer_config(customer: str) -> dict:
+def load_customer_config(customer: str) -> Dict[str, Any]:
     """Load customer configuration - supports both new and legacy format.
     
     Priority:

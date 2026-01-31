@@ -1,7 +1,7 @@
 """PostgreSQL schema inspection for CDC pipeline."""
 
-from typing import List, Dict, Optional
-from helpers_logging import print_error, print_info
+from typing import Any, List, Dict, Optional
+from cdc_generator.helpers.helpers_logging import print_error, print_info
 from .db_inspector_common import get_service_db_config, get_connection_params
 
 try:
@@ -12,7 +12,7 @@ except ImportError:
     HAS_PSYCOPG2 = False
 
 
-def inspect_postgres_schema(service: str, env: str = 'nonprod') -> Optional[List[Dict]]:
+def inspect_postgres_schema(service: str, env: str = 'nonprod') -> Optional[List[Dict[str, Any]]]:
     """Inspect PostgreSQL schema to get list of available tables.
     
     Args:

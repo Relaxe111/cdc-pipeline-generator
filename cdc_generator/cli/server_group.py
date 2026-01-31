@@ -21,11 +21,10 @@ from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
-from helpers import load_env_file
-from helpers_logging import print_header, print_info, print_error
+from cdc_generator.helpers.helpers_logging import print_header, print_info, print_error, print_warning
 
 # Import from modular package
-from manage_server_group import (
+from cdc_generator.validators.manage_server_group import (
     load_schema_exclude_patterns,
     load_database_exclude_patterns,
     list_server_groups,
@@ -37,9 +36,8 @@ from manage_server_group import (
 )
 
 
-def main():
-    # Load environment variables first
-    load_env_file()
+def main() -> int:
+    # Note: .env loading handled by implementations, not generator library
     
     parser = argparse.ArgumentParser(description="Manage server groups")
     parser.add_argument("--update", action="store_true", help="Update server group from database inspection")
@@ -76,7 +74,6 @@ def main():
             for pattern in patterns:
                 print_info(f"  • {pattern}")
         else:
-            from helpers_logging import print_warning
             print_warning("No schema exclude patterns defined")
             print_info("Add patterns to the comment in server-groups.yaml:")
             print_info("  # schema_exclude_patterns: ['hdb_catalog', 'hdb_views', 'sessions']")

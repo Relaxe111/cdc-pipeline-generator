@@ -9,11 +9,43 @@ Shared utilities for MSSQL operations:
 """
 
 import os
-import yaml
 from pathlib import Path
+from typing import Any, Optional, cast
+
+import yaml # type: ignore[import-not-found]
+import pymssql # type: ignore[import-not-found]
 
 
-def get_mssql_connection(env='nonprod', database=None):
+def create_mssql_connection(
+    host: str,
+    port: int,
+    database: str,
+    user: str,
+    password: str
+) -> Any:
+    """
+    Create a pymssql connection with proper typing.
+    
+    Args:
+        host: Server hostname
+        port: Server port
+        database: Database name
+        user: Username
+        password: Password
+        
+    Returns:
+        pymssql connection object
+    """
+    return cast(Any, pymssql.connect( # type: ignore[misc]
+        server=host,
+        port=port,
+        database=database,
+        user=user,
+        password=password
+    ))
+
+
+def get_mssql_connection(env: str = 'nonprod', database: Optional[str] = None) -> tuple[Any, str]:
     """
     Create connection to MSSQL database.
     
@@ -24,22 +56,28 @@ def get_mssql_connection(env='nonprod', database=None):
     Returns:
         Tuple of (connection, database_name)
     """
-    import pymssql
-    
     env_upper = env.upper()
     
     # Try environment-specific variables first, then fall back to generic
     host = os.getenv(f'MSSQL_{env_upper}_HOST', os.getenv('MSSQL_HOST'))
     port = os.getenv(f'MSSQL_{env_upper}_PORT', os.getenv('MSSQL_PORT', '1433'))
-    db_name = database or os.getenv(f'MSSQL_{env_upper}_DATABASE', os.getenv('MSSQL_DATABASE', 'AdOpusTest'))
+    db_name: str = database if database is not None else (
+        os.getenv(f'MSSQL_{env_upper}_DATABASE') or 
+        os.getenv('MSSQL_DATABASE') or 
+        'AdOpusTest'
+    )
     user = os.getenv(f'MSSQL_{env_upper}_USER', os.getenv('MSSQL_USER'))
     password = os.getenv(f'MSSQL_{env_upper}_PASSWORD', os.getenv('MSSQL_PASSWORD'))
     
     if not host:
         raise ValueError(f"MSSQL_{env_upper}_HOST or MSSQL_HOST environment variable not set")
+    if not user:
+        raise ValueError(f"MSSQL_{env_upper}_USER or MSSQL_USER environment variable not set")
+    if not password:
+        raise ValueError(f"MSSQL_{env_upper}_PASSWORD or MSSQL_PASSWORD environment variable not set")
     
-    conn = pymssql.connect(
-        server=host,
+    conn = create_mssql_connection(
+        host=host,
         port=int(port),
         database=db_name,
         user=user,
@@ -49,7 +87,7 @@ def get_mssql_connection(env='nonprod', database=None):
     return conn, db_name
 
 
-def load_table_definition(table_name):
+def load_table_definition(table_name: str) -> Optional[dict[str, Any]]:
     """Load table definition from adopus-db-schema/*.yaml"""
     # Find adopus-db-schema directory
     current_dir = Path(__file__).parent
@@ -70,50 +108,60 @@ def load_table_definition(table_name):
         return yaml.safe_load(f)
 
 
-def get_pk_columns(table_def):
+def get_pk_columns(table_def: dict[str, Any]) -> list[str]:
     """Extract primary key columns from table definition"""
-    pk_cols = []
+    pk_cols: list[str] = []
     
     # Check for top-level primary_key field (adopus-db-schema format)
     if 'primary_key' in table_def:
-        pk = table_def['primary_key']
+        pk: Any = table_def['primary_key']
         if isinstance(pk, list):
-            pk_cols = pk
+            # Cast to list of Any first, then convert to strings
+            pk_list = cast(list[Any], pk)
+            pk_cols = [str(item) for item in pk_list]
         elif isinstance(pk, str):
             pk_cols = [pk]
     
     # Check for fields array with primaryKey property (generated format)
     if not pk_cols:
-        for field in table_def.get('fields', []):
-            if field.get('primaryKey'):
-                pk_cols.append(field.get('mssql'))
+        fields = table_def.get('fields', [])
+        if isinstance(fields, list):
+            fields_typed = cast(list[Any], fields)
+            for field in fields_typed:
+                if isinstance(field, dict):
+                    field_dict = cast(dict[str, Any], field)
+                    if field_dict.get('primaryKey'):
+                        mssql_name: Any = field_dict.get('mssql')
+                        if mssql_name is not None:
+                            pk_cols.append(str(mssql_name))
     
     return pk_cols
 
 
-def get_insert_columns(table_def, pk_cols):
+def get_insert_columns(table_def: dict[str, Any], pk_cols: list[str]) -> tuple[list[str], bool]:
     """
     Build list of columns for INSERT statement.
     Excludes IDENTITY columns, includes required nullable=false columns.
     Handles both adopus-db-schema format (columns) and generated format (fields).
     """
-    first_pk_field = None
-    fields_list = table_def.get('fields', table_def.get('columns', []))
+    first_pk_field: Optional[dict[str, Any]] = None
+    raw_fields = table_def.get('fields') or table_def.get('columns', [])
+    fields_list: list[dict[str, Any]] = cast(list[dict[str, Any]], raw_fields if isinstance(raw_fields, list) else [])
     
     if pk_cols:
         # Find first PK field - check both 'mssql' (generated) and 'name' (source) formats
         for field in fields_list:
-            field_name = field.get('mssql', field.get('name'))
+            field_name: str = str(field.get('mssql') or field.get('name') or '')
             if field_name == pk_cols[0]:
                 first_pk_field = field
                 break
     
-    first_pk_is_identity = first_pk_field.get('identity', False) if first_pk_field else False
+    first_pk_is_identity: bool = bool(first_pk_field.get('identity', False)) if first_pk_field else False
     
-    insert_cols = []
+    insert_cols: list[str] = []
     for field in fields_list:
-        col_name = field.get('mssql', field.get('name'))  # Support both formats
-        is_nullable = field.get('nullable', True)
+        col_name: str = str(field.get('mssql') or field.get('name') or '')
+        is_nullable: bool = bool(field.get('nullable', True))
         
         # Skip IDENTITY columns
         if field.get('identity'):
@@ -130,7 +178,7 @@ def get_insert_columns(table_def, pk_cols):
     return insert_cols, first_pk_is_identity
 
 
-def get_value_for_type(field_type, col_name, prefix='CDCTest'):
+def get_value_for_type(field_type: str, col_name: str, prefix: str = 'CDCTest') -> str:
     """Generate appropriate test value for given SQL field type"""
     field_type = field_type.upper()
     
@@ -146,7 +194,9 @@ def get_value_for_type(field_type, col_name, prefix='CDCTest'):
         return 'NULL'
 
 
-def generate_insert_values(table_def, pk_cols, insert_cols, first_pk_is_identity, test_id_base, num_records, prefix='CDCTest'):
+def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert_cols: list[str], 
+                          first_pk_is_identity: bool, test_id_base: int, num_records: int, 
+                          prefix: str = 'CDCTest') -> tuple[list[str], Optional[int], Optional[int]]:
     """
     Generate value sets for INSERT statements.
     Handles both adopus-db-schema format (columns) and generated format (fields).
@@ -156,23 +206,24 @@ def generate_insert_values(table_def, pk_cols, insert_cols, first_pk_is_identity
         first_pk_val: First PK value (for non-IDENTITY PKs)
         last_pk_val: Last PK value (for non-IDENTITY PKs)
     """
-    all_value_sets = []
-    first_pk_val = None
-    last_pk_val = None
+    all_value_sets: list[str] = []
+    first_pk_val: Optional[int] = None
+    last_pk_val: Optional[int] = None
     
-    fields_list = table_def.get('fields', table_def.get('columns', []))
+    raw_fields = table_def.get('fields') or table_def.get('columns', [])
+    fields_list: list[dict[str, Any]] = cast(list[dict[str, Any]], raw_fields if isinstance(raw_fields, list) else [])
     
     for record_num in range(num_records):
-        test_id = test_id_base + record_num
-        record_vals = []
+        test_id: int = test_id_base + record_num
+        record_vals: list[str] = []
         
         if first_pk_is_identity:
             # Generate values for non-PK columns only
             for col_name in insert_cols:
                 for field in fields_list:
-                    field_name = field.get('mssql', field.get('name'))
+                    field_name: str = str(field.get('mssql') or field.get('name') or '')
                     if field_name == col_name:
-                        field_type = field.get('type', '')
+                        field_type: str = str(field.get('type', ''))
                         record_vals.append(get_value_for_type(field_type, col_name, prefix))
                         break
         else:
@@ -180,29 +231,29 @@ def generate_insert_values(table_def, pk_cols, insert_cols, first_pk_is_identity
             for col_name in insert_cols:
                 if col_name in pk_cols:
                     # PK value
-                    pk_idx = pk_cols.index(col_name)
+                    pk_idx: int = pk_cols.index(col_name)
                     for field in fields_list:
-                        field_name = field.get('mssql', field.get('name'))
+                        field_name = str(field.get('mssql') or field.get('name') or '')
                         if field_name == col_name:
-                            field_type = field.get('type', '')
+                            field_type = str(field.get('type', ''))
                             if 'VARCHAR' in field_type.upper() or 'NVARCHAR' in field_type.upper():
-                                val = f"'{prefix}_{record_num}_{pk_idx}'" if pk_idx > 0 else f"'{prefix}_{record_num}'"
+                                val: str = f"'{prefix}_{record_num}_{pk_idx}'" if pk_idx > 0 else f"'{prefix}_{record_num}'"
                                 record_vals.append(val)
                             else:
-                                val = test_id + pk_idx if pk_idx > 0 else test_id
-                                record_vals.append(str(val))
+                                val_int: int = test_id + pk_idx if pk_idx > 0 else test_id
+                                record_vals.append(str(val_int))
                                 if pk_idx == 0:
                                     if record_num == 0:
-                                        first_pk_val = val
+                                        first_pk_val = val_int
                                     if record_num == num_records - 1:
-                                        last_pk_val = val
+                                        last_pk_val = val_int
                             break
                 else:
                     # Non-PK value
                     for field in fields_list:
-                        field_name = field.get('mssql', field.get('name'))
+                        field_name = str(field.get('mssql') or field.get('name') or '')
                         if field_name == col_name:
-                            field_type = field.get('type', '')
+                            field_type = str(field.get('type', ''))
                             record_vals.append(get_value_for_type(field_type, col_name, prefix))
                             break
         
@@ -211,7 +262,9 @@ def generate_insert_values(table_def, pk_cols, insert_cols, first_pk_is_identity
     return all_value_sets, first_pk_val, last_pk_val
 
 
-def build_batch_insert_sql(table_name, insert_cols, value_sets, first_pk_is_identity, pk_value=None, is_last_batch=False, is_first_batch=False):
+def build_batch_insert_sql(table_name: str, insert_cols: list[str], value_sets: list[str], 
+                          first_pk_is_identity: bool, pk_value: Optional[int] = None, 
+                          is_last_batch: bool = False, is_first_batch: bool = False) -> str:
     """
     Build INSERT SQL statement with optional PK return.
     
@@ -237,7 +290,7 @@ def build_batch_insert_sql(table_name, insert_cols, value_sets, first_pk_is_iden
             return f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES {values_clause};"
 
 
-def discover_cdc_tables():
+def discover_cdc_tables() -> list[str]:
     """Discover all tables with CDC definitions from adopus-db-schema/*.yaml"""
     # Find adopus-db-schema directory
     current_dir = Path(__file__).parent
@@ -253,7 +306,7 @@ def discover_cdc_tables():
     if not schema_dir.exists():
         return []
     
-    tables = []
+    tables: list[str] = []
     for yaml_file in schema_dir.glob('*.yaml'):
         table_name = yaml_file.stem
         tables.append(table_name)

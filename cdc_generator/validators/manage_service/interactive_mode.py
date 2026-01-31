@@ -1,8 +1,9 @@
 """Interactive workflow for legacy table mapping functionality."""
 
+import argparse
 from pathlib import Path
 from typing import Optional
-from helpers_logging import print_header, print_info, print_success, print_error, print_warning, Colors
+from cdc_generator.helpers.helpers_logging import print_header, print_info, print_success, print_error, print_warning, Colors
 from .config import (
     get_available_services,
     load_service_schema_tables,
@@ -20,7 +21,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 
-def run_interactive_mode(args) -> int:
+def run_interactive_mode(args: argparse.Namespace) -> int:
     """Run interactive table mapping workflow.
     
     This is legacy functionality for creating table mappings between source and sink.

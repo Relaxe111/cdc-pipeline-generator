@@ -1,17 +1,18 @@
 """MSSQL schema inspection for CDC pipeline."""
 
-from typing import List, Dict, Optional
-from helpers_logging import print_error, print_info
+from typing import Any, List, Dict, Optional, cast
+from cdc_generator.helpers.helpers_logging import print_error, print_info
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from .db_inspector_common import get_service_db_config, get_connection_params
 
 try:
-    import pymssql
-    HAS_PYMSSQL = True
+    import pymssql as _  # type: ignore
+    _has_pymssql = True
 except ImportError:
-    HAS_PYMSSQL = False
+    _has_pymssql = False
 
 
-def inspect_mssql_schema(service: str, env: str = 'nonprod') -> Optional[List[Dict]]:
+def inspect_mssql_schema(service: str, env: str = 'nonprod') -> Optional[List[Dict[str, Any]]]:
     """Inspect MSSQL schema to get list of available tables.
     
     Args:
@@ -21,7 +22,7 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> Optional[List[Di
     Returns:
         List of table dictionaries with TABLE_SCHEMA, TABLE_NAME, COLUMN_COUNT
     """
-    if not HAS_PYMSSQL:
+    if not _has_pymssql:
         print_error("pymssql not installed - use: pip install pymssql")
         return None
     
@@ -39,8 +40,8 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> Optional[List[Di
         print_info(f"Connecting to MSSQL: {conn_params['host']}:{conn_params['port']}/{conn_params['database']}")
         
         # Connect to MSSQL
-        conn = pymssql.connect(
-            server=conn_params['host'],
+        conn = create_mssql_connection(
+            host=conn_params['host'],
             port=conn_params['port'],
             database=conn_params['database'],
             user=conn_params['user'],
@@ -64,7 +65,7 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> Optional[List[Di
         """
         
         cursor.execute(query)
-        tables = cursor.fetchall()
+        tables = cast(List[Dict[str, Any]], cursor.fetchall())
         
         conn.close()
         

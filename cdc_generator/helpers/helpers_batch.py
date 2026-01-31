@@ -76,7 +76,7 @@ def normalize_table_name(name: str) -> str:
 
 
 def build_delete_case(table_name: str, schema: str, postgres_url: str,
-                      pk_fields: list, mssql_fields: list, postgres_fields: list) -> str:
+                      pk_fields: list[str], mssql_fields: list[str], postgres_fields: list[str]) -> str:
     """
     Generate optimized DELETE case using sql_raw processor.
     
@@ -111,8 +111,8 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
         args_mapping = f'this.{pk_mssql}'
     else:
         # Composite primary key
-        where_parts = []
-        args_list = []
+        where_parts: list[str] = []
+        args_list: list[str] = []
         for i, pk_pg in enumerate(pk_fields, start=1):
             try:
                 pk_idx = postgres_fields.index(pk_pg)
@@ -140,7 +140,7 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
 
 
 def build_upsert_case(table_name: str, schema: str, postgres_url: str,
-                      postgres_fields: list, mssql_fields: list, pk_fields: list) -> str:
+                      postgres_fields: list[str], mssql_fields: list[str], pk_fields: list[str]) -> str:
     """
     Generate optimized INSERT/UPDATE case using sql_insert with ON CONFLICT.
     
@@ -170,7 +170,7 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
     ]
     
     # Build args_mapping (map MSSQL fields to PostgreSQL + add metadata)
-    args_list = []
+    args_list: list[str] = []
     for mssql_field in mssql_fields:
         args_list.append(bloblang_field(mssql_field))
     
@@ -232,7 +232,7 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
 
 # Backward compatibility - keep old function names as aliases
 def build_batch_delete_case(table_name: str, schema: str, postgres_url: str,
-                            pk_fields: list, pk_mssql: str, pk_type: str) -> str:
+                            pk_fields: list[str], pk_mssql: str, pk_type: str) -> str:
     """
     Legacy function - redirects to build_delete_case.
     This is kept for backward compatibility with existing code.
@@ -245,8 +245,8 @@ def build_batch_delete_case(table_name: str, schema: str, postgres_url: str,
 
 
 def build_batch_upsert_case(table_name: str, schema: str, postgres_url: str,
-                           postgres_fields_with_meta: list, postgres_types_with_meta: list,
-                           mssql_fields: list, pk_fields: list, pk_constraint: str) -> str:
+                           postgres_fields_with_meta: list[str], postgres_types_with_meta: list[str],
+                           mssql_fields: list[str], pk_fields: list[str], pk_constraint: str) -> str:
     """
     Legacy function - redirects to build_upsert_case.
     This is kept for backward compatibility with existing code.
@@ -261,7 +261,7 @@ def build_batch_upsert_case(table_name: str, schema: str, postgres_url: str,
 
 
 def build_staging_case(table_name: str, schema: str, postgres_url: str,
-                       postgres_fields: list, mssql_fields: list) -> str:
+                       postgres_fields: list[str], mssql_fields: list[str]) -> str:
     """
     Generate staging table INSERT case using sql_insert with batching.
     
@@ -295,7 +295,7 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
     ]
     
     # Build args_mapping (map MSSQL fields to PostgreSQL + add metadata)
-    args_list = []
+    args_list: list[str] = []
     for mssql_field in mssql_fields:
         args_list.append(bloblang_field(mssql_field))
     
