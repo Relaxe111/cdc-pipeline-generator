@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    fish \
+    vim \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Fish as default shell
+SHELL ["/usr/bin/fish", "-c"]
+RUN chsh -s /usr/bin/fish
+
+# Set working directory
+WORKDIR /workspace
+
+# Install Python package in editable mode
+# This will be done via docker-compose volume mount
+# COPY pyproject.toml setup.py ./
+# RUN pip install -e ".[dev]"
+
+CMD ["fish"]

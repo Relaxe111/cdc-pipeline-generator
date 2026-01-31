@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdc-pipeline-generator"
+version = "0.1.0"
+description = "CDC pipeline configuration generator for Redpanda Connect"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Carasent", email = "opensource@carasent.com"}
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "pymssql>=2.2",
+    "psycopg2-binary>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/carasent/cdc-pipeline-generator"
+Repository = "https://github.com/carasent/cdc-pipeline-generator"
+"Bug Tracker" = "https://github.com/carasent/cdc-pipeline-generator/issues"
+
+[project.scripts]
+cdc-generator = "cdc_generator.cli.commands:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cdc_generator*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true

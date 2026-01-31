@@ -1,0 +1,31 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cdc-generator-dev
+    volumes:
+      - .:/workspace
+      - /workspace/.venv  # Isolate Python virtual environment
+    working_dir: /workspace
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+
+  # Optional: Minimal test PostgreSQL for generator testing
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: cdc-generator-test-db
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: test
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with implementation projects
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+    profiles:
+      - testing  # Only start when explicitly requested
+
+volumes:
+  test-postgres-data:
