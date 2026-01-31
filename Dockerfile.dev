@@ -21,6 +21,12 @@ ENV PYTHONUNBUFFERED=1
 # Create Fish config directory
 RUN mkdir -p /root/.config/fish/completions
 
+# Set Fish as default shell for root user
+RUN chsh -s /usr/bin/fish root
+
+# Auto-launch fish when bash is started (for docker compose exec dev bash)
+RUN echo 'exec fish' >> /root/.bashrc
+
 # Set Fish as default shell
 ENV SHELL=/usr/bin/fish
 SHELL ["/usr/bin/fish", "-c"]

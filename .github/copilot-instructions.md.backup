@@ -1,0 +1,444 @@
+# CDC Pipeline Generator - Copilot Instructions
+
+## 🎯 Project Purpose
+
+**Abstract, reusable library** for generating Redpanda Connect CDC pipelines.
+
+**CRITICAL:** This library **MUST remain pattern-agnostic** to support both implementation patterns:
+
+| Pattern (server_group_type) | Architecture | Example Implementation |
+|------------------------------|--------------|------------------------|
+| **db-per-tenant** | One server, one service → N pipelines (1 per customer) | adopus-cdc-pipeline |
+| **db-shared** | One server, multiple services → 1 pipeline (all customers) | asma-cdc-pipeline |
+
+**Data Flow:** `Source DB (MSSQL/Postgres) → CDC → Kafka → Sink Pipeline → PostgreSQL`
+
+## 🏛️ Architectural Standards
+
+### Abstraction Requirements
+
+**When developing generator code, you MUST:**
+
+1. **Never hardcode pattern-specific logic** - use `server_group_type` field to drive behavior
+2. **Support both patterns equally** - test changes against both example implementations
+3. **Keep implementation details separate** - environments, credentials, and infrastructure belong in implementations
+4. **Design for extensibility** - new patterns should require minimal generator changes
+
+### Pattern Differentiation
+
+**How patterns differ (handled automatically by server_group_type):**
+
+```python
+# ✅ CORRECT - Pattern-agnostic
+if server_group.server_group_type == "db-per-tenant":
+    # One pipeline per customer
+    for customer in service.customers:
+        generate_pipeline(customer.database_name, ...)
+elif server_group.server_group_type == "db-shared":
+    # One pipeline for all customers
+    generate_pipeline(service.database_name, ...)
+
+# ❌ WRONG - Hardcoded assumptions
+if service.name == "adopus":  # Don't check service names!
+    # Pattern-specific logic...
+```
+
+**Key differences to support:**
+- **db-per-tenant**: Each customer has dedicated database → generates N pipelines
+- **db-shared**: Single database with customer_id → generates 1 pipeline
+
+**Generator scope:** Pipeline structure and configuration generation
+**Implementation scope:** Connection strings, credentials, environment setup, infrastructure
+
+## 📐 Coding Standards
+
+### File Size Limit (ALWAYS ENFORCE)
+
+**Maximum file size: 500 lines of code**
+
+When any file exceeds 500 lines:
+1. Refactor into smaller, focused modules
+2. Create package structure (folder with `__init__.py`)
+3. Each module must have **single, clear responsibility**
+4. Document module structure
+
+**Example structure:**
+```
+script.py (main CLI - <200 lines)
+└── script_package/
+    ├── __init__.py       - Public API exports
+    ├── config.py         - Configuration (<500 lines)
+    ├── validation.py     - Validation logic (<500 lines)
+    └── operations.py     - Core operations (<500 lines)
+```
+
+### Module Organization
+
+**Before creating new shared functions:**
+1. Check existing `helpers_*.py` for similar logic
+2. If found: abstract and reuse - **don't duplicate**
+3. If new domain needed: create `helpers_{domain}.py`
+4. Group related utilities by domain prefix
+
+**Module structure:**
+- `core/` - Pipeline generation, main logic
+- `helpers/` - Reusable utilities (batch ops, type mapping, DB connectivity)
+- `validators/` - Schema validation, config validation
+- `cli/` - Command-line interface commands
+
+### Python Code Quality
+
+**Requirements:**
+- Type hints for all functions
+- Docstrings for public APIs
+- Error handling with descriptive messages
+- Logging instead of print statements (except CLI output)
+- Unit tests for new functionality (when test infrastructure exists)
+
+**Pattern-agnostic design checklist:**
+- [ ] Uses `server_group_type` field, not service names
+- [ ] Works with both db-per-tenant and db-shared examples
+- [ ] No hardcoded connection details or credentials
+- [ ] Documented assumptions and limitations
+
+## 🏗️ Architecture (REVERSED APPROACH)
+
+**This generator is the MAIN development environment:**
+
+```
+~/carasent/
+├── cdc-pipeline-generator/          # THIS PROJECT - Main dev environment
+│   ├── docker-compose.yml           # Dev container (mounts implementations)
+│   ├── Dockerfile.dev               # Full dev tools (MSSQL, Postgres, Fish)
+│   ├── cdc_generator/               # Python package
+│   │   ├── core/                    # Pipeline generation logic
+│   │   ├── helpers/                 # Batch, MSSQL, config helpers
+│   │   ├── validators/              # Schema validation
+│   │   └── cli/                     # CLI commands
+│   └── examples/
+│       ├── db-per-tenant/           # Adopus pattern reference
+│       └── db-shared/               # Asma pattern reference
+│
+├── adopus-cdc-pipeline/             # Implementation 1 - INFRASTRUCTURE ONLY
+│   ├── docker-compose.yml           # Postgres, Redpanda, MSSQL (NO dev container)
+│   ├── server-groups.yaml           # Single group: adopus
+│   └── 2-services/adopus.yaml       # 26 customers, db-per-tenant
+│
+└── asma-cdc-pipeline/               # FUTURE: Implementation 2 - INFRASTRUCTURE ONLY
+    ├── docker-compose.yml           # Infrastructure only
+    ├── server-groups.yaml           # Single group: asma
+    └── 2-services/directory.yaml    # Shared database pattern
+```
+
+**Developer Workflow:**
+1. Start adopus infrastructure: `cd ~/carasent/adopus-cdc-pipeline && docker compose up -d`
+2. Start THIS dev container: `cd ~/carasent/cdc-pipeline-generator && docker compose up -d`
+3. Enter container: `docker compose exec dev fish`
+4. Edit generator code: `/workspace/cdc_generator/...`
+5. Test against adopus: `cd /implementations/adopus && cdc generate`
+6. Changes in `/workspace` sync to `~/carasent/cdc-pipeline-generator/` (host)
+7. Changes in `/implementations/adopus` sync to `~/carasent/adopus-cdc-pipeline/` (host)
+
+**Key: ONE dev container, access to ALL implementations**
+
+## ⚠️⚠️⚠️ CRITICAL: Development Container Context ⚠️⚠️⚠️
+
+**ALL development happens inside THIS project's dev container:**
+
+**To enter dev container:**
+```bash
+# From host (macOS)
+cd ~/carasent/cdc-pipeline-generator
+docker compose exec dev fish
+```
+
+**Inside container you have:**
+- `/workspace/` - This generator library (editable)
+- `/implementations/adopus/` - Adopus implementation (mounted rw)
+- `/implementations/asma/` - Asma implementation (will exist later)
+- `network_mode: host` - Access to implementation infrastructure (Postgres, Kafka on localhost)
+
+**When user asks to run commands/scripts:**
+1. If already inside container: Run directly
+2. If on host: Say "Enter dev container first: `docker compose exec dev fish`"
+3. Then run commands from appropriate directory
+
+## Critical Patterns
+
+### File Size Limit (ALWAYS ENFORCE)
+
+**Maximum file size is 500 lines of code**
+
+When any file exceeds 500 lines:
+1. Refactor into smaller, focused modules
+2. Create a package structure (folder with `__init__.py`)
+3. Each module must have a **single, clear responsibility**
+4. Document the module structure
+
+### PostgreSQL Quoting (ALWAYS)
+```sql
+-- ✅ CORRECT
+SELECT "actno", "Navn" FROM avansas."Actor" WHERE "actno" = 123;
+INSERT INTO avansas."stg_Actor" ("FraverId") VALUES (1);
+
+-- ❌ WRONG (relation does not exist)
+SELECT actno FROM avansas.Actor;
+```
+**Why:** MSSQL uses PascalCase, PostgreSQL needs quotes to preserve case.
+
+### Fish Shell (no bash syntax)
+
+**⚠️ CRITICAL: Heredocs are NOT supported in Fish shell**
+- **NEVER use heredoc syntax (`<< 'EOF'`, `<< EOF`, etc.)** - Fish will fail
+- **Alternatives:**
+  - Use `sed -i` for multi-line file edits
+  - Use `printf '%s\n' "line1" "line2"`
+  - Write Python/other tools for complex content
+  
+**Other Fish differences:**
+- No `&&`: Use `; and` or separate commands  
+- Variables: `$VAR`, not `${VAR}`
+
+## Directory Structure
+
+**This Generator Project:**
+```
+cdc-pipeline-generator/
+├── cdc_generator/
+│   ├── core/
+│   │   └── pipeline_generator.py      # Main generation logic (from 3-generate-pipelines.py)
+│   ├── helpers/
+│   │   ├── helpers_batch.py           # Batch operations, map_pg_type
+│   │   ├── helpers_mssql.py           # MSSQL connectivity
+│   │   └── service_config.py          # YAML config loading/validation
+│   ├── validators/
+│   │   └── manage_service/            # 18 validator modules
+│   └── cli/
+│       ├── service.py                 # manage-service command
+│       └── server_group.py            # manage-server-group command
+├── examples/
+│   ├── db-per-tenant/                 # Adopus pattern reference
+│   │   ├── README.md                  # Pattern documentation
+│   │   ├── server-groups.yaml         # Example config
+│   │   ├── services/adopus.yaml       # 26-customer example
+│   │   └── templates/*.yaml           # Pipeline templates
+│   └── db-shared/                     # Asma pattern reference
+│       ├── README.md
+│       ├── server-groups.yaml
+│       ├── services/directory.yaml
+│       └── templates/*.yaml
+└── tests/                             # Future: unit tests
+```
+
+**Implementation Projects (mounted at /implementations/):**
+```
+/implementations/adopus/               # db-per-tenant implementation
+├── server-groups.yaml                 # Single group: adopus
+├── 2-services/adopus.yaml             # 26 customers
+├── 3-pipeline-templates/              # Templates with {{VARS}}
+└── generated/pipelines/               # Auto-generated (read-only)
+
+/implementations/asma/                 # Future: db-shared implementation
+├── server-groups.yaml                 # Single group: asma
+├── 2-services/directory.yaml          # Shared database config
+└── 3-pipeline-templates/
+```
+
+---
+
+## 🏗️ Service Architecture & Pipeline Generation
+
+**Server groups** (defined in `server-groups.yaml`) control CDC architecture and pipeline generation.
+
+### How It Works
+
+1. Service YAML references a `server_group` (e.g., `server_group: adopus`)
+2. Pipeline generator reads `server_group_type` from `server-groups.yaml` 
+3. Generator uses `server_group_type` to determine pipeline structure:
+
+**db-per-tenant** (e.g., adopus):
+- For each customer in service:
+  - 1 source pipeline (reads from customer's dedicated source database)
+  - 1 sink pipeline per sink database (⚠️ **NOT YET IMPLEMENTED** - currently creates 1 sink total)
+
+**db-shared** (e.g., asma):
+- For entire service:
+  - 1 source pipeline (reads from shared source database with customer_id filtering)
+  - 1 sink pipeline per sink database (⚠️ **NOT YET IMPLEMENTED** - currently creates 1 sink total)
+
+### Required Fields in Service YAML
+
+**All patterns:**
+- `server_group`: Reference to server group name
+- `cdc_tables`: Tables for CDC (always at root level)
+- `reference`: Reference customer/database for validation
+
+**db-per-tenant only:**
+- `customers`: Array of customer configurations
+
+**db-shared only:**
+- No `customers` array (single shared database)
+
+### Server Group Configuration
+
+**database_ref field:** Reference database used for schema validation generation in `db-per-tenant` mode (avoids test/stage databases).
+
+**Example server group:**
+```yaml
+server_groups:
+  adopus:
+    server_group_type: db-per-tenant
+    server_type: mssql
+    database_ref: AdOpusTest  # Used for schema inspection
+```
+
+---
+
+## 🗂️ Implementation File Structure
+
+**What the generator creates/expects in implementations:**
+
+| Path | Purpose | Edit? |
+|------|---------|-------|
+| `server-groups.yaml` | Server group definitions | ⚠️ USE CLI |
+| `2-services/{service}.yaml` | Service configuration | ⚠️ USE CLI |
+| `3-pipeline-templates/*.yaml` | Pipeline templates with `{{VARS}}` | ✅ EDIT |
+| `generated/pipelines/` | Auto-generated pipelines | ❌ READ-ONLY |
+| `.vscode/schemas/*.json` | Auto-generated validation schemas | ❌ AUTO-GENERATED |
+
+**File editing guidelines:**
+- **server-groups.yaml** - Use `cdc manage-server-group` CLI commands
+- **Service YAML files** - Use `cdc manage-service` CLI commands for table management
+- **Pipeline templates** - Edit directly (these are your custom templates)
+- **Generated files** - Never edit (will be overwritten on next generation)
+
+---
+
+## Common Tasks
+
+**Add table to service:**
+```bash
+cd /implementations/adopus
+cdc manage-service --service adopus --add-table Actor --primary-key actno
+cdc generate
+```
+
+**List available tables:**
+```bash
+cd /implementations/adopus
+cdc manage-service --service adopus --inspect --schema dbo
+```
+
+**Generate pipelines:**
+```bash
+cd /implementations/adopus
+cdc generate  # Uses /workspace/cdc_generator/core/pipeline_generator.py
+```
+
+**Edit generator code:**
+```bash
+# From inside dev container
+vim /workspace/cdc_generator/core/pipeline_generator.py
+# Changes sync to ~/carasent/cdc-pipeline-generator/ on host
+```
+
+## Testing Workflow
+
+**Unit tests (future):**
+```bash
+cd /workspace
+pytest tests/
+```
+
+**Integration tests:**
+```bash
+# Test against adopus implementation
+cd /implementations/adopus
+cdc generate
+# Verify output in generated/pipelines/
+
+# Compare with examples
+diff /implementations/adopus/generated/pipelines/local/ \
+     /workspace/examples/db-per-tenant/generated/pipelines/local/
+```
+
+## Python Development
+
+**Before creating shared functions:**
+1. Check existing `helpers_*.py` files for similar logic
+2. If found, abstract and reuse - don't duplicate
+3. If new domain needed, create `helpers_{domain}.py`
+4. Keep related utilities grouped by domain prefix
+
+**Module structure:**
+- `core/` - Pipeline generation, main logic
+- `helpers/` - Reusable utilities (batch ops, type mapping, MSSQL)
+- `validators/` - Schema validation, config validation
+- `cli/` - Command-line interface commands
+
+## Server Groups & Patterns
+
+**Server groups** control CDC architecture patterns. The generator is **environment-agnostic** - each implementation handles its own environment differentiation (dev/staging/prod).
+
+| server_group_type | Example | Architecture | Multi-tenancy |
+|-------------------|---------|--------------|---------------|
+| `db-per-tenant` | adopus | One server, one service. N databases → N pipelines (1 per customer) | Database-level isolation |
+| `db-shared` | asma | One server, multiple services. 1 database → 1 pipeline (all customers) | Table-level with `customer_id` |
+
+**Required fields in service YAML:**
+- `server_group`: Reference to server group name
+- `cdc_tables`: Tables for CDC (always at root level)
+- `reference`: Reference customer/database for validation
+
+**For db-per-tenant only:**
+- `customers`: Array of customer configs
+
+**Note:** Environment configurations (connection strings, credentials, etc.) are implementation-specific and handled outside the generator library.
+
+## Version Control
+
+**This project uses Git with master branch:**
+```bash
+cd /workspace
+git add .
+git commit -m "feat: add support for X"
+git push origin master
+```
+
+**Semantic versioning:**
+- Major: Breaking changes (v2.0.0)
+- Minor: New features (v1.1.0)
+- Patch: Bug fixes (v1.0.1)
+
+**Release process (Phase 6):**
+```bash
+git tag v1.0.0
+git push origin master --tags
+```
+
+## Migration Status
+
+**Current Phase:** Phase 4 complete ✅
+
+**Completed:**
+- ✅ Phase 1: Generator library structure created
+- ✅ Phase 2: Scripts extracted from adopus-cdc-pipeline
+- ✅ Phase 3: Reference implementations (db-per-tenant + db-shared)
+- ✅ Phase 4: Reversed architecture - generator is main dev environment
+
+**Next:**
+- Phase 5: Prepare for asma-cdc-pipeline (documentation)
+- Phase 6: Version and publish generator (tag v1.0.0)
+
+See `/implementations/adopus/MIGRATION_TO_GENERATOR_LIBRARY.md` for full plan.
+
+## Future Plans
+
+**Not yet implemented:**
+- Field mappings + transformations (column renaming, value conversion)
+- Fan-out pattern (1 record → N records based on conditions)
+- Tenant ID pattern (common staging with `customer_id` for db-per-tenant)
+- Multi-sink support (1 source → N sink databases per customer)
+- PyPI publication for easier distribution
+- Automated testing in CI/CD
+- GitHub Actions for release automation
