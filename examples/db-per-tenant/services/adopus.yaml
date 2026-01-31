@@ -1,0 +1,384 @@
+# yaml-language-server: $schema=../.vscode/schemas/AdOpusTest.service-validation.schema.json
+# The redhat.vscode-yaml extension shows ALL possible column names from ALL tables
+# in autocomplete suggestions, not just columns for the specific table being edited.
+# This is a known limitation of the extension's JSON Schema support.
+#
+# ✅ NOTE: Despite this limitation, the schema DOES validate that column names
+#    you specify actually exist in the specific table. Invalid columns will be
+#    marked as errors.
+#
+# 💡 HIERARCHICAL CONFIGURATION
+# Properties set at higher levels are inherited by lower levels unless overridden.
+# Inheritance chain: environments (root) → environments.<env> → customers[].environments.<env>
+# To validate hierarchical configuration:
+#   cdc manage-tables --service adopus --validate-hierarchy
+# To validate complete configuration for pipeline generation:
+#   cdc manage-tables --service adopus --validate-config
+#
+# 🛡️  existing_mssql FLAG
+# Controls database initialization behavior:
+#   • false: Fresh setup - can create database and tables (for local development)
+#   • true:  Existing DB - only enable CDC, never modify database (nonprod/prod)
+#
+#
+# ⚠️  CASE SENSITIVITY WARNING
+# The following columns exist with different casing across tables:
+#   - ActNo, Actno, actno
+#   - AdgangKode, Adgangkode
+#   - Adresse1, adresse1
+#   - Adresse2, adresse2
+#   - Ansatt, ansatt
+#   - Antall, antall
+#   - Beskrivelse, beskrivelse
+#   - Bransje, bransje
+#   - Bruker, bruker
+#   - BrukerNavn, Brukernavn, brukerNavn
+#   - CapiTidID, CapiTidId
+#   - ChangeDt, Changedt, changedt
+#   - ChangeUser, Changeuser, changeUser, changeuser
+#   - CreateDt, Createdt, createdt
+#   - CreateUser, Createuser, createUser, createuser
+#   - Descr, descr
+#   - Description, description
+#   - DocID, DocId
+#   - EgenDef, egenDef
+#   - Enhet, enhet
+#   - Epost, epost
+#   - FagGrpID, FaggrpID
+#   - FraDato, Fradato, fraDato
+#   - Fylke, fylke
+#   - ID, Id, id
+#   - Kategori, kategori
+#   - Kommune, kommune
+#   - LedigeStillingerID, ledigeStillingerID
+#   - NavKontornr, navKontorNR
+#   - Navn, navn
+#   - Notat, notat
+#   - Oppdragsgiver, oppdragsgiver
+#   - OppgaveID, oppgaveid
+#   - OrgNo, orgno
+#   - ProdNo, Prodno
+#   - RappNr, Rappnr
+#   - RapportID, rapportId
+#   - SluttDato, Sluttdato
+#   - SoknadID, SoknadId, soknadid
+#   - Start, start
+#   - StartDato, Startdato
+#   - Status, status
+#   - Stillingsprosent, stillingsProsent
+#   - TekstNr, Tekstnr, tekstnr
+#   - Tid, tid
+#   - TilDato, Tildato, tilDato
+#   - Type, type
+#   - Value, value
+#   - Webside, webside
+#
+# Always verify the exact column name casing for your specific table.
+# 📝 To verify column names for a specific table:
+#    cdc manage-service --service adopus --inspect --schema {schema_name}
+# ==================================================================================
+
+service: adopus
+server_group: adopus
+reference: avansas
+source:
+  # Database information (used for schema validation generation)
+  # Run: cdc manage-service --service adopus --generate-validation --schema dbo
+  validation_database: AdOpusTest 
+  validation_env: nonprod     
+# CDC Tables Configuration
+# Tables accessible for CDC replication and live streaming from source database.
+# Validates against auto-generated schema from the specified validation_database.
+# Each table is enabled for Change Data Capture and streamed to Kafka in real-time.
+source_tables:
+  - schema: dbo
+    tables:
+    - name: Actor
+    - name: Fraver
+    - name: Test
+environments:
+  sink_tasks: 8
+  local:
+    existing_mssql: false
+    mssql:
+      host: ${MSSQL_LOCAL_HOST}
+      port: ${MSSQL_LOCAL_PORT}
+      user: ${MSSQL_LOCAL_USER}
+      password: ${MSSQL_LOCAL_PASSWORD}
+    postgres:
+      url: ${POSTGRES_LOCAL_URL}
+      user: ${POSTGRES_LOCAL_USER}
+      password: ${POSTGRES_LOCAL_PASSWORD}
+    kafka:
+      bootstrap_servers: ${KAFKA_LOCAL_BOOTSTRAP_SERVERS}
+      pandaproxy_url: ${PANDAPROXY_LOCAL_URL}
+  nonprod:
+    existing_mssql: true
+    mssql:
+      host: ${MSSQL_NONPROD_HOST}
+      port: ${MSSQL_NONPROD_PORT}
+      user: ${MSSQL_NONPROD_USER}
+      password: ${MSSQL_NONPROD_PASSWORD}
+    postgres:
+      url: ${POSTGRES_NONPROD_URL}
+      user: ${POSTGRES_NONPROD_USER}
+      password: ${POSTGRES_NONPROD_PASSWORD}
+    kafka:
+      bootstrap_servers: ${KAFKA_NONPROD_BOOTSTRAP_SERVERS}
+      pandaproxy_url: ${PANDAPROXY_NONPROD_URL}
+  prod:
+    sink_tasks: 3
+    existing_mssql: true
+    mssql:
+      host: ${MSSQL_PROD_HOST}
+      port: ${MSSQL_PROD_PORT}
+      user: ${MSSQL_PROD_USER}
+      password: ${MSSQL_PROD_PASSWORD}
+    postgres:
+      url: ${POSTGRES_PROD_URL}
+      user: ${POSTGRES_PROD_USER}
+      password: ${POSTGRES_PROD_PASSWORD}
+    kafka:
+      bootstrap_servers: ${KAFKA_PROD_BOOTSTRAP_SERVERS}
+      pandaproxy_url: ${PANDAPROXY_PROD_URL}
+customers:
+- name: arbeidogvekst
+  customer_id: 1
+  schema: arbeidogvekst
+  environments:
+    prod:
+      database:
+        name: AdOpusArbeidOgVekst
+      topic_prefix: prod.arbeidogvekst.AdOpusArbeidOgVekst
+- name: avansas
+  customer_id: 2
+  schema: avansas
+  environments:
+    local:
+      database:
+        name: avansas
+      topic_prefix: local.avansas.avansas
+    nonprod:
+      database:
+        name: AdOpusTest
+      topic_prefix: nonprod.avansas.AdOpusTest
+      postgres:
+        url: ${POSTGRES_NONPROD_URL}&options=-c search_path=avansas
+- name: avprod
+  customer_id: 3
+  schema: avprod
+  environments:
+    prod:
+      database:
+        name: AdOpusAVProd
+      topic_prefix: prod.avprod.AdOpusAVProd
+      mssql:
+        host: ${MSSQL_PROD_49852_HOST}
+        port: ${MSSQL_PROD_49852_PORT}
+        user: ${MSSQL_PROD_49852_USER}
+        password: ${MSSQL_PROD_49852_PASSWORD}
+- name: bkai
+  customer_id: 4
+  schema: bkai
+  environments:
+    prod:
+      database:
+        name: AdOpusBlakorsFredrikstad
+      topic_prefix: prod.bkai.AdOpusBlakorsFredrikstad
+- name: blue
+  customer_id: 5
+  schema: blue
+  environments:
+    prod:
+      database:
+        name: AdOpusBlue
+      topic_prefix: prod.blue.AdOpusBlue
+- name: briga
+  customer_id: 6
+  schema: briga
+  environments:
+    prod:
+      database:
+        name: AdOpusBriga
+      topic_prefix: prod.briga.AdOpusBriga
+- name: brukerforum22
+  customer_id: 7
+  schema: brukerforum22
+  environments:
+    nonprod:
+      database:
+        name: AdOpusBrukerForum22
+      topic_prefix: nonprod.brukerforum22.AdOpusBrukerForum22
+- name: bufar
+  customer_id: 8
+  schema: bufar
+  environments:
+    prod:
+      database:
+        name: AdOpusBufar
+      topic_prefix: prod.bufar.AdOpusBufar
+- name: digforsk
+  customer_id: 9
+  schema: digforsk
+  environments:
+    prod:
+      database:
+        name: AdOpusDigForsk
+      topic_prefix: prod.digforsk.AdOpusDigForsk
+- name: fasvo
+  customer_id: 10
+  schema: fasvo
+  environments:
+    prod:
+      database:
+        name: AdOpusFasvo
+      topic_prefix: prod.fasvo.AdOpusFasvo
+- name: fretex
+  customer_id: 11
+  schema: fretex
+  environments:
+    nonprod:
+      database:
+        name: AdOpusFretexDev
+      topic_prefix: nonprod.fretex.AdOpusFretexDev
+    prod-fretex:
+      database:
+        name: AdOpusFretex
+      topic_prefix: prod.fretex.AdOpusFretex
+      mssql:
+        host: ${MSSQL_PROD_FRETEX_HOST}
+        port: ${MSSQL_PROD_FRETEX_PORT}
+        user: ${MSSQL_PROD_FRETEX_USER}
+        password: ${MSSQL_PROD_FRETEX_PASSWORD}
+      postgres:
+        url: ${POSTGRES_PROD_FRETEX_URL}
+        user: ${POSTGRES_PROD_FRETEX_USER}
+        password: ${POSTGRES_PROD_FRETEX_PASSWORD}
+      kafka:
+        bootstrap_servers: ${KAFKA_PROD_FRETEX_BOOTSTRAP_SERVERS}
+        pandaproxy_url: ${PANDAPROXY_PROD_FRETEX_URL}
+- name: genesis
+  customer_id: 12
+  schema: genesis
+  environments:
+    nonprod:
+      database:
+        name: AdOpusGenesisDev
+      topic_prefix: nonprod.genesis.AdOpusGenesisDev
+    prod:
+      database:
+        name: AdOpusGenesis
+      topic_prefix: prod.genesis.AdOpusGenesis
+- name: giax
+  customer_id: 13
+  schema: giax
+  environments:
+    prod:
+      database:
+        name: AdOpusGiax
+      topic_prefix: prod.giax.AdOpusGiax
+- name: heltmed
+  customer_id: 14
+  schema: heltmed
+  environments:
+    prod:
+      database:
+        name: AdOpusHeltMed
+      topic_prefix: prod.heltmed.AdOpusHeltMed
+- name: jobbintro
+  customer_id: 15
+  schema: jobbintro
+  environments:
+    prod:
+      database:
+        name: AdOpusJobbintro
+      topic_prefix: prod.jobbintro.AdOpusJobbintro
+- name: jobloop
+  customer_id: 16
+  schema: jobloop
+  environments:
+    prod:
+      database:
+        name: AdOpusJobLoop
+      topic_prefix: prod.jobloop.AdOpusJobLoop
+- name: keops
+  customer_id: 17
+  schema: keops
+  environments:
+    prod:
+      database:
+        name: AdOpusKeops
+      topic_prefix: prod.keops.AdOpusKeops
+- name: mjosanker
+  customer_id: 18
+  schema: mjosanker
+  environments:
+    prod:
+      database:
+        name: AdOpusMjosAnker
+      topic_prefix: prod.mjosanker.AdOpusMjosAnker
+- name: movia
+  customer_id: 19
+  schema: movia
+  environments:
+    prod:
+      database:
+        name: AdOpusMovia
+      topic_prefix: prod.movia.AdOpusMovia
+- name: netped
+  customer_id: 20
+  schema: netped
+  environments:
+    prod:
+      database:
+        name: AdOpusNetped
+      topic_prefix: prod.netped.AdOpusNetped
+- name: osloprod
+  customer_id: 21
+  schema: osloprod
+  environments:
+    prod:
+      database:
+        name: AdOpusOsloProd
+      topic_prefix: prod.osloprod.AdOpusOsloProd
+- name: podium
+  customer_id: 22
+  schema: podium
+  environments:
+    prod:
+      sink_tasks: 8
+      database:
+        name: AdOpusPodium
+      topic_prefix: prod.podium.AdOpusPodium
+- name: sarpsborg
+  customer_id: 23
+  schema: sarpsborg
+  environments:
+    prod:
+      database:
+        name: AdOpusSarpsborg
+      topic_prefix: prod.sarpsborg.AdOpusSarpsborg
+- name: sens
+  customer_id: 24
+  schema: sens
+  environments:
+    prod:
+      database:
+        name: AdOpusSens
+      topic_prefix: prod.sens.AdOpusSens
+- name: skolert
+  customer_id: 25
+  schema: skolert
+  environments:
+    prod:
+      database:
+        name: AdOpusSkolert
+      topic_prefix: prod.skolert.AdOpusSkolert
+- name: veksttorget
+  customer_id: 26
+  schema: veksttorget
+  environments:
+    prod:
+      database:
+        name: AdOpusVeksttorget
+      topic_prefix: prod.veksttorget.AdOpusVeksttorget

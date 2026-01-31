@@ -1,0 +1,68 @@
+# ============================================================================
+# Reference Implementation: db-per-tenant Pattern (AdOpus)
+# ============================================================================
+# This is a reference example showing how to configure CDC for a multi-tenant
+# system where each customer has their own dedicated source database.
+#
+# Pattern: One database per customer
+# Use case: AdOpus with 26 customer databases (AdOpusBrukerforum, AdOpusFretexDev, etc.)
+# Pipeline generation: Creates N source + N sink pipelines (one per customer)
+# ============================================================================
+
+server_groups:
+  - name: adopus
+    server_group_type: db-per-tenant
+    service: adopus
+    database_ref: AdOpusTest  # Reference database for schema validation
+    
+    # Databases to exclude from CDC processing
+    database_exclude_patterns:
+      - adpraksis
+      - openreplay
+      - exper
+      - infisical
+      - vault
+      - onlyoffice
+      - stage
+    
+    # Schemas to exclude from CDC processing
+    schema_exclude_patterns:
+      - rpt
+      - tid
+      - hdb_catalog
+      - hdb_views
+      - sessions
+      - cdc
+      - test_schema
+    
+    description: AdOpus multi-tenant databases (one database per customer)
+    include_pattern: AdOpus*  # Databases matching this pattern will be included
+    
+    # Source database server configuration
+    server:
+      type: mssql
+      host: ${MSSQL_NONPROD_HOST}
+      port: ${MSSQL_NONPROD_PORT}
+      username: ${MSSQL_NONPROD_USER}
+      password: ${MSSQL_NONPROD_PASSWORD}
+      server_type: mssql
+      user: ${MSSQL_NONPROD_USER}
+    
+    # Auto-discovered databases (example subset)
+    databases:
+      - name: AdOpusTest
+        service: adopus
+        schemas:
+          - dbo
+      
+      - name: AdOpusBrukerforum
+        service: adopus
+        schemas:
+          - dbo
+      
+      - name: AdOpusFretexDev
+        service: adopus
+        schemas:
+          - dbo
+      
+      # ... additional databases discovered at runtime

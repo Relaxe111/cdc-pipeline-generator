@@ -1,0 +1,115 @@
+# =============================================================================
+# Redpanda Connect Source Pipeline - MSSQL CDC to Redpanda
+# =============================================================================
+# Customer: {{CUSTOMER}}
+# Environment: {{ENV}}
+# Database: {{DATABASE_NAME}}
+# =============================================================================
+
+# File-based cache to persist LSN state across restarts
+cache_resources:
+  - label: lsn_cache
+    file:
+      directory: /data/lsn_cache
+
+input:
+  broker:
+    inputs:
+      {{SOURCE_TABLE_INPUTS}}
+
+    # Poll all tables continuously
+    batching:
+      count: 100
+      period: 1s
+
+pipeline:
+  processors:
+    # Filter out before-update images (operation 3)
+    # MSSQL CDC operations: 1=DELETE, 2=INSERT, 3=before-UPDATE, 4=after-UPDATE
+    - bloblang: |
+        let op_code = this.get("__$operation")
+        # Drop before-update operations (3) - we only need after-update (4)
+        root = if $op_code == 3 { deleted() } else { this }
+    
+    - bloblang: |
+        # Map MSSQL CDC operation codes to Debezium style
+        let op_code = this.get("__$operation")
+        let debezium_op = match $op_code {
+          1 => "d",
+          2 => "c",
+          4 => "u",
+          _ => "c"
+        }
+        
+        # Get table name from metadata
+        let table_name = meta("source_table")
+        
+        # Remove CDC metadata columns (including __lsn_hex used for LSN tracking)
+        let payload_data = this.without("__$start_lsn", "__$end_lsn", "__$seqval", "__$operation", "__$update_mask", "__lsn_hex")
+        
+        # Build Debezium-style CDC envelope
+        root.payload = {
+          "op": $debezium_op,
+          "before": if $op_code == 1 { $payload_data } else { null },
+          "after": if $op_code != 1 { $payload_data } else { null },
+          "source": {
+            "version": "1.0.0",
+            "connector": "redpanda-connect-mssql",
+            "name": "{{TOPIC_PREFIX}}",
+            "ts_ms": now().ts_unix_milli(),
+            "db": "{{DATABASE_NAME}}",
+            "schema": "dbo",
+            "table": $table_name
+          },
+          "ts_ms": now().ts_unix_milli()
+        }
+        
+        # Route to correct Kafka topic and key based on table
+        let data = if $op_code == 1 { root.payload.before } else { root.payload.after }
+        let routing = match $table_name {
+        {{TABLE_ROUTING}}
+          _ => {"topic": "{{TOPIC_PREFIX}}.dbo.unknown", "key": ""}
+        }
+        
+        meta kafka_topic = $routing.topic
+        meta kafka_key = $routing.key
+
+    # Update LSN cache with the max LSN from this message (only if not null)
+    - bloblang: |
+        # Only process messages that have a valid LSN from CDC
+        let lsn = meta("max_lsn")
+        root = if $lsn == null || $lsn == "null" {
+          deleted()  # Drop messages without valid LSN
+        } else {
+          this  # Pass through CDC messages
+        }
+    - cache:
+        resource: lsn_cache
+        operator: set
+        key: '${! meta("source_table").lowercase() + "_last_lsn" }'
+        value: '${! meta("max_lsn") }'
+
+output:
+  kafka:
+    addresses:
+      - "${KAFKA_BOOTSTRAP_SERVERS}"
+    topic: '${! meta("kafka_topic") }'
+    key: '${! meta("kafka_key") }'
+    max_in_flight: 64
+    compression: snappy
+    batching:
+      count: 100
+      period: 1s
+
+logger:
+  level: INFO
+  format: json
+
+metrics:
+  prometheus: {}
+
+http:
+  enabled: true
+  address: "0.0.0.0:4195"
+  root_path: /benthos
+  debug_endpoints: true

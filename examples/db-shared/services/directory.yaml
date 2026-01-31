@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../../.vscode/schemas/directory.service-validation.schema.json
+
+service: directory
+server_group: asma
+
+source:
+  type: postgres
+  validation_database: adopus_db_directory_dev
+  validation_env: nonprod
+  
+  # Tables to replicate via CDC
+  tables:
+    - schema: public
+      name: organizations
+      primary_key: id
+      # Optional: Filter by customer_id if using column-based multi-tenancy
+      # filter: "customer_id = '{{CUSTOMER_ID}}'"
+    
+    - schema: public
+      name: users
+      primary_key: id
+
+environments:
+  nonprod:
+    postgres:
+      name: adopus_db_directory_dev
+      url: ${POSTGRES_URL}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+    kafka:
+      bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}
+  
+  prod:
+    postgres:
+      name: adopus_db_directory_prod
+      url: ${POSTGRES_PROD_URL}
+      user: ${POSTGRES_PROD_USER}
+      password: ${POSTGRES_PROD_PASSWORD}
+    kafka:
+      bootstrap_servers: ${KAFKA_PROD_BOOTSTRAP_SERVERS}

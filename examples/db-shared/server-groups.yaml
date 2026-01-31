@@ -1,0 +1,38 @@
+# ============================================================================
+# Reference Implementation: db-shared Pattern (ASMA)
+# ============================================================================
+# This is a reference example showing how to configure CDC for a multi-tenant
+# system where all customers share a single database, differentiated by
+# customer_id or schema isolation.
+#
+# Pattern: Single database, multiple tenants
+# Use case: ASMA directory service with all customers in one database
+# Pipeline generation: Creates 1 source + 1 sink pipeline (for all customers)
+# ============================================================================
+
+server_groups:
+  - name: asma
+    server_group_type: db-shared
+    service: directory
+    
+    description: ASMA directory service (single database, multi-tenant)
+    
+    # Source database server configuration
+    server:
+      type: postgres
+      host: ${POSTGRES_ASMA_HOST}
+      port: ${POSTGRES_ASMA_PORT}
+      username: ${POSTGRES_ASMA_USER}
+      password: ${POSTGRES_ASMA_PASSWORD}
+      server_type: postgres
+      user: ${POSTGRES_ASMA_USER}
+    
+    # Single shared database
+    databases:
+      - name: adopus_db_directory_dev
+        service: directory
+        schemas:
+          - public
+          - customer_a
+          - customer_b
+          # Customers isolated by schema or by customer_id column
