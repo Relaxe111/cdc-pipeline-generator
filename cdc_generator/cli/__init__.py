@@ -1,5 +1,10 @@
-"""Command-line interface."""
+"""
+CLI module for CDC Pipeline Generator.
 
-from cdc_generator.cli.commands import CLI
+This module provides command-line interface functionality for the CDC pipeline generator,
+including the main entry point that can be installed as a console script.
+"""
 
-__all__ = ["CLI"]
+from .commands import main
+
+__all__ = ["main"]

@@ -1,18 +1,26 @@
+# CDC Pipeline Generator - Development Container
 services:
   dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
     container_name: cdc-generator-dev
+    hostname: cdc-generator-dev
+    network_mode: host
     volumes:
       - .:/workspace
-      - /workspace/.venv  # Isolate Python virtual environment
+      - ../adopus-cdc-pipeline:/implementations/adopus:rw
+      - ../asma-cdc-pipeline:/implementations/asma:rw
+      - /workspace/.venv
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PYTHONPATH=/workspace
+      - PYTHONUNBUFFERED=1
     working_dir: /workspace
-    command: sleep infinity
+    command: tail -f /dev/null
     stdin_open: true
     tty: true
 
-  # Optional: Minimal test PostgreSQL for generator testing
   test-postgres:
     image: postgres:15-alpine
     container_name: cdc-generator-test-db
@@ -21,11 +29,11 @@ services:
       POSTGRES_PASSWORD: test
       POSTGRES_DB: test
     ports:
-      - "5433:5432"  # Different port to avoid conflicts with implementation projects
+      - "5433:5432"
     volumes:
       - test-postgres-data:/var/lib/postgresql/data
     profiles:
-      - testing  # Only start when explicitly requested
+      - testing
 
 volumes:
   test-postgres-data:

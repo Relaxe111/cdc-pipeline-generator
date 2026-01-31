@@ -41,7 +41,7 @@ Repository = "https://github.com/carasent/cdc-pipeline-generator"
 "Bug Tracker" = "https://github.com/carasent/cdc-pipeline-generator/issues"
 
 [project.scripts]
-cdc-generator = "cdc_generator.cli.commands:main"
+cdc = "cdc_generator.cli.commands:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
