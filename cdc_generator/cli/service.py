@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple, cast
 
 try:
-    import yaml 
+    import yaml  # type: ignore
 except ImportError:
-    yaml = None  
+    yaml = None  # type: ignore[assignment]
 
 from cdc_generator.helpers.helpers_logging import (
     Colors,
@@ -100,6 +100,23 @@ Examples:
     parser.add_argument("--sink-table", help="Sink table name (legacy)")
     
     args = parser.parse_args()
+    
+    # Auto-detect service if not specified and only one service exists
+    if not args.service:
+        from cdc_generator.helpers.service_config import get_project_root
+        services_dir = get_project_root() / '2-services'
+        
+        if services_dir.exists():
+            service_files = list(services_dir.glob('*.yaml'))
+            if len(service_files) == 1:
+                args.service = service_files[0].stem
+                print_info(f"Auto-detected service: {args.service}")
+            elif len(service_files) > 1 and not args.create_service:
+                # Only require --service if there are multiple services and we're not in create mode
+                available = ', '.join([f.stem for f in sorted(service_files)])
+                print_error(f"❌ Multiple services found: {available}")
+                print_error("Please specify --service <name>")
+                return 1
     
     # Handle list-source-tables operation
     if args.list_source_tables:
@@ -219,30 +236,62 @@ Examples:
             print("❌ Error: --service is required for --create-service")
             return 1
         
-        # Auto-detect server-group from server_group.yaml
+        # Check if service already exists
         from cdc_generator.helpers.service_config import get_project_root
+        services_dir = get_project_root() / '2-services'
+        service_file = services_dir / f'{args.service}.yaml'
+        
+        if service_file.exists():
+            print_error(f"❌ Service '{args.service}' already exists: {service_file}")
+            print_info(f"To modify it, edit the file directly or use:")
+            print_info(f"  cdc manage-service --service {args.service} --add-source-table <schema.table>")
+            return 1
+        
+        # Auto-detect server-group from server_group.yaml
         server_group = None
         server_groups_file = get_project_root() / 'server_group.yaml'
+        
+        # Also collect all defined services to show what's available
+        defined_services: set[str] = set()
+        existing_services: set[str] = set()
+        
         if server_groups_file.exists() and yaml is not None:
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
                 for sg_name, sg in server_groups_data.get('server_group', {}).items():
                     # For db-per-tenant: group name IS the service name
                     if sg.get('pattern') == 'db-per-tenant':
+                        defined_services.add(sg_name)
                         if sg_name == args.service:
                             server_group = sg_name
                             print_info(f"Auto-detected server group: {server_group}")
-                            break
-                    # For db-shared: check database-level service fields
+                    # For db-shared: collect all database service names
                     elif sg.get('pattern') == 'db-shared':
                         for db in sg.get('databases', []):
-                            if db.get('service') == args.service:
-                                server_group = sg_name
-                                print_info(f"Auto-detected server group: {server_group} (from database {db.get('name')})")
-                            break
-                    
-                    if server_group:
-                        break
+                            svc = db.get('service')
+                            if svc:
+                                defined_services.add(svc)
+                                if svc == args.service:
+                                    server_group = sg_name
+                                    print_info(f"Auto-detected server group: {server_group} (from database {db.get('name')})")
+        
+        # Check which services already have config files
+        if services_dir.exists():
+            for svc_file in services_dir.glob('*.yaml'):
+                existing_services.add(svc_file.stem)
+        
+        # Show helpful info about service status
+        if defined_services:
+            missing_services = defined_services - existing_services
+            if not missing_services:
+                print_warning("⚠️  All services defined in server_group.yaml already have configuration files")
+                print_info(f"Existing services: {', '.join(sorted(existing_services))}")
+            elif args.service not in defined_services:
+                print_error(f"❌ Service '{args.service}' not found in server_group.yaml")
+                if missing_services:
+                    print_info(f"Services defined but not yet created: {', '.join(sorted(missing_services))}")
+                    print_info(f"Did you mean one of these? {', '.join(sorted(missing_services))}")
+                return 1
         
         if not server_group:
             print_error(f"❌ Could not find server group for service '{args.service}'")
@@ -363,6 +412,10 @@ Examples:
         else:
             allowed_schemas = [args.schema] if args.schema else []
         
+        # Ensure allowed_schemas is always a list of strings (not None, not other types)
+        if not isinstance(allowed_schemas, list):
+            allowed_schemas = []
+        allowed_schemas = cast(List[str], allowed_schemas)
         schema = args.schema  # None if --all, specific schema otherwise
         
         # Validate schema if explicitly provided

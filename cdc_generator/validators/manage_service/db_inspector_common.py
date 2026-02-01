@@ -2,7 +2,7 @@
 
 import os
 from typing import Dict, Optional, Any
-from cdc_generator.helpers.helpers_logging import print_error
+from cdc_generator.helpers.helpers_logging import print_error, print_warning
 from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 
 
@@ -17,9 +17,32 @@ def expand_env_vars(value: Any) -> Any:
     """
     if not isinstance(value, str):
         return value
+    
+    original_value = value
     # Replace ${VAR} with $VAR for os.path.expandvars
     value = value.replace('${', '$').replace('}', '')
-    return os.path.expandvars(value)
+    expanded = os.path.expandvars(value)
+    
+    # Check if expansion actually happened (variable was set)
+    if expanded == value and '$' in value:
+        # Variable wasn't expanded - it's not in the environment
+        var_name = value.replace('$', '').split('/')[0].split(':')[0]  # Extract variable name
+        print_warning(f"Environment variable '{var_name}' not set - using literal value: {original_value}")
+        print_warning("In Docker container, ensure variables are set in .env and container is restarted")
+        
+        # Show available environment variables for debugging
+        relevant_vars = {k: v for k, v in os.environ.items() 
+                        if any(keyword in k.upper() for keyword in ['MSSQL', 'POSTGRES', 'DB', 'DATABASE', 'HOST', 'PORT', 'USER', 'PASSWORD'])}
+        if relevant_vars:
+            print_warning(f"Available database-related environment variables in container:")
+            for k, v in sorted(relevant_vars.items()):
+                # Mask password values
+                display_value = '***' if 'PASSWORD' in k.upper() or 'PASS' in k.upper() else v
+                print_warning(f"  {k}={display_value}")
+        else:
+            print_warning("No database-related environment variables found in container")
+    
+    return expanded
 
 
 def get_service_db_config(service: str, env: str = 'nonprod') -> Optional[Dict[str, Any]]:
@@ -35,6 +58,74 @@ def get_service_db_config(service: str, env: str = 'nonprod') -> Optional[Dict[s
     try:
         config = load_service_config(service)
         
+        # Try to get connection info from server_group.yaml first (for inspection)
+        from cdc_generator.helpers.service_config import get_project_root
+        import yaml  # type: ignore
+        
+        server_groups_file = get_project_root() / 'server_group.yaml'
+        if server_groups_file.exists():
+            with open(server_groups_file) as f:
+                server_groups_data = yaml.safe_load(f)
+                
+                # Find the server group for this service
+                for sg_name, sg in server_groups_data.get('server_group', {}).items():
+                    # For db-per-tenant: group name IS the service name
+                    if sg.get('pattern') == 'db-per-tenant' and sg_name == service:
+                        server_config = sg.get('server', {})
+                        database_ref = sg.get('database_ref')
+                        
+                        # Build connection config from server_group.yaml
+                        env_config: Dict[str, Any] = {
+                            'mssql': {
+                                'host': server_config.get('host'),
+                                'port': server_config.get('port'),
+                                'user': server_config.get('user') or server_config.get('username'),
+                                'password': server_config.get('password')
+                            },
+                            'database_name': database_ref
+                        }
+                        
+                        return {
+                            'env_config': env_config,
+                            'config': config
+                        }
+                    
+                    # For db-shared: check database service names
+                    elif sg.get('pattern') == 'db-shared':
+                        for db in sg.get('databases', []):
+                            if db.get('service') == service:
+                                server_config = sg.get('server', {})
+                                db_name = db.get('name')
+                                
+                                # Determine database type
+                                if server_config.get('type') == 'postgres':
+                                    env_config: Dict[str, Any] = {
+                                        'postgres': {
+                                            'host': server_config.get('host'),
+                                            'port': server_config.get('port'),
+                                            'user': server_config.get('user') or server_config.get('username'),
+                                            'password': server_config.get('password'),
+                                            'database': db_name
+                                        },
+                                        'database_name': db_name
+                                    }
+                                else:
+                                    env_config: Dict[str, Any] = {
+                                        'mssql': {
+                                            'host': server_config.get('host'),
+                                            'port': server_config.get('port'),
+                                            'user': server_config.get('user') or server_config.get('username'),
+                                            'password': server_config.get('password')
+                                        },
+                                        'database_name': db_name
+                                    }
+                                
+                                return {
+                                    'env_config': env_config,
+                                    'config': config
+                                }
+        
+        # Fallback to service config (old behavior)
         # For db-shared services (like directory), use direct environment config
         server_group = config.get('server_group')
         if server_group == 'asma':
