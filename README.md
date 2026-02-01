@@ -2,68 +2,226 @@
 
 **Generate Redpanda Connect pipeline configurations for Change Data Capture (CDC) workflows.**
 
-This library provides tools to generate CDC pipeline configurations from templates and service definitions, supporting both **db-per-tenant** (one database per customer) and **db-shared** (single database, multi-tenant) patterns.
+A CLI-first tool for managing CDC pipelines with automatic Docker dev container setup, supporting both **db-per-tenant** (one database per customer) and **db-shared** (single database, multi-tenant) patterns.
 
-## Features
+## ✨ Features
 
-- 🔄 **Multi-tenant CDC patterns**: Support for both db-per-tenant and db-shared architectures
+- 🚀 **Zero-config setup**: `pip install` → `cdc init` → ready to develop
+- 🐳 **Docker dev container**: Automatic environment setup with all dependencies
+- 🔄 **Multi-tenant patterns**: Support for db-per-tenant and db-shared architectures
 - 📝 **Template-based generation**: Jinja2 templates for flexible pipeline configuration
-- ✅ **Validation**: Schema validation for service configurations
-- 🛠️ **CLI tools**: Commands for managing services, server groups, and pipeline generation
-- 🐍 **Python library**: Use as a library in your own projects
+- ✅ **CLI-first philosophy**: All operations via `cdc` commands, no manual YAML editing
+- 🛠️ **Database integration**: Auto-updates docker-compose.yml with database services
 
-## Installation
-
-### Development (Local)
+## 📦 Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/carasent/cdc-pipeline-generator.git
-cd cdc-pipeline-generator
-
-# Install in editable mode
-pip install -e .
+pip install cdc-pipeline-generator
 ```
 
-### Production (From GitHub)
+That's it! The `cdc` command is now available globally.
+
+## 🚀 Quick Start (Recommended Workflow)
+
+> **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Never edit YAML files manually.** The CLI is the sole interface for configuration management.
+
+### 1. Initialize New Project
 
 ```bash
-pip install git+https://github.com/carasent/cdc-pipeline-generator.git@v1.0.0
+# Create project directory
+mkdir my-cdc-project
+cd my-cdc-project
+
+# Initialize with dev container
+cdc init
+# ✅ Creates docker-compose.yml, Dockerfile.dev, project structure
+# ✅ Builds dev container with Python, Fish shell, all dependencies
+# ✅ Prompts to start container automatically
 ```
 
-## Quick Start
-
-> **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Do not create or edit YAML files manually.** The CLI is the sole entry point for managing configuration files.
-
-### 1. Create Service
+### 2. Enter Dev Container
 
 ```bash
-# Create a new service configuration
-cdc manage-service --create adopus --server-group adopus
-
-# Add tables to the service
-cdc manage-service --service adopus --add-table Actor --primary-key actno
-cdc manage-service --service adopus --add-table Fraver --primary-key fraverid
+docker compose exec dev fish
+# Now inside container with cdc commands ready to use
 ```
 
-### 2. Configure Server Group
+### 3. Create Server Group (Auto-configures Docker Compose)
 
 ```bash
-# Add server group (interactive prompts for server_group_type, server details, etc.)
-cdc manage-server-group --add-group adopus
+# For MSSQL source (db-per-tenant pattern)
+cdc manage-server-group --create my-group \
+  --pattern db-per-tenant \
+  --source-type mssql \
+  --extraction-pattern '(?P<customer_id>\w+)_(?P<env>\w+)' \
+  --host '${MSSQL_HOST}' \
+  --port 1433 \
+  --user '${MSSQL_USER}' \
+  --password '${MSSQL_PASSWORD}'
 
-# Or update server group configuration from database inspection
+# ✅ Creates server-groups.yaml
+# ✅ Auto-updates docker-compose.yml with MSSQL + PostgreSQL services
+# ✅ Adds volume definitions and service dependencies
+```
+
+Or for PostgreSQL source (db-shared pattern):
+
+```bash
+cdc manage-server-group --create my-group \
+  --pattern db-shared \
+  --source-type postgresql \
+  --extraction-pattern '(?P<customer_id>\w+)' \
+  --environment-aware \
+  --host '${POSTGRES_SOURCE_HOST}' \
+  --port 5432 \
+  --user '${POSTGRES_SOURCE_USER}' \
+  --password '${POSTGRES_SOURCE_PASSWORD}'
+```
+
+### 4. Configure Environment Variables
+
+```bash
+# Copy example and edit with your credentials
+cp .env.example .env
+nano .env  # or use your preferred editor
+```
+
+Example `.env`:
+```bash
+# Source Database (MSSQL)
+MSSQL_HOST=mssql
+MSSQL_PORT=1433
+MSSQL_USER=sa
+MSSQL_PASSWORD=YourPassword123!
+
+# Target Database (PostgreSQL)
+POSTGRES_TARGET_HOST=postgres-target
+POSTGRES_TARGET_PORT=5432
+POSTGRES_TARGET_USER=postgres
+POSTGRES_TARGET_PASSWORD=postgres
+POSTGRES_TARGET_DB=cdc_target
+```
+
+### 5. Start All Services
+
+```bash
+# Exit container temporarily
+exit
+
+# Start databases and dev container
+docker compose up -d
+
+# Re-enter dev container
+docker compose exec dev fish
+```
+
+### 6. Create Service and Add Tables
+
+```bash
+# Create service
+cdc manage-service --create my-service --server-group my-group
+
+# Add tables to track
+cdc manage-service --service my-service --add-table Users --primary-key id
+cdc manage-service --service my-service --add-table Orders --primary-key order_id
+
+# Inspect available tables (optional)
+cdc manage-service --service my-service --inspect --schema dbo
+```
+
+### 7. Update Server Group (Populate Databases)
+
+```bash
+# Inspect source database and populate server-groups.yaml
 cdc manage-server-group --update
+# ✅ Auto-discovers databases
+# ✅ Maps databases to environments (dev/stage/prod)
+# ✅ Populates table counts and statistics
 ```
 
-### 3. Generate Pipelines
+### 8. Generate CDC Pipelines
 
 ```bash
-# Generate CDC pipelines for a service
-cdc generate --service adopus --environment local
+# Generate pipelines for development environment
+cdc generate --service my-service --environment dev
+
+# Check generated files
+ls generated/pipelines/
+ls generated/schemas/
 ```
 
-## Architecture Patterns
+### 9. Deploy Pipelines
+
+Generated pipeline files in `generated/pipelines/` are ready to deploy to your Redpanda Connect infrastructure.
+
+---
+
+## 📋 Complete Command Reference
+
+---
+
+## 📋 Complete Command Reference
+
+### Project Initialization
+
+```bash
+cdc init                      # Initialize new CDC project with dev container
+```
+
+### Service Management
+
+```bash
+# Create service
+cdc manage-service --create <name> --server-group <group-name>
+
+# Add tables
+cdc manage-service --service <name> --add-table <TableName> --primary-key <column>
+
+# Remove tables
+cdc manage-service --service <name> --remove-table <TableName>
+
+# Inspect database schema
+cdc manage-service --service <name> --inspect --schema <schema-name>
+```
+
+### Server Group Management
+
+```bash
+# Create server group (auto-updates docker-compose.yml)
+cdc manage-server-group --create <name> \
+  --pattern <db-per-tenant|db-shared> \
+  --source-type <mssql|postgresql> \
+  --extraction-pattern '<regex>' \
+  [--environment-aware]  # Required for db-shared
+
+# Update from database inspection
+cdc manage-server-group --update
+
+# Show server group info
+cdc manage-server-group --info
+
+# List all server groups
+cdc manage-server-group --list
+```
+
+### Pipeline Generation
+
+```bash
+# Generate for specific service
+cdc generate --service <name> --environment <dev|stage|prod>
+
+# Generate for all services
+cdc generate --all --environment <env>
+```
+
+### Validation
+
+```bash
+# Validate all configurations
+cdc validate
+```
+
+---
 
 ### db-per-tenant (One database per customer)
 
@@ -85,7 +243,46 @@ See: [`examples/db-per-tenant/`](examples/db-per-tenant/)
 
 See: [`examples/db-shared/`](examples/db-shared/)
 
-## Project Structure
+---
+
+## 🏗️ Architecture Patterns
+
+### db-per-tenant (One database per customer)
+
+**Use case:** Each customer has a dedicated source database.
+
+**Example:** SaaS application with isolated customer databases (customer_a_prod, customer_b_prod, etc.)
+
+**Pipeline generation:** Creates one source + sink pipeline per customer database.
+
+**Setup:**
+```bash
+cdc manage-server-group --create my-group \
+  --pattern db-per-tenant \
+  --source-type mssql \
+  --extraction-pattern '(?P<customer_id>\w+)_(?P<env>\w+)'
+```
+
+### db-shared (Single database, multi-tenant)
+
+**Use case:** All customers share one database, differentiated by `customer_id` column or schema.
+
+**Example:** Multi-tenant application with customer isolation via tenant_id field
+
+**Pipeline generation:** Creates one source + sink pipeline for all customers, with customer filtering.
+
+**Setup:**
+```bash
+cdc manage-server-group --create my-group \
+  --pattern db-shared \
+  --source-type postgresql \
+  --extraction-pattern '(?P<customer_id>\w+)' \
+  --environment-aware
+```
+
+---
+
+## 🐳 Docker Container Workflow
 
 ```
 cdc-pipeline-generator/
@@ -99,89 +296,137 @@ cdc-pipeline-generator/
     └── db-shared/         # Single-database pattern
 ```
 
-## Usage in Your Project
+---
 
-### Option 1: Mounted Development
+## 🐳 Docker Container Workflow
 
-**Best for:** Active development, testing changes immediately.
+The recommended way to use this tool is inside the auto-generated dev container:
+
+### Why Use the Container?
+
+✅ **Isolated environment** - No conflicts with host Python/packages  
+✅ **All dependencies pre-installed** - Python 3.11, Fish shell, database clients  
+✅ **Database services included** - MSSQL/PostgreSQL auto-configured  
+✅ **Consistent across team** - Same environment for everyone  
+
+### Container Commands
+
+```bash
+# Start all services (databases + dev container)
+docker compose up -d
+
+# Enter dev container
+docker compose exec dev fish
+
+# Stop all services
+docker compose down
+
+# Rebuild container (after updating generator version)
+docker compose up -d --build
+
+# View logs
+docker compose logs -f dev
+docker compose logs -f mssql
+docker compose logs -f postgres-target
+```
+
+### Working Inside Container
+
+Once inside (`docker compose exec dev fish`), you have:
+
+- ✅ `cdc` command available
+- ✅ Access to source and target databases
+- ✅ Fish shell with auto-completions
+- ✅ Git configured (via volume mount)
+- ✅ SSH keys available (via volume mount)
+
+All your project files are mounted at `/workspace`, so changes are reflected immediately.
+
+---
+
+## 📁 Project Structure
+
+---
+
+## 📁 Project Structure
+
+After running `cdc init`, your project will have:
+
+```
+my-cdc-project/
+├── docker-compose.yml           # Dev container + database services
+├── Dockerfile.dev               # Container image definition
+├── .env.example                 # Environment variables template
+├── .env                         # Your credentials (git-ignored)
+├── .gitignore                   # Git ignore rules
+├── server-groups.yaml           # Server group config (generated by cdc)
+├── README.md                    # Quick start guide
+├── 2-services/                  # Service definitions (generated by cdc)
+│   └── my-service.yaml
+├── 2-customers/                 # Customer configs (for db-per-tenant)
+├── 3-pipeline-templates/        # Custom pipeline templates (optional)
+└── generated/                   # Generated output (git-ignored)
+    ├── pipelines/               # Redpanda Connect pipeline YAML
+    ├── schemas/                 # PostgreSQL schemas
+    └── table-definitions/       # Table metadata
+```
+
+---
+
+## 🔧 Advanced Usage
+
+### Using as Python Library
+
+```python
+from cdc_generator.core.pipeline_generator import generate_pipelines
+
+# Generate pipelines programmatically
+generate_pipelines(
+    service='my-service',
+    environment='dev',
+    output_dir='./generated/pipelines'
+)
+```
+
+### Custom Pipeline Templates
+
+Place custom Jinja2 templates in `3-pipeline-templates/`:
 
 ```yaml
-# docker-compose.yml
-services:
-  dev:
-    volumes:
-      - .:/workspace
-      - ../cdc-pipeline-generator:/generator:rw
-    environment:
-      PYTHONPATH: /generator:/workspace
+# 3-pipeline-templates/source-pipeline.yaml
+input:
+  mssql_cdc:
+    dsn: "{{ dsn }}"
+    tables: {{ tables | tojson }}
+    # Your custom configuration
 ```
 
-```python
-# requirements-dev.txt
--e /generator
+### Environment-Specific Configuration
+
+Use environment variables in server-groups.yaml:
+
+```yaml
+server:
+  host: ${MSSQL_HOST}        # Replaced at runtime
+  port: ${MSSQL_PORT}
+  user: ${MSSQL_USER}
+  password: ${MSSQL_PASSWORD}
 ```
 
-### Option 2: Pinned Version
+---
 
-**Best for:** Production, stable deployments.
+## 🤝 Contributing
 
-```python
-# requirements.txt
-cdc-pipeline-generator @ git+https://github.com/carasent/cdc-pipeline-generator.git@v1.2.0
-```
+### For Library Contributors
 
-## CLI Commands
-
-All configuration is managed through `cdc` commands:
-
-### Service Management
-```bash
-# Create new service
-cdc manage-service --create <service-name> --server-group <group-name>
-
-# Add tables to service
-cdc manage-service --service <name> --add-table <TableName> --primary-key <column>
-
-# Inspect source database schema
-cdc manage-service --service <name> --inspect --schema dbo
-
-# Remove table from service
-cdc manage-service --service <name> --remove-table <TableName>
-```
-
-### Server Group Management
-```bash
-# Add new server group (interactive)
-cdc manage-server-group --add-group <name>
-
-# Update server group from database inspection
-cdc manage-server-group --update
-
-# Refresh database/table metadata
-cdc manage-server-group --refresh
-```
-
-### Pipeline Generation
-```bash
-# Generate CDC pipelines for service
-cdc generate --service <name> --environment <env>
-
-# Generate for all services
-cdc generate --all --environment <env>
-```
-
-### Validation
-```bash
-# Validate all configurations
-cdc validate
-```
-
-## Development
-
-### Setup
+If you want to contribute to the cdc-pipeline-generator library itself:
 
 ```bash
-# Install development dependencies
+# Clone repository
+git clone https://github.com/Relaxe111/cdc-pipeline-generator.git
+cd cdc-pipeline-generator
+
+# Install in editable mode with dev dependencies
 pip install -e ".[dev]"
 
 # Run tests
@@ -192,28 +437,10 @@ black .
 ruff check .
 ```
 
-### Docker Development Container
+### For Users
 
-```bash
-docker compose up -d
-docker compose exec dev fish
-```
+If you're using the library in your project, just install from PyPI as shown in [Installation](#-installation).
 
-## Contributing
+---
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Links
-
-- **GitHub**: https://github.com/carasent/cdc-pipeline-generator
-- **Issues**: https://github.com/carasent/cdc-pipeline-generator/issues
-- **Documentation**: See `examples/` directory for reference implementations
-
-## Example Projects
-
-- **adopus-cdc-pipeline**: db-per-tenant pattern with MSSQL source
-- **asma-cdc-pipeline**: db-shared pattern with PostgreSQL source
+## 📚 Resources
