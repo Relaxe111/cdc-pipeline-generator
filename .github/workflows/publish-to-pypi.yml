@@ -9,6 +9,7 @@ jobs:
   publish:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
+    environment: pypi  # Use 'pypi' environment for secrets and protection
     
     steps:
     - name: Checkout code
