@@ -96,14 +96,14 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         server_group = config.get('server_group')
         use_yaml_schemas = False
         if server_group:
-            server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+            server_groups_file = PROJECT_ROOT / 'server_group.yaml'
             if server_groups_file.exists():
                 with open(server_groups_file) as f:
                     server_groups_data = yaml.safe_load(f)
                     for sg in server_groups_data.get('server_groups', []):
                         if sg.get('name') == server_group:
                             server_type = sg.get('server', {}).get('type')
-                            server_group_type = sg.get('server_group_type')
+                            pattern = sg.get('pattern')
                             
                             # Use YAML-based generation for PostgreSQL services
                             if server_type == 'postgres':
@@ -125,16 +125,16 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                 print_error(f"Environment '{env}' not found for customer '{reference_customer}'")
                 return False
         
-        # Load all server groups from server-groups.yaml
-        server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+        # Load all server groups from server_group.yaml
+        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         all_server_groups = {}
         all_database_names_by_group = {}
         
         if server_groups_file.exists():
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
-                for sg in server_groups_data.get('server_groups', []):
-                    group_name = sg.get('name')
+                server_group_dict = server_groups_data.get('server_group', {})
+                for group_name, sg in server_group_dict.items():
                     all_server_groups[group_name] = sg
                     # Extract all database names from this server group
                     db_names = set()
@@ -151,7 +151,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         # Get current server group and mode
         server_group = config.get('server_group')
         if server_group:
-            mode = all_server_groups.get(server_group, {}).get('server_group_type', 'db-per-tenant')
+            mode = all_server_groups.get(server_group, {}).get('pattern', 'db-per-tenant')
         else:
             mode = config.get('mode', 'db-per-tenant')
         
@@ -1081,9 +1081,9 @@ def generate_table_names_enum_schema(service: str, schemas_data: dict) -> bool:
 
 
 def generate_service_enum_schema() -> bool:
-    """Generate mini schema for 'service' key from server-groups.yaml.
+    """Generate mini schema for 'service' key from server_group.yaml.
     
-    Extracts service names based on server_group_type:
+    Extracts service names based on pattern:
     - db-per-tenant: uses top-level 'service' field
     - db-shared: uses 'databases[].service' values
     
@@ -1093,9 +1093,9 @@ def generate_service_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         if not server_groups_file.exists():
-            print_error(f"server-groups.yaml not found at {server_groups_file}")
+            print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
         
         with open(server_groups_file) as f:
@@ -1103,15 +1103,12 @@ def generate_service_enum_schema() -> bool:
         
         services = set()
         
-        for group in data.get('server_groups', []):
-            group_name = group.get('name')
+        for group_name, group in data.get('server_group', {}).items():
             group_type = group.get('server_group_type')
             
             if group_type == 'db-per-tenant':
-                # Use top-level service field (which should be the group name)
-                service_name = group.get('service', group_name)
-                if service_name:
-                    services.add(service_name)
+                # For db-per-tenant: group name IS the service name
+                services.add(group_name)
             elif group_type == 'db-shared':
                 # Collect all unique service names from databases
                 for db in group.get('databases', []):
@@ -1124,7 +1121,7 @@ def generate_service_enum_schema() -> bool:
             "$schema": "http://json-schema.org/draft-07/schema#",
             "$id": "service.schema.json",
             "title": "Service Name Validation",
-            "description": "Valid service names from server-groups.yaml (auto-generated)",
+            "description": "Valid service names from server_group.yaml (auto-generated)",
             "type": "string",
             "enum": sorted(list(services))
         }
@@ -1150,7 +1147,7 @@ def generate_service_enum_schema() -> bool:
 
 
 def generate_server_group_enum_schema() -> bool:
-    """Generate mini schema for 'server_group' key from server-groups.yaml.
+    """Generate mini schema for 'server_group' key from server_group.yaml.
     
     Extracts all server group names.
     
@@ -1160,27 +1157,22 @@ def generate_server_group_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         if not server_groups_file.exists():
-            print_error(f"server-groups.yaml not found at {server_groups_file}")
+            print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
         
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
         
-        server_groups = []
-        
-        for group in data.get('server_groups', []):
-            group_name = group.get('name')
-            if group_name:
-                server_groups.append(group_name)
+        server_groups = list(data.get('server_group', {}).keys())
         
         # Create the mini schema for server_group key only
         schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "$id": "server_group.schema.json",
             "title": "Server Group Validation",
-            "description": "Valid server group names from server-groups.yaml (auto-generated)",
+            "description": "Valid server group names from server_group.yaml (auto-generated)",
             "type": "string",
             "enum": sorted(server_groups)
         }
@@ -1216,9 +1208,9 @@ def generate_database_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         if not server_groups_file.exists():
-            print_error(f"server-groups.yaml not found at {server_groups_file}")
+            print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
         
         with open(server_groups_file) as f:
@@ -1229,16 +1221,13 @@ def generate_database_name_schemas() -> bool:
         
         generated_count = 0
         
-        for group in data.get('server_groups', []):
-            group_name = group.get('name')
-            if not group_name:
-                continue
+        for group_name, group in data.get('server_group', {}).items():
             
             # Extract database names from this server group
             db_names = []
             
             # For db-per-tenant, include database_ref if it exists
-            group_type = group.get('server_group_type')
+            group_type = group.get('pattern')
             database_ref = group.get('database_ref')
             if group_type == 'db-per-tenant' and database_ref:
                 db_names.append(database_ref)
@@ -1291,9 +1280,9 @@ def generate_schema_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         if not server_groups_file.exists():
-            print_error(f"server-groups.yaml not found at {server_groups_file}")
+            print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
         
         with open(server_groups_file) as f:
@@ -1307,8 +1296,8 @@ def generate_schema_name_schemas() -> bool:
         databases_to_generate = []
         
         # First pass: collect all databases and group by schema list
-        for group in data.get('server_groups', []):
-            group_type = group.get('server_group_type')
+        for group_name, group in data.get('server_group', {}).items():
+            group_type = group.get('pattern')
             database_ref = group.get('database_ref')
             
             for db in group.get('databases', []):

@@ -7,13 +7,18 @@ class Colors:
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
     CYAN = '\033[96m'  # Alias for OKCYAN
+    BLUE = '\033[94m'  # Alias for OKBLUE
     OKGREEN = '\033[92m'
+    GREEN = '\033[92m'  # Alias for OKGREEN
     WARNING = '\033[93m'
+    YELLOW = '\033[93m'  # Alias for WARNING
     FAIL = '\033[91m'
+    RED = '\033[91m'  # Alias for FAIL
     ENDC = '\033[0m'
     RESET = '\033[0m'  # Alias for ENDC
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    DIM = '\033[2m'
 
 
 def print_header(msg: str) -> None:

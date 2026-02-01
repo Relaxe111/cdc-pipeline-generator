@@ -2,7 +2,7 @@
 
 from .config import (
     load_server_groups,
-    get_server_group_by_name,
+    get_single_server_group,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
@@ -38,12 +38,13 @@ from .cli_handlers import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_update,
+    handle_info,
 )
 
 __all__ = [
     # Config
     'load_server_groups',
-    'get_server_group_by_name',
+    'get_single_server_group',
     'load_database_exclude_patterns',
     'load_schema_exclude_patterns',
     'save_database_exclude_patterns',
@@ -69,4 +70,5 @@ __all__ = [
     'handle_add_ignore_pattern',
     'handle_add_schema_exclude',
     'handle_update',
+    'handle_info',
 ]

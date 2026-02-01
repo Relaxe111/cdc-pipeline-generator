@@ -5,7 +5,25 @@ from typing import List, Dict, Optional
 from ruamel.yaml import YAML
 from cdc_generator.helpers.helpers_logging import print_error
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+def get_implementation_root() -> Path:
+    """Get the implementation root directory.
+    
+    Looks for the implementation root by searching for 2-services/ directory.
+    This allows the tool to work from any subdirectory within the implementation.
+    """
+    current = Path.cwd()
+    
+    # Search upwards from current directory for 2-services/
+    for parent in [current] + list(current.parents):
+        if (parent / "2-services").exists():
+            return parent
+    
+    # Fallback to current directory
+    return current
+
+
+PROJECT_ROOT = get_implementation_root()
 SERVICES_DIR = PROJECT_ROOT / "2-services"
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 

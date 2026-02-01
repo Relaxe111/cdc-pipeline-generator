@@ -5,10 +5,9 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from .config import SERVER_GROUPS_FILE, get_server_group_by_name
+from .config import SERVER_GROUPS_FILE, get_single_server_group
 from .filters import infer_service_name
 from cdc_generator.helpers.helpers_logging import print_error, print_info, print_success
 
@@ -54,7 +53,7 @@ def parse_existing_comments(server_group_name: str) -> List[str]:
 
 
 def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, Any]]) -> bool:
-    """Update server-groups.yaml with database/schema information."""
+    """Update server_group.yaml with database/schema information."""
     try:
         # Read the file to preserve exclude patterns comments
         with open(SERVER_GROUPS_FILE, 'r') as f:
@@ -72,21 +71,27 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         with open(SERVER_GROUPS_FILE, 'r') as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
         
-        server_group = get_server_group_by_name(config, server_group_name)
+        server_group = get_single_server_group(config)
         
         if not server_group:
-            print_error(f"Server group '{server_group_name}' not found")
+            print_error(f"No server group found in configuration")
             return False
         
-        server_group_type = server_group.get('server_group_type')
+        # Verify the server group name matches
+        actual_name = server_group.get('name')
+        if actual_name != server_group_name:
+            print_error(f"Server group name mismatch: expected '{server_group_name}', found '{actual_name}'")
+            return False
+        
+        pattern = server_group.get('pattern')
         
         # Set service name for db-per-tenant: use server group name
-        if server_group_type == 'db-per-tenant':
+        if pattern == 'db-per-tenant':
             server_group['service'] = server_group_name
             print_info(f"Set service name to '{server_group_name}' (db-per-tenant)")
         
         # Auto-generate service names for db-shared type
-        if server_group_type == 'db-shared':
+        if pattern == 'db-shared':
             print_info(f"Auto-generating service names from database names...")
             for db in databases:
                 db_name = db['name']
@@ -108,7 +113,7 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                     print_success(f"  • {db_name:<40} -> {inferred_service} (inferred)")
         
         # For db-per-tenant, set service to the server group name for all databases
-        if server_group_type == 'db-per-tenant':
+        if pattern == 'db-per-tenant':
             for db in databases:
                 db['service'] = server_group_name
         
@@ -139,10 +144,10 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         if schema_exclude_patterns_line:
             output_lines.append(schema_exclude_patterns_line)
         
-        output_lines.append("server_groups:")
+        output_lines.append("server_group:")
         
-        for sg in config.get('server_groups', []):
-            sg_name = sg.get('name')
+        server_group_dict = config.get('server_group', {})
+        for sg_name, sg in server_group_dict.items():
             
             # If this is the server group being updated, add the databases
             if sg_name == server_group_name:
@@ -160,47 +165,20 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             output_lines.append("# ============================================================================")
             if sg_name == 'adopus':
                 output_lines.append("# AdOpus Server Group (db-per-tenant)")
-                output_lines.append("# ============================================================================")
-                if sg_name == server_group_name:
-                    # Update existing metadata, preserving other comments
-                    existing_comments = parse_existing_comments(sg_name)
-                    for comment in existing_comments:
-                        # Replace Last Updated line with new timestamp
-                        if 'Last Updated:' in comment:
-                            output_lines.append(f"# Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                        else:
-                            output_lines.append(comment)
-                else:
-                    # Preserve existing comments for non-updated server groups
-                    existing_comments = parse_existing_comments(sg_name)
-                    for comment in existing_comments:
-                        output_lines.append(comment)
-                output_lines.append("# ============================================================================")
             elif sg_name == 'asma':
                 output_lines.append("# ASMA Server Group (db-shared)")
-                output_lines.append("# ============================================================================")
-                if sg_name == server_group_name:
-                    # Update existing metadata, preserving other comments
-                    existing_comments = parse_existing_comments(sg_name)
-                    for comment in existing_comments:
-                        # Replace Last Updated line with new timestamp
-                        if 'Last Updated:' in comment:
-                            output_lines.append(f"# Last Updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-                        else:
-                            output_lines.append(comment)
-                else:
-                    # Preserve existing comments for non-updated server groups
-                    existing_comments = parse_existing_comments(sg_name)
-                    for comment in existing_comments:
-                        output_lines.append(comment)
-                output_lines.append("# ============================================================================")
+            output_lines.append("# ============================================================================")
             
-            # Add the server group YAML
-            sg_yaml = yaml.dump([sg], default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
-            # Remove the leading "- " from first line and adjust indentation
+            # Add the server group as a dict entry (key: value format)
+            # Write the key first
+            output_lines.append(f"  {sg_name}:")
+            
+            # Dump the server group data and indent it properly
+            sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
             sg_lines = sg_yaml.strip().split('\n')
             for line in sg_lines:
-                output_lines.append(line)
+                # Add 4 spaces of indentation (2 for server_group level + 2 for content)
+                output_lines.append(f"    {line}")
         
         # Write the complete file
         with open(SERVER_GROUPS_FILE, 'w') as f:

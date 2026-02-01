@@ -7,9 +7,24 @@ except ImportError:
 
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+import os
 
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-SERVER_GROUPS_FILE = PROJECT_ROOT / "server-groups.yaml"
+
+def get_implementation_root() -> Path:
+    """Get implementation root by searching upward for server_group.yaml."""
+    current = Path(os.getcwd())
+    
+    # Search upwards from current directory for server_group.yaml
+    for parent in [current, *current.parents]:
+        if (parent / "server_group.yaml").exists():
+            return parent
+    
+    # Fallback to hardcoded path (for backwards compatibility)
+    return Path(__file__).parent.parent.parent.parent
+
+
+PROJECT_ROOT = get_implementation_root()
+SERVER_GROUPS_FILE = PROJECT_ROOT / "server_group.yaml"
 
 
 def load_server_groups() -> Dict[str, Any]:
@@ -21,16 +36,33 @@ def load_server_groups() -> Dict[str, Any]:
         return yaml.safe_load(f) or {}  # type: ignore[misc]
 
 
-def get_server_group_by_name(config: Dict[str, Any], name: str) -> Optional[Dict[str, Any]]:
-    """Get a specific server group by name from configuration."""
-    for sg in config.get('server_groups', []):
-        if sg.get('name') == name:
-            return sg
+def get_single_server_group(config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Get the single server group from configuration.
+    
+    Since each implementation has only one server group, this returns the first one found.
+    Adds 'name' field to the returned dict for compatibility.
+    
+    Args:
+        config: Loaded server groups configuration
+        
+    Returns:
+        Server group dict with 'name' field added, or None if no server group exists
+    """
+    server_group_dict = config.get('server_group', {})
+    if not server_group_dict:
+        return None
+    
+    # Get the first (and should be only) server group
+    for name, group_data in server_group_dict.items():
+        result = dict(group_data)
+        result['name'] = name
+        return result
+    
     return None
 
 
 def load_database_exclude_patterns() -> List[str]:
-    """Load database exclude patterns from server-groups.yaml metadata."""
+    """Load database exclude patterns from server_group.yaml metadata."""
     try:
         with open(SERVER_GROUPS_FILE) as f:
             for line in f:
@@ -49,7 +81,7 @@ def load_database_exclude_patterns() -> List[str]:
 
 
 def load_schema_exclude_patterns() -> List[str]:
-    """Load schema exclude patterns from server-groups.yaml metadata."""
+    """Load schema exclude patterns from server_group.yaml metadata."""
     try:
         with open(SERVER_GROUPS_FILE) as f:
             for line in f:
@@ -68,7 +100,7 @@ def load_schema_exclude_patterns() -> List[str]:
 
 
 def save_database_exclude_patterns(patterns: List[str]) -> None:
-    """Save database exclude patterns to server-groups.yaml metadata comment."""
+    """Save database exclude patterns to server_group.yaml metadata comment."""
     try:
         with open(SERVER_GROUPS_FILE) as f:
             lines = f.readlines()
@@ -96,7 +128,7 @@ def save_database_exclude_patterns(patterns: List[str]) -> None:
 
 
 def save_schema_exclude_patterns(patterns: List[str]) -> None:
-    """Save schema exclude patterns to server-groups.yaml metadata comment."""
+    """Save schema exclude patterns to server_group.yaml metadata comment."""
     try:
         with open(SERVER_GROUPS_FILE) as f:
             lines = f.readlines()

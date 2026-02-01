@@ -14,7 +14,7 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Tuple, cast
 
 try:
     import yaml 
@@ -49,9 +49,32 @@ SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Interactive CDC table mapping manager")
-    parser.add_argument("--service", help="Service name")
+    parser = argparse.ArgumentParser(
+        description="Interactive CDC service management tool",
+        epilog="""
+Examples:
+  # Create a new service
+  cdc manage-service --service myservice --create-service
+  
+  # Inspect database tables
+  cdc manage-service --service adopus --inspect --schema dbo
+  cdc manage-service --service adopus --inspect --all
+  
+  # Add tables to service
+  cdc manage-service --service adopus --add-source-table dbo.Actor
+  cdc manage-service --service adopus --add-source-tables dbo.Actor dbo.Fraver
+  
+  # Remove table from service
+  cdc manage-service --service adopus --remove-table dbo.Actor
+  
+  # Validate service configuration
+  cdc manage-service --service adopus --validate-config
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--service", required=False, help="Service name from 2-services/*.yaml (required for most operations)")
     parser.add_argument("--create-service", action="store_true", help="Create a new service configuration file")
+    parser.add_argument("--list-source-tables", action="store_true", help="List all source tables configured in this service")
     parser.add_argument("--add-source-table", help="Add single table to service (format: schema.table)")
     parser.add_argument("--add-source-tables", nargs='+', help="Add multiple tables to service (space-separated, format: schema.table schema.table)")
     parser.add_argument("--remove-table", help="Remove table from service (format: schema.table or just table)")
@@ -78,30 +101,144 @@ def main() -> int:
     
     args = parser.parse_args()
     
+    # Handle list-source-tables operation
+    if args.list_source_tables:
+        if not args.service:
+            print_error("❌ Error: --service is required for --list-source-tables")
+            return 1
+        
+        from cdc_generator.helpers.service_config import load_service_config
+        
+        try:
+            config = load_service_config(args.service)
+            
+            # Try new hierarchical format first (shared.source_tables)
+            source_tables: List[Dict[str, Any]] = config.get('shared', {}).get('source_tables', [])
+            
+            # If not found, try old flat format (source.tables)
+            if not source_tables:
+                old_tables: Dict[str, Any] = config.get('source', {}).get('tables', {})
+                if old_tables:
+                    # Convert old format to display
+                    print_header(f"Source Tables in '{args.service}'")
+                    
+                    # Group by schema
+                    schema_tables: Dict[str, List[Tuple[str, Any]]] = {}
+                    for table_key, table_props in sorted(old_tables.items()):
+                        key_str = str(table_key)
+                        if '.' in key_str:
+                            schema, table = key_str.split('.', 1)
+                        else:
+                            schema = 'dbo'
+                            table = key_str
+                        
+                        if schema not in schema_tables:
+                            schema_tables[schema] = []
+                        schema_tables[schema].append((table, table_props))
+                    
+                    table_count = 0
+                    for schema_name in sorted(schema_tables.keys()):
+                        print(f"{Colors.BOLD}{Colors.BLUE}{schema_name}{Colors.RESET}")
+                        
+                        for table_name, table_properties in schema_tables[schema_name]:
+                            table_count += 1
+                            pk: str = ''
+                            if isinstance(table_properties, dict):
+                                pk_value = cast(str, table_properties.get('primary_key', '')) # type: ignore
+                                pk = pk_value if pk_value else ''
+                            
+                            # Table name with optional PK
+                            if pk:
+                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET} {Colors.DIM}(PK: {pk}){Colors.RESET}")
+                            else:
+                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET}")
+                        
+                        print()  # Blank line between schemas
+                    
+                    print(f"{Colors.DIM}Total: {table_count} table(s) across {len(schema_tables)} schema(s){Colors.RESET}\n")
+                    return 0
+            
+            if not source_tables:
+                print_warning(f"No source tables configured in service '{args.service}'")
+                print_info(f"Add tables with: cdc manage-service --service {args.service} --add-source-table <schema.table>")
+                return 0
+            
+            print_header(f"Source Tables in '{args.service}'")
+            
+            table_count = 0
+            # Group by schema
+            for schema_group in source_tables:
+                schema_name = schema_group.get('schema')
+                tables = schema_group.get('tables', [])
+                
+                if tables:
+                    print(f"{Colors.BOLD}{Colors.BLUE}{schema_name}{Colors.RESET}")
+                    for table in tables:
+                        table_count += 1
+                        if isinstance(table, str):
+                            print(f"  {Colors.CYAN}{table}{Colors.RESET}")
+                        else:
+                            table_name = table.get('name', 'Unknown')
+                            pk = table.get('primary_key')
+                            ignore_cols = table.get('ignore_columns', [])
+                            track_cols = table.get('track_columns', [])
+                            
+                            # Table name with optional PK
+                            if pk:
+                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET} {Colors.DIM}(PK: {pk}){Colors.RESET}")
+                            else:
+                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET}")
+                            
+                            # Show ignore columns if present
+                            if ignore_cols:
+                                print(f"    {Colors.DIM}ignore:{Colors.RESET}")
+                                for col in ignore_cols:
+                                    print(f"      {Colors.RED}{col}{Colors.RESET}")
+                            
+                            # Show track columns if present
+                            if track_cols:
+                                print(f"    {Colors.DIM}track:{Colors.RESET}")
+                                for col in track_cols:
+                                    print(f"      {Colors.OKGREEN}{col}{Colors.RESET}")
+                    
+                    print()  # Blank line between schemas
+            
+            print(f"{Colors.DIM}Total: {table_count} table(s) across {len(source_tables)} schema(s){Colors.RESET}\n")
+            return 0
+            
+        except FileNotFoundError as e:
+            print_error(f"Service not found: {e}")
+            return 1
+        except Exception as e:
+            print_error(f"Failed to list source tables: {e}")
+            return 1
+    
     # Handle create-service operation
     if args.create_service:
         if not args.service:
             print("❌ Error: --service is required for --create-service")
             return 1
         
-        # Auto-detect server-group from server-groups.yaml
+        # Auto-detect server-group from server_group.yaml
+        from cdc_generator.helpers.service_config import get_project_root
         server_group = None
-        server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
+        server_groups_file = get_project_root() / 'server_group.yaml'
         if server_groups_file.exists() and yaml is not None:
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
-                for sg in server_groups_data.get('server_groups', []):
-                    # Check server group level service field
-                    if sg.get('service') == args.service:
-                        server_group = sg.get('name')
-                        print_info(f"Auto-detected server group: {server_group}")
-                        break
-                    
-                    # Also check database-level service fields
-                    for db in sg.get('databases', []):
-                        if db.get('service') == args.service:
-                            server_group = sg.get('name')
-                            print_info(f"Auto-detected server group: {server_group} (from database {db.get('name')})")
+                for sg_name, sg in server_groups_data.get('server_group', {}).items():
+                    # For db-per-tenant: group name IS the service name
+                    if sg.get('pattern') == 'db-per-tenant':
+                        if sg_name == args.service:
+                            server_group = sg_name
+                            print_info(f"Auto-detected server group: {server_group}")
+                            break
+                    # For db-shared: check database-level service fields
+                    elif sg.get('pattern') == 'db-shared':
+                        for db in sg.get('databases', []):
+                            if db.get('service') == args.service:
+                                server_group = sg_name
+                                print_info(f"Auto-detected server group: {server_group} (from database {db.get('name')})")
                             break
                     
                     if server_group:
@@ -109,7 +246,7 @@ def main() -> int:
         
         if not server_group:
             print_error(f"❌ Could not find server group for service '{args.service}'")
-            print_error(f"Add service mapping to server-groups.yaml")
+            print_error(f"Add service mapping to server_group.yaml")
             return 1
             
         create_service(args.service, server_group)
@@ -142,25 +279,27 @@ def main() -> int:
     # Handle inspect operation (auto-detect database type)
     if args.service and args.inspect:
         # Load service config to detect database type
-        from cdc_generator.helpers.service_config import load_service_config  
+        from cdc_generator.helpers.service_config import load_service_config, get_project_root
         config: dict[str, Any] = load_service_config(args.service)  
-        server_group: str | None = config.get('server_group')  
         
-        # Determine database type from server group
-        db_type = None
-        if server_group:
-            server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
+        # Try to get database type from source.type first (legacy format)
+        db_type = config.get('source', {}).get('type')
+        server_group: str | None = config.get('server_group')
+        
+        # If not found, try from server group (new format)
+        if not db_type and server_group:
+            server_groups_file = get_project_root() / 'server_group.yaml'
             if server_groups_file.exists() and yaml is not None:
                 with open(server_groups_file) as f:
                     server_groups_data = yaml.safe_load(f)
-                    for sg in server_groups_data.get('server_groups', []):
-                        if sg.get('name') == server_group:
-                            db_type = sg.get('server', {}).get('type')
-                            break
+                    server_group_dict = server_groups_data.get('server_group', {})
+                    if server_group in server_group_dict:
+                        sg = server_group_dict[server_group]
+                        db_type = sg.get('server', {}).get('type')
         
         if not db_type:
             print_error(f"Could not determine database type for service '{args.service}'")
-            print_error(f"Check that server_group is set in service config and exists in server-groups.yaml")
+            print_error(f"Check that source.type is set or server_group exists in server_group.yaml")
             return 1
         
         # Require either --all or explicit --schema
@@ -168,34 +307,61 @@ def main() -> int:
             print_error(f"Error: --inspect requires either --all (for all schemas) or --schema <name> (for specific schema)")
             return 1
         
-        # Get allowed schemas from server-groups.yaml
-        server_groups_file = Path(__file__).parent.parent / 'server-groups.yaml'
+        # Get allowed schemas from server_group.yaml (only for services with server_group)
         allowed_schemas = None
+        server_group_found = False
         
-        if server_groups_file.exists() and yaml is not None:
-            with open(server_groups_file) as f:
-                server_groups_data = yaml.safe_load(f)
-                for sg in server_groups_data.get('server_groups', []):
-                    if sg.get('name') == server_group:
+        if server_group:
+            server_groups_file = get_project_root() / 'server_group.yaml'
+            
+            if server_groups_file.exists() and yaml is not None:
+                with open(server_groups_file) as f:
+                    server_groups_data = yaml.safe_load(f)
+                    server_group_dict = server_groups_data.get('server_group', {})
+                    if server_group in server_group_dict:
+                        sg = server_group_dict[server_group]
+                        server_group_found = True
+                            
                         # For db-per-tenant: get schemas from database_ref
-                        if sg.get('server_group_type') == 'db-per-tenant':
+                        if sg.get('pattern') == 'db-per-tenant':
                             database_ref = sg.get('database_ref')
-                            for db in sg.get('databases', []):
-                                if db.get('name') == database_ref:
-                                    allowed_schemas = db.get('schemas', [])
-                                    break
-                        # For db-shared: find database matching service name
-                        elif sg.get('server_group_type') == 'db-shared':
-                            for db in sg.get('databases', []):
-                                if db.get('service') == args.service:
-                                    allowed_schemas = db.get('schemas', [])
-                                    break
-                        break
-        
-        if not allowed_schemas:
-            print_error(f"No schemas defined for service '{args.service}' in server-groups.yaml")
-            print_error(f"Please add schemas list to the database entry for this service")
-            return 1
+                            if not database_ref:
+                                print_error(f"No database_ref defined for server group '{server_group}'")
+                                return 1
+                                
+                            # Find the reference database
+                                for db in sg.get('databases', []):
+                                    if db.get('name') == database_ref:
+                                        allowed_schemas = db.get('schemas', [])
+                                        break
+                                
+                                if not allowed_schemas:
+                                    print_error(f"Reference database '{database_ref}' not found in databases list for server group '{server_group}'")
+                                    return 1
+                            
+                            # For db-shared: find database matching service name
+                            elif sg.get('pattern') == 'db-shared':
+                                for db in sg.get('databases', []):
+                                    if db.get('service') == args.service:
+                                        allowed_schemas = db.get('schemas', [])
+                                        break
+                                
+                                if not allowed_schemas:
+                                    print_error(f"No database with service='{args.service}' found in server group '{server_group}'")
+                                    return 1
+            
+            # If server_group is set but not found in server_group.yaml
+            if not server_group_found:
+                # Check if we have source.type as fallback
+                if config.get('source', {}).get('type'):
+                    print_warning(f"Server group '{server_group}' not found in server_group.yaml, using source.type")
+                    allowed_schemas = [args.schema] if args.schema else []
+                else:
+                    print_error(f"Server group '{server_group}' not found in server_group.yaml")
+                    return 1
+        # No server_group set - use any schema (services with direct source.type)
+        else:
+            allowed_schemas = [args.schema] if args.schema else []
         
         schema = args.schema  # None if --all, specific schema otherwise
         
@@ -218,7 +384,7 @@ def main() -> int:
             return 1
         
         if tables:
-            # Filter by allowed schemas from server-groups.yaml
+            # Filter by allowed schemas from server_group.yaml
             if args.all:
                 # When --all, filter to only allowed schemas
                 tables = [t for t in tables if t['TABLE_SCHEMA'] in allowed_schemas]  
@@ -334,6 +500,25 @@ def main() -> int:
         if remove_table_from_service(args.service, schema, table):
             print_info("\nRun 'cdc generate' to update pipelines")
             return 0
+        return 1
+    
+    # If no operation specified or service missing, show help
+    if not args.service:
+        # List available services
+        from cdc_generator.helpers.service_config import get_project_root
+        services_dir = get_project_root() / "2-services"
+        if services_dir.exists():
+            service_files = sorted(services_dir.glob("*.yaml"))
+            if service_files:
+                print_header("Available Services")
+                for service_file in service_files:
+                    service_name = service_file.stem
+                    print(f"  • {service_name}")
+                print()
+        
+        print_error("❌ Error: --service is required")
+        print_info("Usage: cdc manage-service --service <name> [options]")
+        print_info("Run 'cdc manage-service --help' for more information")
         return 1
     
     # Interactive mode (legacy workflow - delegates to interactive_mode module)

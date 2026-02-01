@@ -57,8 +57,8 @@ def detect_environment():
         return Path('/implementations/asma'), 'asma', True
     
     # Check if we're in an implementation directory on host
-    # Look for server-groups.yaml as indicator
-    if (cwd / 'server-groups.yaml').exists():
+    # Look for server_group.yaml as indicator
+    if (cwd / 'server_group.yaml').exists():
         # We're in an implementation root
         # Try to detect which one from path
         if 'adopus-cdc-pipeline' in str(cwd):
@@ -72,7 +72,7 @@ def detect_environment():
     # Try to find implementation root by walking up
     current = cwd
     while current != current.parent:
-        if (current / 'server-groups.yaml').exists():
+        if (current / 'server_group.yaml').exists():
             impl_name = None
             if 'adopus-cdc-pipeline' in str(current):
                 impl_name = 'adopus'
@@ -128,6 +128,11 @@ def get_script_paths(workspace_root, is_dev_container):
 
 # Commands that use generator library
 GENERATOR_COMMANDS = {
+    "init": {
+        "module": "cdc_generator.cli.init",
+        "script": "cli/init.py",
+        "description": "Initialize a new CDC pipeline project"
+    },
     "generate": {
         "module": "cdc_generator.core.pipeline_generator",
         "script": "core/pipeline_generator.py",

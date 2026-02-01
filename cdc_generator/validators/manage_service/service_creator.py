@@ -1,7 +1,8 @@
 """Service creation and scaffolding."""
 
-import yaml
+import yaml  # type: ignore
 from pathlib import Path
+from typing import Dict, Any
 from cdc_generator.helpers.helpers_logging import print_header, print_success
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -19,61 +20,61 @@ def create_service(service_name: str, server_group: str) -> None:
     
     service_file = services_dir / f'{service_name}.yaml'
     
-    # Load server-groups.yaml to get server_group_type and database info
-    server_groups_file = PROJECT_ROOT / 'server-groups.yaml'
+    # Load server_group.yaml to get server_group_type and database info
+    server_groups_file = PROJECT_ROOT / 'server_group.yaml'
     with open(server_groups_file) as f:
         server_groups_data = yaml.safe_load(f)
     
     # Find the server group and get its type
-    server_group_type = None
     validation_database = None
     database_name = None
     schemas = []
+    pattern = None
     
-    for group in server_groups_data.get('server_groups', []):
-        if group.get('name') == server_group:
-            server_group_type = group.get('server_group_type')
-            
-            # Extract database name and schemas based on server_group_type
-            if server_group_type == 'db-per-tenant':
-                # Use database_ref for validation
-                validation_database = group.get('database_ref')
-                database_name = validation_database
-                # Find schemas for the reference database
-                for db in group.get('databases', []):
-                    if db.get('name') == database_name:
-                        schemas = db.get('schemas', ['dbo'])
-                        break
-            elif server_group_type == 'db-shared':
-                # Find the database that matches this service name
-                for db in group.get('databases', []):
-                    if db.get('service') == service_name:
-                        validation_database = db.get('name')
-                        database_name = db.get('name')
-                        schemas = db.get('schemas', ['public'])
-                        break
-            break
+    server_group_dict = server_groups_data.get('server_group', {})
+    if server_group in server_group_dict:
+        group = server_group_dict[server_group]
+        pattern = group.get('pattern')
+        
+        # Extract database name and schemas based on pattern
+        if pattern == 'db-per-tenant':
+            # Use database_ref for validation
+            validation_database = group.get('database_ref')
+            database_name = validation_database
+            # Find schemas for the reference database
+            for db in group.get('databases', []):
+                if db.get('name') == database_name:
+                    schemas = db.get('schemas', ['dbo'])
+                    break
+        elif pattern == 'db-shared':
+            # Find the database that matches this service name
+            for db in group.get('databases', []):
+                if db.get('service') == service_name:
+                    validation_database = db.get('name')
+                    database_name = db.get('name')
+                    schemas = db.get('schemas', ['public'])
+                    break
     
-    if not server_group_type:
-        raise ValueError(f"Server group '{server_group}' not found in server-groups.yaml")
+    if not pattern:
+        raise ValueError(f"Server group '{server_group}' not found in server_group.yaml")
     
-    if server_group_type == 'db-shared' and not validation_database:
+    if pattern == 'db-shared' and not validation_database:
         raise ValueError(f"No database found for service '{service_name}' in server group '{server_group}'")
     
     # Check if service exists - update mode
     update_mode = service_file.exists()
     
     if update_mode:
-        print_header(f"Updating {server_group_type} service: {service_name}")
+        print_header(f"Updating {pattern} service: {service_name}")
         # Load existing service file
         with open(service_file) as f:
             existing_service = yaml.safe_load(f)
     else:
-        print_header(f"Creating new {server_group_type} service: {service_name}")
+        print_header(f"Creating new {pattern} service: {service_name}")
         existing_service = None
     
-    if server_group_type == 'db-per-tenant':
-        template = {
+    if pattern == 'db-per-tenant':
+        template: Dict[str, Any] = {
             'service': service_name,
             'server_group': server_group,
             'source': {
@@ -156,7 +157,7 @@ def create_service(service_name: str, server_group: str) -> None:
         }
     
     else:  # db-shared
-        template = {
+        template: Dict[str, Any] = {
             'service': service_name,
             'server_group': server_group,
             'source': {
@@ -190,7 +191,7 @@ def create_service(service_name: str, server_group: str) -> None:
         # Update top-level fields
         existing_service['server_group'] = server_group
         
-        # Update validation_database if found in server-groups.yaml
+        # Update validation_database if found in server_group.yaml
         if validation_database and 'source' in existing_service:
             existing_service['source']['validation_database'] = validation_database
         
@@ -248,8 +249,8 @@ def create_service(service_name: str, server_group: str) -> None:
 #
 # 🚫 DO NOT MANUALLY EDIT:
 #   - service, server_group, reference (use --create-service to update)
-#   - environments (auto-populated from server-groups.yaml)
-#   - Database connection details (managed via server-groups.yaml)
+#   - environments (auto-populated from server_group.yaml)
+#   - Database connection details (managed via server_group.yaml)
 # ============================================================================
 
 """.format(service_name=service_name)
@@ -263,7 +264,7 @@ def create_service(service_name: str, server_group: str) -> None:
     
     if not update_mode:
         print_success(f"\nNext steps:")
-        if server_group_type == 'db-per-tenant':
+        if pattern == 'db-per-tenant':
             print_success(f"  1. Edit {service_file} to configure your service")
             print_success(f"  2. Add CDC tables to shared.source_tables")
             print_success(f"  3. Configure customers and environments")

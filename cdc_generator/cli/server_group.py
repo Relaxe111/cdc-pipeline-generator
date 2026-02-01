@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manage server groups - inspect databases and update server-groups.yaml.
+Manage server groups - inspect databases and update server_group.yaml.
 
 Usage:
     cdc manage-server-group --update                          # Update asma (default)
@@ -32,6 +32,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_update,
+    handle_info,
     regenerate_all_validation_schemas,
 )
 
@@ -41,19 +42,18 @@ def main() -> int:
     
     parser = argparse.ArgumentParser(description="Manage server groups")
     parser.add_argument("--update", action="store_true", help="Update server group from database inspection")
-    parser.add_argument("--server-group", default="asma", help="Server group name (default: asma)")
-    parser.add_argument("--all", action="store_true", help="Update all server groups")
     parser.add_argument("--list", action="store_true", help="List all server groups")
+    parser.add_argument("--info", action="store_true", help="Show detailed server group information")
     
-    # Add server group
-    parser.add_argument("--add-group", help="Add new server group")
+    # Create server group (one per implementation)
+    parser.add_argument("--create", metavar="NAME", help="Create new server group with given name")
+    parser.add_argument("--pattern", choices=["db-per-tenant", "db-shared"], default="db-per-tenant",
+                       help="Server group pattern (default: db-per-tenant)")
     parser.add_argument("--type", choices=["postgres", "mssql"], help="Database type for new server group")
     parser.add_argument("--host", help="Database host (use ${VAR} for environment variables)")
     parser.add_argument("--port", type=int, help="Database port")
     parser.add_argument("--user", help="Database user (use ${VAR} for environment variables)")
     parser.add_argument("--password", help="Database password (use ${VAR} for environment variables)")
-    parser.add_argument("--mode", choices=["db-per-tenant", "db-shared"], default="db-per-tenant",
-                       help="Server group type (default: db-per-tenant)")
     
     # Exclude patterns management
     parser.add_argument("--add-to-ignore-list", help="Add pattern(s) to database exclude list (comma-separated)")
@@ -75,7 +75,7 @@ def main() -> int:
                 print_info(f"  • {pattern}")
         else:
             print_warning("No schema exclude patterns defined")
-            print_info("Add patterns to the comment in server-groups.yaml:")
+            print_info("Add patterns to the comment in server_group.yaml:")
             print_info("  # schema_exclude_patterns: ['hdb_catalog', 'hdb_views', 'sessions']")
         return 0
     
@@ -96,24 +96,31 @@ def main() -> int:
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
     
-    # Handle add group
-    if args.add_group:
+    # Handle create group
+    if args.create:
+        # Convert --create to args.add_group format for backwards compat with handler
+        args.add_group = args.create
+        args.mode = args.pattern  # Use pattern instead of mode
         result = handle_add_group(args)
         if result == 0:
             regenerate_all_validation_schemas()
         return result
+    
+    # Handle info
+    if args.info:
+        return handle_info(args)
     
     # Handle list
     if args.list:
         list_server_groups()
         return 0
     
-    # Handle update
+    # Handle update (no --server-group or --all needed, only one group per implementation)
     if args.update:
         return handle_update(args)
     
     # No action specified
-    print_error("No action specified. Use --update, --list, or --add-group")
+    print_error("No action specified. Use --update, --list, --info, or --create")
     parser.print_help()
     return 1
 

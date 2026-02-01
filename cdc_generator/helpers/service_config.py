@@ -15,8 +15,20 @@ yaml.default_flow_style = False
 
 
 def get_project_root() -> Path:
-    """Get the project root directory."""
-    return Path(__file__).parent.parent
+    """Get the project root directory.
+    
+    Looks for the implementation root by searching for 2-services/ directory.
+    This allows the tool to work from any subdirectory within the implementation.
+    """
+    current = Path.cwd()
+    
+    # Search upwards from current directory for 2-services/
+    for parent in [current] + list(current.parents):
+        if (parent / "2-services").exists():
+            return parent
+    
+    # Fallback to current directory
+    return current
 
 
 def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:

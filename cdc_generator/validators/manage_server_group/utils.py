@@ -64,18 +64,23 @@ def regenerate_all_validation_schemas(server_group_names: Optional[List[str]] = 
                 continue
             
             # Load server groups to check type
-            from .config import load_server_groups, get_server_group_by_name
+            from .config import load_server_groups, get_single_server_group
             server_groups_config = load_server_groups()
-            server_group = get_server_group_by_name(server_groups_config, server_group_name)
+            server_group = get_single_server_group(server_groups_config)
             
             if not server_group:
-                print_warning(f"  ⊘ Skipped {service_name} (server group '{server_group_name}' not found)")
+                print_warning(f"  ⊘ Skipped {service_name} (no server group found in configuration)")
                 continue
             
-            server_group_type = server_group.get('server_group_type')
+            # Verify the server group name matches
+            if server_group.get('name') != server_group_name:
+                print_warning(f"  ⊘ Skipped {service_name} (server group mismatch: expected '{server_group_name}', found '{server_group.get('name')}')")
+                continue
+            
+            pattern = server_group.get('pattern')
             
             # Only db-per-tenant services need a reference customer
-            if server_group_type == 'db-per-tenant' and 'reference' not in service_config:
+            if pattern == 'db-per-tenant' and 'reference' not in service_config:
                 print_warning(f"  ⊘ Skipped {service_name} (db-per-tenant requires reference customer)")
                 continue
             
