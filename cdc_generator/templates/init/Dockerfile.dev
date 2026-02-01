@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    fish \
+    postgresql-client \
+    freetds-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CDC Pipeline Generator from PyPI
+RUN pip install --no-cache-dir cdc-pipeline-generator
+
+# Set up Fish shell
+RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher"
+
+WORKDIR /workspace
+
+# Default command
+CMD ["fish"]

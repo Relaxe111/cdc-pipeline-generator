@@ -47,6 +47,11 @@ cdc = "cdc_generator.cli.commands:main"
 where = ["."]
 include = ["cdc_generator*"]
 
+[tool.setuptools.package-data]
+cdc_generator = [
+    "templates/init/*",
+]
+
 [tool.black]
 line-length = 100
 target-version = ['py311']

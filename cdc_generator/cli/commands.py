@@ -10,6 +10,7 @@ Usage:
     cdc <command> [options]
 
 Commands:
+    init                  Initialize a new CDC Pipeline project with dev container
     validate              Validate all customer configurations  
     manage-service        Manage service definitions (from generator)
     manage-server-group   Manage server groups (from generator)
@@ -129,8 +130,8 @@ def get_script_paths(workspace_root, is_dev_container):
 # Commands that use generator library
 GENERATOR_COMMANDS = {
     "init": {
-        "module": "cdc_generator.cli.init",
-        "script": "cli/init.py",
+        "module": "cdc_generator.cli.init_project",
+        "script": "cli/init_project.py",
         "description": "Initialize a new CDC pipeline project"
     },
     "generate": {
@@ -308,16 +309,22 @@ def run_local_command(command, paths, extra_args, workspace_root):
 
 def main():
     """Main CLI entry point."""
-    # Detect environment
-    workspace_root, implementation_name, is_dev_container = detect_environment()
-    
     # Show help if requested or no command given
     if len(sys.argv) < 2 or sys.argv[1] in ["help", "--help", "-h"]:
+        workspace_root, implementation_name, is_dev_container = detect_environment()
         print_help(workspace_root, implementation_name, is_dev_container)
         return 0
     
     command = sys.argv[1]
     extra_args = sys.argv[2:] if len(sys.argv) > 2 else []
+    
+    # Special handling for 'init' - runs anywhere without environment detection
+    if command == "init":
+        from cdc_generator.cli.init_project import init_project
+        return init_project(extra_args)
+    
+    # For other commands, detect environment
+    workspace_root, implementation_name, is_dev_container = detect_environment()
     
     # Get script paths
     paths = get_script_paths(workspace_root, is_dev_container)

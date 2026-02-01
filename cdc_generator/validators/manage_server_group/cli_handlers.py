@@ -188,6 +188,18 @@ def handle_add_group(args: Namespace) -> int:
         print_warning(f"⚠️  Scaffolding encountered issues: {e}")
         print_info("You may need to create some directories/files manually")
     
+    # Update docker-compose.yml with database services
+    print_info(f"\n🐳 Updating docker-compose.yml...")
+    try:
+        from cdc_generator.helpers.update_compose import update_docker_compose
+        update_docker_compose(
+            source_type=args.source_type,
+            project_root=PROJECT_ROOT
+        )
+    except Exception as e:
+        print_warning(f"⚠️  Could not update docker-compose.yml: {e}")
+        print_info("You may need to add database services manually")
+    
     print_info(f"\n📋 Next steps:")
     print_info(f"  1. cp .env.example .env")
     print_info(f"  2. Edit .env with your database credentials")

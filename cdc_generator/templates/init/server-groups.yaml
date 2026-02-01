@@ -1,0 +1,20 @@
+server_groups:
+  - name: my-server-group
+    server_group_type: db-shared  # or db-per-tenant
+    service: my-service
+    server:
+      type: mssql  # or postgresql
+      host: ${MSSQL_HOST}
+      port: ${MSSQL_PORT}
+      username: ${MSSQL_USER}
+      password: ${MSSQL_PASSWORD}
+    environments:
+      dev:
+        databases:
+          - name: my_database_dev
+      stage:
+        databases:
+          - name: my_database_stage
+      prod:
+        databases:
+          - name: my_database_prod
