@@ -10,12 +10,14 @@ from argparse import Namespace
 
 from .config import (
     SERVER_GROUPS_FILE,
+    PROJECT_ROOT,
     load_server_groups,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
     save_schema_exclude_patterns
 )
+from .scaffolding import scaffold_project_structure
 from .db_inspector import (
     list_mssql_databases,
     list_postgres_databases,
@@ -30,6 +32,38 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning, 
     print_error
 )
+
+
+def _ensure_project_structure(server_group_name: str, server_group_config: Dict[str, Any]) -> None:
+    """Ensure basic directory structure exists, creating missing directories quietly.
+    
+    This runs on --update to make sure critical directories exist.
+    """
+    critical_dirs = [
+        "services",
+        "pipeline-templates",
+        "generated/pipelines",
+        "generated/schemas",
+        ".vscode",
+    ]
+    
+    missing_dirs: List[str] = []
+    for dir_path in critical_dirs:
+        full_path = PROJECT_ROOT / dir_path
+        if not full_path.exists():
+            missing_dirs.append(dir_path)
+            full_path.mkdir(parents=True, exist_ok=True)
+    
+    if missing_dirs:
+        print_info(f"📂 Created {len(missing_dirs)} missing director{'y' if len(missing_dirs) == 1 else 'ies'}")
+        
+        # Check if we should scaffold the full project
+        needs_full_scaffold = not (PROJECT_ROOT / ".env.example").exists()
+        
+        if needs_full_scaffold:
+            print_info("⚠️  Missing core files detected. Consider running scaffolding:")
+            print_info(f"   cdc manage-server-group --create {server_group_name} --pattern {server_group_config.get('pattern', 'db-shared')} \\")
+            print_info(f"       --source-type {server_group_config.get('server', {}).get('type', 'postgres')}")
 
 
 def list_server_groups() -> None:
@@ -118,6 +152,16 @@ def handle_add_group(args: Namespace) -> int:
         'databases': []
     }
     
+    # Add extraction pattern (unified key for both db-per-tenant and db-shared)
+    extraction_pattern = getattr(args, 'extraction_pattern', '')
+    if extraction_pattern:
+        new_group['extraction_pattern'] = extraction_pattern
+    # If empty or not provided, don't add the key (will use fallback matching)
+    
+    # Add environment_aware for db-shared
+    if args.mode == 'db-shared':
+        new_group['environment_aware'] = getattr(args, 'environment_aware', True)
+    
     server_group_name = args.add_group
     server_group_block = config.get('server_group')
     if not isinstance(server_group_block, dict):
@@ -130,11 +174,27 @@ def handle_add_group(args: Namespace) -> int:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
     
     print_success(f"✓ Added server group '{args.add_group}' ({args.mode})")
-    print_info(f"\nNext steps:")
-    print_info(f"  1. Run --update to populate databases: cdc manage-server-group --update --server-group {args.add_group}")
+    
+    # Scaffold project structure
+    print_info(f"\n📂 Scaffolding project structure...")
+    try:
+        scaffold_project_structure(
+            server_group_name=server_group_name,
+            pattern=args.mode,
+            source_type=args.source_type,
+            project_root=PROJECT_ROOT
+        )
+    except Exception as e:
+        print_warning(f"⚠️  Scaffolding encountered issues: {e}")
+        print_info("You may need to create some directories/files manually")
+    
+    print_info(f"\n📋 Next steps:")
+    print_info(f"  1. cp .env.example .env")
+    print_info(f"  2. Edit .env with your database credentials")
+    print_info(f"  3. cdc manage-server-group --update")
     if args.mode == 'db-per-tenant':
-        print_info(f"  2. Update service field in server_group.yaml")
-    print_info(f"  3. Regenerate validation schema: cdc manage-service --service <service> --generate-validation --all")
+        print_info(f"  4. Update service field in server_group.yaml")
+    print_info(f"  5. docker compose up -d")
     
     return 0
 
@@ -264,21 +324,28 @@ def handle_update(args: Namespace) -> int:
     
     # Process the first (and should be only) server group
     server_group = None
+    server_group_name = None
     for sg_name, sg_config in server_group_dict.items():
         sg_config['name'] = sg_name  # Add name for compatibility
         server_group = sg_config
+        server_group_name = sg_name
         break
     
-    if not server_group:
+    if not server_group or not server_group_name:
         print_error("Failed to load server group configuration")
         return 1
     
+    # Ensure directory structure exists (scaffold if missing)
+    _ensure_project_structure(server_group_name, server_group)
+    
     sg_name = server_group.get('name')
     sg_type = server_group.get('server', {}).get('type')
+    sg_pattern = server_group.get('pattern', 'db-shared')
     include_pattern = server_group.get('include_pattern')
     
     print_header(f"Updating Server Group: {sg_name}")
     print_info(f"Type: {sg_type}")
+    print_info(f"Pattern: {sg_pattern}")
     if include_pattern:
         print_info(f"Include Pattern: {include_pattern}")
     print_info(f"{'='*80}\n")
@@ -294,14 +361,16 @@ def handle_update(args: Namespace) -> int:
         # Inspect databases based on server type
         if sg_type == 'mssql':
             databases = list_mssql_databases(
-                server_config, 
+                server_config,
+                server_group,  # Pass full server group config for extraction patterns
                 include_pattern,
                 database_exclude_patterns, 
                 schema_exclude_patterns
             )
         elif sg_type == 'postgres':
             databases = list_postgres_databases(
-                server_config, 
+                server_config,
+                server_group,  # Pass full server group config for extraction patterns
                 include_pattern,
                 database_exclude_patterns, 
                 schema_exclude_patterns

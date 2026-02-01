@@ -46,25 +46,25 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize
 
 
 # manage-service subcommand options
-# Dynamic service completion - lists available services from 2-services/*.yaml
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "Service name from 2-services/*.yaml" -r -f -a "(
+# Dynamic service completion - lists available services from services/*.yaml
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "Service name from services/*.yaml" -r -f -a "(
     # Check if we're in an implementation directory (adopus-cdc-pipeline, asma-cdc-pipeline)
     set -l services_dir (pwd | string match -r '.*/(adopus-cdc-pipeline|asma-cdc-pipeline)' | head -n1)
     if test -n \"\$services_dir\"
         # We're in an implementation directory
-        set services_dir (pwd | string replace -r '/(adopus-cdc-pipeline|asma-cdc-pipeline).*' '/\$1/2-services')
-    else if test -d 2-services
+        set services_dir (pwd | string replace -r '/(adopus-cdc-pipeline|asma-cdc-pipeline).*' '/\$1/services')
+    else if test -d services
         # We're at the root of an implementation
-        set services_dir 2-services
-    else if test -d ../2-services
+        set services_dir services
+    else if test -d ../services
         # We're in a subdirectory
-        set services_dir ../2-services
-    else if test -d ../../2-services
+        set services_dir ../services
+    else if test -d ../../services
         # We're deeper in subdirectories
-        set services_dir ../../2-services
+        set services_dir ../../services
     else
         # Fallback - try to find from current working directory
-        set services_dir (find (pwd) -maxdepth 3 -type d -name '2-services' 2>/dev/null | head -n1)
+        set services_dir (find (pwd) -maxdepth 3 -type d -name 'services' 2>/dev/null | head -n1)
     end
     
     if test -d \"\$services_dir\"
@@ -75,7 +75,9 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "S
         end
     end
 )"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-service -d "Create a new service configuration file"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-service -d "Create a new service configuration file" -r -f -a "(
+    python -m cdc_generator.helpers.helpers_completions --list-databases 2>/dev/null
+)"
 
 # Dynamic table completion - lists available tables from service-schemas/{service}/{schema}/{TableName}.yaml
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-table -d "Add single table to service (schema.table)" -r -f -a "(
@@ -158,6 +160,8 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_h
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l port -d "Database port" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l user -d "Database user (use \${VAR} for env vars)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l password -d "Database password (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l environment-aware -d "Enable environment-aware grouping (flag, no value needed)"
 
 # generate subcommand - complete with customer names dynamically
 complete -c cdc -n "__fish_seen_subcommand_from generate" -l all -d "Generate for all customers"

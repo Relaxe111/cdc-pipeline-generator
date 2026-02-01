@@ -5,11 +5,11 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
+from datetime import datetime, timezone
 
 from .config import SERVER_GROUPS_FILE, get_single_server_group
-from .filters import infer_service_name
-from cdc_generator.helpers.helpers_logging import print_error, print_info, print_success
+from cdc_generator.helpers.helpers_logging import print_error, print_info
 
 
 def parse_existing_comments(server_group_name: str) -> List[str]:
@@ -55,18 +55,43 @@ def parse_existing_comments(server_group_name: str) -> List[str]:
 def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, Any]]) -> bool:
     """Update server_group.yaml with database/schema information."""
     try:
-        # Read the file to preserve exclude patterns comments
+        # Read the file to preserve comments
         with open(SERVER_GROUPS_FILE, 'r') as f:
             file_content = f.read()
         
-        # Extract exclude patterns comments if they exist
-        database_exclude_patterns_line: Optional[str] = None
-        schema_exclude_patterns_line: Optional[str] = None
-        for line in file_content.split('\n'):
-            if line.startswith('# database_exclude_patterns:'):
-                database_exclude_patterns_line = line
-            elif line.startswith('# schema_exclude_patterns:'):
-                schema_exclude_patterns_line = line
+        # Extract all comment lines before server_group: key OR after it (before first server group entry)
+        # This handles both file structures:
+        # - adopus: comments BEFORE server_group:
+        # - asma: comments AFTER server_group: but BEFORE asma:/adopus: entry
+        preserved_comments: List[str] = []
+        lines = file_content.split('\n')
+        
+        # Find where server_group: line is
+        sg_line_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip() == 'server_group:':
+                sg_line_idx = i
+                break
+        
+        if sg_line_idx >= 0:
+            # Collect comments BEFORE server_group:
+            for i in range(sg_line_idx):
+                line = lines[i]
+                if line.strip().startswith('#') or line.strip() == '':
+                    preserved_comments.append(line)
+            
+            # Also collect comments AFTER server_group: but before first actual entry
+            # BUT skip server group header comments (they'll be regenerated)
+            for i in range(sg_line_idx + 1, len(lines)):
+                line = lines[i]
+                # Stop at first actual server group entry (not a comment)
+                if line.strip() and not line.strip().startswith('#'):
+                    break
+                # Skip server group header separators and titles (they'll be regenerated)
+                if '============' in line or 'Server Group' in line:
+                    continue
+                if line.strip().startswith('#') or line.strip() == '':
+                    preserved_comments.append(line)
         
         with open(SERVER_GROUPS_FILE, 'r') as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
@@ -90,27 +115,99 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             server_group['service'] = server_group_name
             print_info(f"Set service name to '{server_group_name}' (db-per-tenant)")
         
+        # Initialize header comment lines
+        header_comment_lines: list[str] = []
+        
         # Auto-generate service names for db-shared type
         if pattern == 'db-shared':
             print_info(f"Auto-generating service names from database names...")
+            
+            # Group databases by service
+            from collections import defaultdict
+            service_groups: Dict[str, Dict[str, Any]] = defaultdict(lambda: {'databases': {}})
+            all_environments: set[str] = set()
+            
             for db in databases:
                 db_name = db['name']
-                inferred_service = infer_service_name(db_name)
+                inferred_service = db.get('service', 'unknown')
                 
-                # Check if database already has a service set (not REPLACE_ME)
-                existing_service: Optional[str] = None
-                for existing_db in server_group.get('databases', []):
-                    if existing_db.get('name') == db_name:
-                        existing_service = existing_db.get('service')
+                # Extract environment from database name
+                env: str | None = None
+                for env_candidate in ['dev', 'test', 'stage', 'prod']:
+                    if env_candidate in db_name:
+                        env = env_candidate
                         break
                 
-                # Keep existing service if it's not REPLACE_ME, otherwise use inferred
-                if existing_service and existing_service != 'REPLACE_ME':
-                    db['service'] = existing_service
-                    print_info(f"  • {db_name:<40} -> {existing_service} (preserved)")
-                else:
-                    db['service'] = inferred_service
-                    print_success(f"  • {db_name:<40} -> {inferred_service} (inferred)")
+                if env and inferred_service:
+                    all_environments.add(env)
+                    service_groups[inferred_service]['databases'][env] = {
+                        'name': db_name,
+                        'table_count': db.get('table_count', 0),
+                        'schemas': db.get('schemas', [])
+                    }
+            
+            # Sort environments for consistent display
+            sorted_environments: list[str] = sorted(all_environments)
+            
+            # Display grouped by service (console output + header comments)
+            from cdc_generator.helpers.helpers_logging import Colors
+            for service in sorted(service_groups.keys()):
+                print(f"\n  {Colors.BLUE}{service}{Colors.RESET}")
+                header_comment_lines.append(f" ? Service: {service}")
+                
+                # Get dev schemas as reference
+                dev_db = service_groups[service]['databases'].get('dev')
+                dev_schemas: set[str] = set(dev_db['schemas']) if dev_db else set()
+                dev_table_count = dev_db['table_count'] if dev_db else 0
+                
+                # Show all environments
+                for env in sorted_environments:
+                    db_info = service_groups[service]['databases'].get(env)
+                    
+                    if not db_info:
+                        # Missing database for this environment
+                        print(f"    {env}: {Colors.RED}⚠ missing database{Colors.RESET}")
+                        header_comment_lines.append(f" !  {env}: ⚠ missing database")
+                    elif db_info['table_count'] == 0:
+                        # Database exists but is empty
+                        db_name = db_info['name']
+                        print(f"    {env}: {Colors.RED}⚠ {db_name} (empty - no tables){Colors.RESET}")
+                        header_comment_lines.append(f" !  {env}: ⚠ {db_name} (empty - no tables)")
+                    else:
+                        # Database exists with tables
+                        db_name = db_info['name']
+                        table_count = db_info['table_count']
+                        db_schemas: set[str] = set(db_info.get('schemas', []))
+                        
+                        has_warnings = False
+                        warning_parts: list[str] = []
+                        
+                        # Check schema match with dev (if not dev and dev exists)
+                        if env != 'dev' and dev_schemas:
+                            if db_schemas != dev_schemas:
+                                missing_schemas: set[str] = dev_schemas - db_schemas
+                                extra_schemas: set[str] = db_schemas - dev_schemas
+                                if missing_schemas:
+                                    warning_parts.append(f"missing schemas: {', '.join(sorted(missing_schemas))}")
+                                if extra_schemas:
+                                    warning_parts.append(f"extra schemas: {', '.join(sorted(extra_schemas))}")
+                                has_warnings = True
+                            
+                            # Check table count mismatch with dev - ANY difference triggers warning
+                            if dev_table_count > 0 and table_count != dev_table_count:
+                                warning_parts.append(f"table count differs from dev ({dev_table_count} tables)")
+                                has_warnings = True
+                        
+                        if has_warnings:
+                            warning_msg = "; ".join(warning_parts)
+                            print(f"    {env}: {Colors.YELLOW}⚠ {db_name}{Colors.RESET} ({table_count} tables, {Colors.YELLOW}{warning_msg}{Colors.RESET})")
+                            header_comment_lines.append(f" TODO: {env}: ⚠ {db_name} ({table_count} tables, {warning_msg})")
+                        else:
+                            print(f"    {env}: {Colors.GREEN}{db_name}{Colors.RESET} ({table_count} tables)")
+                            header_comment_lines.append(f" *  {env}: {db_name} ({table_count} tables)")
+                
+                # Add blank line between services in header
+                header_comment_lines.append("")
         
         # For db-per-tenant, set service to the server group name for all databases
         if pattern == 'db-per-tenant':
@@ -119,30 +216,129 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         
         # Calculate metadata for comments
         total_dbs = len(databases)
-        _total_schemas = sum(len(db['schemas']) for db in databases)
         total_tables = sum(db['table_count'] for db in databases)
-        _avg_tables = int(total_tables / total_dbs) if total_dbs > 0 else 0
+        avg_tables = int(total_tables / total_dbs) if total_dbs > 0 else 0
         
-        # Build database list for comments (comma-separated)
-        _db_list = ', '.join(db['name'] for db in databases)
+        # Calculate per-environment statistics and group databases by service
+        from collections import defaultdict
+        env_stats: Dict[str, Dict[str, int]] = defaultdict(lambda: {'dbs': 0, 'tables': 0})
+        service_envs: Dict[str, set[str]] = defaultdict(set)
+        
+        for db in databases:
+            # Extract environment from database name (assumes pattern like service_env or service_db_env)
+            db_name = db['name']
+            env: str | None = None
+            
+            # Try to extract environment from db name
+            for env_candidate in ['dev', 'test', 'stage', 'prod']:
+                if env_candidate in db_name:
+                    env = env_candidate
+                    break
+            
+            if env:
+                env_stats[env]['dbs'] += 1
+                env_stats[env]['tables'] += db.get('table_count', 0)
+                
+                # Group by service for db-shared pattern
+                if pattern == 'db-shared':
+                    service = db.get('service', 'unknown')
+                    service_envs[service].add(env)
+        
+        # Build per-environment stats line
+        env_stats_parts: list[str] = []
+        for env in sorted(env_stats.keys()):
+            stats = env_stats[env]
+            env_stats_parts.append(f"{env}: {stats['dbs']} dbs, {stats['tables']} tables")
+        env_stats_line = " | ".join(env_stats_parts) if env_stats_parts else ""
+        
+        # Build database list for header comments
+        db_list_lines: List[str] = []
+        if pattern == 'db-shared' and header_comment_lines:
+            # Use the detailed service/environment breakdown
+            db_list_lines = header_comment_lines
+        else:
+            # Fallback to simple database list for db-per-tenant
+            db_names = [db['name'] for db in databases]
+            current_line = ""
+            for db_name in db_names:
+                if current_line and len(current_line + ", " + db_name) > 75:
+                    db_list_lines.append(current_line)
+                    current_line = db_name
+                else:
+                    if current_line:
+                        current_line += ", " + db_name
+                    else:
+                        current_line = db_name
+            if current_line:
+                db_list_lines.append(current_line)
         
         # Build the complete YAML content with comments
         output_lines: List[str] = []
         
-        # Add auto-generated warning at the very top
-        output_lines.append("# ============================================================================")
-        output_lines.append("# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY")
-        output_lines.append("# Use 'cdc manage-server-group' commands to modify this file")
-        output_lines.append("# ============================================================================")
-        output_lines.append("")
+        # Count services
+        num_services = len(service_envs) if pattern == 'db-shared' else 1
+        service_list = ", ".join(sorted(service_envs.keys())) if pattern == 'db-shared' else server_group_name
         
-        # Preserve database_exclude_patterns comment at the top
-        if database_exclude_patterns_line:
-            output_lines.append(database_exclude_patterns_line)
+        # Restore all preserved comments (including header, exclude patterns, etc.)
+        # But update the timestamp and metadata
+        timestamp_updated = False
+        for i, comment in enumerate(preserved_comments):
+            # Update timestamp
+            if 'Updated at:' in comment:
+                output_lines.append(f"# ? Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                timestamp_updated = True
+                # Add stats right after timestamp
+                output_lines.append(f"# ? Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
+                output_lines.append(f"# ? Services: {num_services} ({service_list})")
+                if env_stats_line:
+                    output_lines.append(f"# ? Per Environment: {env_stats_line}")
+                if db_list_lines:
+                    output_lines.append(f"# Databases:")
+                    for line in db_list_lines:
+                        output_lines.append(f"#{line}")
+            # Skip old stats lines (they'll be regenerated)
+            elif any(keyword in comment for keyword in ['Total:', 'Total Databases:', 'Per Environment:', 'Databases:', 'Avg Tables', 'Services:']):
+                continue
+            # Skip database list continuation lines (old format without service names)
+            # This includes lines starting with "#  " or "# *  " or "# !  " or "# ?  " or "# TODO:" or "# Service:" or "# ? Service:"
+            # Also skip standalone "#" lines (blank comment lines from service separators)
+            elif ((comment.startswith('#  ') or comment.startswith('# *  ') or 
+                   comment.startswith('# !  ') or comment.startswith('# ?  ') or 
+                   comment.startswith('# TODO:') or
+                   comment.startswith('# Service:') or comment.startswith('# ? Service:') or comment.strip() == '#') and 
+                  not any(keyword in comment for keyword in ['='])):
+                continue
+            # Skip excessive blank lines before server_group: (keep only essential structure)
+            elif comment.strip() == '' and i > 0 and output_lines and output_lines[-1].strip() == '':
+                continue
+                continue
+            else:
+                output_lines.append(comment)
         
-        # Preserve schema_exclude_patterns comment at the top
-        if schema_exclude_patterns_line:
-            output_lines.append(schema_exclude_patterns_line)
+        # If no timestamp was in original comments, add it with stats
+        if not timestamp_updated and preserved_comments:
+            # Find the header block and add timestamp before closing
+            for i, line in enumerate(output_lines):
+                if '============' in line and i > 0:
+                    output_lines.insert(i, f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                    output_lines.insert(i + 1, f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
+                    idx = i + 2
+                    if env_stats_line:
+                        output_lines.insert(idx, f"# Per Environment: {env_stats_line}")
+                        idx += 1
+                    if db_list_lines:
+                        output_lines.insert(idx, f"# Databases:")
+                        for line_idx, line in enumerate(db_list_lines, start=1):
+                            output_lines.insert(idx + line_idx, f"#{line}")
+                    break
+        
+        # Add exactly one blank line before server_group: if we have preserved comments
+        # Remove any trailing blank lines from output_lines first
+        while output_lines and output_lines[-1].strip() == '':
+            output_lines.pop()
+        
+        if preserved_comments:
+            output_lines.append("")
         
         output_lines.append("server_group:")
         
@@ -151,15 +347,65 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             
             # If this is the server group being updated, add the databases
             if sg_name == server_group_name:
-                # Store databases as objects with name, service, schemas (remove table_count)
-                sg['databases'] = [
-                    {
-                        'name': db['name'],
-                        'service': db['service'],
-                        'schemas': db['schemas']
-                    }
-                    for db in databases
-                ]
+                # Check if environment-aware grouping is enabled
+                environment_aware = sg.get('environment_aware', False)
+                
+                if environment_aware and sg.get('pattern') == 'db-shared':
+                    # Group databases by service and environment
+                    service_data: Dict[str, Dict[str, Any]] = {}
+                    for db in databases:
+                        service = db.get('service', db['name'])
+                        env = db.get('environment', '')
+                        
+                        if service not in service_data:
+                            service_data[service] = {
+                                'schemas': set(),  # Collect all unique schemas across environments
+                                'environments': {}
+                            }
+                        
+                        # Add schemas to service-level set
+                        for schema in db['schemas']:
+                            service_data[service]['schemas'].add(schema)
+                        
+                        # Store database for this environment (only one database per env)
+                        if env:
+                            if env not in service_data[service]['environments']:
+                                service_data[service]['environments'][env] = {
+                                    'database': db['name'],
+                                    'table_count': db.get('table_count', 0)
+                                }
+                            else:
+                                # If multiple databases for same service+env, append to database name
+                                existing = service_data[service]['environments'][env]['database']
+                                if isinstance(existing, str):
+                                    service_data[service]['environments'][env]['database'] = [existing, db['name']]
+                                else:
+                                    service_data[service]['environments'][env]['database'].append(db['name'])
+                                service_data[service]['environments'][env]['table_count'] += db.get('table_count', 0)
+                    
+                    # Convert to final YAML structure
+                    sg['services'] = {}
+                    for service, data in sorted(service_data.items()):
+                        sg['services'][service] = {
+                            'schemas': sorted(data['schemas'])  # Shared schemas at service level
+                        }
+                        # Add each environment as a direct key under service
+                        for env, env_data in sorted(data['environments'].items()):
+                            sg['services'][service][env] = env_data
+                    
+                    # Remove old databases key
+                    if 'databases' in sg:
+                        del sg['databases']
+                else:
+                    # Standard flat database list
+                    sg['databases'] = [
+                        {
+                            'name': db['name'],
+                            'service': db['service'],
+                            'schemas': db['schemas']
+                        }
+                        for db in databases
+                    ]
             
             # Add comment header before each server group
             output_lines.append("# ============================================================================")

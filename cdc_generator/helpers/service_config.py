@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Shared module for loading service and customer configurations.
-Supports both new service-based format (2-services/) and legacy format (2-customers/).
+Supports both new service-based format (services/) and legacy format (2-customers/).
 """
 
 from pathlib import Path
@@ -18,12 +18,12 @@ def get_project_root() -> Path:
     """Get the project root directory of the implementation.
     
     Searches upwards from the current working directory for a directory containing
-    either 'server_group.yaml' or a '2-services/' directory. This allows the
+    either 'server_group.yaml' or a 'services/' directory. This allows the
     tool to work correctly from any subdirectory within an implementation repo.
     """
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        if (parent / 'server_group.yaml').exists() or (parent / '2-services').is_dir():
+        if (parent / 'server_group.yaml').exists() or (parent / 'services').is_dir():
             return parent
     
     # Fallback or error
@@ -34,8 +34,8 @@ def get_project_root() -> Path:
 
 
 def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:
-    """Load service configuration from 2-services/, preserving comments."""
-    services_dir = get_project_root() / "2-services"
+    """Load service configuration from services/, preserving comments."""
+    services_dir = get_project_root() / "services"
     service_path = services_dir / f"{service_name}.yaml"
     if not service_path.exists():
         raise FileNotFoundError(f"Service config not found: {service_path}")
@@ -149,7 +149,7 @@ def load_customer_config(customer: str) -> Dict[str, Any]:
     """Load customer configuration - supports both new and legacy format.
     
     Priority:
-    1. Try new service-based format (2-services/adopus.yaml)
+    1. Try new service-based format (services/adopus.yaml)
     2. Fall back to legacy format (2-customers/{customer}.yaml)
     """
     # Try new service-based format first
@@ -170,7 +170,7 @@ def get_all_customers() -> List[str]:
     """Get list of all customers.
     
     Priority:
-    1. Read from service config (2-services/adopus.yaml)
+    1. Read from service config (services/adopus.yaml)
     2. Fall back to directory listing (2-customers/)
     """
     try:

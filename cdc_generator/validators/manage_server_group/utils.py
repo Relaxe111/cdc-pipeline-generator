@@ -16,7 +16,7 @@ from cdc_generator.helpers.helpers_logging import (
 
 # Constants
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-SERVICES_DIR = PROJECT_ROOT / "2-services"
+SERVICES_DIR = PROJECT_ROOT / "services"
 SERVICE_SCHEMA_FILE = PROJECT_ROOT / ".vscode" / "service-schema.json"
 COMPLETIONS_SCRIPT = PROJECT_ROOT / "scripts" / "generate-completions.sh"
 

@@ -20,12 +20,12 @@
 │
 ├── adopus-cdc-pipeline/            # Implementation 1 - INFRASTRUCTURE ONLY
 │   ├── server-groups.yaml          # Single server group (adopus)
-│   ├── 2-services/                 # Service configs
+│   ├── services/                 # Service configs
 │   └── docker-compose.yml          # Infrastructure only (NO dev container)
 │
 └── asma-cdc-pipeline/              # FUTURE: Implementation 2 - INFRASTRUCTURE ONLY
     ├── server-groups.yaml          # Single server group (asma)
-    ├── 2-services/                 # Service configs
+    ├── services/                 # Service configs
     └── docker-compose.yml          # Infrastructure only (NO dev container)
 ```
 
@@ -182,8 +182,8 @@ cdc-pipeline-generator/
 
 ### Step 3.1: Create db-per-tenant Example (Adopus Pattern)
 - [x] Copy current `server-groups.yaml` (adopus group only)
-- [x] Copy `2-services/adopus.yaml` as template
-- [x] Copy `3-pipeline-templates/*.yaml`
+- [x] Copy `services/adopus.yaml` as template
+- [x] Copy `pipeline-templates/*.yaml`
 - [x] Create README.md explaining the pattern
 - [x] Add example customer configurations
 

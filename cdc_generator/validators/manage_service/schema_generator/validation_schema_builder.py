@@ -13,7 +13,7 @@ from .schema_properties import (
 )
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-SERVICES_DIR = PROJECT_ROOT / '2-services'
+SERVICES_DIR = PROJECT_ROOT / 'services'
 
 
 def build_json_schema_structure(

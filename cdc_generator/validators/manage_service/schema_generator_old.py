@@ -11,7 +11,7 @@ from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-SERVICES_DIR = PROJECT_ROOT / '2-services'
+SERVICES_DIR = PROJECT_ROOT / 'services'
 
 # Check for pymssql availability
 try:

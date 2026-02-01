@@ -72,7 +72,7 @@ Examples:
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--service", required=False, help="Service name from 2-services/*.yaml (required for most operations)")
+    parser.add_argument("--service", required=False, help="Service name from services/*.yaml (required for most operations)")
     parser.add_argument("--create-service", action="store_true", help="Create a new service configuration file")
     parser.add_argument("--list-source-tables", action="store_true", help="List all source tables configured in this service")
     parser.add_argument("--add-source-table", help="Add single table to service (format: schema.table)")
@@ -104,7 +104,7 @@ Examples:
     # Auto-detect service if not specified and only one service exists
     if not args.service:
         from cdc_generator.helpers.service_config import get_project_root
-        services_dir = get_project_root() / '2-services'
+        services_dir = get_project_root() / 'services'
         
         if services_dir.exists():
             service_files = list(services_dir.glob('*.yaml'))
@@ -238,7 +238,7 @@ Examples:
         
         # Check if service already exists
         from cdc_generator.helpers.service_config import get_project_root
-        services_dir = get_project_root() / '2-services'
+        services_dir = get_project_root() / 'services'
         service_file = services_dir / f'{args.service}.yaml'
         
         if service_file.exists():
@@ -559,7 +559,7 @@ Examples:
     if not args.service:
         # List available services
         from cdc_generator.helpers.service_config import get_project_root
-        services_dir = get_project_root() / "2-services"
+        services_dir = get_project_root() / "services"
         if services_dir.exists():
             service_files = sorted(services_dir.glob("*.yaml"))
             if service_files:

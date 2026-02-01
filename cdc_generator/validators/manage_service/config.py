@@ -9,14 +9,14 @@ from cdc_generator.helpers.helpers_logging import print_error
 def get_implementation_root() -> Path:
     """Get the implementation root directory.
     
-    Looks for the implementation root by searching for 2-services/ directory.
+    Looks for the implementation root by searching for services/ directory.
     This allows the tool to work from any subdirectory within the implementation.
     """
     current = Path.cwd()
     
-    # Search upwards from current directory for 2-services/
+    # Search upwards from current directory for services/
     for parent in [current] + list(current.parents):
-        if (parent / "2-services").exists():
+        if (parent / "services").exists():
             return parent
     
     # Fallback to current directory
@@ -24,7 +24,7 @@ def get_implementation_root() -> Path:
 
 
 PROJECT_ROOT = get_implementation_root()
-SERVICES_DIR = PROJECT_ROOT / "2-services"
+SERVICES_DIR = PROJECT_ROOT / "services"
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 # Initialize ruamel.yaml to preserve comments and formatting
@@ -34,7 +34,7 @@ yaml.default_flow_style = False
 
 
 def get_available_services() -> List[str]:
-    """Get list of available services from 2-services/ directory."""
+    """Get list of available services from services/ directory."""
     if not SERVICES_DIR.exists():
         return []
     return [f.stem for f in SERVICES_DIR.glob("*.yaml")]

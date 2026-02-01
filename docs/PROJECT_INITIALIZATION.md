@@ -56,9 +56,9 @@ cd my-cdc-pipeline
 cdc init --name my-project --type adopus --git-init
 
 # What gets created:
-# ├── 2-services/              # Service configurations
+# ├── services/              # Service configurations
 # ├── 2-customers/             # Customer configurations (legacy)
-# ├── 3-pipeline-templates/    # Custom pipeline templates
+# ├── pipeline-templates/    # Custom pipeline templates
 # ├── generated/               # Generated pipelines and schemas
 # │   ├── pipelines/
 # │   ├── schemas/
@@ -124,9 +124,9 @@ def get_implementation_root() -> Path:
     """Search upward from CWD for implementation markers."""
     current = Path.cwd()
     
-    # Search upwards for 2-services/ directory
+    # Search upwards for services/ directory
     for parent in [current] + list(current.parents):
-        if (parent / "2-services").exists():
+        if (parent / "services").exists():
             return parent
     
     # Fallback to current directory
@@ -141,14 +141,14 @@ cdc-pipelines-development/
 ├── cdc-pipeline-generator/          # Generator library
 │   └── cdc_generator/
 └── adopus-cdc-pipeline/              # Implementation
-    ├── 2-services/
+    ├── services/
     ├── server-groups.yaml
     └── ...
 ```
 
 **How it works:**
 1. You run commands FROM the implementation directory: `cd /implementations/adopus`
-2. Code searches upward from CWD, finds `2-services/` in current directory
+2. Code searches upward from CWD, finds `services/` in current directory
 3. Uses that as project root
 
 **Example:**
@@ -156,7 +156,7 @@ cdc-pipelines-development/
 # In dev container
 cd /implementations/adopus
 cdc manage-service --service proxy --add-source-table public.users
-# ✓ Finds: /implementations/adopus/2-services/proxy.yaml
+# ✓ Finds: /implementations/adopus/services/proxy.yaml
 ```
 
 ### Production Environment
@@ -164,7 +164,7 @@ cdc manage-service --service proxy --add-source-table public.users
 **Structure:**
 ```
 my-cdc-pipeline/                      # User's project
-├── 2-services/
+├── services/
 ├── server-groups.yaml
 └── ...
 # cdc-pipeline-generator installed as library via pip/pipx
@@ -173,14 +173,14 @@ my-cdc-pipeline/                      # User's project
 **How it works:**
 1. Generator is installed as Python package
 2. User runs commands FROM their project directory
-3. Code searches upward from CWD, finds `2-services/` in current directory
+3. Code searches upward from CWD, finds `services/` in current directory
 4. Uses that as project root
 
 **Example:**
 ```bash
 cd ~/my-cdc-pipeline
 cdc manage-service --service myservice --add-source-table dbo.Users
-# ✓ Finds: ~/my-cdc-pipeline/2-services/myservice.yaml
+# ✓ Finds: ~/my-cdc-pipeline/services/myservice.yaml
 ```
 
 ### Why This Works
@@ -191,13 +191,13 @@ The key insight: **Commands always run FROM the implementation directory**, rega
 - Generator is in `/workspace/cdc-pipeline-generator`
 - Implementation is in `/implementations/adopus`
 - You `cd /implementations/adopus` before running commands
-- CWD = `/implementations/adopus`, finds `2-services/` there ✓
+- CWD = `/implementations/adopus`, finds `services/` there ✓
 
 **Production:**
 - Generator is installed as package (anywhere Python can find it)
 - Implementation is in `~/my-project`
 - You `cd ~/my-project` before running commands
-- CWD = `~/my-project`, finds `2-services/` there ✓
+- CWD = `~/my-project`, finds `services/` there ✓
 
 ## After Initialization
 
@@ -296,7 +296,7 @@ cdc-pipeline-generator==0.1.0
 
 ### 3. Project Structure
 
-- Keep `2-services/` for service definitions
+- Keep `services/` for service definitions
 - Keep `service-schemas/` for saved table schemas (autocomplete source)
 - Keep `generated/` in `.gitignore` (regenerated on each build)
 - Keep `kubernetes/` for deployment manifests
@@ -328,16 +328,16 @@ cdc manage-service --service myservice --add-source-table dbo.Users
 
 ### "Service config not found"
 
-**Problem:** Command can't find `2-services/` directory
+**Problem:** Command can't find `services/` directory
 
 **Solution:**
 ```bash
 # Make sure you're in the project root
 cd /path/to/your/project
-pwd  # Should show directory containing 2-services/
+pwd  # Should show directory containing services/
 
-# Or check if 2-services/ exists
-ls -la 2-services/
+# Or check if services/ exists
+ls -la services/
 ```
 
 ### "Command not found: cdc"

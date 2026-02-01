@@ -15,7 +15,7 @@ def create_service(service_name: str, server_group: str) -> None:
         service_name: Name of the service to create
         server_group: Server group name (e.g., 'adopus', 'asma')
     """
-    services_dir = PROJECT_ROOT / '2-services'
+    services_dir = PROJECT_ROOT / 'services'
     services_dir.mkdir(exist_ok=True)
     
     service_file = services_dir / f'{service_name}.yaml'

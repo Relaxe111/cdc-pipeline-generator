@@ -28,9 +28,9 @@ def create_project_structure(project_name: str, project_type: str, target_dir: P
         # Create directory structure
         directories = [
             "1-cdc-management",
-            "2-services",
+            "services",
             "2-customers",  # For backward compatibility
-            "3-pipeline-templates",
+            "pipeline-templates",
             "generated/pipelines",
             "generated/schemas",
             "generated/table-definitions",

@@ -81,6 +81,7 @@ def main() -> int:
     parser.add_argument("--update", action="store_true", help="Update the server group by inspecting the source database.")
     parser.add_argument("--list", action="store_true", help="List the configured server group.")
     parser.add_argument("--info", action="store_true", help="Show detailed information for the server group.")
+    parser.add_argument("--view-services", action="store_true", help="View environment-grouped services (db-shared mode).")
 
     # Arguments for --create
     parser.add_argument("--pattern", choices=["db-per-tenant", "db-shared"],
@@ -91,6 +92,14 @@ def main() -> int:
     parser.add_argument("--port", help="Database port (default: ${POSTGRES_SOURCE_PORT}/${MSSQL_SOURCE_PORT}).")
     parser.add_argument("--user", help="Database user (default: ${POSTGRES_SOURCE_USER}/${MSSQL_SOURCE_USER}).")
     parser.add_argument("--password", help="Database password (default: ${POSTGRES_SOURCE_PASSWORD}/${MSSQL_SOURCE_PASSWORD}).")
+    
+    # Pattern extraction configuration
+    parser.add_argument("--extraction-pattern", 
+                       help="Regex pattern with named groups to extract identifiers from database names (required for --create). "
+                            "For db-per-tenant: use 'customer' group. For db-shared: use 'service', 'env', 'suffix' groups. "
+                            "Leave empty to use simple fallback matching.")
+    parser.add_argument("--environment-aware", action="store_true",
+                       help="Enable environment-aware grouping (required for db-shared with --create).")
     
     # Exclude patterns management
     parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in server_group.yaml).")
@@ -109,11 +118,26 @@ def main() -> int:
             missing.append("--pattern")
         if not args.source_type:
             missing.append("--source-type")
+        
+        # extraction-pattern is required for --create but can be empty string for fallback
+        if not hasattr(args, 'extraction_pattern') or args.extraction_pattern is None:
+            missing.append("--extraction-pattern")
+        
+        # db-shared specific validation
+        if args.pattern == "db-shared":
+            if not args.environment_aware:
+                missing.append("--environment-aware")
+        
         if missing:
             print_error("Missing required options for --create:")
             for flag in missing:
                 print_info(f"  • {flag}")
+            print_info("\nNotes:")
+            print_info("  --extraction-pattern: Can be empty string '' to use simple fallback matching")
+            if args.pattern == "db-shared":
+                print_info("  --environment-aware: Required for db-shared pattern")
             return 1
+        
         placeholders = _default_connection_placeholders(args.source_type)
         args.host = args.host or placeholders['host']
         args.port = args.port or placeholders['port']
@@ -163,6 +187,43 @@ def main() -> int:
     # Handle info
     if args.info:
         return handle_info(args)
+    
+    # Handle view-services
+    if args.view_services:
+        from cdc_generator.validators.manage_server_group.config import load_server_groups, get_single_server_group
+        try:
+            config = load_server_groups()
+            server_group = get_single_server_group(config)
+            
+            if not server_group:
+                print_error("No server group found in configuration")
+                return 1
+            
+            if 'services' in server_group:
+                print_header("Environment-Grouped Services")
+                for service_name, service_data in sorted(server_group['services'].items()):
+                    schemas = service_data.get('schemas', [])
+                    print_info(f"\n📦 Service: {service_name}")
+                    print_info(f"   Schemas (shared): {', '.join(schemas)}")
+                    
+                    # Display each environment
+                    for key, value in sorted(service_data.items()):
+                        if key == 'schemas':
+                            continue  # Already displayed
+                        if isinstance(value, dict) and 'database' in value:
+                            env = key
+                            database = value.get('database', '')
+                            table_count = value.get('table_count', 0)
+                            print_info(f"   🌍 {env}:")
+                            print_info(f"       Database: {database}")
+                            print_info(f"       Tables: {table_count}")
+            else:
+                print_warning("Server group is not using environment-aware grouping.")
+                print_info("Run 'cdc manage-server-group --update' to regenerate with grouping enabled.")
+            return 0
+        except Exception as e:
+            print_error(f"Failed to view services: {e}")
+            return 1
     
     # Handle list
     if args.list:

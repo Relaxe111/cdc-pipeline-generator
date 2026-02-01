@@ -7,6 +7,12 @@ from .config import (
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
     save_schema_exclude_patterns,
+    PROJECT_ROOT,
+    SERVER_GROUPS_FILE,
+)
+
+from .scaffolding import (
+    scaffold_project_structure,
 )
 
 from .filters import (
@@ -49,6 +55,10 @@ __all__ = [
     'load_schema_exclude_patterns',
     'save_database_exclude_patterns',
     'save_schema_exclude_patterns',
+    'PROJECT_ROOT',
+    'SERVER_GROUPS_FILE',
+    # Scaffolding
+    'scaffold_project_structure',
     # Filters
     'should_ignore_database',
     'should_include_database',

@@ -43,6 +43,78 @@ _INTERESTING_ENV_KEYWORDS = (
 _ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
 
 
+def extract_identifiers(db_name: str, server_group_config: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
+    
+    Args:
+        db_name: Database name to parse
+        server_group_config: Server group configuration with extraction patterns
+        
+    Returns:
+        Dictionary with extracted identifiers (customer, service, env, suffix)
+    """
+    pattern_type = server_group_config.get('pattern')
+    extraction_pattern = server_group_config.get('extraction_pattern', '')
+    
+    # If extraction pattern is provided and not empty, use it
+    if extraction_pattern:
+        match = re.match(extraction_pattern, db_name)
+        if match:
+            groups = match.groupdict()
+            
+            # For db-per-tenant: extract customer
+            if pattern_type == 'db-per-tenant':
+                return {
+                    'customer': groups.get('customer', db_name),
+                    'service': server_group_config.get('name', ''),
+                    'env': '',
+                    'suffix': ''
+                }
+            
+            # For db-shared: extract service, env, suffix
+            elif pattern_type == 'db-shared':
+                service_name = groups.get('service', '')
+                suffix = groups.get('suffix', '')
+                
+                # Apply suffix transformation if present
+                if suffix:
+                    service_name = f"{suffix}_{service_name}"
+                
+                return {
+                    'customer': '',
+                    'service': service_name,
+                    'env': groups.get('env', ''),
+                    'suffix': suffix
+                }
+    
+    # Fallback logic when no pattern or pattern doesn't match
+    if pattern_type == 'db-per-tenant':
+        # Use database name as customer
+        return {'customer': db_name, 'service': server_group_config.get('name', ''), 'env': '', 'suffix': ''}
+    
+    elif pattern_type == 'db-shared':
+        # Simple fallback: search for environment keywords and strip "db"
+        env_match = re.search(r'(dev|test|stage|prod|nonprod)', db_name, re.IGNORECASE)
+        env = env_match.group(1).lower() if env_match else ''
+        
+        # Remove environment keyword and "db" word, use what's left as service
+        service = db_name.lower()
+        if env:
+            service = re.sub(rf'_{env}$|^{env}_', '', service)
+        service = re.sub(r'_db_|_db$|^db_', '_', service).strip('_')
+        
+        return {
+            'customer': '',
+            'service': service or db_name,
+            'env': env,
+            'suffix': ''
+        }
+    
+    # Default: use database name as service
+    return {'customer': '', 'service': db_name, 'env': '', 'suffix': ''}
+
+
 def _collect_missing_env_vars(template: str) -> List[str]:
     """Return env var names referenced in template that are not exported."""
     missing: List[str] = []
@@ -178,7 +250,8 @@ def get_postgres_connection(server_config: Dict[str, Any], database: str = 'post
 
 
 def list_mssql_databases(
-    server_config: Dict[str, Any], 
+    server_config: Dict[str, Any],
+    server_group_config: Dict[str, Any],
     include_pattern: Optional[str] = None, 
     database_exclude_patterns: Optional[List[str]] = None,
     schema_exclude_patterns: Optional[List[str]] = None
@@ -203,6 +276,8 @@ def list_mssql_databases(
     databases: List[Dict[str, Any]] = []
     ignored_count = 0
     excluded_count = 0
+    ignored_schema_count = 0
+    databases_with_ignored_schemas = 0
     for row in cursor.fetchall():
         db_name = row[0]
         
@@ -230,6 +305,10 @@ def list_mssql_databases(
             # Filter schemas based on provided exclude patterns
             schema_patterns = schema_exclude_patterns or []
             schemas = [s for s in all_schemas if not should_exclude_schema(s, schema_patterns)]
+            ignored_schemas = len(all_schemas) - len(schemas)
+            if ignored_schemas > 0:
+                ignored_schema_count += ignored_schemas
+                databases_with_ignored_schemas += 1
             
             # Get table count
             cursor.execute(f"""
@@ -238,8 +317,14 @@ def list_mssql_databases(
             """)
             table_count = cursor.fetchone()[0]
             
+            # Extract identifiers using configured pattern
+            identifiers = extract_identifiers(db_name, server_group_config)
+            
             databases.append({
                 'name': db_name,
+                'service': identifiers.get('service', db_name),
+                'environment': identifiers.get('env', ''),
+                'customer': identifiers.get('customer', ''),
                 'schemas': schemas if schemas else ['dbo'],
                 'table_count': table_count
             })
@@ -248,17 +333,24 @@ def list_mssql_databases(
             continue
     
     if ignored_count > 0:
-        print_info(f"Ignored {ignored_count} database(s) matching patterns: {ignore_patterns}")
+        patterns_text = ', '.join(ignore_patterns)
+        print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
     
     if excluded_count > 0:
-        print_info(f"Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
+        print_info(f"⊘ Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
+    
+    if ignored_schema_count > 0:
+        schema_patterns = schema_exclude_patterns or []
+        patterns_text = ', '.join(schema_patterns)
+        print_info(f"📊 Ignored {ignored_schema_count} schema(s) from {databases_with_ignored_schemas} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
     
     conn.close()
     return databases
 
 
 def list_postgres_databases(
-    server_config: Dict[str, Any], 
+    server_config: Dict[str, Any],
+    server_group_config: Dict[str, Any],
     include_pattern: Optional[str] = None,
     database_exclude_patterns: Optional[List[str]] = None,
     schema_exclude_patterns: Optional[List[str]] = None
@@ -299,12 +391,15 @@ def list_postgres_databases(
         filtered_db_names.append(db_name)
     
     if ignored_count > 0:
-        print_info(f"Ignored {ignored_count} database(s) matching patterns: {ignore_patterns}")
+        patterns_text = ', '.join(ignore_patterns)
+        print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
     
     if excluded_count > 0:
-        print_info(f"Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
+        print_info(f"⊘ Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
     
     databases: List[Dict[str, Any]] = []
+    ignored_schema_count = 0
+    databases_with_ignored_schemas = 0
     for db_name in filtered_db_names:
         try:
             db_conn = get_postgres_connection(server_config, db_name)
@@ -324,8 +419,10 @@ def list_postgres_databases(
             # Filter schemas based on provided exclude patterns
             schema_patterns = schema_exclude_patterns or []
             schemas = [s for s in all_schemas if not should_exclude_schema(s, schema_patterns)]
-            
-            # Get table count (exclude temp schemas)
+            ignored_schemas = len(all_schemas) - len(schemas)
+            if ignored_schemas > 0:
+                ignored_schema_count += ignored_schemas
+                databases_with_ignored_schemas += 1
             db_cursor.execute("""
                 SELECT COUNT(*) 
                 FROM information_schema.tables 
@@ -336,8 +433,14 @@ def list_postgres_databases(
             """)
             table_count = db_cursor.fetchone()[0]
             
+            # Extract identifiers using configured pattern
+            identifiers = extract_identifiers(db_name, server_group_config)
+            
             databases.append({
                 'name': db_name,
+                'service': identifiers.get('service', db_name),
+                'environment': identifiers.get('env', ''),
+                'customer': identifiers.get('customer', ''),
                 'schemas': schemas,
                 'table_count': table_count
             })
@@ -345,5 +448,10 @@ def list_postgres_databases(
             db_conn.close()
         except Exception as e:
             print_warning(f"Could not inspect database {db_name}: {e}")
+    
+    if ignored_schema_count > 0:
+        schema_patterns = schema_exclude_patterns or []
+        patterns_text = ', '.join(schema_patterns)
+        print_info(f"📊 Ignored {ignored_schema_count} schema(s) from {databases_with_ignored_schemas} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
     
     return databases

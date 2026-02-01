@@ -7,12 +7,16 @@ services:
     container_name: cdc-generator-dev
     hostname: cdc-generator-dev
     network_mode: host
+    env_file:
+      - .env
     volumes:
       - .:/workspace
       - ../adopus-cdc-pipeline:/implementations/adopus:rw
       - ../asma-cdc-pipeline:/implementations/asma:rw
       - /workspace/.venv
       - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.gitconfig:/root/.gitconfig:ro
+      - ~/.ssh:/root/.ssh:ro
     environment:
       - PYTHONPATH=/workspace
       - PYTHONUNBUFFERED=1
@@ -25,9 +29,22 @@ services:
     image: postgres:15-alpine
     container_name: cdc-generator-test-db
     environment:
-      POSTGRES_USER: test
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: test
+      
+      POSTGRES_SOURCE_URL: ${POSTGRES_SOURCE_URL}
+      POSTGRES_SOURCE_HOST: ${POSTGRES_SOURCE_HOST}
+      POSTGRES_SOURCE_DOCKER_URL: ${POSTGRES_SOURCE_DOCKER_URL}
+      POSTGRES_SOURCE_USER: ${POSTGRES_SOURCE_USER}
+      POSTGRES_SOURCE_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
+      POSTGRES_SOURCE_DB: ${POSTGRES_SOURCE_DB}
+      POSTGRES_SOURCE_PORT: ${POSTGRES_SOURCE_PORT}
+      
+      MSSQL_SOURCE_URL: ${MSSQL_SOURCE_URL}
+      MSSQL_SOURCE_HOST: ${MSSQL_SOURCE_HOST}
+      MSSQL_SOURCE_PORT: ${MSSQL_SOURCE_PORT}
+      MSSQL_SOURCE_USER: ${MSSQL_SOURCE_USER}
+      MSSQL_SOURCE_PASSWORD: ${MSSQL_SOURCE_PASSWORD}
+      MSSQL_SOURCE_DB: ${MSSQL_SOURCE_DB}
+
     ports:
       - "5433:5432"
     volumes:

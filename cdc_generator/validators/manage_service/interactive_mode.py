@@ -38,7 +38,7 @@ def run_interactive_mode(args: argparse.Namespace) -> int:
     # Step 1: Select source service
     available_services = get_available_services()
     if not available_services:
-        print_error("No services found in 2-services/")
+        print_error("No services found in services/")
         return 1
     
     source_service = args.source or prompt_select("Select source service:", available_services)
