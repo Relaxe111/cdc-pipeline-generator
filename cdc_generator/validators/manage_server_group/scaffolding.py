@@ -12,9 +12,9 @@ def _get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 # Docker Compose: Infrastructure for {server_group_name.title()} CDC Pipeline
 # =============================================================================
 # This setup provides infrastructure services for CDC replication.
-# Development environment is in cdc-pipeline-generator project.
 # 
 # Services:
+# - Dev Container (Python development environment with Fish shell)
 # - PostgreSQL (target database for CDC)
 # - Redpanda (Kafka-compatible streaming platform)
 # - Redpanda Connect Source (Source DB CDC → Redpanda)
@@ -27,13 +27,37 @@ def _get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 #   By default, we connect to remote source servers
 #
 # Usage:
-#   docker compose up -d                          # Start infrastructure
+#   docker compose up -d                          # Start all services
+#   docker compose exec dev fish                  # Enter dev container
 #   docker compose --profile local-mssql up -d    # Include local MSSQL
-#
-# Note: For development work, use cdc-pipeline-generator dev container
 # =============================================================================
 
 services:
+  # ===========================================================================
+  # Dev Container - Python Development Environment
+  # ===========================================================================
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    hostname: {container_prefix}-dev
+    container_name: {container_prefix}-dev
+    volumes:
+      - .:/workspace
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+    environment:
+      PYTHONPATH: /workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: fish
+    networks:
+      - cdc-network
+    depends_on:
+      - postgres
+      - redpanda
+
   # ===========================================================================
   # PostgreSQL - CDC Target Database
   # ===========================================================================
@@ -278,6 +302,36 @@ CDC_MAX_IN_FLIGHT=64
     return content
 
 
+def _get_dockerfile_dev_template() -> str:
+    """Generate Dockerfile.dev for development container."""
+    return """FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    git \\
+    fish \\
+    curl \\
+    postgresql-client \\
+    freetds-dev \\
+    gcc \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CDC Pipeline Generator from PyPI
+RUN pip install --no-cache-dir cdc-pipeline-generator
+
+# Set up Fish shell
+RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher"
+
+WORKDIR /workspace
+
+# Note: Fish completions for cdc command are included in the installed package
+# They will be available automatically when using the cdc command
+
+# Default command
+CMD ["fish"]
+"""
+
+
 def _get_readme_template(server_group_name: str, pattern: str) -> str:
     """Generate README.md template."""
     pattern_desc = "db-per-tenant" if pattern == "db-per-tenant" else "db-shared"
@@ -420,6 +474,7 @@ def scaffold_project_structure(
     # Create template files
     files_to_create = {
         "docker-compose.yml": _get_docker_compose_template(server_group_name, pattern),
+        "Dockerfile.dev": _get_dockerfile_dev_template(),
         ".env.example": _get_env_example_template(server_group_name, pattern, source_type),
         "README.md": _get_readme_template(server_group_name, pattern),
         ".gitignore": """.env
@@ -439,7 +494,24 @@ generated/table-definitions/*
 """,
     }
     
+    # docker-compose.yml should always be created/overwritten with full CDC infrastructure
+    # (init template only has basic postgres, server-group scaffold has full Redpanda setup)
+    docker_compose_path = project_root / "docker-compose.yml"
+    if docker_compose_path.exists():
+        # Backup existing file
+        backup_path = project_root / "docker-compose.yml.bak"
+        import shutil
+        shutil.copy2(docker_compose_path, backup_path)
+        print(f"✓ Backed up existing docker-compose.yml to docker-compose.yml.bak")
+    
+    docker_compose_path.write_text(files_to_create["docker-compose.yml"])
+    print(f"✓ Created file: docker-compose.yml (with Redpanda CDC infrastructure)")
+    
+    # Create other files (skip if they exist)
     for filename, content in files_to_create.items():
+        if filename == "docker-compose.yml":
+            continue  # Already handled above
+        
         file_path = project_root / filename
         if not file_path.exists():  # Don't overwrite existing files
             file_path.write_text(content)

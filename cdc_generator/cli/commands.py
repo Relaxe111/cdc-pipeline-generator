@@ -98,13 +98,24 @@ def get_script_paths(workspace_root, is_dev_container):
         dict: Mapping of script types to paths
     """
     if is_dev_container:
-        # In dev container
+        # In dev container - check if generator files exist locally
         generator_root = Path('/workspace')
-        return {
-            'generator': generator_root / 'cdc_generator',
-            'scripts': workspace_root / 'scripts',
-            'root': workspace_root,
-        }
+        generator_candidate = generator_root / 'cdc_generator'
+        
+        if generator_candidate.exists() and (generator_candidate / 'cli').exists():
+            # Generator development mode - use local files
+            return {
+                'generator': generator_candidate,
+                'scripts': workspace_root / 'scripts',
+                'root': workspace_root,
+            }
+        else:
+            # User project with installed package - use python -m
+            return {
+                'generator': None,  # Use installed package
+                'scripts': workspace_root / 'scripts',
+                'root': workspace_root,
+            }
     else:
         # On host - try to find generator
         # Look for generator as sibling directory

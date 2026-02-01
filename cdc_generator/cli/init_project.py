@@ -23,7 +23,8 @@ def copy_template_files(target_dir: Path):
             'Dockerfile.dev',
             'server-groups.yaml',
             'README.md',
-            '.gitignore'
+            '.gitignore',
+            'cdc.fish'
         ]
         
         for file_name in files_to_copy:
@@ -47,9 +48,8 @@ def copy_template_files(target_dir: Path):
 def create_directory_structure(target_dir: Path):
     """Create the required directory structure."""
     directories = [
-        '2-services',
-        '2-customers',
-        '3-pipeline-templates',
+        'services',
+        'pipeline-templates',
         'generated/pipelines',
         'generated/schemas',
         'generated/table-definitions',

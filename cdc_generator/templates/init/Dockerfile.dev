@@ -4,6 +4,7 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
     git \
     fish \
+    curl \
     postgresql-client \
     freetds-dev \
     gcc \
@@ -13,9 +14,13 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir cdc-pipeline-generator
 
 # Set up Fish shell
-RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher"
+RUN fish -c "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher" \
+    && mkdir -p /root/.config/fish/completions
 
 WORKDIR /workspace
+
+# Copy Fish completions for cdc command
+COPY cdc.fish /root/.config/fish/completions/cdc.fish
 
 # Default command
 CMD ["fish"]

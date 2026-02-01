@@ -1,5 +1,5 @@
 include README.md
 include LICENSE
-recursive-include cdc_generator *.yaml *.yml *.jinja2 *.j2
+recursive-include cdc_generator *.yaml *.yml *.jinja2 *.j2 .gitignore *.fish
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
