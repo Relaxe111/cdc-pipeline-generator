@@ -27,20 +27,23 @@ def expand_env_vars(value: Any) -> Any:
     if expanded == value and '$' in value:
         # Variable wasn't expanded - it's not in the environment
         var_name = value.replace('$', '').split('/')[0].split(':')[0]  # Extract variable name
-        print_warning(f"Environment variable '{var_name}' not set - using literal value: {original_value}")
-        print_warning("In Docker container, ensure variables are set in .env and container is restarted")
+        
+        print_warning(f"⚠️ Environment variable '{var_name}' not set.")
+        print_warning(f"   - Using literal value: {original_value}")
+        print_warning(f"   - 💡 In Docker, ensure variables are in .env and restart the container.")
         
         # Show available environment variables for debugging
         relevant_vars = {k: v for k, v in os.environ.items() 
                         if any(keyword in k.upper() for keyword in ['MSSQL', 'POSTGRES', 'DB', 'DATABASE', 'HOST', 'PORT', 'USER', 'PASSWORD'])}
+        
         if relevant_vars:
-            print_warning(f"Available database-related environment variables in container:")
+            print_warning("\n   Available database-related environment variables:")
             for k, v in sorted(relevant_vars.items()):
                 # Mask password values
                 display_value = '***' if 'PASSWORD' in k.upper() or 'PASS' in k.upper() else v
-                print_warning(f"  {k}={display_value}")
+                print_warning(f"     - {k}={display_value}")
         else:
-            print_warning("No database-related environment variables found in container")
+            print_warning("\n   No database-related environment variables found in the container.")
     
     return expanded
 

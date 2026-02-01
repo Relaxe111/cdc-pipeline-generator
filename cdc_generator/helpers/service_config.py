@@ -15,20 +15,22 @@ yaml.default_flow_style = False
 
 
 def get_project_root() -> Path:
-    """Get the project root directory.
+    """Get the project root directory of the implementation.
     
-    Looks for the implementation root by searching for 2-services/ directory.
-    This allows the tool to work from any subdirectory within the implementation.
+    Searches upwards from the current working directory for a directory containing
+    either 'server_group.yaml' or a '2-services/' directory. This allows the
+    tool to work correctly from any subdirectory within an implementation repo.
     """
     current = Path.cwd()
-    
-    # Search upwards from current directory for 2-services/
-    for parent in [current] + list(current.parents):
-        if (parent / "2-services").exists():
+    for parent in [current, *current.parents]:
+        if (parent / 'server_group.yaml').exists() or (parent / '2-services').is_dir():
             return parent
     
-    # Fallback to current directory
-    return current
+    # Fallback or error
+    raise FileNotFoundError(
+        "Could not determine project root. Make sure you are inside an implementation "
+        "directory (e.g., adopus-cdc-pipeline) that contains a 'server_group.yaml' file."
+    )
 
 
 def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:

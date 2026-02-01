@@ -11,16 +11,17 @@ import os
 
 
 def get_implementation_root() -> Path:
-    """Get implementation root by searching upward for server_group.yaml."""
+    """Locate implementation root by searching for known markers."""
     current = Path(os.getcwd())
-    
-    # Search upwards from current directory for server_group.yaml
     for parent in [current, *current.parents]:
-        if (parent / "server_group.yaml").exists():
+        server_group = parent / "server_group.yaml"
+        services_dir = parent / "2-services"
+        customers_dir = parent / "2-customers"
+        if server_group.exists() or services_dir.is_dir() or customers_dir.is_dir():
             return parent
-    
-    # Fallback to hardcoded path (for backwards compatibility)
-    return Path(__file__).parent.parent.parent.parent
+    # As a final fallback, return current directory so new files are created
+    # where the command is executed, instead of defaulting to the generator root.
+    return current
 
 
 PROJECT_ROOT = get_implementation_root()

@@ -18,7 +18,8 @@ from .config import (
 )
 from .db_inspector import (
     list_mssql_databases,
-    list_postgres_databases
+    list_postgres_databases,
+    MissingEnvironmentVariableError
 )
 from .yaml_writer import update_server_group_yaml
 from .utils import regenerate_all_validation_schemas, update_vscode_schema, update_completions
@@ -33,7 +34,11 @@ from cdc_generator.helpers.helpers_logging import (
 
 def list_server_groups() -> None:
     """List all server groups."""
-    config = load_server_groups()
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_warning("server_group.yaml not found – creating a new one from scratch.")
+        config = {'server_group': {}}
     print_header("Server Groups")
     
     for group in config.get('server_groups', []):
@@ -53,25 +58,32 @@ def list_server_groups() -> None:
 
 def handle_add_group(args: Namespace) -> int:
     """Handle adding a new server group."""
-    if not all([args.type, args.host, args.port, args.user, args.password]):
-        print_error("--add-group requires: --type, --host, --port, --user, --password")
+    if not all([args.source_type, args.host, args.port, args.user, args.password]):
+        print_error("--add-group requires: --source-type, --host, --port, --user, --password")
         return 1
     
-    config = load_server_groups()
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_warning("server_group.yaml not found. Creating a fresh configuration.")
+        config = {'server_group': {}}
     
     # Check if group already exists
-    for group in config.get('server_groups', []):
+    existing_groups = config.get('server_group', {})
+    if args.add_group in existing_groups:
+        print_error(f"Server group '{args.add_group}' already exists")
+        return 1
+    for group in existing_groups.values():
         if group.get('name') == args.add_group:
             print_error(f"Server group '{args.add_group}' already exists")
             return 1
     
     # Create new server group
     new_group: Dict[str, Any] = {
-        'name': args.add_group,
         'pattern': args.mode,
-        'description': f"{'Multi-tenant' if args.mode == 'db-per-tenant' else 'Shared'} {args.type.upper()} server",
+        'description': f"{'Multi-tenant' if args.mode == 'db-per-tenant' else 'Shared'} {args.source_type.upper()} server",
         'server': {
-            'type': args.type,
+            'type': args.source_type,
             'host': args.host,
             'port': args.port,
             'user': args.user,
@@ -80,6 +92,7 @@ def handle_add_group(args: Namespace) -> int:
         'databases': []
     }
     
+    server_group_name = args.add_group
     config.setdefault('server_group', {})[server_group_name] = new_group  # type: ignore[misc]
     
     # Save configuration
@@ -187,7 +200,27 @@ def handle_update(args: Namespace) -> int:
     
     Since each implementation has only one server group, we update it directly.
     """
-    config = load_server_groups()
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("File 'server_group.yaml' not found in the project root.")
+        print_info("\n💡 To get started, create a 'server_group.yaml' file in your repository root.")
+        print_info("   Here is an example for a PostgreSQL 'db-shared' setup:")
+        print_info(
+            "\n"
+            "    server_group:\n"
+            "      asma:  # Or your implementation name\n"
+            "        pattern: db-shared\n"
+            "        server:\n"
+            "          type: postgres\n"
+            "          host: '${POSTGRES_SOURCE_HOST}'\n"
+            "          port: '${POSTGRES_SOURCE_PORT}'\n"
+            "          user: '${POSTGRES_SOURCE_USER}'\n"
+            "          password: '${POSTGRES_SOURCE_PASSWORD}'\n"
+            "        databases: [] # This will be auto-populated by --update"
+        )
+        return 1
+        
     server_group_dict = config.get('server_group', {})
     
     if not server_group_dict:
@@ -271,6 +304,13 @@ def handle_update(args: Namespace) -> int:
             print_error(f"Failed to update server group '{sg_name}'")
             return 1
             
+    except MissingEnvironmentVariableError as env_error:
+        print_error(str(env_error))
+        print_info(
+            "Export the missing variable inside the dev container (e.g. `set -x NAME value`) "
+            "or replace the placeholder in server_group.yaml before running --update."
+        )
+        return 1
     except Exception as e:
         print_error(f"Error updating server group '{sg_name}': {e}")
         import traceback

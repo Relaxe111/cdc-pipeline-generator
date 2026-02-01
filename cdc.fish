@@ -1,6 +1,15 @@
 # Fish shell completions for cdc command
 # Auto-generated completions for CDC Pipeline CLI
 
+function __cdc_has_manage_server_group_create --description "Check if --create flag is present for manage-server-group"
+    for token in (commandline -opc)
+        if test "$token" = "--create"
+            return 0
+        end
+    end
+    return 1
+end
+
 # Main command description
 complete -c cdc -f -d "CDC Pipeline Management CLI"
 
@@ -130,20 +139,25 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-column
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r
 
 # manage-server-group subcommand options
+# General actions
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l update -d "Update server group from database inspection"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list -d "List all server groups"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l info -d "Show detailed server group information"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l create -d "Create new server group" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l type -d "Database type" -r -f -a "postgres mssql"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l host -d "Database host (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l port -d "Database port" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l user -d "Database user (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l password -d "Database password (use \${VAR} for env vars)" -r
+
+# Exclude patterns
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-ignore-list -d "Add pattern(s) to database exclude list" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-ignore-patterns -d "List current database exclude patterns"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-schema-excludes -d "List current schema exclude patterns"
+
+# Creation flags (only show when --create is present in the command line)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l source-type -d "Source database type" -r -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l password -d "Database password (use \${VAR} for env vars)" -r
 
 # generate subcommand - complete with customer names dynamically
 complete -c cdc -n "__fish_seen_subcommand_from generate" -l all -d "Generate for all customers"

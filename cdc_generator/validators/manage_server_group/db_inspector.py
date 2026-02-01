@@ -1,6 +1,7 @@
 """Database inspection for MSSQL and PostgreSQL servers."""
 
 import os
+import re
 from typing import List, Dict, Optional, Any
 
 try:
@@ -22,15 +23,61 @@ from cdc_generator.helpers.helpers_logging import print_info, print_warning
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 
 
+class MissingEnvironmentVariableError(ValueError):
+    """Raised when a required connection value still contains an unresolved env var."""
+
+
+_ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
+
+
+def _collect_missing_env_vars(template: str) -> List[str]:
+    """Return env var names referenced in template that are not exported."""
+    missing: List[str] = []
+    for match in _ENV_REFERENCE_PATTERN.finditer(template):
+        var_name = match.group('braced') or match.group('plain')
+        if var_name and os.environ.get(var_name) is None:
+            missing.append(var_name)
+    return missing
+
+
+def _resolve_env_value(value: Any, field_name: str) -> str:
+    """Resolve environment variables and ensure the result is usable."""
+    if value is None:
+        raise MissingEnvironmentVariableError(
+            f"Server configuration is missing the '{field_name}' field."
+        )
+
+    value_str = str(value)
+    missing_vars = _collect_missing_env_vars(value_str)
+    if missing_vars:
+        missing = ", ".join(sorted(set(missing_vars)))
+        raise MissingEnvironmentVariableError(
+            f"Environment variable(s) {missing} required for '{field_name}' are not set.\n"
+            "Set them inside the dev container or replace the placeholder value in server_group.yaml."
+        )
+
+    expanded = os.path.expandvars(value_str)
+
+    if not expanded.strip():
+        raise MissingEnvironmentVariableError(
+            f"Value for '{field_name}' is empty after resolving environment variables."
+        )
+
+    return expanded
+
+
 def get_mssql_connection(server_config: Dict[str, Any]) -> Any:
     """Get MSSQL connection from server config."""
     if not has_pymssql:
         raise ImportError("pymssql not installed - run: pip install pymssql")
     
-    host = os.path.expandvars(server_config['host'])
-    user = os.path.expandvars(server_config.get('username', server_config.get('user', '')))
-    password = os.path.expandvars(server_config['password'])
-    port = int(os.path.expandvars(str(server_config.get('port', 1433))))
+    host = _resolve_env_value(server_config.get('host'), 'host')
+    user = _resolve_env_value(
+        server_config.get('username', server_config.get('user')),
+        'username'
+    )
+    password = _resolve_env_value(server_config.get('password'), 'password')
+    port = int(_resolve_env_value(server_config.get('port', 1433), 'port'))
     
     return create_mssql_connection(
         host=host,
@@ -46,10 +93,13 @@ def get_postgres_connection(server_config: Dict[str, Any], database: str = 'post
     if not has_psycopg2:
         raise ImportError("psycopg2 not installed - run: pip install psycopg2-binary")
     
-    host = os.path.expandvars(server_config['host'])
-    user = os.path.expandvars(server_config.get('username', server_config.get('user', '')))
-    password = os.path.expandvars(server_config['password'])
-    port = int(os.path.expandvars(str(server_config.get('port', 5432))))
+    host = _resolve_env_value(server_config.get('host'), 'host')
+    user = _resolve_env_value(
+        server_config.get('username', server_config.get('user')),
+        'username'
+    )
+    password = _resolve_env_value(server_config.get('password'), 'password')
+    port = int(_resolve_env_value(server_config.get('port', 5432), 'port'))
     
     return psycopg2.connect(  # type: ignore[misc]
         host=host,

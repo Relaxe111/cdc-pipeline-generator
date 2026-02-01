@@ -38,9 +38,9 @@ def print_success(msg: str) -> None:
 
 def print_warning(msg: str) -> None:
     """Print a warning message."""
-    print(f"{Colors.WARNING}⚠ {msg}{Colors.ENDC}")
+    print(f"{Colors.YELLOW}⚠️  {msg}{Colors.ENDC}")
 
 
 def print_error(msg: str) -> None:
     """Print an error message."""
-    print(f"{Colors.FAIL}✗ {msg}{Colors.ENDC}")
+    print(f"{Colors.RED}❌ {msg}{Colors.ENDC}")
