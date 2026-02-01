@@ -27,6 +27,19 @@ class MissingEnvironmentVariableError(ValueError):
     """Raised when a required connection value still contains an unresolved env var."""
 
 
+_INTERESTING_ENV_KEYWORDS = (
+    "POSTGRES",
+    "MSSQL",
+    "SQLSERVER",
+    "DATABASE",
+    "SOURCE",
+    "SINK",
+    "CDC",
+    "REDPANDA",
+    "KAFKA",
+)
+
+
 _ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
 
 
@@ -40,28 +53,81 @@ def _collect_missing_env_vars(template: str) -> List[str]:
     return missing
 
 
+def _list_available_env_vars() -> List[str]:
+    """List docker env variables that look relevant for database connections."""
+    available: List[str] = []
+    for name in os.environ:
+        upper = name.upper()
+        if any(keyword in upper for keyword in _INTERESTING_ENV_KEYWORDS):
+            available.append(name)
+    return sorted(set(available))
+
+
+def _format_env_lines(values: List[str]) -> str:
+    """Format env variable names as indented bullet list."""
+    if not values:
+        return "        - None detected in this container session."
+    return "\n".join(f"        - {value}" for value in values)
+
+
+def _build_missing_env_message(field_name: str, missing_vars: List[str]) -> str:
+    required_block = _format_env_lines(sorted(set(missing_vars)))
+    available_block = _format_env_lines(_list_available_env_vars())
+    return (
+        "Missing environment variables detected for a connection field.\n"
+        f"    Field: {field_name}\n"
+        "    Required variables:\n"
+        f"{required_block}\n"
+        "\n"
+        "Currently exported docker env variables:\n"
+        f"{available_block}\n"
+        "\n"
+        "Next steps:\n"
+        "    - Export the missing variables inside the dev container (set -x VAR_NAME value)\n"
+        "    - Or update server_group.yaml to use literal credentials when appropriate\n"
+    )
+
+
+def _build_missing_field_message(field_name: str) -> str:
+    available_block = _format_env_lines(_list_available_env_vars())
+    return (
+        "Server configuration is missing a required connection field.\n"
+        f"    Field: {field_name}\n"
+        "\n"
+        "Currently exported docker env variables:\n"
+        f"{available_block}\n"
+    )
+
+
+def _build_empty_value_message(field_name: str) -> str:
+    available_block = _format_env_lines(_list_available_env_vars())
+    return (
+        "The resolved connection value is empty after expanding environment variables.\n"
+        f"    Field: {field_name}\n"
+        "\n"
+        "Currently exported docker env variables:\n"
+        f"{available_block}\n"
+        "\n"
+        "Next steps:\n"
+        "    - Export the expected variable with a non-empty value\n"
+        "    - Or update server_group.yaml with a literal fallback\n"
+    )
+
+
 def _resolve_env_value(value: Any, field_name: str) -> str:
     """Resolve environment variables and ensure the result is usable."""
     if value is None:
-        raise MissingEnvironmentVariableError(
-            f"Server configuration is missing the '{field_name}' field."
-        )
+        raise MissingEnvironmentVariableError(_build_missing_field_message(field_name))
 
     value_str = str(value)
     missing_vars = _collect_missing_env_vars(value_str)
     if missing_vars:
-        missing = ", ".join(sorted(set(missing_vars)))
-        raise MissingEnvironmentVariableError(
-            f"Environment variable(s) {missing} required for '{field_name}' are not set.\n"
-            "Set them inside the dev container or replace the placeholder value in server_group.yaml."
-        )
+        raise MissingEnvironmentVariableError(_build_missing_env_message(field_name, missing_vars))
 
     expanded = os.path.expandvars(value_str)
 
     if not expanded.strip():
-        raise MissingEnvironmentVariableError(
-            f"Value for '{field_name}' is empty after resolving environment variables."
-        )
+        raise MissingEnvironmentVariableError(_build_empty_value_message(field_name))
 
     return expanded
 

@@ -5,7 +5,7 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, cast
 from argparse import Namespace
 
 from .config import (
@@ -34,6 +34,7 @@ from cdc_generator.helpers.helpers_logging import (
 
 def list_server_groups() -> None:
     """List all server groups."""
+    config: Dict[str, Any]
     try:
         config = load_server_groups()
     except FileNotFoundError:
@@ -41,12 +42,30 @@ def list_server_groups() -> None:
         config = {'server_group': {}}
     print_header("Server Groups")
     
-    for group in config.get('server_groups', []):
-        name = group.get('name', 'unknown')
-        group_type = group.get('server_group_type', 'unknown')
-        db_type = group.get('server', {}).get('type', 'unknown')
-        db_count = len(group.get('databases', []))
-        service = group.get('service', 'N/A')
+    server_groups_obj = config.get('server_groups')
+    server_groups: List[Dict[str, Any]] = []
+    if isinstance(server_groups_obj, list):
+        server_groups_list = cast(List[Any], server_groups_obj)
+        for candidate in server_groups_list:
+            if isinstance(candidate, dict):
+                server_groups.append(cast(Dict[str, Any], candidate))
+    
+    for group in server_groups:
+        name = str(group.get('name', 'unknown'))
+        group_type = str(group.get('server_group_type', 'unknown'))
+        server_obj = group.get('server')
+        if isinstance(server_obj, dict):
+            server_data = cast(Dict[str, Any], server_obj)
+        else:
+            server_data = {}
+        db_type = str(server_data.get('type', 'unknown'))
+        databases_obj = group.get('databases')
+        if isinstance(databases_obj, list):
+            databases = cast(List[Any], databases_obj)
+        else:
+            databases = []
+        db_count = len(databases)
+        service = str(group.get('service', 'N/A'))
         
         print(f"\n{name}")
         print(f"  Type: {group_type}")
@@ -62,6 +81,7 @@ def handle_add_group(args: Namespace) -> int:
         print_error("--add-group requires: --source-type, --host, --port, --user, --password")
         return 1
     
+    config: Dict[str, Any]
     try:
         config = load_server_groups()
     except FileNotFoundError:
@@ -69,7 +89,13 @@ def handle_add_group(args: Namespace) -> int:
         config = {'server_group': {}}
     
     # Check if group already exists
-    existing_groups = config.get('server_group', {})
+    raw_groups = config.get('server_group')
+    existing_groups: Dict[str, Dict[str, Any]] = {}
+    if isinstance(raw_groups, dict):
+        raw_groups_dict = cast(Dict[Any, Any], raw_groups)
+        for name, group in raw_groups_dict.items():
+            if isinstance(name, str) and isinstance(group, dict):
+                existing_groups[name] = cast(Dict[str, Any], group)
     if args.add_group in existing_groups:
         print_error(f"Server group '{args.add_group}' already exists")
         return 1
@@ -93,7 +119,11 @@ def handle_add_group(args: Namespace) -> int:
     }
     
     server_group_name = args.add_group
-    config.setdefault('server_group', {})[server_group_name] = new_group  # type: ignore[misc]
+    server_group_block = config.get('server_group')
+    if not isinstance(server_group_block, dict):
+        server_group_block = {}
+        config['server_group'] = server_group_block
+    server_group_block[server_group_name] = new_group
     
     # Save configuration
     with open(SERVER_GROUPS_FILE, 'w') as f:

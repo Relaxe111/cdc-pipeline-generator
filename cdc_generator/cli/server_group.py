@@ -23,19 +23,24 @@ Usage:
     cdc manage-server-group --add-to-schema-excludes "schema_to_exclude"
 
 Note:
-To create a new server group, you should manually create the 'server_group.yaml'
-file in the root of your implementation repository (e.g., adopus-cdc-pipeline).
-The '--update' command will then populate it based on the connection details
-you provide in that file. Environment variables like ${MSSQL_HOST} are supported.
+To create a new server group, run `cdc manage-server-group --create <name>`
+inside your implementation repository (e.g., adopus-cdc-pipeline). The command
+will scaffold `server_group.yaml` with environment-variable placeholders such as
+${MSSQL_HOST}. Afterwards, use '--update' to inspect the database and populate
+the database list automatically.
 """
 
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+# When executed directly (python cdc_generator/cli/server_group.py), ensure the
+# project root is on sys.path so package imports succeed.
+if __package__ in (None, ""):
+    project_root = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(project_root))
+
 from cdc_generator.helpers.helpers_logging import print_header, print_info, print_error, print_warning
 
 # Import from modular package
@@ -99,7 +104,7 @@ def main() -> int:
 
     # Handle --create
     if args.create:
-        missing = []
+        missing: List[str] = []
         if not args.pattern:
             missing.append("--pattern")
         if not args.source_type:
