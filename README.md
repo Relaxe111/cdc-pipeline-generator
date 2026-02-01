@@ -33,38 +33,34 @@ pip install git+https://github.com/carasent/cdc-pipeline-generator.git@v1.0.0
 
 ## Quick Start
 
-### 1. Create Server Groups Configuration
+> **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Do not create or edit YAML files manually.** The CLI is the sole entry point for managing configuration files.
 
-```yaml
-# server-groups.yaml
-server_groups:
-  - name: adopus
-    server_group_type: db-per-tenant
-    service: adopus
-    server:
-      type: mssql
-      host: ${MSSQL_HOST}
-      port: ${MSSQL_PORT}
+### 1. Create Service
+
+```bash
+# Create a new service configuration
+cdc manage-service --create adopus --server-group adopus
+
+# Add tables to the service
+cdc manage-service --service adopus --add-table Actor --primary-key actno
+cdc manage-service --service adopus --add-table Fraver --primary-key fraverid
 ```
 
-### 2. Create Service Configuration
+### 2. Configure Server Group
 
-```yaml
-# services/adopus.yaml
-service: adopus
-server_group: adopus
+```bash
+# Add server group (interactive prompts for server_group_type, server details, etc.)
+cdc manage-server-group --add-group adopus
 
-source_tables:
-  - schema: dbo
-    tables:
-      - name: Actor
-      - name: Fraver
+# Or update server group configuration from database inspection
+cdc manage-server-group --update
 ```
 
 ### 3. Generate Pipelines
 
 ```bash
-cdc-generator generate --service adopus --environment local
+# Generate CDC pipelines for a service
+cdc generate --service adopus --environment local
 ```
 
 ## Architecture Patterns
@@ -136,20 +132,48 @@ cdc-pipeline-generator @ git+https://github.com/carasent/cdc-pipeline-generator.
 
 ## CLI Commands
 
+All configuration is managed through `cdc` commands:
+
+### Service Management
 ```bash
-# Generate pipelines
-cdc-generator generate --service adopus --environment local
+# Create new service
+cdc manage-service --create <service-name> --server-group <group-name>
 
-# Manage services
-cdc-generator manage-service --service adopus --add-table Actor --primary-key actno
-cdc-generator manage-service --service adopus --inspect --schema dbo
+# Add tables to service
+cdc manage-service --service <name> --add-table <TableName> --primary-key <column>
 
-# Manage server groups
-cdc-generator manage-server-group --update
-cdc-generator manage-server-group --add-group asma
+# Inspect source database schema
+cdc manage-service --service <name> --inspect --schema dbo
 
-# Validate configurations
-cdc-generator validate
+# Remove table from service
+cdc manage-service --service <name> --remove-table <TableName>
+```
+
+### Server Group Management
+```bash
+# Add new server group (interactive)
+cdc manage-server-group --add-group <name>
+
+# Update server group from database inspection
+cdc manage-server-group --update
+
+# Refresh database/table metadata
+cdc manage-server-group --refresh
+```
+
+### Pipeline Generation
+```bash
+# Generate CDC pipelines for service
+cdc generate --service <name> --environment <env>
+
+# Generate for all services
+cdc generate --all --environment <env>
+```
+
+### Validation
+```bash
+# Validate all configurations
+cdc validate
 ```
 
 ## Development
