@@ -9,7 +9,7 @@ description = "CDC pipeline configuration generator for Redpanda Connect"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Carasent", email = "opensource@carasent.com"}
+    {name = "Igor Efrem", email = "igor@carasent.com"}
 ]
 requires-python = ">=3.11"
 classifiers = [
