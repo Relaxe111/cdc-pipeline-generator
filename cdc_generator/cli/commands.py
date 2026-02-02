@@ -2,20 +2,17 @@
 """
 CDC Pipeline CLI - Main Entry Point
 
-This CLI can run in two modes:
-1. Inside dev container (/workspace): Uses absolute paths to generator and implementations
-2. In implementation directory (adopus-cdc-pipeline, asma-cdc-pipeline): Auto-detects context
+This CLI runs inside a Docker dev container with all dependencies pre-installed.
 
 Usage:
     cdc <command> [options]
 
 Commands:
-    init                  Initialize a new CDC Pipeline project with dev container
     scaffold              Scaffold a new CDC pipeline project with server group configuration
     validate              Validate all customer configurations  
-    manage-service        Manage service definitions (from generator)
-    manage-server-group   Manage server groups (from generator)
-    generate [customer]   Generate pipelines (from generator)
+    manage-service        Manage service definitions
+    manage-server-group   Manage server groups
+    generate [customer]   Generate pipelines
     setup-local          Set up local development environment
     enable <customer> <env>      Enable CDC on MSSQL tables
     migrate-replica      Apply PostgreSQL migrations to replica
@@ -28,6 +25,8 @@ Commands:
     schema-docs          Generate database schema documentation
     reload-pipelines     Regenerate and reload Redpanda Connect pipelines
     help                 Show this help message
+
+Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
 """
 
 import sys
@@ -141,11 +140,6 @@ def get_script_paths(workspace_root, is_dev_container):
 
 # Commands that use generator library
 GENERATOR_COMMANDS = {
-    "init": {
-        "module": "cdc_generator.cli.init_project",
-        "script": "cli/init_project.py",
-        "description": "Initialize a new CDC pipeline project"
-    },
     "scaffold": {
         "module": "cdc_generator.cli.scaffold_command",
         "script": "cli/scaffold_command.py",
