@@ -57,9 +57,71 @@ def _default_connection_placeholders(source_type: str) -> Dict[str, str]:
     }
 
 
+class ScaffoldArgumentParser(argparse.ArgumentParser):
+    """Custom argument parser with better error messages."""
+    
+    def error(self, message: str) -> None:
+        """Override error method to provide detailed missing argument information."""
+        # Parse which arguments are missing from the error message
+        if "required:" in message:
+            print_error("Missing required arguments for 'cdc scaffold':\n")
+            
+            # Check what's missing by examining sys.argv
+            provided_args = sys.argv[1:]  # Skip 'cdc scaffold' part
+            
+            missing_items: List[str] = []
+            
+            # Check positional argument
+            has_name = False
+            for arg in provided_args:
+                if not arg.startswith('-'):
+                    has_name = True
+                    break
+            
+            if not has_name:
+                missing_items.append(
+                    "  • name\n"
+                    "      Project/server group name (e.g., 'adopus', 'asma', 'myproject')"
+                )
+            
+            # Check required flags
+            if '--pattern' not in provided_args:
+                missing_items.append(
+                    "  • --pattern {db-per-tenant,db-shared}\n"
+                    "      db-per-tenant: One database per customer (e.g., adopus_customer1, adopus_customer2)\n"
+                    "      db-shared: Multiple services in shared databases (e.g., asma_service_env)"
+                )
+            
+            if '--source-type' not in provided_args:
+                missing_items.append(
+                    "  • --source-type {postgres,mssql}\n"
+                    "      Type of source database to extract data from"
+                )
+            
+            if '--extraction-pattern' not in provided_args:
+                missing_items.append(
+                    "  • --extraction-pattern \"REGEX_PATTERN\"\n"
+                    "      Regex pattern to extract identifiers from database names\n"
+                    "      db-per-tenant example: \"^adopus_(?P<customer>[^_]+)$\"\n"
+                    "      db-shared example: \"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"\n"
+                    "      Use empty string \"\" for simple fallback matching (no regex)"
+                )
+            
+            if missing_items:
+                print_info("\n".join(missing_items))
+                print_info("\n💡 Quick start examples:")
+                print_info("  cdc scaffold adopus --pattern db-per-tenant --source-type mssql --extraction-pattern \"^adopus_(?P<customer>[^_]+)$\"")
+                print_info("  cdc scaffold asma --pattern db-shared --source-type postgres --extraction-pattern \"\" --environment-aware")
+            
+            sys.exit(2)
+        
+        # Default behavior for other errors
+        super().error(message)
+
+
 def main() -> int:
     """Main entry point for scaffold command."""
-    parser = argparse.ArgumentParser(
+    parser = ScaffoldArgumentParser(
         prog="cdc scaffold",
         description="Scaffold a new CDC Pipeline project with server group configuration",
         formatter_class=argparse.RawDescriptionHelpFormatter,
