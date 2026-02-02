@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, cast
 import os
 
+# Import metadata comment utilities
+from .metadata_comments import (
+    ensure_file_header_exists,
+    validate_output_has_metadata
+)
+
 
 def get_implementation_root() -> Path:
     """Locate implementation root by searching for known markers."""
@@ -166,6 +172,9 @@ def save_database_exclude_patterns(patterns: List[str]) -> None:
                 if line.strip().startswith('#') or line.strip() == '':
                     preserved_comments.append(line)
         
+        # CRITICAL: Ensure file header exists
+        preserved_comments = ensure_file_header_exists(preserved_comments)
+        
         # Load config
         with open(SERVER_GROUPS_FILE) as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
@@ -192,18 +201,23 @@ def save_database_exclude_patterns(patterns: List[str]) -> None:
         # Write each server group
         server_group_dict = config.get('server_group', {})
         for sg_name, sg in server_group_dict.items():
-            output_lines.append("# ============================================================================")
+            output_lines.append("  # ============================================================================")
             if sg_name == 'adopus':
-                output_lines.append("# AdOpus Server Group (db-per-tenant)")
+                output_lines.append("  # AdOpus Server Group (db-per-tenant)")
             elif sg_name == 'asma':
-                output_lines.append("# ASMA Server Group (db-shared)")
-            output_lines.append("# ============================================================================")
+                output_lines.append("  # ASMA Server Group (db-shared)")
+            else:
+                output_lines.append(f"  # {sg_name.title()} Server Group")
+            output_lines.append("  # ============================================================================")
             output_lines.append(f"  {sg_name}:")
             
             sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
             sg_lines = sg_yaml.strip().split('\n')
             for line in sg_lines:
                 output_lines.append(f"    {line}")
+        
+        # CRITICAL: Validate before writing
+        validate_output_has_metadata(output_lines)
         
         # Write back
         with open(SERVER_GROUPS_FILE, 'w') as f:
@@ -250,6 +264,9 @@ def save_schema_exclude_patterns(patterns: List[str]) -> None:
                 if line.strip().startswith('#') or line.strip() == '':
                     preserved_comments.append(line)
         
+        # CRITICAL: Ensure file header exists
+        preserved_comments = ensure_file_header_exists(preserved_comments)
+        
         # Load config
         with open(SERVER_GROUPS_FILE) as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
@@ -276,18 +293,23 @@ def save_schema_exclude_patterns(patterns: List[str]) -> None:
         # Write each server group
         server_group_dict = config.get('server_group', {})
         for sg_name, sg in server_group_dict.items():
-            output_lines.append("# ============================================================================")
+            output_lines.append("  # ============================================================================")
             if sg_name == 'adopus':
-                output_lines.append("# AdOpus Server Group (db-per-tenant)")
+                output_lines.append("  # AdOpus Server Group (db-per-tenant)")
             elif sg_name == 'asma':
-                output_lines.append("# ASMA Server Group (db-shared)")
-            output_lines.append("# ============================================================================")
+                output_lines.append("  # ASMA Server Group (db-shared)")
+            else:
+                output_lines.append(f"  # {sg_name.title()} Server Group")
+            output_lines.append("  # ============================================================================")
             output_lines.append(f"  {sg_name}:")
             
             sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
             sg_lines = sg_yaml.strip().split('\n')
             for line in sg_lines:
                 output_lines.append(f"    {line}")
+        
+        # CRITICAL: Validate before writing
+        validate_output_has_metadata(output_lines)
         
         # Write back
         with open(SERVER_GROUPS_FILE, 'w') as f:

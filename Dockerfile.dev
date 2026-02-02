@@ -11,11 +11,10 @@ ENV PATH="/opt/mssql-tools18/bin:/workspace:${PATH}"
 # Set working directory
 WORKDIR /workspace
 
-# Copy package files for installation
+# Copy ONLY pyproject.toml to install dependencies (not the package itself yet)
 COPY pyproject.toml setup.py ./
-COPY cdc_generator/ ./cdc_generator/
 
-# Install Python dependencies and the cdc-pipeline-generator package
+# Install Python dependencies WITHOUT installing the package yet
 # This includes all runtime dependencies, dev dependencies, and type stubs
 RUN pip install --no-cache-dir \
     # Core dependencies (from pyproject.toml)
@@ -35,8 +34,10 @@ RUN pip install --no-cache-dir \
     pylint \
     # Type stubs for static type checking
     types-PyYAML \
-    types-pymssql \
-    && pip install -e .
+    types-pymssql
+
+# NOTE: The actual package installation happens at runtime via docker-entrypoint.sh
+# This ensures we always use the latest code from the volume-mounted /workspace
 
 # Set Python to unbuffered mode for better logging
 ENV PYTHONUNBUFFERED=1

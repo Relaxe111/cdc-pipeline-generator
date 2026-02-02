@@ -1,5 +1,12 @@
 # CDC Pipeline Generator - Copilot Instructions
 
+## 📖 Documentation References
+
+**Before writing or modifying code, always read:**
+- **[Coding Guidelines](.github/copilot-coding-guidelines.md)** - Code organization, style, naming conventions, function/file size limits, type hints, and patterns optimized for AI navigation
+
+---
+
 ## 🎯 Project Purpose
 
 **Abstract, reusable library** for generating Redpanda Connect CDC pipelines.

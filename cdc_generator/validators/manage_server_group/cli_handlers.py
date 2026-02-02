@@ -25,6 +25,11 @@ from .db_inspector import (
 )
 from .yaml_writer import update_server_group_yaml
 from .utils import regenerate_all_validation_schemas, update_vscode_schema, update_completions
+from .metadata_comments import (
+    get_file_header_comments,
+    ensure_file_header_exists,
+    validate_output_has_metadata
+)
 from cdc_generator.helpers.helpers_logging import (
     print_header, 
     print_info, 
@@ -169,9 +174,42 @@ def handle_add_group(args: Namespace) -> int:
         config['server_group'] = server_group_block
     server_group_block[server_group_name] = new_group
     
+    # Build output with metadata comments
+    output_lines: List[str] = []
+    
+    # Add file header comments
+    header_comments = get_file_header_comments()
+    output_lines.extend(header_comments)
+    output_lines.append("")  # Blank line after header
+    
+    # Add server_group: key
+    output_lines.append("server_group:")
+    
+    # Add server group separator
+    output_lines.append("  # ============================================================================")
+    if server_group_name == 'adopus':
+        output_lines.append("  # AdOpus Server Group (db-per-tenant)")
+    elif server_group_name == 'asma':
+        output_lines.append("  # ASMA Server Group (db-shared)")
+    else:
+        pattern_label = "db-per-tenant" if args.mode == "db-per-tenant" else "db-shared"
+        output_lines.append(f"  # {server_group_name.title()} Server Group ({pattern_label})")
+    output_lines.append("  # ============================================================================")
+    output_lines.append(f"  {server_group_name}:")
+    
+    # Dump the server group YAML
+    sg_yaml = yaml.dump(new_group, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+    sg_lines = sg_yaml.strip().split('\n')
+    for line in sg_lines:
+        output_lines.append(f"    {line}")  # 4 spaces indent
+    
+    # Validate before writing
+    validate_output_has_metadata(output_lines)
+    
     # Save configuration
     with open(SERVER_GROUPS_FILE, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        f.write('\n'.join(output_lines))
+        f.write('\n')
     
     print_success(f"✓ Added server group '{args.add_group}' ({args.mode})")
     

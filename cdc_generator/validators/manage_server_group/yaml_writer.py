@@ -9,6 +9,11 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 
 from .config import SERVER_GROUPS_FILE, get_single_server_group
+from .metadata_comments import (
+    ensure_file_header_exists,
+    validate_output_has_metadata,
+    get_update_timestamp_comment
+)
 from cdc_generator.helpers.helpers_logging import print_error, print_info
 
 
@@ -92,6 +97,9 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                     continue
                 if line.strip().startswith('#') or line.strip() == '':
                     preserved_comments.append(line)
+        
+        # CRITICAL: Ensure file header exists
+        preserved_comments = ensure_file_header_exists(preserved_comments)
         
         with open(SERVER_GROUPS_FILE, 'r') as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
@@ -408,12 +416,14 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                     ]
             
             # Add comment header before each server group
-            output_lines.append("# ============================================================================")
+            output_lines.append("  # ============================================================================")
             if sg_name == 'adopus':
-                output_lines.append("# AdOpus Server Group (db-per-tenant)")
+                output_lines.append("  # AdOpus Server Group (db-per-tenant)")
             elif sg_name == 'asma':
-                output_lines.append("# ASMA Server Group (db-shared)")
-            output_lines.append("# ============================================================================")
+                output_lines.append("  # ASMA Server Group (db-shared)")
+            else:
+                output_lines.append(f"  # {sg_name.title()} Server Group")
+            output_lines.append("  # ============================================================================")
             
             # Add the server group as a dict entry (key: value format)
             # Write the key first
@@ -425,6 +435,9 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             for line in sg_lines:
                 # Add 4 spaces of indentation (2 for server_group level + 2 for content)
                 output_lines.append(f"    {line}")
+        
+        # CRITICAL: Validate before writing
+        validate_output_has_metadata(output_lines)
         
         # Write the complete file
         with open(SERVER_GROUPS_FILE, 'w') as f:

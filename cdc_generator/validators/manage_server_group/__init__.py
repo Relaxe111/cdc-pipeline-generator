@@ -11,6 +11,14 @@ from .config import (
     SERVER_GROUPS_FILE,
 )
 
+from .metadata_comments import (
+    get_file_header_comments,
+    get_update_timestamp_comment,
+    ensure_file_header_exists,
+    validate_output_has_metadata,
+    add_metadata_stats_comments,
+)
+
 from .scaffolding import (
     scaffold_project_structure,
 )
@@ -57,6 +65,12 @@ __all__ = [
     'save_schema_exclude_patterns',
     'PROJECT_ROOT',
     'SERVER_GROUPS_FILE',
+    # Metadata Comments
+    'get_file_header_comments',
+    'get_update_timestamp_comment',
+    'ensure_file_header_exists',
+    'validate_output_has_metadata',
+    'add_metadata_stats_comments',
     # Scaffolding
     'scaffold_project_structure',
     # Filters
