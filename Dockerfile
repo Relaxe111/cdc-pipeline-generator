@@ -3,9 +3,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /generator
 
-# Install system dependencies
+# Install system dependencies including Fish shell
 RUN apt-get update && apt-get install -y \
     git \
+    fish \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
