@@ -35,45 +35,64 @@ docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generato
 docker pull asmacarma/cdc-pipeline-generator:latest
 ```
 
-## 🚀 Quick Start (Docker Workflow)
+## 🚀 Quick Start (Docker Compose Workflow)
 
 > **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Never edit YAML files manually.** The CLI is the sole interface for configuration management.
 
-### 1. Initialize New Project
+### 1. Create Docker Compose File
+
+Create a `docker-compose.yml` in your project directory:
+
+```yaml
+version: '3.8'
+
+services:
+  cdc:
+    image: asmacarma/cdc-pipeline-generator:latest  # Use :latest for auto-updates
+    # image: asmacarma/cdc-pipeline-generator:0     # Recommended: Pin to major version for stability
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: --help  # Override with your command
+    profiles:
+      - tools  # Prevents auto-start with docker compose up
+
+# Note: 
+# - :latest - Always pulls newest version (auto-updates on docker compose pull)
+# - :0      - Pins to major version 0.x.x (stable, gets minor/patch updates)
+# - :0.2    - Pins to minor version 0.2.x (only patch updates)
+# - :0.2.4  - Pins to exact version (no updates)
+```
+
+**Version strategy:**
+- Development: Use `:latest` for newest features
+- Production: Use `:0` to auto-update within major version
+- Critical systems: Use exact version like `:0.2.4`
+
+### 2. Initialize Project
 
 ```bash
 # Create project directory
 mkdir my-cdc-project
 cd my-cdc-project
 
-# Initialize with dev container
-docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest init
+# Copy the docker-compose.yml above, then:
+docker compose run --rm cdc init
 
-# ✅ Creates docker-compose.yml, Dockerfile.dev, project structure
-# ✅ Builds dev container with Python, Fish shell, all dependencies
-# ✅ Prompts to start container automatically
+# ✅ Creates project structure, pipeline templates, directories
 ```
 
-### 2. Enter Dev Container
-
-```bash
-docker compose exec dev fish
-# Now inside container with cdc commands ready to use
-```
-
-### 3. Scaffold Server Group (Interactive Setup)
+### 3. Scaffold Server Group
 
 ```bash
 # For db-per-tenant pattern (e.g., one database per customer)
-docker run --rm -v $PWD:/workspace -w /workspace \
-  asmacarma/cdc-pipeline-generator:latest scaffold my-group \
+docker compose run --rm cdc scaffold my-group \
   --pattern db-per-tenant \
   --source-type mssql \
   --extraction-pattern "^myapp_(?P<customer>[^_]+)$"
 
 # For db-shared pattern (e.g., multi-tenant in single database)
-docker run --rm -v $PWD:/workspace -w /workspace \
-  asmacarma/cdc-pipeline-generator:latest scaffold my-group \
+docker compose run --rm cdc scaffold my-group \
   --pattern db-shared \
   --source-type postgres \
   --extraction-pattern "^myapp_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$" \
@@ -82,19 +101,13 @@ docker run --rm -v $PWD:/workspace -w /workspace \
 # ✅ Creates server_group.yaml with configuration
 # ✅ Auto-updates docker-compose.yml with database services
 # ✅ Creates directory structure (services/, generated/, etc.)
-# ✅ Uses environment variables for credentials (${POSTGRES_SOURCE_HOST}, etc.)
+# ✅ Uses environment variables for credentials
 
 # Required flags:
-#   --pattern          : db-per-tenant or db-shared
-#   --source-type      : postgres or mssql
-#   --extraction-pattern : Regex with named groups (customer for db-per-tenant, service/env for db-shared)
-#   --environment-aware : Required for db-shared pattern
-#
-# Optional flags:
-#   --host     : Override default ${SOURCE_HOST}
-#   --port     : Override default ${SOURCE_PORT}
-#   --user     : Override default ${SOURCE_USER}
-#   --password : Override default ${SOURCE_PASSWORD}
+#   --pattern            : db-per-tenant or db-shared
+#   --source-type        : postgres or mssql
+#   --extraction-pattern : Regex with named groups
+#   --environment-aware  : Required for db-shared pattern
 ```
 
 ### 4. Configure Environment Variables
