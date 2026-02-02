@@ -27,14 +27,17 @@ def _get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 #   By default, we connect to remote source servers
 #
 # Usage:
-#   docker compose up -d                          # Start all services
+# Usage:
+#   docker compose up -d                          # Start dev container only
 #   docker compose exec dev fish                  # Enter dev container
-#   docker compose --profile local-mssql up -d    # Include local MSSQL
+#   cdc setup-local --enable-local-sink           # Start PostgreSQL (target)
+#   cdc setup-local --enable-local-source         # Start MSSQL (source)
+#   cdc setup-local --enable-local-sink --enable-local-source  # Start both
 # =============================================================================
 
 services:
   # ===========================================================================
-  # Dev Container - Python Development Environment
+  # Dev Container - Python Development Environment (Standalone)
   # ===========================================================================
   dev:
     build:
@@ -54,12 +57,11 @@ services:
     command: fish
     networks:
       - cdc-network
-    depends_on:
-      - postgres
-      - redpanda
+    # No depends_on - dev container is standalone
+    # Use 'cdc setup-local' to start databases on demand
 
   # ===========================================================================
-  # PostgreSQL - CDC Target Database
+  # PostgreSQL - CDC Target Database (Start with --enable-local-sink)
   # ===========================================================================
   postgres:
     image: postgres:17-alpine
@@ -81,6 +83,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    profiles:
+      - local-sink
+      - full
 
   # ===========================================================================
   # Redpanda - Kafka-Compatible Streaming Platform
@@ -116,6 +121,9 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+    profiles:
+      - streaming
+      - full
 
   # ===========================================================================
   # Redpanda Console - Web UI for Monitoring
@@ -144,6 +152,9 @@ services:
       - cdc-network
     depends_on:
       - redpanda
+    profiles:
+      - streaming
+      - full
 
   # ===========================================================================
   # Adminer - Database Management UI
@@ -160,6 +171,9 @@ services:
       - cdc-network
     depends_on:
       - postgres
+    profiles:
+      - local-sink
+      - full
 
   # ===========================================================================
   # Redpanda Connect Source (Source DB → Redpanda)
@@ -195,14 +209,15 @@ services:
   #     - postgres
 
   # ===========================================================================
-  # Optional: Local SQL Server 2022 (for testing without remote server)
+  # Optional: Local SQL Server 2022 (Start with --enable-local-source)
   # ===========================================================================
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     hostname: {container_prefix}-mssql
     container_name: {container_prefix}-mssql
     profiles:
-      - local-mssql
+      - local-source
+      - full
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${{MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}}

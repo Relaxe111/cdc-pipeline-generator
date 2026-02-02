@@ -160,6 +160,10 @@ GENERATOR_COMMANDS = {
         "script": "cli/server_group.py",
         "description": "Manage server groups"
     },
+    "setup-local": {
+        "script": "cli/setup_local.py",
+        "description": "Set up local development environment with on-demand services"
+    },
 }
 
 # Commands that use local scripts (implementation-specific)
@@ -167,10 +171,6 @@ LOCAL_COMMANDS = {
     "validate": {
         "script": "scripts/1-validate-customers.py",
         "description": "Validate all customer YAML configurations"
-    },
-    "setup-local": {
-        "script": "scripts/4-setup-local.py",
-        "description": "Set up local development environment"
     },
     "enable": {
         "script": "scripts/5-enable-cdc-mssql.py",
