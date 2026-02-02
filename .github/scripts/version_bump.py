@@ -103,8 +103,14 @@ def update_pyproject_toml(new_version: str) -> None:
 
 def set_github_output(name: str, value: str, multiline: bool = False) -> None:
     """Set GitHub Actions output."""
-    github_output = Path(os.environ.get('GITHUB_OUTPUT', '/dev/stdout'))
-    with github_output.open('a') as f:
+    github_output_file = os.environ.get('GITHUB_OUTPUT')
+    
+    if not github_output_file:
+        # Fallback to stdout if not in GitHub Actions
+        print(f"{name}={value}")
+        return
+    
+    with open(github_output_file, 'a') as f:
         if multiline:
             f.write(f"{name}<<EOF\n")
             f.write(f"{value}\n")
