@@ -69,46 +69,80 @@ services:
 - Production: Use `:0` to auto-update within major version
 - Critical systems: Use exact version like `:0.2.4`
 
-### 2. Initialize Project
+### 2. Initialize Project and Enter Dev Container
 
 ```bash
 # Create project directory
 mkdir my-cdc-project
 cd my-cdc-project
 
-# Copy the docker-compose.yml above, then:
+# Copy the docker-compose.yml above, then initialize:
 docker compose run --rm cdc init
+# ✅ Creates project structure, Dockerfile.dev, pipeline templates
 
-# ✅ Creates project structure, pipeline templates, directories
+# Start the dev container (builds container with Fish shell, Python, dependencies)
+docker compose up -d
+
+# Enter the dev container shell
+docker compose exec dev fish
+# 🐚 You are now inside the container with full cdc CLI and Fish completions
 ```
 
-### 3. Scaffold Server Group
+**Inside the dev container**, you'll see a Fish shell prompt with:
+- ✅ `cdc` command available with tab completion
+- ✅ All dependencies pre-installed
+- ✅ Your project directory mounted at `/workspace`
 
-```bash
-# For db-per-tenant pattern (e.g., one database per customer)
-docker compose run --rm cdc scaffold my-group \
+### 3. Scaffold Server Group (Inside Dev Container)
+
+**Now working inside the container shell**, run the scaffold command:
+
+```fish
+# 🐚 Inside dev container
+
+# For db-per-tenant pattern (one database per customer)
+cdc scaffold my-group \
   --pattern db-per-tenant \
   --source-type mssql \
   --extraction-pattern "^myapp_(?P<customer>[^_]+)$"
 
-# For db-shared pattern (e.g., multi-tenant in single database)
-docker compose run --rm cdc scaffold my-group \
+# For db-shared pattern (multi-tenant, single database)
+cdc scaffold my-group \
   --pattern db-shared \
   --source-type postgres \
   --extraction-pattern "^myapp_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$" \
   --environment-aware
-
-# ✅ Creates server_group.yaml with configuration
-# ✅ Auto-updates docker-compose.yml with database services
-# ✅ Creates directory structure (services/, generated/, etc.)
-# ✅ Uses environment variables for credentials
-
-# Required flags:
-#   --pattern            : db-per-tenant or db-shared
-#   --source-type        : postgres or mssql
-#   --extraction-pattern : Regex with named groups
-#   --environment-aware  : Required for db-shared pattern
 ```
+
+**Required flags explained:**
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--pattern` | `db-per-tenant` or `db-shared` | Choose your multi-tenancy model |
+| `--source-type` | `postgres` or `mssql` | Source database type |
+| `--extraction-pattern` | Regex string | Pattern to extract identifiers from DB names |
+| `--environment-aware` | (flag, no value) | **Required for db-shared only** - enables env grouping |
+
+**Pattern-specific requirements:**
+
+For `--pattern db-per-tenant`:
+- Regex must have named group: `(?P<customer>...)`
+- Example: `"^myapp_(?P<customer>[^_]+)$"` matches `myapp_customer1`
+
+For `--pattern db-shared`:
+- Regex must have named groups: `(?P<service>...)` and `(?P<env>...)`
+- Must include `--environment-aware` flag
+- Example: `"^myapp_(?P<service>users)_(?P<env>dev|stage|prod)$"`
+
+**Fish shell autocomplete** (inside dev container):
+- Type `cdc scaffold my-group --pattern ` + TAB → shows `db-per-tenant` and `db-shared`
+- Type `cdc scaffold my-group --source-type ` + TAB → shows `postgres` and `mssql`
+
+**What gets created:**
+- ✅ `server_group.yaml` with your configuration
+- ✅ Updates `docker-compose.yml` with database services
+- ✅ Directory structure: `services/`, `generated/`, `pipeline-templates/`
+- ✅ Connection credentials use env vars: `${POSTGRES_SOURCE_HOST}`, etc.
 
 ### 4. Configure Environment Variables
 
