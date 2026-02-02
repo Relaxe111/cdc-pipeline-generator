@@ -35,9 +35,17 @@ complete -c cdc -n "__fish_use_subcommand" -a "schema-docs" -d "Generate databas
 complete -c cdc -n "__fish_use_subcommand" -a "reload-pipelines" -d "Regenerate and reload Redpanda Connect pipelines"
 complete -c cdc -n "__fish_use_subcommand" -a "help" -d "Show help message"
 
-# Common flags
-complete -c cdc -l help -s h -d "Show help message"
-complete -c cdc -l version -s v -d "Show version"
+# Global flags (only show when no subcommand is active)
+complete -c cdc -n "__fish_use_subcommand" -l help -s h -d "Show help message"
+complete -c cdc -n "__fish_use_subcommand" -l version -s v -d "Show version"
+
+# Subcommand-specific help (show -h/--help for each subcommand)
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -s h -l help -d "Show scaffold help"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -s h -l help -d "Show manage-service help"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -s h -l help -d "Show manage-server-group help"
+complete -c cdc -n "__fish_seen_subcommand_from generate" -s h -l help -d "Show generate help"
+complete -c cdc -n "__fish_seen_subcommand_from validate" -s h -l help -d "Show validate help"
+complete -c cdc -n "__fish_seen_subcommand_from setup-local" -s h -l help -d "Show setup-local help"
 
 # init subcommand options
 complete -c cdc -n "__fish_seen_subcommand_from init" -l name -d "Project name (e.g., adopus-cdc-pipeline)" -r
