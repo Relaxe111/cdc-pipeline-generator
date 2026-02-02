@@ -1,5 +1,7 @@
 # CDC Pipeline Generator
 
+[![Docker Hub](https://img.shields.io/docker/v/asmacarma/cdc-pipeline-generator?label=docker&logo=docker)](https://hub.docker.com/r/asmacarma/cdc-pipeline-generator)
+
 **Generate Redpanda Connect pipeline configurations for Change Data Capture (CDC) workflows.**
 
 A CLI-first tool for managing CDC pipelines with automatic Docker dev container setup, supporting both **db-per-tenant** (one database per customer) and **db-shared** (single database, multi-tenant) patterns.
