@@ -48,14 +48,14 @@ Create a `docker-compose.yml` in your project directory:
 ```yaml
 services:
   dev:
-    image: asmacarma/cdc-pipeline-generator:latest  # Use :latest for auto-updates
-    # image: asmacarma/cdc-pipeline-generator:0     # Recommended: Pin to major version for stability
+    image: asmacarma/cdc-pipeline-generator:latest
     volumes:
       - .:/workspace
     working_dir: /workspace
     stdin_open: true
     tty: true
-    command: fish  # Interactive Fish shell with cdc commands
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["fish"]
 
 # When you run 'cdc scaffold', database services (mssql/postgres) will be
 # automatically inserted below, while this dev service remains unchanged.
