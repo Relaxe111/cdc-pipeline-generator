@@ -64,12 +64,37 @@ docker compose exec dev fish
 ### 3. Scaffold Server Group (Interactive Setup)
 
 ```bash
-# Interactive scaffolding - prompts for all settings
-cdc scaffold my-group
+# For db-per-tenant pattern (e.g., one database per customer)
+docker run --rm -v $PWD:/workspace -w /workspace \
+  asmacarma/cdc-pipeline-generator:latest scaffold my-group \
+  --pattern db-per-tenant \
+  --source-type mssql \
+  --extraction-pattern "^myapp_(?P<customer>[^_]+)$"
+
+# For db-shared pattern (e.g., multi-tenant in single database)
+docker run --rm -v $PWD:/workspace -w /workspace \
+  asmacarma/cdc-pipeline-generator:latest scaffold my-group \
+  --pattern db-shared \
+  --source-type postgres \
+  --extraction-pattern "^myapp_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$" \
+  --environment-aware
 
 # ✅ Creates server_group.yaml with configuration
 # ✅ Auto-updates docker-compose.yml with database services
 # ✅ Creates directory structure (services/, generated/, etc.)
+# ✅ Uses environment variables for credentials (${POSTGRES_SOURCE_HOST}, etc.)
+
+# Required flags:
+#   --pattern          : db-per-tenant or db-shared
+#   --source-type      : postgres or mssql
+#   --extraction-pattern : Regex with named groups (customer for db-per-tenant, service/env for db-shared)
+#   --environment-aware : Required for db-shared pattern
+#
+# Optional flags:
+#   --host     : Override default ${SOURCE_HOST}
+#   --port     : Override default ${SOURCE_PORT}
+#   --user     : Override default ${SOURCE_USER}
+#   --password : Override default ${SOURCE_PASSWORD}
 ```
 
 ### 4. Configure Environment Variables
@@ -151,13 +176,33 @@ docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generato
 ### Scaffolding (New in 0.2.x)
 
 ```bash
-docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest scaffold <name>
+docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest scaffold <name> \
+  --pattern <db-per-tenant|db-shared> \
+  --source-type <postgres|mssql> \
+  --extraction-pattern "<regex>" \
+  [--environment-aware]
 
-# Interactive prompts for:
-# - Pattern (db-per-tenant or db-shared)
-# - Source database type
-# - Connection details
-# - Extraction patterns
+# Required for db-per-tenant:
+#   --pattern db-per-tenant
+#   --source-type postgres|mssql
+#   --extraction-pattern with 'customer' named group
+
+# Required for db-shared:
+#   --pattern db-shared
+#   --source-type postgres|mssql
+#   --extraction-pattern with 'service' and 'env' named groups
+#   --environment-aware (mandatory flag)
+
+# Optional connection overrides:
+#   --host <host>         # Default: ${POSTGRES_SOURCE_HOST} or ${MSSQL_SOURCE_HOST}
+#   --port <port>         # Default: ${POSTGRES_SOURCE_PORT} or ${MSSQL_SOURCE_PORT}
+#   --user <user>         # Default: ${POSTGRES_SOURCE_USER} or ${MSSQL_SOURCE_USER}
+#   --password <password> # Default: ${POSTGRES_SOURCE_PASSWORD} or ${MSSQL_SOURCE_PASSWORD}
+
+# Example patterns:
+# - db-per-tenant: "^adopus_(?P<customer>[^_]+)$"
+# - db-shared: "^asma_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$"
+# - Empty pattern "" for simple fallback matching
 ```
 
 ### Service Management
