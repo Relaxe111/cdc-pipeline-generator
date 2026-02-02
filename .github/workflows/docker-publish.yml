@@ -12,6 +12,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for creating tags and releases
+      packages: write
     
     steps:
       - name: Checkout code
@@ -50,13 +53,19 @@ jobs:
           cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:latest
           cache-to: type=inline
       
-      - name: Create Git tag
+      - name: Create Git tag and push changes
         run: |
           NEW_VERSION="${{ steps.version_bump.outputs.new_version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit updated pyproject.toml
+          git add pyproject.toml
+          git commit -m "chore: Bump version to ${NEW_VERSION} [skip ci]" || echo "No changes to commit"
+          
+          # Create and push tag
           git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
-          git push origin "v${NEW_VERSION}"
+          git push origin master "v${NEW_VERSION}"
       
       - name: Create GitHub Release
         uses: actions/create-release@v1
