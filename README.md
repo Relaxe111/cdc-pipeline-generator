@@ -47,15 +47,18 @@ Create a `docker-compose.yml` in your project directory:
 version: '3.8'
 
 services:
-  cdc:
+  dev:
     image: asmacarma/cdc-pipeline-generator:latest  # Use :latest for auto-updates
     # image: asmacarma/cdc-pipeline-generator:0     # Recommended: Pin to major version for stability
     volumes:
       - .:/workspace
     working_dir: /workspace
-    command: --help  # Override with your command
-    profiles:
-      - tools  # Prevents auto-start with docker compose up
+    stdin_open: true
+    tty: true
+    command: fish  # Interactive Fish shell with cdc commands
+
+# When you run 'cdc scaffold', database services (mssql/postgres) will be
+# automatically inserted below, while this dev service remains unchanged.
 
 # Note: 
 # - :latest - Always pulls newest version (auto-updates on docker compose pull)
@@ -69,18 +72,20 @@ services:
 - Production: Use `:0` to auto-update within major version
 - Critical systems: Use exact version like `:0.2.4`
 
-### 2. Initialize Project and Enter Dev Container
+**⚠️ Important:** This docker-compose.yml will be **automatically updated** when you run `cdc scaffold`. New database services will be inserted while preserving the `dev` service.
+
+### 2. Initialize Project and Start Dev Container
 
 ```bash
 # Create project directory
 mkdir my-cdc-project
 cd my-cdc-project
 
-# Copy the docker-compose.yml above, then initialize:
-docker compose run --rm cdc init
-# ✅ Creates project structure, Dockerfile.dev, pipeline templates
+# Copy the docker-compose.yml from above, then initialize:
+docker compose run --rm dev init
+# ✅ Creates project structure, Dockerfile.dev, pipeline templates, directories
 
-# Start the dev container (builds container with Fish shell, Python, dependencies)
+# Start the dev container
 docker compose up -d
 
 # Enter the dev container shell
@@ -140,9 +145,29 @@ For `--pattern db-shared`:
 
 **What gets created:**
 - ✅ `server_group.yaml` with your configuration
-- ✅ Updates `docker-compose.yml` with database services
+- ✅ **Updates `docker-compose.yml`** - inserts database services (mssql/postgres) after `dev` service
 - ✅ Directory structure: `services/`, `generated/`, `pipeline-templates/`
 - ✅ Connection credentials use env vars: `${POSTGRES_SOURCE_HOST}`, etc.
+
+**Docker Compose update example:**
+After scaffold, your docker-compose.yml will have new services added:
+```yaml
+services:
+  dev:  # ← Your original service (preserved)
+    image: asmacarma/cdc-pipeline-generator:latest
+    # ... unchanged ...
+  
+  mssql:  # ← Added by scaffold
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD}
+  
+  postgres-target:  # ← Added by scaffold
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_TARGET_PASSWORD}
+```
 
 ### 4. Configure Environment Variables
 
