@@ -69,26 +69,27 @@ jobs:
           git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
           git push origin master "v${NEW_VERSION}"
       
-      - if: steps.version_bump.outputs.should_skip != 'true'
-        name: Create GitHub Release
-        uses: actions/create-release@v1
+      - name: Create GitHub Release
+        if: steps.version_bump.outputs.should_skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version_bump.outputs.new_version }}
-          release_name: Release v${{ steps.version_bump.outputs.new_version }}
-          body: |
-            ## Changes
-            
-            Version bumped from ${{ steps.version_bump.outputs.old_version }} → ${{ steps.version_bump.outputs.new_version }}
-            Bump type: ${{ steps.version_bump.outputs.bump_type }}
-            
-            ### Commits
-            ${{ steps.version_bump.outputs.commits }}
-            
-            ### Docker Image
-            ```bash
-            docker pull ${{ env.DOCKER_IMAGE }}:${{ steps.version_bump.outputs.new_version }}
-            ```
-          draft: false
-          prerelease: false
+        run: |
+          NEW_VERSION="${{ steps.version_bump.outputs.new_version }}"
+          OLD_VERSION="${{ steps.version_bump.outputs.old_version }}"
+          BUMP_TYPE="${{ steps.version_bump.outputs.bump_type }}"
+          COMMITS="${{ steps.version_bump.outputs.commits }}"
+          
+          gh release create "v${NEW_VERSION}" \
+            --title "Release v${NEW_VERSION}" \
+            --notes "## Changes
+
+          Version bumped from ${OLD_VERSION} → ${NEW_VERSION}
+          Bump type: ${BUMP_TYPE}
+
+          ### Commits
+          ${COMMITS}
+
+          ### Docker Image
+          \`\`\`bash
+          docker pull ${{ env.DOCKER_IMAGE }}:${NEW_VERSION}
+          \`\`\`"
