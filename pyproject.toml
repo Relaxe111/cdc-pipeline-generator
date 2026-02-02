@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cdc-pipeline-generator"
-version = "0.2.1"
+version = "0.2.2"
 description = "CDC pipeline configuration generator for Redpanda Connect"
 readme = "README.md"
 license = {text = "MIT"}
