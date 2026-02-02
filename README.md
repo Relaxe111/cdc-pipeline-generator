@@ -8,22 +8,43 @@ A CLI-first tool for managing CDC pipelines with automatic Docker dev container 
 
 ## ✨ Features
 
-- 🚀 **Zero-config setup**: `pip install` → `cdc init` → ready to develop
-- 🐳 **Docker dev container**: Automatic environment setup with all dependencies
+- 🚀 **Zero-dependency setup**: Only Docker required
+- 🐳 **Docker-first**: Run from Docker Hub image - no local installation needed
 - 🔄 **Multi-tenant patterns**: Support for db-per-tenant and db-shared architectures
 - 📝 **Template-based generation**: Jinja2 templates for flexible pipeline configuration
 - ✅ **CLI-first philosophy**: All operations via `cdc` commands, no manual YAML editing
 - 🛠️ **Database integration**: Auto-updates docker-compose.yml with database services
+- 🔖 **Automated releases**: Semantic versioning with conventional commits
 
 ## 📦 Installation
+
+**Option 1: Docker (Recommended - Zero Dependencies)**
+
+```bash
+# Pull latest version
+docker pull asmacarma/cdc-pipeline-generator:latest
+
+# Run commands
+docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest --help
+```
+
+**Option 2: pipx (Optional - For local CLI)**
 
 ```bash
 pip install cdc-pipeline-generator
 ```
 
-That's it! The `cdc` command is now available globally.
+## 🔄 Updating
 
-## 🚀 Quick Start (Recommended Workflow)
+```bash
+# Docker: Pull latest version
+docker pull asmacarma/cdc-pipeline-generator:latest
+
+# pipx: Upgrade package
+pipx upgrade cdc-pipeline-generator
+```
+
+## 🚀 Quick Start (Docker Workflow)
 
 > **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Never edit YAML files manually.** The CLI is the sole interface for configuration management.
 
@@ -35,7 +56,8 @@ mkdir my-cdc-project
 cd my-cdc-project
 
 # Initialize with dev container
-cdc init
+docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest init
+
 # ✅ Creates docker-compose.yml, Dockerfile.dev, project structure
 # ✅ Builds dev container with Python, Fish shell, all dependencies
 # ✅ Prompts to start container automatically
@@ -48,36 +70,15 @@ docker compose exec dev fish
 # Now inside container with cdc commands ready to use
 ```
 
-### 3. Create Server Group (Auto-configures Docker Compose)
+### 3. Scaffold Server Group (Interactive Setup)
 
 ```bash
-# For MSSQL source (db-per-tenant pattern)
-cdc manage-server-group --create my-group \
-  --pattern db-per-tenant \
-  --source-type mssql \
-  --extraction-pattern '(?P<customer_id>\w+)_(?P<env>\w+)' \
-  --host '${MSSQL_HOST}' \
-  --port 1433 \
-  --user '${MSSQL_USER}' \
-  --password '${MSSQL_PASSWORD}'
+# Interactive scaffolding - prompts for all settings
+cdc scaffold my-group
 
-# ✅ Creates server-groups.yaml
-# ✅ Auto-updates docker-compose.yml with MSSQL + PostgreSQL services
-# ✅ Adds volume definitions and service dependencies
-```
-
-Or for PostgreSQL source (db-shared pattern):
-
-```bash
-cdc manage-server-group --create my-group \
-  --pattern db-shared \
-  --source-type postgresql \
-  --extraction-pattern '(?P<customer_id>\w+)' \
-  --environment-aware \
-  --host '${POSTGRES_SOURCE_HOST}' \
-  --port 5432 \
-  --user '${POSTGRES_SOURCE_USER}' \
-  --password '${POSTGRES_SOURCE_PASSWORD}'
+# ✅ Creates server_group.yaml with configuration
+# ✅ Auto-updates docker-compose.yml with database services
+# ✅ Creates directory structure (services/, generated/, etc.)
 ```
 
 ### 4. Configure Environment Variables
@@ -121,7 +122,7 @@ docker compose exec dev fish
 
 ```bash
 # Create service
-cdc manage-service --create my-service --server-group my-group
+cdc manage-service --create my-service
 
 # Add tables to track
 cdc manage-service --service my-service --add-table Users --primary-key id
@@ -131,34 +132,20 @@ cdc manage-service --service my-service --add-table Orders --primary-key order_i
 cdc manage-service --service my-service --inspect --schema dbo
 ```
 
-### 7. Update Server Group (Populate Databases)
-
-```bash
-# Inspect source database and populate server-groups.yaml
-cdc manage-server-group --update
-# ✅ Auto-discovers databases
-# ✅ Maps databases to environments (dev/stage/prod)
-# ✅ Populates table counts and statistics
-```
-
-### 8. Generate CDC Pipelines
+### 7. Generate CDC Pipelines
 
 ```bash
 # Generate pipelines for development environment
-cdc generate --service my-service --environment dev
+cdc generate-pipelines --service my-service --environment dev
 
 # Check generated files
 ls generated/pipelines/
 ls generated/schemas/
 ```
 
-### 9. Deploy Pipelines
+### 8. Deploy Pipelines
 
 Generated pipeline files in `generated/pipelines/` are ready to deploy to your Redpanda Connect infrastructure.
-
----
-
-## 📋 Complete Command Reference
 
 ---
 
@@ -167,14 +154,34 @@ Generated pipeline files in `generated/pipelines/` are ready to deploy to your R
 ### Project Initialization
 
 ```bash
-cdc init                      # Initialize new CDC project with dev container
+# Docker
+docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest init
+
+# Local
+cdc init
+```
+
+### Scaffolding (New in 0.2.x)
+
+```bash
+# Docker
+docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest scaffold <name>
+
+# Local
+cdc scaffold <name>
+
+# Interactive prompts for:
+# - Pattern (db-per-tenant or db-shared)
+# - Source database type
+# - Connection details
+# - Extraction patterns
 ```
 
 ### Service Management
 
 ```bash
 # Create service
-cdc manage-service --create <name> --server-group <group-name>
+cdc manage-service --create <name>
 
 # Add tables
 cdc manage-service --service <name> --add-table <TableName> --primary-key <column>
@@ -186,18 +193,15 @@ cdc manage-service --service <name> --remove-table <TableName>
 cdc manage-service --service <name> --inspect --schema <schema-name>
 ```
 
-### Server Group Management
+### Pipeline Generation
 
 ```bash
-# Create server group (auto-updates docker-compose.yml)
-cdc manage-server-group --create <name> \
-  --pattern <db-per-tenant|db-shared> \
-  --source-type <mssql|postgresql> \
-  --extraction-pattern '<regex>' \
-  [--environment-aware]  # Required for db-shared
+# Generate all pipelines
+cdc generate-pipelines --service <name> --environment <dev|stage|prod>
 
-# Update from database inspection
-cdc manage-server-group --update
+# Generate with snapshot
+cdc generate-pipelines --service <name> --environment dev --snapshot
+```
 
 # Show server group info
 cdc manage-server-group --info
