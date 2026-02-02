@@ -44,8 +44,6 @@ docker pull asmacarma/cdc-pipeline-generator:latest
 Create a `docker-compose.yml` in your project directory:
 
 ```yaml
-version: '3.8'
-
 services:
   dev:
     image: asmacarma/cdc-pipeline-generator:latest  # Use :latest for auto-updates
@@ -60,7 +58,7 @@ services:
 # When you run 'cdc scaffold', database services (mssql/postgres) will be
 # automatically inserted below, while this dev service remains unchanged.
 
-# Note: 
+# Version pinning options:
 # - :latest - Always pulls newest version (auto-updates on docker compose pull)
 # - :0      - Pins to major version 0.x.x (stable, gets minor/patch updates)
 # - :0.2    - Pins to minor version 0.2.x (only patch updates)
