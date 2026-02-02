@@ -101,11 +101,16 @@ def update_pyproject_toml(new_version: str) -> None:
     print(f"Updated pyproject.toml to version {new_version}")
 
 
-def set_github_output(name: str, value: str) -> None:
+def set_github_output(name: str, value: str, multiline: bool = False) -> None:
     """Set GitHub Actions output."""
     github_output = Path(os.environ.get('GITHUB_OUTPUT', '/dev/stdout'))
     with github_output.open('a') as f:
-        f.write(f"{name}={value}\n")
+        if multiline:
+            f.write(f"{name}<<EOF\n")
+            f.write(f"{value}\n")
+            f.write("EOF\n")
+        else:
+            f.write(f"{name}={value}\n")
 
 
 def main() -> None:
@@ -135,9 +140,9 @@ def main() -> None:
     set_github_output('new_version', new_version)
     set_github_output('bump_type', bump_type)
     
-    # Write commits for release notes
+    # Write commits for release notes (multiline)
     commits_text = '\n'.join(f"- {commit}" for commit in commits)
-    set_github_output('commits', commits_text)
+    set_github_output('commits', commits_text, multiline=True)
 
 
 if __name__ == '__main__':
