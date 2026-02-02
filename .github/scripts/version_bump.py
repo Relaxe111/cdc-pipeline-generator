@@ -130,6 +130,15 @@ def main() -> None:
     commits = get_commits_since_tag(latest_tag)
     print(f"Found {len(commits)} commits since {latest_tag}")
     
+    # If no new commits, exit successfully without bumping
+    if not commits or all(not commit.strip() for commit in commits):
+        print("No new commits since last tag. Skipping version bump.")
+        set_github_output('should_skip', 'true')
+        set_github_output('old_version', old_version)
+        set_github_output('new_version', old_version)
+        set_github_output('bump_type', 'none')
+        return
+    
     # Determine bump type
     bump_type = determine_bump_type(commits)
     print(f"Bump type: {bump_type}")
@@ -142,6 +151,7 @@ def main() -> None:
     update_pyproject_toml(new_version)
     
     # Set GitHub Actions outputs
+    set_github_output('should_skip', 'false')
     set_github_output('old_version', old_version)
     set_github_output('new_version', new_version)
     set_github_output('bump_type', bump_type)

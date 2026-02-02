@@ -43,6 +43,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       
       - name: Build and push Docker image
+        if: steps.version_bump.outputs.should_skip != 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -54,6 +55,7 @@ jobs:
           cache-to: type=inline
       
       - name: Create Git tag and push changes
+        if: steps.version_bump.outputs.should_skip != 'true'
         run: |
           NEW_VERSION="${{ steps.version_bump.outputs.new_version }}"
           git config user.name "github-actions[bot]"
@@ -67,7 +69,8 @@ jobs:
           git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
           git push origin master "v${NEW_VERSION}"
       
-      - name: Create GitHub Release
+      - if: steps.version_bump.outputs.should_skip != 'true'
+        name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
