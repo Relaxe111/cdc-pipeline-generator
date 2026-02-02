@@ -23,17 +23,18 @@ Usage:
     cdc manage-server-group --add-to-schema-excludes "schema_to_exclude"
 
 Note:
-To create a new server group, run `cdc manage-server-group --create <name>`
-inside your implementation repository (e.g., adopus-cdc-pipeline). The command
-will scaffold `server_group.yaml` with environment-variable placeholders such as
-${MSSQL_HOST}. Afterwards, use '--update' to inspect the database and populate
-the database list automatically.
+To create a new server group, use 'cdc scaffold <name>' command.
+The '--create' flag is deprecated but kept for backwards compatibility.
+
+Example:
+    cdc scaffold myproject --pattern db-shared --source-type postgres \\
+        --extraction-pattern "" --environment-aware
 """
 
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any, cast
 
 # When executed directly (python cdc_generator/cli/server_group.py), ensure the
 # project root is on sys.path so package imports succeed.
@@ -111,8 +112,21 @@ def main() -> int:
     
     args = parser.parse_args()
 
-    # Handle --create
+    # Handle --create (DEPRECATED - kept for backwards compatibility)
     if args.create:
+        print_warning("⚠️  The '--create' flag is deprecated.")
+        print_info("📌 Please use 'cdc scaffold' instead:")
+        print_info(f"   cdc scaffold {args.create} \\")
+        if args.pattern:
+            print_info(f"       --pattern {args.pattern} \\")
+        if args.source_type:
+            print_info(f"       --source-type {args.source_type} \\")
+        if hasattr(args, 'extraction_pattern') and args.extraction_pattern is not None:
+            print_info(f"       --extraction-pattern \"{args.extraction_pattern}\" \\")
+        if args.pattern == "db-shared" and args.environment_aware:
+            print_info(f"       --environment-aware")
+        print_info("")
+        
         missing: List[str] = []
         if not args.pattern:
             missing.append("--pattern")
@@ -212,8 +226,9 @@ def main() -> int:
                             continue  # Already displayed
                         if isinstance(value, dict) and 'database' in value:
                             env = key
-                            database = value.get('database', '')
-                            table_count = value.get('table_count', 0)
+                            env_data = cast(Dict[str, Any], value)
+                            database = str(env_data.get('database', ''))
+                            table_count = int(env_data.get('table_count', 0))
                             print_info(f"   🌍 {env}:")
                             print_info(f"       Database: {database}")
                             print_info(f"       Tables: {table_count}")

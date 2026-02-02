@@ -11,6 +11,7 @@ Usage:
 
 Commands:
     init                  Initialize a new CDC Pipeline project with dev container
+    scaffold              Scaffold a new CDC pipeline project with server group configuration
     validate              Validate all customer configurations  
     manage-service        Manage service definitions (from generator)
     manage-server-group   Manage server groups (from generator)
@@ -144,6 +145,11 @@ GENERATOR_COMMANDS = {
         "module": "cdc_generator.cli.init_project",
         "script": "cli/init_project.py",
         "description": "Initialize a new CDC pipeline project"
+    },
+    "scaffold": {
+        "module": "cdc_generator.cli.scaffold_command",
+        "script": "cli/scaffold_command.py",
+        "description": "Scaffold a new CDC pipeline project with server group configuration"
     },
     "generate": {
         "module": "cdc_generator.core.pipeline_generator",
@@ -329,10 +335,16 @@ def main():
     command = sys.argv[1]
     extra_args = sys.argv[2:] if len(sys.argv) > 2 else []
     
-    # Special handling for 'init' - runs anywhere without environment detection
+    # Special handling for 'init' and 'scaffold' - run anywhere without environment detection
     if command == "init":
         from cdc_generator.cli.init_project import init_project
         return init_project(extra_args)
+    
+    if command == "scaffold":
+        from cdc_generator.cli.scaffold_command import main as scaffold_main
+        # Override sys.argv to make argparse work correctly
+        sys.argv = [sys.argv[0]] + extra_args
+        return scaffold_main()
     
     # For other commands, detect environment
     workspace_root, implementation_name, is_dev_container = detect_environment()

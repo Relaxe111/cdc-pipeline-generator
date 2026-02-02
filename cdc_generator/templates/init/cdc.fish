@@ -15,6 +15,7 @@ complete -c cdc -f -d "CDC Pipeline Management CLI"
 
 # Generator commands (work from generator or implementation)
 complete -c cdc -n "__fish_use_subcommand" -a "init" -d "Initialize a new CDC pipeline project"
+complete -c cdc -n "__fish_use_subcommand" -a "scaffold" -d "Scaffold a new CDC pipeline project"
 complete -c cdc -n "__fish_use_subcommand" -a "validate" -d "Validate all customer configurations"
 complete -c cdc -n "__fish_use_subcommand" -a "manage-service" -d "Manage service definitions"
 complete -c cdc -n "__fish_use_subcommand" -a "manage-server-group" -d "Manage server groups"
@@ -44,39 +45,26 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l type -d "Implementation
 complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target directory (default: current)" -r -F
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
 
+# scaffold subcommand options
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l source-type -d "Source database type" -r -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l password -d "Database password (use \${VAR} for env vars)" -r
+
 
 # manage-service subcommand options
-# Dynamic service completion - lists available services from services/*.yaml
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "Service name from services/*.yaml" -r -f -a "(
-    # Check if we're in an implementation directory (adopus-cdc-pipeline, asma-cdc-pipeline)
-    set -l services_dir (pwd | string match -r '.*/(adopus-cdc-pipeline|asma-cdc-pipeline)' | head -n1)
-    if test -n \"\$services_dir\"
-        # We're in an implementation directory
-        set services_dir (pwd | string replace -r '/(adopus-cdc-pipeline|asma-cdc-pipeline).*' '/\$1/services')
-    else if test -d services
-        # We're at the root of an implementation
-        set services_dir services
-    else if test -d ../services
-        # We're in a subdirectory
-        set services_dir ../services
-    else if test -d ../../services
-        # We're deeper in subdirectories
-        set services_dir ../../services
-    else
-        # Fallback - try to find from current working directory
-        set services_dir (find (pwd) -maxdepth 3 -type d -name 'services' 2>/dev/null | head -n1)
-    end
-    
-    if test -d \"\$services_dir\"
-        for file in \$services_dir/*.yaml
-            if test -f \"\$file\"
-                basename \$file .yaml
-            end
-        end
-    end
+# Dynamic service completion - lists EXISTING services from services/*.yaml
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "Existing service name" -r -f -a "(
+    python3 -m cdc_generator.helpers.autocompletions --list-existing-services 2>/dev/null
 )"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-service -d "Create a new service configuration file" -r -f -a "(
-    python -m cdc_generator.helpers.helpers_completions --list-databases 2>/dev/null
+
+# Dynamic --create-service completion - lists services from server_group.yaml
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-service -d "Create service from server_group.yaml" -r -f -a "(
+    python3 -m cdc_generator.helpers.autocompletions --list-available-services 2>/dev/null
 )"
 
 # Dynamic table completion - lists available tables from service-schemas/{service}/{schema}/{TableName}.yaml
@@ -94,32 +82,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-ta
     end
     
     if test -n \"\$service_name\"
-        # Find service-schemas directory
-        set -l schemas_dir
-        if test -d service-schemas
-            set schemas_dir service-schemas
-        else if test -d ../service-schemas
-            set schemas_dir ../service-schemas
-        else if test -d ../../service-schemas
-            set schemas_dir ../../service-schemas
-        else
-            set schemas_dir (find (pwd) -maxdepth 3 -type d -name 'service-schemas' 2>/dev/null | head -n1)
-        end
-        
-        if test -d \"\$schemas_dir/\$service_name\"
-            # List all tables in format schema.TableName
-            for schema_dir in \$schemas_dir/\$service_name/*/
-                if test -d \"\$schema_dir\"
-                    set -l schema_name (basename \$schema_dir)
-                    for table_file in \$schema_dir/*.yaml
-                        if test -f \"\$table_file\"
-                            set -l table_name (basename \$table_file .yaml)
-                            echo \"\$schema_name.\$table_name\"
-                        end
-                    end
-                end
-            end
-        end
+        python3 -m cdc_generator.helpers.autocompletions --list-tables \"\$service_name\" 2>/dev/null
     end
 )"
 
