@@ -18,7 +18,7 @@ A CLI-first tool for managing CDC pipelines with automatic Docker dev container 
 
 ## 📦 Installation
 
-**Option 1: Docker (Recommended - Zero Dependencies)**
+**Only Docker required - zero dependencies!**
 
 ```bash
 # Pull latest version
@@ -28,20 +28,11 @@ docker pull asmacarma/cdc-pipeline-generator:latest
 docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest --help
 ```
 
-**Option 2: pipx (Optional - For local CLI)**
-
-```bash
-pip install cdc-pipeline-generator
-```
-
 ## 🔄 Updating
 
 ```bash
-# Docker: Pull latest version
+# Pull latest version
 docker pull asmacarma/cdc-pipeline-generator:latest
-
-# pipx: Upgrade package
-pipx upgrade cdc-pipeline-generator
 ```
 
 ## 🚀 Quick Start (Docker Workflow)
@@ -154,21 +145,13 @@ Generated pipeline files in `generated/pipelines/` are ready to deploy to your R
 ### Project Initialization
 
 ```bash
-# Docker
 docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest init
-
-# Local
-cdc init
 ```
 
 ### Scaffolding (New in 0.2.x)
 
 ```bash
-# Docker
 docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest scaffold <name>
-
-# Local
-cdc scaffold <name>
 
 # Interactive prompts for:
 # - Pattern (db-per-tenant or db-shared)
