@@ -20,12 +20,14 @@ A CLI-first tool for managing CDC pipelines with automatic Docker dev container 
 
 **Only Docker required - zero dependencies!**
 
+Supports **Intel (x86_64)** and **Apple Silicon (ARM64)** platforms.
+
 ```bash
 # Pull latest version
 docker pull asmacarma/cdc-pipeline-generator:latest
 
-# Run commands
-docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest --help
+# Verify platform support
+docker image inspect asmacarma/cdc-pipeline-generator:latest | grep Architecture
 ```
 
 ## 🔄 Updating
