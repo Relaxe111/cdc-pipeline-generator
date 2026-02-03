@@ -67,8 +67,9 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target d
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
 
 # scaffold subcommand options
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"
+# Flag names (only show when not yet used)
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -a "postgres mssql"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
