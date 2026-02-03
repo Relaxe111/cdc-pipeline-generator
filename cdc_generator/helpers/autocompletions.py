@@ -222,6 +222,30 @@ def list_tables_for_service(service_name: str) -> List[str]:
     return sorted(tables)
 
 
+def scaffold_flag_completions(flag: str) -> List[str]:
+    """
+    Return appropriate completions for scaffold subcommand flags.
+    
+    Args:
+        flag: The flag name (--pattern, --source-type, etc.)
+    
+    Returns:
+        List of "value\tDescription" formatted completions
+    """
+    completions = {
+        '--pattern': [
+            'db-per-tenant\tOne database per tenant',
+            'db-shared\tShared database for all tenants',
+        ],
+        '--source-type': [
+            'postgres\tPostgreSQL database',
+            'mssql\tMicrosoft SQL Server',
+        ],
+    }
+    
+    return completions.get(flag, [])
+
+
 def main() -> int:
     """CLI entry point for autocompletion queries."""
     if len(sys.argv) < 2:
@@ -262,6 +286,15 @@ def main() -> int:
         tables = list_tables_for_service(service_name)
         for table in tables:
             print(table)
+    
+    elif command == '--scaffold-flag-values':
+        if len(sys.argv) < 3:
+            print("Error: --scaffold-flag-values requires flag name", file=sys.stderr)
+            return 1
+        flag = sys.argv[2]
+        completions = scaffold_flag_completions(flag)
+        for completion in completions:
+            print(completion)
     
     else:
         print(f"Unknown command: {command}", file=sys.stderr)

@@ -73,25 +73,31 @@ class ScaffoldArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         """Override error method to provide detailed missing argument information."""
         # Parse which arguments are missing from the error message
-        if "required:" in message:
+        if "required:" in message or "arguments are required:" in message:
             print(f"\n{self.RED}❌ Missing required arguments for 'cdc scaffold':{self.RESET}\n")
             
             # Check what's missing by examining sys.argv
-            provided_args = sys.argv[1:]  # Skip 'cdc scaffold' part
+            # sys.argv has already been modified by commands.py: [script_name, --flag1, val1, --flag2, ...]
+            # The positional 'name' argument would be a non-flag argument
+            provided_args = sys.argv[1:]  # Everything after script name
             
             missing_items: List[str] = []
             
-            # Check positional argument
+            # Check positional argument (name)
             has_name = False
             for arg in provided_args:
-                if not arg.startswith('-'):
-                    has_name = True
-                    break
+                if not arg.startswith('-') and not arg.startswith('--'):
+                    # Also check it's not a flag value by looking at previous arg
+                    idx = provided_args.index(arg)
+                    if idx == 0 or not provided_args[idx-1].startswith('-'):
+                        has_name = True
+                        break
             
             if not has_name:
                 missing_items.append(
-                    f"  {self.CYAN}📝 name{self.RESET}\n"
-                    f"      {self.BOLD}Project/server group name{self.RESET} (e.g., {self.GREEN}'adopus'{self.RESET}, {self.GREEN}'asma'{self.RESET}, {self.GREEN}'myproject'{self.RESET})"
+                    f"  {self.CYAN}📝 name{self.RESET} (positional argument)\n"
+                    f"      {self.BOLD}Project/server group name{self.RESET} (e.g., {self.GREEN}'adopus'{self.RESET}, {self.GREEN}'asma'{self.RESET}, {self.GREEN}'myproject'{self.RESET})\n"
+                    f"      {self.YELLOW}⚠️  This must come FIRST, before any --flags{self.RESET}"
                 )
             
             # Check required flags

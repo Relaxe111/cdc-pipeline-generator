@@ -23,6 +23,17 @@ function __cdc_flag_not_used --description "Check if a flag has NOT been used ye
     return 0  # Flag not used yet
 end
 
+function __cdc_last_token_is --description "Check if last token equals given value"
+    set -l expected $argv[1]
+    set -l tokens (commandline -opc)
+    
+    if test (count $tokens) -gt 0
+        test "$tokens[-1]" = "$expected"
+        return $status
+    end
+    return 1
+end
+
 # Main command description
 complete -c cdc -f -d "CDC Pipeline Management CLI"
 
@@ -67,15 +78,20 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target d
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
 
 # scaffold subcommand options
-# Flag names (only show when not yet used)
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -a "db-per-tenant db-shared"
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --port" -l port -d "Database port" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
+
+# Scaffold flag values - only show when completing value for specific flag
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --pattern" -f -a "db-per-tenant" -d "One database per tenant"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --pattern" -f -a "db-shared" -d "Shared database for all tenants"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --source-type" -f -a "postgres" -d "PostgreSQL database"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --source-type" -f -a "mssql" -d "Microsoft SQL Server"
 
 
 # manage-service subcommand options
