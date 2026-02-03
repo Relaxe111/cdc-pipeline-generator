@@ -30,5 +30,6 @@ COPY cdc_generator/templates/init/cdc.fish /root/.config/fish/completions/cdc.fi
 # Set working directory for user projects
 WORKDIR /workspace
 
-# Default command - shows help, but allows both cdc commands and shell access
-CMD ["cdc", "--help"]
+# Use ENTRYPOINT for cdc command, but allow shell override
+ENTRYPOINT ["cdc"]
+CMD ["--help"]

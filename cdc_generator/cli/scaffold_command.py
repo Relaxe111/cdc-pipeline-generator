@@ -60,11 +60,21 @@ def _default_connection_placeholders(source_type: str) -> Dict[str, str]:
 class ScaffoldArgumentParser(argparse.ArgumentParser):
     """Custom argument parser with better error messages."""
     
+    # ANSI color codes
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN = '\033[96m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+    
     def error(self, message: str) -> None:
         """Override error method to provide detailed missing argument information."""
         # Parse which arguments are missing from the error message
         if "required:" in message:
-            print_error("Missing required arguments for 'cdc scaffold':\n")
+            print(f"\n{self.RED}❌ Missing required arguments for 'cdc scaffold':{self.RESET}\n")
             
             # Check what's missing by examining sys.argv
             provided_args = sys.argv[1:]  # Skip 'cdc scaffold' part
@@ -80,38 +90,38 @@ class ScaffoldArgumentParser(argparse.ArgumentParser):
             
             if not has_name:
                 missing_items.append(
-                    "  • name\n"
-                    "      Project/server group name (e.g., 'adopus', 'asma', 'myproject')"
+                    f"  {self.CYAN}📝 name{self.RESET}\n"
+                    f"      {self.BOLD}Project/server group name{self.RESET} (e.g., {self.GREEN}'adopus'{self.RESET}, {self.GREEN}'asma'{self.RESET}, {self.GREEN}'myproject'{self.RESET})"
                 )
             
             # Check required flags
             if '--pattern' not in provided_args:
                 missing_items.append(
-                    "  • --pattern {db-per-tenant,db-shared}\n"
-                    "      db-per-tenant: One database per customer (e.g., adopus_customer1, adopus_customer2)\n"
-                    "      db-shared: Multiple services in shared databases (e.g., asma_service_env)"
+                    f"  {self.CYAN}🎯 --pattern{self.RESET} {{db-per-tenant,db-shared}}\n"
+                    f"      {self.YELLOW}db-per-tenant:{self.RESET} One database per customer (e.g., adopus_customer1, adopus_customer2)\n"
+                    f"      {self.YELLOW}db-shared:{self.RESET} Multiple services in shared databases (e.g., asma_service_env)"
                 )
             
             if '--source-type' not in provided_args:
                 missing_items.append(
-                    "  • --source-type {postgres,mssql}\n"
-                    "      Type of source database to extract data from"
+                    f"  {self.CYAN}🗄️  --source-type{self.RESET} {{postgres,mssql}}\n"
+                    f"      Type of {self.BOLD}source database{self.RESET} to extract data from"
                 )
             
             if '--extraction-pattern' not in provided_args:
                 missing_items.append(
-                    "  • --extraction-pattern \"REGEX_PATTERN\"\n"
-                    "      Regex pattern to extract identifiers from database names\n"
-                    "      db-per-tenant example: \"^adopus_(?P<customer>[^_]+)$\"\n"
-                    "      db-shared example: \"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"\n"
-                    "      Use empty string \"\" for simple fallback matching (no regex)"
+                    f"  {self.CYAN}🔍 --extraction-pattern{self.RESET} {self.MAGENTA}\"REGEX_PATTERN\"{self.RESET}\n"
+                    f"      Regex pattern to extract identifiers from database names\n"
+                    f"      {self.BLUE}db-per-tenant example:{self.RESET} {self.GREEN}\"^adopus_(?P<customer>[^_]+)$\"{self.RESET}\n"
+                    f"      {self.BLUE}db-shared example:{self.RESET} {self.GREEN}\"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"{self.RESET}\n"
+                    f"      Use empty string {self.GREEN}\"\"{self.RESET} for simple fallback matching (no regex)"
                 )
             
             if missing_items:
-                print_info("\n".join(missing_items))
-                print_info("\n💡 Quick start examples:")
-                print_info("  cdc scaffold adopus --pattern db-per-tenant --source-type mssql --extraction-pattern \"^adopus_(?P<customer>[^_]+)$\"")
-                print_info("  cdc scaffold asma --pattern db-shared --source-type postgres --extraction-pattern \"\" --environment-aware")
+                print("\n".join(missing_items))
+                print(f"\n{self.YELLOW}💡 Quick start examples:{self.RESET}")
+                print(f"  {self.GREEN}cdc scaffold adopus --pattern db-per-tenant --source-type mssql --extraction-pattern \"^adopus_(?P<customer>[^_]+)$\"{self.RESET}")
+                print(f"  {self.GREEN}cdc scaffold asma --pattern db-shared --source-type postgres --extraction-pattern \"\" --environment-aware{self.RESET}")
             
             sys.exit(2)
         
