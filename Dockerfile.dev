@@ -56,6 +56,16 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # Set Fish as default shell for root user
 RUN chsh -s /usr/bin/fish root
 
+# Auto-reload completions on every shell start (always use latest)
+RUN echo '# Auto-reload completions from workspace on shell start' >> /root/.config/fish/config.fish \
+    && echo 'if test -f /workspace/cdc_generator/templates/init/cdc.fish' >> /root/.config/fish/config.fish \
+    && echo '    cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish 2>/dev/null' >> /root/.config/fish/config.fish \
+    && echo 'end' >> /root/.config/fish/config.fish \
+    && echo '' >> /root/.config/fish/config.fish
+
+# Add reload alias for immediate completion updates during development
+RUN echo 'alias reload-completions="cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish && source /usr/share/fish/vendor_completions.d/cdc.fish && echo ✅ Completions reloaded!"' >> /root/.config/fish/config.fish
+
 # Auto-launch fish when bash is started (for docker compose exec dev bash)
 RUN echo 'exec fish' >> /root/.bashrc
 
