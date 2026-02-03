@@ -56,6 +56,74 @@ if service.name == "adopus":  # Never check service names!
 
 ---
 
+## ⚠️ Modifying Existing Code (CRITICAL)
+
+**When updating, modifying, or extending existing generator code:**
+
+**NEVER break or remove existing functionality unless explicitly requested**
+
+- ✅ **Preserve all existing behavior** - Existing features must continue to work
+- ✅ **Add new functionality alongside existing** - Extend, don't replace
+- ✅ **Maintain backward compatibility** - Old configurations must still work
+- ✅ **Test both patterns** - Verify db-per-tenant AND db-shared still work
+- ✅ **Add, don't subtract** - New parameters should be optional with defaults
+
+**Write clean, maintainable code from the start:**
+
+- ✅ **SOLID Principles** - Follow Open/Closed, Single Responsibility, etc.
+- ✅ **DRY (Don't Repeat Yourself)** - Extract common logic into reusable functions
+- ✅ **Composability** - Build small, focused functions that combine well
+- ✅ **Modular design** - Separate concerns into clear modules/packages
+- ✅ **No dead code** - Remove unused functions, imports, or commented-out code
+- ✅ **Refactor for reuse** - If adding similar code, refactor existing code to be reusable
+
+**Design principles:**
+
+1. **Open/Closed Principle** - Open for extension, closed for modification
+   - Use optional parameters with defaults instead of changing signatures
+   - Use strategy pattern for varying behavior (e.g., `server_group_type`)
+   
+2. **Single Responsibility** - Each function/module does ONE thing well
+   - If a function does multiple things, split it
+   - Extract helpers for reusable operations
+   
+3. **Composition over Duplication** - Reuse existing code through composition
+   - Check existing helpers before writing new code
+   - Extract common patterns into shared utilities
+
+**Before modifying:**
+1. Understand what the code currently does
+2. Identify all places that depend on it
+3. Check for similar existing code that could be refactored/reused
+4. Design changes that extend, not replace
+5. Test that existing use cases still work
+
+**Example:**
+```python
+# ✅ CORRECT - Composable, extensible design
+def generate_pipeline(service, customer=None, include_metadata=False):
+    """Extends existing functionality via optional parameters"""
+    pipeline = _build_base_pipeline(service, customer)
+    if include_metadata:
+        pipeline = _add_metadata(pipeline)
+    return pipeline
+
+# ✅ CORRECT - Extract common logic to avoid duplication
+def _build_base_pipeline(service, customer):
+    """Reusable helper for both db-per-tenant and db-shared"""
+    # Common pipeline building logic
+
+# ❌ WRONG - Changes existing signature, breaks callers
+def generate_pipeline(service, include_metadata):
+    # Breaks existing code
+
+# ❌ WRONG - Duplication instead of composition
+def generate_pipeline_with_metadata(service, customer):
+    # Duplicate code instead of extending existing function
+```
+
+---
+
 ## 📐 Coding Standards
 
 ### File Size Limit

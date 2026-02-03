@@ -10,6 +10,19 @@ function __cdc_has_manage_server_group_create --description "Check if --create f
     return 1
 end
 
+function __cdc_flag_not_used --description "Check if a flag has NOT been used yet"
+    set -l flag $argv[1]
+    set -l tokens (commandline -opc)
+    
+    # Check if flag already exists in command line
+    for token in $tokens
+        if test "$token" = "$flag"
+            return 1  # Flag already used
+        end
+    end
+    return 0  # Flag not used yet
+end
+
 # Main command description
 complete -c cdc -f -d "CDC Pipeline Management CLI"
 
@@ -47,7 +60,7 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize
 
 # manage-service subcommand options
 # Dynamic service completion - lists available services from services/*.yaml
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "Service name from services/*.yaml" -r -f -a "(
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --service" -l service -d "Service name from services/*.yaml" -r -f -a "(
     # Check if we're in an implementation directory (adopus-cdc-pipeline, asma-cdc-pipeline)
     set -l services_dir (pwd | string match -r '.*/(adopus-cdc-pipeline|asma-cdc-pipeline)' | head -n1)
     if test -n \"\$services_dir\"
@@ -75,7 +88,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l service -d "S
         end
     end
 )"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-service -d "Create a new service configuration file" -r -f -a "(
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --create-service" -l create-service -d "Create a new service configuration file" -r -f -a "(
     python -m cdc_generator.helpers.helpers_completions --list-databases 2>/dev/null
 )"
 
@@ -124,44 +137,44 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-ta
 )"
 
 # Completion for --list-source-tables (only when --service is present)
-complete -c cdc -n "__fish_seen_subcommand_from manage-service; and string match -q -- '*--service*' (commandline -opc)" -l list-source-tables -d "List all source tables in service"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and string match -q -- '*--service*' (commandline -opc); and __cdc_flag_not_used --list-source-tables" -l list-source-tables -d "List all source tables in service"
 
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-tables -d "Add multiple tables (space-separated)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect -d "Inspect database schema and list tables"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l save -d "Save detailed table schemas to YAML"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l generate-validation -d "Generate JSON Schema for validation"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-hierarchy -d "Validate hierarchical inheritance"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-config -d "Comprehensive configuration validation"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l all -d "Process all schemas"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l env -d "Environment (nonprod/prod)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l primary-key -d "Primary key column name" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --add-source-tables" -l add-source-tables -d "Add multiple tables (space-separated)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --remove-table" -l remove-table -d "Remove table from service" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --inspect" -l inspect -d "Inspect database schema and list tables"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --schema" -l schema -d "Database schema to inspect or filter" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --save" -l save -d "Save detailed table schemas to YAML"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --generate-validation" -l generate-validation -d "Generate JSON Schema for validation"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --validate-hierarchy" -l validate-hierarchy -d "Validate hierarchical inheritance"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --validate-config" -l validate-config -d "Comprehensive configuration validation"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --all" -l all -d "Process all schemas"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --env" -l env -d "Environment (nonprod/prod)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --primary-key" -l primary-key -d "Primary key column name" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --ignore-columns" -l ignore-columns -d "Column to ignore (schema.table.column)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --track-columns" -l track-columns -d "Column to track (schema.table.column)" -r
 
 # manage-server-group subcommand options
 # General actions
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l update -d "Update server group from database inspection"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list -d "List all server groups"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l info -d "Show detailed server group information"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l create -d "Create new server group" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --update" -l update -d "Update server group from database inspection"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list" -l list -d "List all server groups"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --info" -l info -d "Show detailed server group information"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --create" -l create -d "Create new server group" -r
 
 # Exclude patterns
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-ignore-list -d "Add pattern(s) to database exclude list" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-ignore-patterns -d "List current database exclude patterns"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-schema-excludes -d "List current schema exclude patterns"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-to-ignore-list" -l add-to-ignore-list -d "Add pattern(s) to database exclude list" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-ignore-patterns" -l list-ignore-patterns -d "List current database exclude patterns"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-to-schema-excludes" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-schema-excludes" -l list-schema-excludes -d "List current schema exclude patterns"
 
 # Creation flags (only show when --create is present in the command line)
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l source-type -d "Source database type" -r -f -a "postgres mssql"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l host -d "Database host (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l port -d "Database port" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l user -d "Database user (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l password -d "Database password (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create" -l environment-aware -d "Enable environment-aware grouping (flag, no value needed)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --port" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (flag, no value needed)"
 
 # generate subcommand - complete with customer names dynamically
 complete -c cdc -n "__fish_seen_subcommand_from generate" -l all -d "Generate for all customers"
