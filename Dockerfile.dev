@@ -46,8 +46,8 @@ ENV PYTHONUNBUFFERED=1
 # Create Fish config directory
 RUN mkdir -p /root/.config/fish/completions
 
-# Copy Fish completions for cdc command
-COPY cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
+# Copy Fish completions for cdc command (single source of truth from template)
+COPY cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

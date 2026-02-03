@@ -13,9 +13,10 @@ echo "Installed version:"
 pip show cdc-pipeline-generator | grep "^Version:"
 
 # Update Fish completions from latest source (in case of changes)
-if test -f /workspace/cdc.fish
+# Single source of truth: template file
+if test -f /workspace/cdc_generator/templates/init/cdc.fish
     echo "Updating Fish completions..."
-    cp /workspace/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
+    cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
 end
 
 # Execute the main command (usually tail -f /dev/null to keep container running)
