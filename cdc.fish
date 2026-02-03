@@ -28,6 +28,7 @@ complete -c cdc -f -d "CDC Pipeline Management CLI"
 
 # Generator commands (work from generator or implementation)
 complete -c cdc -n "__fish_use_subcommand" -a "init" -d "Initialize a new CDC pipeline project"
+complete -c cdc -n "__fish_use_subcommand" -a "scaffold" -d "Scaffold a new CDC pipeline project"
 complete -c cdc -n "__fish_use_subcommand" -a "validate" -d "Validate all customer configurations"
 complete -c cdc -n "__fish_use_subcommand" -a "manage-service" -d "Manage service definitions"
 complete -c cdc -n "__fish_use_subcommand" -a "manage-server-group" -d "Manage server groups"
@@ -56,6 +57,16 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l name -d "Project name (
 complete -c cdc -n "__fish_seen_subcommand_from init" -l type -d "Implementation type" -r -f -a "adopus asma"
 complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target directory (default: current)" -r -F
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
+
+# scaffold subcommand options
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --port" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
 
 
 # manage-service subcommand options
