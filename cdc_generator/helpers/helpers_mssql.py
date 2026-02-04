@@ -13,7 +13,28 @@ from pathlib import Path
 from typing import Any, Optional, cast
 
 import yaml # type: ignore[import-not-found]
-import pymssql # type: ignore[import-not-found]
+
+# pymssql is optional - only required for MSSQL operations
+try:
+    import pymssql # type: ignore[import-not-found]
+    HAS_PYMSSQL = True
+except ImportError:
+    HAS_PYMSSQL = False
+    pymssql = None  # type: ignore[assignment]
+
+
+class MSSQLNotAvailableError(Exception):
+    """Raised when pymssql is not installed but MSSQL operations are requested."""
+    pass
+
+
+def _ensure_pymssql() -> None:
+    """Ensure pymssql is available, raise helpful error if not."""
+    if not HAS_PYMSSQL:
+        raise MSSQLNotAvailableError(
+            "pymssql is not installed. Install it with: pip install pymssql\n"
+            "Note: pymssql requires FreeTDS. On macOS: brew install freetds"
+        )
 
 
 def create_mssql_connection(
@@ -35,8 +56,12 @@ def create_mssql_connection(
         
     Returns:
         pymssql connection object
+        
+    Raises:
+        MSSQLNotAvailableError: If pymssql is not installed
     """
-    return cast(Any, pymssql.connect( # type: ignore[misc]
+    _ensure_pymssql()
+    return cast(Any, pymssql.connect( # type: ignore[misc,union-attr]
         server=host,
         port=port,
         database=database,
