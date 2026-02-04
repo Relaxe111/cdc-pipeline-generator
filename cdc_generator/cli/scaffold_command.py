@@ -182,27 +182,37 @@ Connection Defaults:
     # Positional argument
     parser.add_argument(
         "name",
+        nargs="?",  # Optional when using --update
         help="Name of the server group (e.g., 'adopus', 'asma', 'myproject')",
     )
 
-    # Required arguments
+    # Update mode (no other args required)
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update existing project scaffold with latest structure and configurations. "
+             "Adds new directories, merges .vscode/settings.json, updates .gitignore. "
+             "Does not modify server_group.yaml content or services.",
+    )
+
+    # Required arguments (for new scaffold)
     parser.add_argument(
         "--pattern",
         choices=["db-per-tenant", "db-shared"],
-        required=True,
+        required=False,  # Not required when using --update
         help="Server group pattern",
     )
     
     parser.add_argument(
         "--source-type",
         choices=["postgres", "mssql"],
-        required=True,
+        required=False,  # Not required when using --update
         help="Source database type",
     )
     
     parser.add_argument(
         "--extraction-pattern",
-        required=True,
+        required=False,  # Not required when using --update
         help="Regex pattern with named groups to extract identifiers from database names. "
              "For db-per-tenant: use 'customer' group. For db-shared: use 'service', 'env', 'suffix' groups. "
              "Use empty string '' to disable regex and use simple fallback matching.",
@@ -237,8 +247,26 @@ Connection Defaults:
 
     args = parser.parse_args()
 
-    # Validation
+    # Handle --update mode (no other args required)
+    if args.update:
+        from pathlib import Path
+        from cdc_generator.validators.manage_server_group.scaffolding import update_scaffold
+        from cdc_generator.validators.manage_server_group.config import get_implementation_root
+        
+        project_root = get_implementation_root()
+        return 0 if update_scaffold(project_root) else 1
+    
+    # For new scaffold, require all arguments
     missing: List[str] = []
+    
+    if not args.name:
+        missing.append("name (positional argument)")
+    if not args.pattern:
+        missing.append("--pattern")
+    if not args.source_type:
+        missing.append("--source-type")
+    if args.extraction_pattern is None:
+        missing.append("--extraction-pattern")
     
     # db-shared specific validation
     if args.pattern == "db-shared":
@@ -250,6 +278,7 @@ Connection Defaults:
         for flag in missing:
             print_info(f"  • {flag}")
         print_info("\nNotes:")
+        print_info("  Use 'cdc scaffold --update' to update existing project structure")
         if args.pattern == "db-shared":
             print_info("  --environment-aware: Required for db-shared pattern")
         return 1

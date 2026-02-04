@@ -1,11 +1,16 @@
-"""Project scaffolding for new CDC pipeline implementations."""
-
-from pathlib import Path
-from typing import Dict, Any
+"""Template generation functions for project scaffolding."""
 
 
-def _get_docker_compose_template(server_group_name: str, pattern: str) -> str:
-    """Generate docker-compose.yml template with server_group naming."""
+def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
+    """Generate docker-compose.yml template with server_group naming.
+    
+    Args:
+        server_group_name: Name of the server group (e.g., 'adopus', 'asma')
+        pattern: 'db-per-tenant' or 'db-shared'
+        
+    Returns:
+        Complete docker-compose.yml content as string
+    """
     container_prefix = server_group_name.replace('_', '-')
     
     return f"""# =============================================================================
@@ -57,6 +62,7 @@ services:
       - cdc-network
     # No depends_on - dev container is standalone
     # Use 'cdc setup-local' to start databases on demand
+    entrypoint: ""
 
   # ===========================================================================
   # PostgreSQL - CDC Target Database (Start with --enable-local-sink)
@@ -240,8 +246,17 @@ volumes:
 """
 
 
-def _get_env_example_template(server_group_name: str, pattern: str, source_type: str) -> str:
-    """Generate .env.example template."""
+def get_env_example_template(server_group_name: str, pattern: str, source_type: str) -> str:
+    """Generate .env.example template.
+    
+    Args:
+        server_group_name: Name of the server group
+        pattern: 'db-per-tenant' or 'db-shared'
+        source_type: 'mssql' or 'postgres'
+        
+    Returns:
+        Complete .env.example content as string
+    """
     source_prefix = "POSTGRES_SOURCE" if source_type == "postgres" else "MSSQL_SOURCE"
     
     content = f"""# =============================================================================
@@ -307,8 +322,16 @@ CDC_MAX_IN_FLIGHT=64
     return content
 
 
-def _get_readme_template(server_group_name: str, pattern: str) -> str:
-    """Generate README.md template."""
+def get_readme_template(server_group_name: str, pattern: str) -> str:
+    """Generate README.md template.
+    
+    Args:
+        server_group_name: Name of the server group
+        pattern: 'db-per-tenant' or 'db-shared'
+        
+    Returns:
+        Complete README.md content as string
+    """
     pattern_desc = "db-per-tenant" if pattern == "db-per-tenant" else "db-shared"
     
     return f"""# {server_group_name.title()} CDC Pipeline
@@ -386,76 +409,13 @@ See the `_docs/` directory for detailed documentation.
 """
 
 
-def _create_vscode_settings() -> Dict[str, Any]:
-    """Create .vscode/settings.json with useful defaults."""
-    return {
-        "files.associations": {
-            "*.yaml": "yaml",
-            "docker-compose*.yml": "dockercompose"
-        },
-        "yaml.schemas": {
-            ".vscode/service-schema.json": "services/*.yaml"
-        },
-        "files.exclude": {
-            "**/__pycache__": True,
-            "**/.pytest_cache": True,
-            "**/*.pyc": True,
-            ".lsn_cache": True
-        },
-        "files.readonlyInclude": {
-            "server_group.yaml": True,
-            "services/**/*.yaml": True,
-            "generated/**/*.yaml": True
-        },
-        "search.exclude": {
-            "**/generated": True,
-            "**/.venv": True
-        }
-    }
-
-
-def scaffold_project_structure(
-    server_group_name: str,
-    pattern: str,
-    source_type: str,
-    project_root: Path
-) -> None:
-    """Create complete directory structure and template files for new implementation.
+def get_gitignore_template() -> str:
+    """Generate .gitignore template.
     
-    Args:
-        server_group_name: Name of the server group (e.g., 'adopus', 'asma')
-        pattern: 'db-per-tenant' or 'db-shared'
-        source_type: 'mssql' or 'postgres'
-        project_root: Root directory of the implementation
+    Returns:
+        Complete .gitignore content as string
     """
-    # Create directory structure
-    directories = [
-        "services",
-        "pipeline-templates",
-        "generated/pipelines",
-        "generated/schemas",
-        "generated/pg-migrations",
-        "_docs",
-        ".vscode",
-        "service-schemas",
-    ]
-    
-    for directory in directories:
-        dir_path = project_root / directory
-        dir_path.mkdir(parents=True, exist_ok=True)
-        print(f"✓ Created directory: {directory}")
-    
-    # Create .gitkeep files in generated directories
-    for gen_dir in ["pipelines", "schemas", "pg-migrations"]:
-        gitkeep = project_root / "generated" / gen_dir / ".gitkeep"
-        gitkeep.touch()
-    
-    # Create template files
-    files_to_create = {
-        "docker-compose.yml": _get_docker_compose_template(server_group_name, pattern),
-        ".env.example": _get_env_example_template(server_group_name, pattern, source_type),
-        "README.md": _get_readme_template(server_group_name, pattern),
-        ".gitignore": """.env
+    return """.env
 .venv
 __pycache__/
 *.pyc
@@ -468,279 +428,21 @@ generated/schemas/*
 *.swp
 *.swo
 *~
-""",
-    }
-    
-    # docker-compose.yml should always be created/overwritten with full CDC infrastructure
-    # (init template only has basic postgres, server-group scaffold has full Redpanda setup)
-    docker_compose_path = project_root / "docker-compose.yml"
-    if docker_compose_path.exists():
-        # Backup existing file
-        backup_path = project_root / "docker-compose.yml.bak"
-        import shutil
-        shutil.copy2(docker_compose_path, backup_path)
-        print(f"✓ Backed up existing docker-compose.yml to docker-compose.yml.bak")
-    
-    docker_compose_path.write_text(files_to_create["docker-compose.yml"])
-    print(f"✓ Created file: docker-compose.yml (with Redpanda CDC infrastructure)")
-    
-    # Create other files (skip if they exist)
-    for filename, content in files_to_create.items():
-        if filename == "docker-compose.yml":
-            continue  # Already handled above
-        
-        file_path = project_root / filename
-        if not file_path.exists():  # Don't overwrite existing files
-            file_path.write_text(content)
-            print(f"✓ Created file: {filename}")
-        else:
-            print(f"⊘ Skipped (exists): {filename}")
-    
-    # Create .vscode/settings.json
-    vscode_settings = project_root / ".vscode" / "settings.json"
-    if not vscode_settings.exists():
-        try:
-            import json
-            vscode_settings.write_text(json.dumps(_create_vscode_settings(), indent=2))
-            print("✓ Created file: .vscode/settings.json")
-        except ImportError:
-            print("⚠️  Could not create .vscode/settings.json (json module not available)")
-    
-    # Create pipeline templates with real, tested templates
-    source_template = project_root / "pipeline-templates" / "source-pipeline.yaml"
-    if not source_template.exists():
-        source_template.write_text("""# =============================================================================
-# Redpanda Connect Source Pipeline - MSSQL CDC to Redpanda
-# =============================================================================
-# Customer: {{CUSTOMER}}
-# Environment: {{ENV}}
-# Database: {{DATABASE_NAME}}
-# =============================================================================
+"""
 
-# File-based cache to persist LSN state across restarts
-cache_resources:
-  - label: lsn_cache
-    file:
-      directory: /data/lsn_cache
 
-input:
-  broker:
-    inputs:
-      {{SOURCE_TABLE_INPUTS}}
+# Re-export pipeline templates from dedicated module
+from .pipeline_templates import (
+    get_source_pipeline_template,
+    get_sink_pipeline_template,
+)
 
-    # Poll all tables continuously
-    batching:
-      count: 100
-      period: 1s
+__all__ = [
+    "get_docker_compose_template",
+    "get_env_example_template",
+    "get_readme_template",
+    "get_gitignore_template",
+    "get_source_pipeline_template",
+    "get_sink_pipeline_template",
+]
 
-pipeline:
-  processors:
-    # Filter out before-update images (operation 3)
-    # MSSQL CDC operations: 1=DELETE, 2=INSERT, 3=before-UPDATE, 4=after-UPDATE
-    - bloblang: |
-        let op_code = this.get("__$operation")
-        # Drop before-update operations (3) - we only need after-update (4)
-        root = if $op_code == 3 { deleted() } else { this }
-    
-    - bloblang: |
-        # Map MSSQL CDC operation codes to Debezium style
-        let op_code = this.get("__$operation")
-        let debezium_op = match $op_code {
-          1 => "d",
-          2 => "c",
-          4 => "u",
-          _ => "c"
-        }
-        
-        # Get table name from metadata
-        let table_name = meta("source_table")
-        
-        # Remove CDC metadata columns (including __lsn_hex used for LSN tracking)
-        let payload_data = this.without("__$start_lsn", "__$end_lsn", "__$seqval", "__$operation", "__$update_mask", "__lsn_hex")
-        
-        # Build Debezium-style CDC envelope
-        root.payload = {
-          "op": $debezium_op,
-          "before": if $op_code == 1 { $payload_data } else { null },
-          "after": if $op_code != 1 { $payload_data } else { null },
-          "source": {
-            "version": "1.0.0",
-            "connector": "redpanda-connect-mssql",
-            "name": "{{TOPIC_PREFIX}}",
-            "ts_ms": now().ts_unix_milli(),
-            "db": "{{DATABASE_NAME}}",
-            "schema": "dbo",
-            "table": $table_name
-          },
-          "ts_ms": now().ts_unix_milli()
-        }
-        
-        # Route to correct Kafka topic and key based on table
-        let data = if $op_code == 1 { root.payload.before } else { root.payload.after }
-        let routing = match $table_name {
-        {{TABLE_ROUTING}}
-          _ => {"topic": "{{TOPIC_PREFIX}}.dbo.unknown", "key": ""}
-        }
-        
-        meta kafka_topic = $routing.topic
-        meta kafka_key = $routing.key
-
-    # Update LSN cache with the max LSN from this message (only if not null)
-    - bloblang: |
-        # Only process messages that have a valid LSN from CDC
-        let lsn = meta("max_lsn")
-        root = if $lsn == null || $lsn == "null" {
-          deleted()  # Drop messages without valid LSN
-        } else {
-          this  # Pass through CDC messages
-        }
-    - cache:
-        resource: lsn_cache
-        operator: set
-        key: '${! meta("source_table").lowercase() + "_last_lsn" }'
-        value: '${! meta("max_lsn") }'
-
-output:
-  kafka:
-    addresses:
-      - "${KAFKA_BOOTSTRAP_SERVERS}"
-    topic: '${! meta("kafka_topic") }'
-    key: '${! meta("kafka_key") }'
-    max_in_flight: 64
-    compression: snappy
-    batching:
-      count: 100
-      period: 1s
-
-logger:
-  level: INFO
-  format: json
-
-metrics:
-  prometheus: {}
-
-http:
-  enabled: true
-  address: "0.0.0.0:4195"
-  root_path: /benthos
-  debug_endpoints: true
-""")
-        print("✓ Created file: pipeline-templates/source-pipeline.yaml")
-    
-    sink_template = project_root / "pipeline-templates" / "sink-pipeline.yaml"
-    if not sink_template.exists():
-        sink_template.write_text("""# =============================================================================
-# Redpanda Connect Sink Pipeline - Consolidated Multi-Schema
-# =============================================================================
-# This pipeline consumes CDC events from Kafka and routes to multiple 
-# PostgreSQL schemas in a single pipeline instance.
-#
-# Architecture:
-#   - 1 Sink container handles ALL customers for an environment
-#   - Routes by schema (customer) extracted from Kafka topic
-#   - Single port, single consumer group per environment
-#
-# Pattern:
-#   1. Consume from all customer topics for environment
-#   2. Extract schema (customer) from topic name
-#   3. Route to appropriate schema's staging table
-#   4. Stored procedure merges staging -> final
-#
-# Environment: {{ENV}}
-# =============================================================================
-
-input:
-  kafka:
-    addresses:
-      - "${KAFKA_BOOTSTRAP_SERVERS}"
-    topics:
-      {{SINK_TOPICS}}
-    consumer_group: "{{ENV}}-sink-group"
-    start_from_oldest: true
-
-pipeline:
-  processors:
-    # Parse JSON and extract routing metadata from topic
-    - bloblang: |
-        # Parse the JSON content
-        root = content().parse_json()
-        
-        # Extract schema (customer) from topic: env.customer.db.schema.table
-        # Example: nonprod.avansas.AdOpusTest.dbo.Actor -> schema=avansas
-        let topic = metadata("kafka_topic")
-        let parts = $topic.split(".")
-        root.__routing_schema = $parts.index(1)  # customer name = PostgreSQL schema
-        root.__routing_table = this.payload.source.table
-        
-    # Extract CDC operation and enrich with metadata
-    - bloblang: |
-        # Map Debezium operation codes
-        let op = if this.payload.op == "d" { "DELETE" } 
-                 else if this.payload.op == "c" { "INSERT" } 
-                 else if this.payload.op == "u" { "UPDATE" }
-                 else { "UNKNOWN" }
-        
-        # For DELETE use before, for INSERT/UPDATE use after
-        let base = if this.payload.op == "d" { this.payload.before } else { this.payload.after }
-        
-        # Build the record with all metadata
-        root = $base
-        root.__routing_schema = this.__routing_schema
-        root.__routing_table = this.__routing_table
-        root.__cdc_operation = $op
-        root.__source = "kafka-cdc"
-        root.__source_db = this.payload.source.db
-        root.__source_table = this.payload.source.table
-        root.__source_ts_ms = this.payload.source.ts_ms
-        root.__sync_timestamp = now().ts_format("2006-01-02T15:04:05Z")
-        
-        # Capture Kafka metadata for offset tracking
-        root.__kafka_offset = metadata("kafka_offset").number()
-        root.__kafka_partition = metadata("kafka_partition").number()
-        root.__kafka_timestamp = metadata("kafka_timestamp_unix").ts_format("2006-01-02T15:04:05Z")
-    
-    # Log processing info
-    - log:
-        level: INFO
-        message: "Processing ${!this.__cdc_operation} for ${!this.__routing_schema}.${!this.__routing_table} offset=${!this.__kafka_offset}"
-
-output:
-  switch:
-    cases:
-      {{TABLE_CASES}}
-      # Fallback for unknown schema/table combinations
-      - output:
-          drop: {}
-          processors:
-            - log:
-                level: WARN
-                message: "Unknown route: ${!this.__routing_schema}.${!this.__routing_table}"
-
-logger:
-  level: INFO
-  format: json
-  add_timestamp: true
-  static_fields:
-    "@service": redpanda-connect-sink
-    environment: "{{ENV}}"
-
-http:
-  enabled: true
-  address: "0.0.0.0:${HTTP_PORT:-4196}"
-  root_path: /
-  debug_endpoints: false
-
-metrics:
-  prometheus:
-    push_url: ""
-    push_interval: 30s
-    push_job_name: redpanda-connect-sink-{{ENV}}
-""")
-        print("✓ Created file: pipeline-templates/sink-pipeline.yaml")
-    
-    print(f"\n✅ Project scaffolding complete for '{server_group_name}'!")
-    print(f"\n📋 Next steps:")
-    print(f"   1. cp .env.example .env")
-    print(f"   2. Edit .env with your database credentials")
-    print(f"   3. docker compose up -d")
-    print(f"   4. cdc manage-server-group --update")

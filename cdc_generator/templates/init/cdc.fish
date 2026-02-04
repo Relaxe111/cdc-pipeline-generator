@@ -78,6 +78,7 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target d
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
 
 # scaffold subcommand options
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --update" -l update -d "Update existing project scaffold with latest structure"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r

@@ -24,6 +24,7 @@ from .metadata_comments import (
 
 from .scaffolding import (
     scaffold_project_structure,
+    update_scaffold,
 )
 
 from .filters import (
@@ -80,6 +81,7 @@ __all__ = [
     'add_metadata_stats_comments',
     # Scaffolding
     'scaffold_project_structure',
+    'update_scaffold',
     # Filters
     'should_ignore_database',
     'should_include_database',
