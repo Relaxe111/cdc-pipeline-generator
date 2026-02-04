@@ -12,7 +12,6 @@ from .config import SERVER_GROUPS_FILE, get_single_server_group
 from .metadata_comments import (
     ensure_file_header_exists,
     validate_output_has_metadata,
-    get_update_timestamp_comment
 )
 from cdc_generator.helpers.helpers_logging import print_error, print_info
 
@@ -64,38 +63,31 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         with open(SERVER_GROUPS_FILE, 'r') as f:
             file_content = f.read()
         
-        # Extract all comment lines before server_group: key OR after it (before first server group entry)
-        # This handles both file structures:
-        # - adopus: comments BEFORE server_group:
-        # - asma: comments AFTER server_group: but BEFORE asma:/adopus: entry
+        # Extract all comment lines before the server group entry
+        # In flat format, comments appear before the server_group_name: key
         preserved_comments: List[str] = []
         lines = file_content.split('\n')
         
-        # Find where server_group: line is
+        # Find where the server group entry starts (first non-comment, non-blank line)
         sg_line_idx = -1
         for i, line in enumerate(lines):
-            if line.strip() == 'server_group:':
+            stripped = line.strip()
+            # Skip comments and blank lines
+            if stripped.startswith('#') or stripped == '':
+                continue
+            # First non-comment line that ends with ':' is the server group entry
+            if stripped.endswith(':') and not stripped.startswith('-'):
                 sg_line_idx = i
                 break
         
         if sg_line_idx >= 0:
-            # Collect comments BEFORE server_group:
+            # Collect comments BEFORE the server group entry
             for i in range(sg_line_idx):
                 line = lines[i]
                 if line.strip().startswith('#') or line.strip() == '':
-                    preserved_comments.append(line)
-            
-            # Also collect comments AFTER server_group: but before first actual entry
-            # BUT skip server group header comments (they'll be regenerated)
-            for i in range(sg_line_idx + 1, len(lines)):
-                line = lines[i]
-                # Stop at first actual server group entry (not a comment)
-                if line.strip() and not line.strip().startswith('#'):
-                    break
-                # Skip server group header separators and titles (they'll be regenerated)
-                if '============' in line or 'Server Group' in line:
-                    continue
-                if line.strip().startswith('#') or line.strip() == '':
+                    # Skip server group header separators and titles (they'll be regenerated)
+                    if '============' in line or 'Server Group' in line:
+                        continue
                     preserved_comments.append(line)
         
         # CRITICAL: Ensure file header exists
@@ -117,11 +109,6 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             return False
         
         pattern = server_group.get('pattern')
-        
-        # Set service name for db-per-tenant: use server group name
-        if pattern == 'db-per-tenant':
-            server_group['service'] = server_group_name
-            print_info(f"Set service name to '{server_group_name}' (db-per-tenant)")
         
         # Initialize header comment lines
         header_comment_lines: list[str] = []
@@ -216,11 +203,6 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                 
                 # Add blank line between services in header
                 header_comment_lines.append("")
-        
-        # For db-per-tenant, set service to the server group name for all databases
-        if pattern == 'db-per-tenant':
-            for db in databases:
-                db['service'] = server_group_name
         
         # Calculate metadata for comments
         total_dbs = len(databases)
@@ -348,93 +330,104 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         if preserved_comments:
             output_lines.append("")
         
-        output_lines.append("server_group:")
+        # Add server group header comment
+        output_lines.append("# ============================================================================")
+        if server_group_name == 'adopus':
+            output_lines.append("# AdOpus Server Group (db-per-tenant)")
+        elif server_group_name == 'asma':
+            output_lines.append("# ASMA Server Group (db-shared)")
+        else:
+            output_lines.append(f"# {server_group_name.title()} Server Group")
+        output_lines.append("# ============================================================================")
         
-        server_group_dict = config.get('server_group', {})
-        for sg_name, sg in server_group_dict.items():
-            
-            # If this is the server group being updated, add the databases
-            if sg_name == server_group_name:
-                # Check if environment-aware grouping is enabled
-                environment_aware = sg.get('environment_aware', False)
+        # Get the server group data (without the injected 'name' field)
+        sg = dict(server_group)
+        sg.pop('name', None)  # Remove the 'name' field we added
+        
+        # Check if environment-aware grouping is enabled
+        environment_aware = sg.get('environment_aware', False)
+        
+        if environment_aware and sg.get('pattern') == 'db-shared':
+            # Group databases by service and environment
+            service_data: Dict[str, Dict[str, Any]] = {}
+            for db in databases:
+                service = db.get('service', db['name'])
+                env = db.get('environment', '')
                 
-                if environment_aware and sg.get('pattern') == 'db-shared':
-                    # Group databases by service and environment
-                    service_data: Dict[str, Dict[str, Any]] = {}
-                    for db in databases:
-                        service = db.get('service', db['name'])
-                        env = db.get('environment', '')
-                        
-                        if service not in service_data:
-                            service_data[service] = {
-                                'schemas': set(),  # Collect all unique schemas across environments
-                                'environments': {}
-                            }
-                        
-                        # Add schemas to service-level set
-                        for schema in db['schemas']:
-                            service_data[service]['schemas'].add(schema)
-                        
-                        # Store database for this environment (only one database per env)
-                        if env:
-                            if env not in service_data[service]['environments']:
-                                service_data[service]['environments'][env] = {
-                                    'database': db['name'],
-                                    'table_count': db.get('table_count', 0)
-                                }
-                            else:
-                                # If multiple databases for same service+env, append to database name
-                                existing = service_data[service]['environments'][env]['database']
-                                if isinstance(existing, str):
-                                    service_data[service]['environments'][env]['database'] = [existing, db['name']]
-                                else:
-                                    service_data[service]['environments'][env]['database'].append(db['name'])
-                                service_data[service]['environments'][env]['table_count'] += db.get('table_count', 0)
-                    
-                    # Convert to final YAML structure
-                    sg['services'] = {}
-                    for service, data in sorted(service_data.items()):
-                        sg['services'][service] = {
-                            'schemas': sorted(data['schemas'])  # Shared schemas at service level
+                if service not in service_data:
+                    service_data[service] = {
+                        'schemas': set(),  # Collect all unique schemas across environments
+                        'environments': {}
+                    }
+                
+                # Add schemas to service-level set
+                for schema in db['schemas']:
+                    service_data[service]['schemas'].add(schema)
+                
+                # Store database for this environment (only one database per env)
+                if env:
+                    if env not in service_data[service]['environments']:
+                        service_data[service]['environments'][env] = {
+                            'database': db['name'],
+                            'table_count': db.get('table_count', 0)
                         }
-                        # Add each environment as a direct key under service
-                        for env, env_data in sorted(data['environments'].items()):
-                            sg['services'][service][env] = env_data
-                    
-                    # Remove old databases key
-                    if 'databases' in sg:
-                        del sg['databases']
-                else:
-                    # Standard flat database list
-                    sg['databases'] = [
+                    else:
+                        # If multiple databases for same service+env, append to database name
+                        existing = service_data[service]['environments'][env]['database']
+                        if isinstance(existing, str):
+                            service_data[service]['environments'][env]['database'] = [existing, db['name']]
+                        else:
+                            service_data[service]['environments'][env]['database'].append(db['name'])
+                        service_data[service]['environments'][env]['table_count'] += db.get('table_count', 0)
+            
+            # Convert to final YAML structure
+            sg['services'] = {}
+            for service, data in sorted(service_data.items()):
+                sg['services'][service] = {
+                    'schemas': sorted(data['schemas'])  # Shared schemas at service level
+                }
+                # Add each environment as a direct key under service
+                for env, env_data in sorted(data['environments'].items()):
+                    sg['services'][service][env] = env_data
+            
+            # Remove old databases key
+            if 'databases' in sg:
+                del sg['databases']
+        else:
+            # db-per-tenant: service name as root key with databases list
+            # Collect all unique schemas across all databases
+            all_schemas: set[str] = set()
+            for db in databases:
+                for schema in db.get('schemas', []):
+                    all_schemas.add(schema)
+            
+            # Use server_group_name as the single service
+            sg['services'] = {
+                server_group_name: {
+                    'schemas': sorted(all_schemas),
+                    'databases': [
                         {
                             'name': db['name'],
-                            'service': db['service'],
-                            'schemas': db['schemas']
+                            'table_count': db.get('table_count', 0)
                         }
                         for db in databases
                     ]
+                }
+            }
             
-            # Add comment header before each server group
-            output_lines.append("  # ============================================================================")
-            if sg_name == 'adopus':
-                output_lines.append("  # AdOpus Server Group (db-per-tenant)")
-            elif sg_name == 'asma':
-                output_lines.append("  # ASMA Server Group (db-shared)")
-            else:
-                output_lines.append(f"  # {sg_name.title()} Server Group")
-            output_lines.append("  # ============================================================================")
-            
-            # Add the server group as a dict entry (key: value format)
-            # Write the key first
-            output_lines.append(f"  {sg_name}:")
-            
-            # Dump the server group data and indent it properly
-            sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
-            sg_lines = sg_yaml.strip().split('\n')
-            for line in sg_lines:
-                # Add 4 spaces of indentation (2 for server_group level + 2 for content)
-                output_lines.append(f"    {line}")
+            # Remove old databases key from root level
+            if 'databases' in sg:
+                del sg['databases']
+        
+        # Add the server group entry (flat structure - name is root key)
+        output_lines.append(f"{server_group_name}:")
+        
+        # Dump the server group data and indent it properly
+        sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        sg_lines = sg_yaml.strip().split('\n')
+        for line in sg_lines:
+            # Add 2 spaces of indentation (flat structure)
+            output_lines.append(f"  {line}")
         
         # CRITICAL: Validate before writing
         validate_output_has_metadata(output_lines)

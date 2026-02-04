@@ -1,12 +1,12 @@
 """Common database inspection utilities for CDC pipeline."""
 
 import os
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Union
 from cdc_generator.helpers.helpers_logging import print_error, print_warning
 from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 
 
-def expand_env_vars(value: Any) -> Any:
+def expand_env_vars(value: Union[str, int, None]) -> Union[str, int, None]:
     """Expand ${VAR} and $VAR patterns in environment variables.
     
     Args:

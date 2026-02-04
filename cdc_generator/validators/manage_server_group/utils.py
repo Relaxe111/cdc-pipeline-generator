@@ -3,8 +3,9 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Optional
 
+from .types import DatabaseInfo
 from cdc_generator.helpers.helpers_logging import (
     print_header, 
     print_info, 
@@ -105,7 +106,7 @@ def regenerate_all_validation_schemas(server_group_names: Optional[List[str]] = 
     print_success("\n✓ Validation schema regeneration complete")
 
 
-def update_vscode_schema(databases: List[Dict[str, Any]]) -> bool:
+def update_vscode_schema(databases: List[DatabaseInfo]) -> bool:
     """Update .vscode/service-schema.json with database names."""
     try:
         if not SERVICE_SCHEMA_FILE.exists():

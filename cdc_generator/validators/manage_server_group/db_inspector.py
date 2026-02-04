@@ -2,7 +2,15 @@
 
 import os
 import re
-from typing import List, Dict, Optional, Any
+from typing import List, Optional, Union, TYPE_CHECKING, Any
+
+from .types import ServerConfig, ServerGroupConfig, DatabaseInfo, ExtractedIdentifiers
+
+# Type checking imports for database connections
+# These are untyped external libraries - use Any for connection objects
+if TYPE_CHECKING:
+    # Connection types would go here if stubs existed
+    pass
 
 try:
     import pymssql  # type: ignore[import-not-found]
@@ -27,6 +35,16 @@ class MissingEnvironmentVariableError(ValueError):
     """Raised when a required connection value still contains an unresolved env var."""
 
 
+class PostgresConnectionError(Exception):
+    """Raised when PostgreSQL connection fails with user-friendly context."""
+    
+    def __init__(self, message: str, host: str, port: int, hint: str = ""):
+        self.host = host
+        self.port = port
+        self.hint = hint
+        super().__init__(message)
+
+
 _INTERESTING_ENV_KEYWORDS = (
     "POSTGRES",
     "MSSQL",
@@ -43,7 +61,7 @@ _INTERESTING_ENV_KEYWORDS = (
 _ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
 
 
-def extract_identifiers(db_name: str, server_group_config: Dict[str, Any]) -> Dict[str, str]:
+def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig) -> ExtractedIdentifiers:
     """
     Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
     
@@ -52,7 +70,7 @@ def extract_identifiers(db_name: str, server_group_config: Dict[str, Any]) -> Di
         server_group_config: Server group configuration with extraction patterns
         
     Returns:
-        Dictionary with extracted identifiers (customer, service, env, suffix)
+        ExtractedIdentifiers with customer, service, env, suffix
     """
     pattern_type = server_group_config.get('pattern')
     extraction_pattern = server_group_config.get('extraction_pattern', '')
@@ -186,8 +204,13 @@ def _build_empty_value_message(field_name: str) -> str:
     )
 
 
-def _resolve_env_value(value: Any, field_name: str) -> str:
-    """Resolve environment variables and ensure the result is usable."""
+def _resolve_env_value(value: Union[str, int, None], field_name: str) -> str:
+    """Resolve environment variables and ensure the result is usable.
+    
+    Args:
+        value: YAML config value - can be str, int, or None
+        field_name: Name of the field for error messages
+    """
     if value is None:
         raise MissingEnvironmentVariableError(_build_missing_field_message(field_name))
 
@@ -204,8 +227,12 @@ def _resolve_env_value(value: Any, field_name: str) -> str:
     return expanded
 
 
-def get_mssql_connection(server_config: Dict[str, Any]) -> Any:
-    """Get MSSQL connection from server config."""
+def get_mssql_connection(server_config: ServerConfig) -> Any:  # noqa: ANN401 - pymssql has no stubs
+    """Get MSSQL connection from server config.
+    
+    Returns:
+        pymssql connection object (typed as Any due to missing type stubs)
+    """
     if not has_pymssql:
         raise ImportError("pymssql not installed - run: pip install pymssql")
     
@@ -226,8 +253,12 @@ def get_mssql_connection(server_config: Dict[str, Any]) -> Any:
     )
 
 
-def get_postgres_connection(server_config: Dict[str, Any], database: str = 'postgres') -> Any:
-    """Get PostgreSQL connection from server config."""
+def get_postgres_connection(server_config: ServerConfig, database: str = 'postgres') -> Any:  # noqa: ANN401 - psycopg2 has no stubs
+    """Get PostgreSQL connection from server config.
+    
+    Returns:
+        psycopg2 connection object (typed as Any due to missing type stubs)
+    """
     if not has_psycopg2:
         raise ImportError("psycopg2 not installed - run: pip install psycopg2-binary")
     
@@ -239,23 +270,115 @@ def get_postgres_connection(server_config: Dict[str, Any], database: str = 'post
     password = _resolve_env_value(server_config.get('password'), 'password')
     port = int(_resolve_env_value(server_config.get('port', 5432), 'port'))
     
-    return psycopg2.connect(  # type: ignore[misc]
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        connect_timeout=10  # 10 second timeout
-    )
+    try:
+        return psycopg2.connect(  # type: ignore[misc]
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            connect_timeout=10  # 10 second timeout
+        )
+    except psycopg2.OperationalError as e:  # type: ignore[union-attr]
+        error_msg = str(e).lower()
+        
+        # DNS resolution failure
+        if "could not translate host name" in error_msg or "name or service not known" in error_msg:
+            raise PostgresConnectionError(
+                f"Cannot resolve hostname '{host}'",
+                host=host,
+                port=port,
+                hint=(
+                    "Check that:\n"
+                    f"  • The hostname '{host}' is correct\n"
+                    "  • You have network connectivity (try: ping the host)\n"
+                    "  • DNS is working (try: nslookup or dig the hostname)\n"
+                    "  • If using VPN, ensure it's connected"
+                )
+            ) from e
+        
+        # Connection refused (server not running or wrong port)
+        if "connection refused" in error_msg:
+            raise PostgresConnectionError(
+                f"Connection refused by {host}:{port}",
+                host=host,
+                port=port,
+                hint=(
+                    "Check that:\n"
+                    "  • PostgreSQL server is running\n"
+                    f"  • Port {port} is correct\n"
+                    "  • Firewall allows connections to this port\n"
+                    "  • Server is configured to accept remote connections (pg_hba.conf)"
+                )
+            ) from e
+        
+        # Connection timeout
+        if "timeout" in error_msg or "timed out" in error_msg:
+            raise PostgresConnectionError(
+                f"Connection to {host}:{port} timed out",
+                host=host,
+                port=port,
+                hint=(
+                    "Check that:\n"
+                    "  • The server is reachable (try: telnet or nc to host:port)\n"
+                    "  • Network/firewall isn't blocking the connection\n"
+                    "  • Server isn't overloaded"
+                )
+            ) from e
+        
+        # Authentication failure
+        if "password authentication failed" in error_msg or "authentication failed" in error_msg:
+            raise PostgresConnectionError(
+                f"Authentication failed for user at {host}:{port}",
+                host=host,
+                port=port,
+                hint=(
+                    "Check that:\n"
+                    "  • Username is correct\n"
+                    "  • Password is correct\n"
+                    "  • User has permission to connect to the database\n"
+                    "  • Check pg_hba.conf authentication method"
+                )
+            ) from e
+        
+        # Database doesn't exist
+        if "database" in error_msg and "does not exist" in error_msg:
+            raise PostgresConnectionError(
+                f"Database '{database}' does not exist on {host}:{port}",
+                host=host,
+                port=port,
+                hint=f"Check that database '{database}' exists on the server"
+            ) from e
+        
+        # SSL required
+        if "ssl" in error_msg:
+            raise PostgresConnectionError(
+                f"SSL connection issue with {host}:{port}",
+                host=host,
+                port=port,
+                hint=(
+                    "Check that:\n"
+                    "  • Server SSL configuration is correct\n"
+                    "  • Client SSL settings match server requirements"
+                )
+            ) from e
+        
+        # Generic operational error
+        raise PostgresConnectionError(
+            f"Failed to connect to PostgreSQL at {host}:{port}",
+            host=host,
+            port=port,
+            hint=f"Original error: {e}"
+        ) from e
 
 
 def list_mssql_databases(
-    server_config: Dict[str, Any],
-    server_group_config: Dict[str, Any],
+    server_config: ServerConfig,
+    server_group_config: ServerGroupConfig,
     include_pattern: Optional[str] = None, 
     database_exclude_patterns: Optional[List[str]] = None,
     schema_exclude_patterns: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+) -> List[DatabaseInfo]:
     """List all databases on MSSQL server."""
     print_info(f"Connecting to MSSQL server...")
     
@@ -273,7 +396,7 @@ def list_mssql_databases(
         ORDER BY name
     """)
     
-    databases: List[Dict[str, Any]] = []
+    databases: List[DatabaseInfo] = []
     ignored_count = 0
     excluded_count = 0
     ignored_schema_count = 0
@@ -322,9 +445,9 @@ def list_mssql_databases(
             
             databases.append({
                 'name': db_name,
-                'service': identifiers.get('service', db_name),
-                'environment': identifiers.get('env', ''),
-                'customer': identifiers.get('customer', ''),
+                'service': identifiers['service'] or db_name,
+                'environment': identifiers['env'],
+                'customer': identifiers['customer'],
                 'schemas': schemas if schemas else ['dbo'],
                 'table_count': table_count
             })
@@ -349,12 +472,12 @@ def list_mssql_databases(
 
 
 def list_postgres_databases(
-    server_config: Dict[str, Any],
-    server_group_config: Dict[str, Any],
+    server_config: ServerConfig,
+    server_group_config: ServerGroupConfig,
     include_pattern: Optional[str] = None,
     database_exclude_patterns: Optional[List[str]] = None,
     schema_exclude_patterns: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+) -> List[DatabaseInfo]:
     """List all databases on PostgreSQL server."""
     print_info(f"Connecting to PostgreSQL server...")
     
@@ -397,7 +520,7 @@ def list_postgres_databases(
     if excluded_count > 0:
         print_info(f"⊘ Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
     
-    databases: List[Dict[str, Any]] = []
+    databases: List[DatabaseInfo] = []
     ignored_schema_count = 0
     databases_with_ignored_schemas = 0
     for db_name in filtered_db_names:
@@ -438,9 +561,9 @@ def list_postgres_databases(
             
             databases.append({
                 'name': db_name,
-                'service': identifiers.get('service', db_name),
-                'environment': identifiers.get('env', ''),
-                'customer': identifiers.get('customer', ''),
+                'service': identifiers['service'] or db_name,
+                'environment': identifiers['env'],
+                'customer': identifiers['customer'],
                 'schemas': schemas,
                 'table_count': table_count
             })

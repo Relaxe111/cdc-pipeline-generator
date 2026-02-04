@@ -22,7 +22,7 @@ def create_mssql_connection(
     database: str,
     user: str,
     password: str
-) -> Any:
+) -> Any:  # noqa: ANN401 - pymssql.Connection is untyped
     """
     Create a pymssql connection with proper typing.
     

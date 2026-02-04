@@ -12,22 +12,24 @@ from .config import (
     SERVER_GROUPS_FILE,
     PROJECT_ROOT,
     load_server_groups,
+    get_single_server_group,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
     save_schema_exclude_patterns
 )
+from .types import ServerGroupConfig
 from .scaffolding import scaffold_project_structure
 from .db_inspector import (
     list_mssql_databases,
     list_postgres_databases,
-    MissingEnvironmentVariableError
+    MissingEnvironmentVariableError,
+    PostgresConnectionError
 )
 from .yaml_writer import update_server_group_yaml
 from .utils import regenerate_all_validation_schemas, update_vscode_schema, update_completions
 from .metadata_comments import (
     get_file_header_comments,
-    ensure_file_header_exists,
     validate_output_has_metadata
 )
 from cdc_generator.helpers.helpers_logging import (
@@ -39,7 +41,7 @@ from cdc_generator.helpers.helpers_logging import (
 )
 
 
-def _ensure_project_structure(server_group_name: str, server_group_config: Dict[str, Any]) -> None:
+def _ensure_project_structure(server_group_name: str, server_group_config: ServerGroupConfig) -> None:
     """Ensure basic directory structure exists, creating missing directories quietly.
     
     This runs on --update to make sure critical directories exist.
@@ -125,23 +127,14 @@ def handle_add_group(args: Namespace) -> int:
         config = load_server_groups()
     except FileNotFoundError:
         print_warning("server_group.yaml not found. Creating a fresh configuration.")
-        config = {'server_group': {}}
+        config = {}
     
-    # Check if group already exists
-    raw_groups = config.get('server_group')
-    existing_groups: Dict[str, Dict[str, Any]] = {}
-    if isinstance(raw_groups, dict):
-        raw_groups_dict = cast(Dict[Any, Any], raw_groups)
-        for name, group in raw_groups_dict.items():
-            if isinstance(name, str) and isinstance(group, dict):
-                existing_groups[name] = cast(Dict[str, Any], group)
-    if args.add_group in existing_groups:
-        print_error(f"Server group '{args.add_group}' already exists")
-        return 1
-    for group in existing_groups.values():
-        if group.get('name') == args.add_group:
-            print_error(f"Server group '{args.add_group}' already exists")
-            return 1
+    # Check if group already exists (flat structure: name is root key with 'pattern' field)
+    for name, group_data in config.items():
+        if isinstance(group_data, dict) and 'pattern' in group_data:
+            if name == args.add_group:
+                print_error(f"Server group '{args.add_group}' already exists")
+                return 1
     
     # Create new server group
     new_group: Dict[str, Any] = {
@@ -168,11 +161,6 @@ def handle_add_group(args: Namespace) -> int:
         new_group['environment_aware'] = getattr(args, 'environment_aware', True)
     
     server_group_name = args.add_group
-    server_group_block = config.get('server_group')
-    if not isinstance(server_group_block, dict):
-        server_group_block = {}
-        config['server_group'] = server_group_block
-    server_group_block[server_group_name] = new_group
     
     # Build output with metadata comments
     output_lines: List[str] = []
@@ -182,26 +170,23 @@ def handle_add_group(args: Namespace) -> int:
     output_lines.extend(header_comments)
     output_lines.append("")  # Blank line after header
     
-    # Add server_group: key
-    output_lines.append("server_group:")
-    
     # Add server group separator
-    output_lines.append("  # ============================================================================")
+    output_lines.append("# ============================================================================")
     if server_group_name == 'adopus':
-        output_lines.append("  # AdOpus Server Group (db-per-tenant)")
+        output_lines.append("# AdOpus Server Group (db-per-tenant)")
     elif server_group_name == 'asma':
-        output_lines.append("  # ASMA Server Group (db-shared)")
+        output_lines.append("# ASMA Server Group (db-shared)")
     else:
         pattern_label = "db-per-tenant" if args.mode == "db-per-tenant" else "db-shared"
-        output_lines.append(f"  # {server_group_name.title()} Server Group ({pattern_label})")
-    output_lines.append("  # ============================================================================")
-    output_lines.append(f"  {server_group_name}:")
+        output_lines.append(f"# {server_group_name.title()} Server Group ({pattern_label})")
+    output_lines.append("# ============================================================================")
+    output_lines.append(f"{server_group_name}:")
     
     # Dump the server group YAML
     sg_yaml = yaml.dump(new_group, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
     sg_lines = sg_yaml.strip().split('\n')
     for line in sg_lines:
-        output_lines.append(f"    {line}")  # 4 spaces indent
+        output_lines.append(f"  {line}")  # 2 spaces indent (flat structure)
     
     # Validate before writing
     validate_output_has_metadata(output_lines)
@@ -348,47 +333,31 @@ def handle_update(args: Namespace) -> int:
         print_info("   Here is an example for a PostgreSQL 'db-shared' setup:")
         print_info(
             "\n"
-            "    server_group:\n"
-            "      asma:  # Or your implementation name\n"
-            "        pattern: db-shared\n"
-            "        server:\n"
-            "          type: postgres\n"
-            "          host: '${POSTGRES_SOURCE_HOST}'\n"
-            "          port: '${POSTGRES_SOURCE_PORT}'\n"
-            "          user: '${POSTGRES_SOURCE_USER}'\n"
-            "          password: '${POSTGRES_SOURCE_PASSWORD}'\n"
-            "        databases: [] # This will be auto-populated by --update"
+            "    asma1:  # Your implementation name\n"
+            "      pattern: db-shared\n"
+            "      server:\n"
+            "        type: postgres\n"
+            "        host: '${POSTGRES_SOURCE_HOST}'\n"
+            "        port: '${POSTGRES_SOURCE_PORT}'\n"
+            "        user: '${POSTGRES_SOURCE_USER}'\n"
+            "        password: '${POSTGRES_SOURCE_PASSWORD}'\n"
+            "      services: {} # This will be auto-populated by --update"
         )
         return 1
-        
-    server_group_dict = config.get('server_group', {})
     
-    if not server_group_dict:
+    # Use get_single_server_group which handles flat format
+    server_group = get_single_server_group(config)
+    
+    if not server_group:
         print_error("No server group found in server_group.yaml")
         return 1
     
-    # Get the single server group (there should only be one)
-    if len(server_group_dict) > 1:
-        print_warning(f"Found {len(server_group_dict)} server groups, expected 1")
-        print_info("Server groups: " + ", ".join(server_group_dict.keys()))
-    
-    # Process the first (and should be only) server group
-    server_group = None
-    server_group_name = None
-    for sg_name, sg_config in server_group_dict.items():
-        sg_config['name'] = sg_name  # Add name for compatibility
-        server_group = sg_config
-        server_group_name = sg_name
-        break
-    
-    if not server_group or not server_group_name:
-        print_error("Failed to load server group configuration")
-        return 1
+    server_group_name = cast(str, server_group.get('name'))
     
     # Ensure directory structure exists (scaffold if missing)
     _ensure_project_structure(server_group_name, server_group)
     
-    sg_name = server_group.get('name')
+    sg_name = server_group_name  # Already extracted above
     sg_type = server_group.get('server', {}).get('type')
     sg_pattern = server_group.get('pattern', 'db-shared')
     include_pattern = server_group.get('include_pattern')
@@ -460,6 +429,15 @@ def handle_update(args: Namespace) -> int:
             "or replace the placeholder in server_group.yaml before running --update."
         )
         return 1
+    except PostgresConnectionError as pg_error:
+        print_error(f"PostgreSQL Connection Failed")
+        print_error(f"   {pg_error}")
+        if pg_error.hint:
+            print("")
+            print_info("💡 " + pg_error.hint.replace("\n", "\n   "))
+        print("")
+        print_info(f"🔌 Target: {pg_error.host}:{pg_error.port}")
+        return 1
     except Exception as e:
         print_error(f"Error updating server group '{sg_name}': {e}")
         import traceback
@@ -472,71 +450,82 @@ def handle_info(args: Namespace) -> int:
     from cdc_generator.helpers.helpers_logging import Colors
     
     config = load_server_groups()
-    server_group_dict = config.get('server_group', {})
     
-    if not server_group_dict:
+    # Use get_single_server_group for flat format
+    sg_config = get_single_server_group(config)
+    
+    if not sg_config:
         print_error("No server group found in server_group.yaml")
         return 1
     
-    for sg_name, sg_config in server_group_dict.items():
-        pattern = sg_config.get('pattern', 'unknown')
-        server = sg_config.get('server', {})
-        databases = sg_config.get('databases', [])
-        database_ref = sg_config.get('database_ref')
-        db_exclude = sg_config.get('database_exclude_patterns', [])
-        schema_exclude = sg_config.get('schema_exclude_patterns', [])
-        description = sg_config.get('description', '')
-        include_pattern = sg_config.get('include_pattern')
-        
-        # Header
-        print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}")
-        print(f"{Colors.BLUE}🔧  Server Group: {Colors.GREEN}{sg_name}{Colors.RESET}")
-        print(f"{Colors.BLUE}{'='*80}{Colors.RESET}\n")
-        
-        # Basic info
-        print(f"    {Colors.YELLOW}Pattern:{Colors.RESET}         {pattern}")
-        if description:
-            print(f"    {Colors.YELLOW}Description:{Colors.RESET}     {description}")
-        if database_ref:
-            print(f"    {Colors.YELLOW}Database Ref:{Colors.RESET}    {database_ref}")
-        if include_pattern:
-            print(f"    {Colors.YELLOW}Include Pattern:{Colors.RESET} {include_pattern}")
-        
-        # Server configuration
-        print(f"\n    {Colors.BLUE}📡 Server Configuration:{Colors.RESET}")
-        print(f"        {Colors.DIM}Type:{Colors.RESET}     {server.get('type', 'N/A')}")
-        print(f"        {Colors.DIM}Host:{Colors.RESET}     {server.get('host', 'N/A')}")
-        print(f"        {Colors.DIM}Port:{Colors.RESET}     {server.get('port', 'N/A')}")
-        print(f"        {Colors.DIM}User:{Colors.RESET}     {server.get('user', 'N/A')}")
-        
-        # Exclude patterns
-        if db_exclude or schema_exclude:
-            print(f"\n    {Colors.BLUE}🚫 Exclude Patterns:{Colors.RESET}")
-            if db_exclude:
-                print(f"        {Colors.DIM}Databases:{Colors.RESET}")
-                for pattern in db_exclude:
-                    print(f"            • {pattern}")
-            if schema_exclude:
-                print(f"        {Colors.DIM}Schemas:{Colors.RESET}")
-                for pattern in schema_exclude:
-                    print(f"            • {pattern}")
-        
-        # Databases
-        print(f"\n    {Colors.BLUE}💾 Databases ({len(databases)}):{Colors.RESET}")
-        if databases:
-            for db in databases:
-                db_name = db.get('name', 'unnamed')
-                schemas = db.get('schemas', [])
-                db_service = db.get('service')
-                
-                print(f"        {Colors.GREEN}▶{Colors.RESET} {db_name}")
-                if db_service and pattern == 'db-shared':
-                    print(f"            {Colors.DIM}Service:{Colors.RESET} {db_service}")
-                if schemas:
-                    print(f"            {Colors.DIM}Schemas:{Colors.RESET} {', '.join(schemas)}")
-        else:
-            print(f"        {Colors.DIM}No databases configured yet{Colors.RESET}")
-        
-        print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}\n")
+    sg_name = sg_config.get('name', 'unnamed')
+    pattern = sg_config.get('pattern', 'unknown')
+    server = sg_config.get('server', {})
+    services = sg_config.get('services', {})
+    database_ref = sg_config.get('database_ref')
+    db_exclude = sg_config.get('database_exclude_patterns', [])
+    schema_exclude = sg_config.get('schema_exclude_patterns', [])
+    description = sg_config.get('description', '')
+    include_pattern = sg_config.get('include_pattern')
+    environment_aware = sg_config.get('environment_aware', False)
+    
+    # Header
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}")
+    print(f"{Colors.BLUE}🔧  Server Group: {Colors.GREEN}{sg_name}{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*80}{Colors.RESET}\n")
+    
+    # Basic info
+    print(f"    {Colors.YELLOW}Pattern:{Colors.RESET}         {pattern}")
+    if description:
+        print(f"    {Colors.YELLOW}Description:{Colors.RESET}     {description}")
+    if database_ref:
+        print(f"    {Colors.YELLOW}Database Ref:{Colors.RESET}    {database_ref}")
+    if include_pattern:
+        print(f"    {Colors.YELLOW}Include Pattern:{Colors.RESET} {include_pattern}")
+    print(f"    {Colors.YELLOW}Environment Aware:{Colors.RESET} {environment_aware}")
+    
+    # Server configuration
+    print(f"\n    {Colors.BLUE}📡 Server Configuration:{Colors.RESET}")
+    print(f"        {Colors.DIM}Type:{Colors.RESET}     {server.get('type', 'N/A')}")
+    print(f"        {Colors.DIM}Host:{Colors.RESET}     {server.get('host', 'N/A')}")
+    print(f"        {Colors.DIM}Port:{Colors.RESET}     {server.get('port', 'N/A')}")
+    print(f"        {Colors.DIM}User:{Colors.RESET}     {server.get('user', 'N/A')}")
+    
+    # Exclude patterns
+    if db_exclude or schema_exclude:
+        print(f"\n    {Colors.BLUE}🚫 Exclude Patterns:{Colors.RESET}")
+        if db_exclude:
+            print(f"        {Colors.DIM}Databases:{Colors.RESET}")
+            for p in db_exclude:
+                print(f"            • {p}")
+        if schema_exclude:
+            print(f"        {Colors.DIM}Schemas:{Colors.RESET}")
+            for p in schema_exclude:
+                print(f"            • {p}")
+    
+    # Services (unified structure for both patterns)
+    print(f"\n    {Colors.BLUE}📦 Services ({len(services)}):{Colors.RESET}")
+    if services:
+        for svc_name, svc_config in services.items():
+            schemas = svc_config.get('schemas', [])
+            databases = svc_config.get('databases', [])
+            envs = [k for k in svc_config.keys() if k not in ('schemas', 'databases', 'database')]
+            
+            print(f"        {Colors.GREEN}▶{Colors.RESET} {svc_name}")
+            if schemas:
+                print(f"            {Colors.DIM}Schemas:{Colors.RESET} {', '.join(schemas)}")
+            
+            # For db-shared: show environments
+            if envs:
+                print(f"            {Colors.DIM}Environments:{Colors.RESET} {', '.join(envs)}")
+            
+            # For db-per-tenant: show databases count
+            if databases:
+                total_tables = sum(db.get('table_count', 0) for db in databases)
+                print(f"            {Colors.DIM}Databases:{Colors.RESET} {len(databases)} ({total_tables} tables)")
+    else:
+        print(f"        {Colors.DIM}No services configured yet{Colors.RESET}")
+    
+    print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}\n")
     
     return 0

@@ -9,6 +9,8 @@
 | **File Size** | Max 600 lines (ideal 200-400) | AI reads entire file in one operation |
 | **Function Size** | Max 100 lines (ideal 10-50) | Single responsibility, easy reasoning |
 | **Type Hints** | Required all new code | AI understands data flow instantly |
+| **Avoid `Any`** | Use TypedDict/explicit types | Self-documenting, catches bugs early |
+| **Runtime Validation** | Validate external data | YAML/JSON/API data needs structure checks |
 | **PostgreSQL Quotes** | Always `"schema"."table"` | Preserves MSSQL PascalCase |
 | **Pattern-Agnostic** | Never hardcode asma/adopus | Use `server_group_type` field |
 | **YAML Preservation** | Use `ruamel.yaml` | Preserve comments/structure |
@@ -89,6 +91,45 @@ printf '%s\n' 'line1' > file.txt
 # YAML: '${POSTGRES_HOST}'
 # Runtime: os.getenv('POSTGRES_HOST')
 ```
+
+### 6. Type Safety - Avoid `Any`
+```python
+# ❌ Avoid Any - hides data structure
+def process(config: Dict[str, Any]) -> Any:
+    return config.get('server')
+
+# ✅ Use explicit TypedDict for known structures
+class ServerConfig(TypedDict, total=False):
+    type: Literal['postgres', 'mssql']
+    host: str
+    port: Union[str, int]
+
+def process(config: ServerConfig) -> str:
+    return config.get('host', '')
+
+# ✅ Runtime validation for external/questionable data sources
+def load_config(path: Path) -> ServerConfig:
+    """Load and validate config from YAML file."""
+    with open(path) as f:
+        raw = yaml.safe_load(f)
+    
+    # Validate structure before using
+    if not isinstance(raw, dict):
+        raise ValueError(f"Expected dict, got {type(raw).__name__}")
+    if 'host' not in raw:
+        raise ValueError("Missing required field: 'host'")
+    if raw.get('type') not in ('postgres', 'mssql', None):
+        raise ValueError(f"Invalid server type: {raw.get('type')}")
+    
+    return cast(ServerConfig, raw)
+```
+
+**When to validate at runtime:**
+- Loading from YAML/JSON files
+- Reading from environment variables
+- Receiving API responses
+- Processing user input
+- Any data crossing trust boundaries
 
 ## ✅ Pre-Commit
 

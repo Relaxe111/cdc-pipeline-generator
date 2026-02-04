@@ -72,7 +72,17 @@ target-version = ['py311']
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+# ANN401: Disallow explicit Any in type annotations
+select = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow Any in type stub files and tests if needed
+"*.pyi" = ["ANN401"]
+"tests/*" = ["ANN401"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
+disallow_any_explicit = true

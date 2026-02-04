@@ -7,7 +7,7 @@ service-schemas/ directory instead of database introspection.
 
 import yaml  # type: ignore
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from cdc_generator.helpers.helpers_logging import print_info, print_success, print_error
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from cdc_generator.helpers.service_config import load_service_config, load_customer_config
@@ -64,7 +64,7 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict[
         mssql = env_config.get('mssql', {})
         
         # Expand environment variables (support ${VAR} format)
-        def expand_env(value: Any) -> Any:
+        def expand_env(value: Union[str, int, None]) -> Union[str, int, None]:
             """Expand ${VAR} and $VAR patterns."""
             if not isinstance(value, str):
                 return value
@@ -72,10 +72,14 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict[
             import os
             return os.path.expandvars(value)
         
-        host = expand_env(mssql.get('host', 'localhost'))
-        port = int(expand_env(mssql.get('port', '1433')))
-        user = expand_env(mssql.get('user', 'sa'))
-        password = expand_env(mssql.get('password', ''))
+        host_val = expand_env(mssql.get('host', 'localhost'))
+        host = str(host_val) if host_val is not None else 'localhost'
+        port_val = expand_env(mssql.get('port', '1433'))
+        port = int(port_val) if port_val is not None else 1433
+        user_val = expand_env(mssql.get('user', 'sa'))
+        user = str(user_val) if user_val is not None else 'sa'
+        password_val = expand_env(mssql.get('password', ''))
+        password = str(password_val) if password_val is not None else ''
         
         conn = create_mssql_connection(
             host=host,
