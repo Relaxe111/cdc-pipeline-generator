@@ -6,18 +6,18 @@
 - **[Coding Guidelines](.github/copilot-coding-guidelines.md)** - Code organization, style, naming conventions, function/file size limits, type hints, and patterns optimized for AI navigation
 
 **For Redpanda Connect / Bloblang transformations:**
-- **[Redpanda Connect Docs](docs/redpanda-connect/README.md)** - Complete Bloblang reference and pipeline patterns
+- **[Redpanda Connect Docs](_docs/redpanda-connect/README.md)** - Complete Bloblang reference and pipeline patterns
 
 | Document | Use Case |
 |----------|----------|
-| [Bloblang Fundamentals](docs/redpanda-connect/01-BLOBLANG-FUNDAMENTALS.md) | Core syntax: assignment, variables, conditionals, maps |
-| [Bloblang Methods](docs/redpanda-connect/02-BLOBLANG-METHODS.md) | String, number, timestamp, array, object, JWT methods |
-| [Bloblang Functions](docs/redpanda-connect/03-BLOBLANG-FUNCTIONS.md) | Built-in functions: uuid, now, env, content, metadata |
-| [HTTP Inputs](docs/redpanda-connect/04-HTTP-INPUTS.md) | Webhook receivers, JWT/signature validation, API polling |
-| [SQL Patterns](docs/redpanda-connect/05-SQL-PATTERNS.md) | PostgreSQL integration, UPSERT, batching, connection pools |
-| [Error Handling](docs/redpanda-connect/06-ERROR-HANDLING.md) | try/catch, DLQ, fallback outputs, error routing |
-| [Pipeline Patterns](docs/redpanda-connect/07-PIPELINE-PATTERNS.md) | Complete CDC pipeline examples, multi-input/output |
-| [**Pipeline Templating**](docs/redpanda-connect/08-PIPELINE-TEMPLATING.md) | **Template structure, .blobl files, generation flow** |
+| [Bloblang Fundamentals](_docs/redpanda-connect/01-BLOBLANG-FUNDAMENTALS.md) | Core syntax: assignment, variables, conditionals, maps |
+| [Bloblang Methods](_docs/redpanda-connect/02-BLOBLANG-METHODS.md) | String, number, timestamp, array, object, JWT methods |
+| [Bloblang Functions](_docs/redpanda-connect/03-BLOBLANG-FUNCTIONS.md) | Built-in functions: uuid, now, env, content, metadata |
+| [HTTP Inputs](_docs/redpanda-connect/04-HTTP-INPUTS.md) | Webhook receivers, JWT/signature validation, API polling |
+| [SQL Patterns](_docs/redpanda-connect/05-SQL-PATTERNS.md) | PostgreSQL integration, UPSERT, batching, connection pools |
+| [Error Handling](_docs/redpanda-connect/06-ERROR-HANDLING.md) | try/catch, DLQ, fallback outputs, error routing |
+| [Pipeline Patterns](_docs/redpanda-connect/07-PIPELINE-PATTERNS.md) | Complete CDC pipeline examples, multi-input/output |
+| [**Pipeline Templating**](_docs/redpanda-connect/08-PIPELINE-TEMPLATING.md) | **Template structure, .blobl files, generation flow** |
 
 ---
 
@@ -42,7 +42,7 @@
 
 **Generator scope:** ALL scripts, pipeline generation logic, CLI commands  
 **Implementation scope:** YAML configuration files, generated artifacts, .env files  
-**Detailed architecture:** See `docs/ARCHITECTURE.md`
+**Detailed architecture:** See `_docs/ARCHITECTURE.md`
 
 ---
 
@@ -314,16 +314,16 @@ cdc generate  # Uses your modified generator code
 
 ## 📚 Reference Documentation
 
-- **Architecture details:** `docs/ARCHITECTURE.md`
+- **Architecture details:** `_docs/ARCHITECTURE.md`
 - **Pattern examples:** `examples/db-per-tenant/`, `examples/db-shared/`
-- **API documentation:** `docs/`
+- **API documentation:** `_docs/`
 - **Implementation guides:** Implementation repos' copilot-instructions
 
 ---
 
 ## 🚧 Future Plans
 
-**Planned pipeline types (see [Redpanda Connect Docs](docs/redpanda-connect/README.md)):**
+**Planned pipeline types (see [Redpanda Connect Docs](_docs/redpanda-connect/README.md)):****
 - PostgreSQL CDC source pipeline (using `sql_raw` or `sql_select` inputs)
 - HTTP webhook receiver with signature validation (HMAC, JWT)
 - API polling pipelines with OAuth 2.0

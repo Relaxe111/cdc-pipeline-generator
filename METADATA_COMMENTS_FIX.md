@@ -137,7 +137,7 @@ After ANY operation, `server_group.yaml` should have this structure:
 # 
 # For detailed documentation, see:
 #   - CDC_CLI.md in the implementation repository
-#   - cdc-pipeline-generator/docs/ for generator documentation
+#   - cdc-pipeline-generator/_docs/ for generator documentation
 # ============================================================================
 
 server_group:

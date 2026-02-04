@@ -186,7 +186,7 @@ CDC Pipeline implementation using cdc-pipeline-generator.
 
 ## Documentation
 
-See `docs/` for detailed documentation.
+See `_docs/` for detailed documentation.
 """
         
         (target_dir / "README.md").write_text(readme_template)

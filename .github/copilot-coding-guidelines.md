@@ -1,6 +1,6 @@
 # Coding Guidelines (AI Quick Reference)
 
-> **For detailed documentation see [docs/development/CODING_STANDARDS.md](../docs/development/CODING_STANDARDS.md)**
+> **For detailed documentation see [_docs/development/CODING_STANDARDS.md](../_docs/development/CODING_STANDARDS.md)**
 
 ## 🎯 Critical Rules
 
@@ -102,7 +102,7 @@ printf '%s\n' 'line1' > file.txt
 
 ## 📖 Full Docs
 
-See **[docs/development/CODING_STANDARDS.md](../docs/development/CODING_STANDARDS.md)** for:
+See **[_docs/development/CODING_STANDARDS.md](../_docs/development/CODING_STANDARDS.md)** for:
 - Detailed examples
 - Error handling patterns  
 - Security best practices

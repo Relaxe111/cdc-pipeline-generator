@@ -43,7 +43,7 @@ def get_file_header_comments() -> List[str]:
         "# ",
         "# For detailed documentation, see:",
         "#   - CDC_CLI.md in the implementation repository",
-        "#   - cdc-pipeline-generator/docs/ for generator documentation",
+        "#   - cdc-pipeline-generator/_docs/ for generator documentation",
         "# ============================================================================",
     ]
 
