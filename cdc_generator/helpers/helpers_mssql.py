@@ -17,9 +17,9 @@ import yaml # type: ignore[import-not-found]
 # pymssql is optional - only required for MSSQL operations
 try:
     import pymssql # type: ignore[import-not-found]
-    HAS_PYMSSQL = True
+    _has_pymssql = True
 except ImportError:
-    HAS_PYMSSQL = False
+    _has_pymssql = False
     pymssql = None  # type: ignore[assignment]
 
 
@@ -30,7 +30,7 @@ class MSSQLNotAvailableError(Exception):
 
 def _ensure_pymssql() -> None:
     """Ensure pymssql is available, raise helpful error if not."""
-    if not HAS_PYMSSQL:
+    if not _has_pymssql:
         raise MSSQLNotAvailableError(
             "pymssql is not installed. Install it with: pip install pymssql\n"
             "Note: pymssql requires FreeTDS. On macOS: brew install freetds"
