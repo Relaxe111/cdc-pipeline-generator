@@ -50,6 +50,8 @@ services:
     container_name: {container_prefix}-dev
     volumes:
       - .:/workspace
+      - ../adopus-cdc-pipeline:/implementations/adopus
+      - ../asma-cdc-pipeline:/implementations/asma
       - ~/.ssh:/root/.ssh:ro
       - ~/.gitconfig:/root/.gitconfig:ro
     environment:
