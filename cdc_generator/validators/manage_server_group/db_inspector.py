@@ -112,14 +112,19 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig) ->
         return {'customer': db_name, 'service': server_group_config.get('name', ''), 'env': '', 'suffix': ''}
     
     elif pattern_type == 'db-shared':
-        # Simple fallback: search for environment keywords and strip "db"
-        env_match = re.search(r'(dev|test|stage|prod|nonprod)', db_name, re.IGNORECASE)
-        env = env_match.group(1).lower() if env_match else ''
+        # Extract environment from last segment of database name
+        # Example: activities_db_dev -> env = "dev", chat_staging -> env = "staging"
+        parts = db_name.lower().split('_')
+        raw_env = parts[-1] if parts else ''
         
-        # Remove environment keyword and "db" word, use what's left as service
+        # Apply env_mappings if configured (e.g., {"staging": "stage", "production": "prod"})
+        env_mappings = server_group_config.get('env_mappings', {})
+        env = env_mappings.get(raw_env, raw_env) if env_mappings else raw_env
+        
+        # Remove environment suffix and "db" word, use what's left as service
         service = db_name.lower()
-        if env:
-            service = re.sub(rf'_{env}$|^{env}_', '', service)
+        if raw_env:
+            service = re.sub(rf'_{raw_env}$', '', service)
         service = re.sub(r'_db_|_db$|^db_', '_', service).strip('_')
         
         return {

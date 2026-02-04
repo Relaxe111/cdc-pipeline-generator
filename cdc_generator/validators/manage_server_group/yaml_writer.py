@@ -110,8 +110,9 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         
         pattern = server_group.get('pattern')
         
-        # Initialize header comment lines
+        # Initialize header comment lines and service groups
         header_comment_lines: list[str] = []
+        service_groups: Dict[str, Dict[str, Any]] = {}
         
         # Auto-generate service names for db-shared type
         if pattern == 'db-shared':
@@ -119,27 +120,28 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             
             # Group databases by service
             from collections import defaultdict
-            service_groups: Dict[str, Dict[str, Any]] = defaultdict(lambda: {'databases': {}})
+            service_groups = defaultdict(lambda: {'databases': {}})
             all_environments: set[str] = set()
             
             for db in databases:
                 db_name = db['name']
                 inferred_service = db.get('service', 'unknown')
                 
-                # Extract environment from database name
-                env: str | None = None
-                for env_candidate in ['dev', 'test', 'stage', 'prod']:
-                    if env_candidate in db_name:
-                        env = env_candidate
-                        break
+                # Use environment field from database (already extracted by db_inspector)
+                env = db.get('environment', '')
                 
-                if env and inferred_service:
-                    all_environments.add(env)
-                    service_groups[inferred_service]['databases'][env] = {
-                        'name': db_name,
-                        'table_count': db.get('table_count', 0),
-                        'schemas': db.get('schemas', [])
-                    }
+                # Always track the service, even if env is missing
+                if inferred_service:
+                    if inferred_service not in service_groups:
+                        service_groups[inferred_service] = {'databases': {}}
+                    
+                    if env:
+                        all_environments.add(env)
+                        service_groups[inferred_service]['databases'][env] = {
+                            'name': db_name,
+                            'table_count': db.get('table_count', 0),
+                            'schemas': db.get('schemas', [])
+                        }
             
             # Sort environments for consistent display
             sorted_environments: list[str] = sorted(all_environments)
@@ -215,15 +217,8 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         service_envs: Dict[str, set[str]] = defaultdict(set)
         
         for db in databases:
-            # Extract environment from database name (assumes pattern like service_env or service_db_env)
-            db_name = db['name']
-            env: str | None = None
-            
-            # Try to extract environment from db name
-            for env_candidate in ['dev', 'test', 'stage', 'prod']:
-                if env_candidate in db_name:
-                    env = env_candidate
-                    break
+            # Use environment field from database (already extracted by db_inspector)
+            env = db.get('environment', '')
             
             if env:
                 env_stats[env]['dbs'] += 1
@@ -265,9 +260,22 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         # Build the complete YAML content with comments
         output_lines: List[str] = []
         
-        # Count services
-        num_services = len(service_envs) if pattern == 'db-shared' else 1
-        service_list = ", ".join(sorted(service_envs.keys())) if pattern == 'db-shared' else server_group_name
+        # Count services - use service_groups for db-shared (more accurate)
+        # Fallback to existing services in server_group config if service_groups is empty
+        if pattern == 'db-shared' and service_groups:
+            num_services = len(service_groups)
+            service_list = ", ".join(sorted(service_groups.keys()))
+        elif pattern == 'db-shared' and 'services' in server_group:
+            # Use existing services from config
+            existing_services = server_group.get('services', {})
+            num_services = len(existing_services)
+            service_list = ", ".join(sorted(existing_services.keys()))
+        elif service_envs:
+            num_services = len(service_envs)
+            service_list = ", ".join(sorted(service_envs.keys()))
+        else:
+            num_services = 1
+            service_list = server_group_name
         
         # Restore all preserved comments (including header, exclude patterns, etc.)
         # But update the timestamp and metadata
@@ -275,25 +283,29 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         for i, comment in enumerate(preserved_comments):
             # Update timestamp
             if 'Updated at:' in comment:
-                output_lines.append(f"# ? Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                output_lines.append(f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
                 timestamp_updated = True
                 # Add stats right after timestamp
-                output_lines.append(f"# ? Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
-                output_lines.append(f"# ? Services: {num_services} ({service_list})")
+                output_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
+                output_lines.append(f"# ? Services ({num_services}): {service_list}")
                 if env_stats_line:
-                    output_lines.append(f"# ? Per Environment: {env_stats_line}")
+                    output_lines.append(f"# Per Environment: {env_stats_line}")
                 if db_list_lines:
                     output_lines.append(f"# Databases:")
                     for line in db_list_lines:
                         output_lines.append(f"#{line}")
             # Skip old stats lines (they'll be regenerated)
-            elif any(keyword in comment for keyword in ['Total:', 'Total Databases:', 'Per Environment:', 'Databases:', 'Avg Tables', 'Services:']):
+            # Note: 'Services:' without '?' prefix is legacy format to skip
+            elif any(keyword in comment for keyword in ['Total:', 'Total Databases:', 'Per Environment:', 'Databases:', 'Avg Tables']) or \
+                 ('Services:' in comment and '? Services' not in comment):
                 continue
             # Skip database list continuation lines (old format without service names)
             # This includes lines starting with "#  " or "# *  " or "# !  " or "# ?  " or "# TODO:" or "# Service:" or "# ? Service:"
             # Also skip standalone "#" lines (blank comment lines from service separators)
+            # IMPORTANT: Do NOT skip "# ? Services" line - that's the services count header!
             elif ((comment.startswith('#  ') or comment.startswith('# *  ') or 
-                   comment.startswith('# !  ') or comment.startswith('# ?  ') or 
+                   comment.startswith('# !  ') or 
+                   (comment.startswith('# ?  ') and 'Services' not in comment) or  # Preserve "# ? Services (N):" line
                    comment.startswith('# TODO:') or
                    comment.startswith('# Service:') or comment.startswith('# ? Service:') or comment.strip() == '#') and 
                   not any(keyword in comment for keyword in ['='])):
@@ -312,7 +324,8 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                 if '============' in line and i > 0:
                     output_lines.insert(i, f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
                     output_lines.insert(i + 1, f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
-                    idx = i + 2
+                    output_lines.insert(i + 2, f"# ? Services ({num_services}): {service_list}")
+                    idx = i + 3
                     if env_stats_line:
                         output_lines.insert(idx, f"# Per Environment: {env_stats_line}")
                         idx += 1

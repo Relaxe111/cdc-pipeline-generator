@@ -7,6 +7,9 @@ from .config import (
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
     save_schema_exclude_patterns,
+    load_env_mappings,
+    save_env_mappings,
+    save_server_group_preserving_comments,
     PROJECT_ROOT,
     SERVER_GROUPS_FILE,
 )
@@ -51,6 +54,7 @@ from .cli_handlers import (
     handle_add_group,
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
+    handle_add_env_mapping,
     handle_update,
     handle_info,
 )
@@ -63,6 +67,9 @@ __all__ = [
     'load_schema_exclude_patterns',
     'save_database_exclude_patterns',
     'save_schema_exclude_patterns',
+    'load_env_mappings',
+    'save_env_mappings',
+    'save_server_group_preserving_comments',
     'PROJECT_ROOT',
     'SERVER_GROUPS_FILE',
     # Metadata Comments
@@ -93,6 +100,7 @@ __all__ = [
     'handle_add_group',
     'handle_add_ignore_pattern',
     'handle_add_schema_exclude',
+    'handle_add_env_mapping',
     'handle_update',
     'handle_info',
 ]

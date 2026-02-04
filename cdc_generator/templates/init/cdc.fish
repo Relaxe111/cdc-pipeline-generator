@@ -154,6 +154,10 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_f
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-to-schema-excludes" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-schema-excludes" -l list-schema-excludes -d "List current schema exclude patterns"
 
+# Environment mappings
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-env-mapping" -l add-env-mapping -d "Add env mapping(s) 'from:to,from:to' (e.g., 'staging:stage,production:prod')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-env-mappings" -l list-env-mappings -d "List current environment mappings"
+
 # Creation flags (only show when --create is present in the command line)
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"

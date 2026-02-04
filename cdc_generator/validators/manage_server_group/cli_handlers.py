@@ -16,7 +16,9 @@ from .config import (
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
-    save_schema_exclude_patterns
+    save_schema_exclude_patterns,
+    load_env_mappings,
+    save_env_mappings
 )
 from .types import ServerGroupConfig
 from .scaffolding import scaffold_project_structure
@@ -316,6 +318,118 @@ def handle_add_schema_exclude(args: Namespace) -> int:
         return 1
     
     print_info(f"\nCurrent schema exclude patterns: {patterns}")
+    
+    return 0
+
+
+def parse_env_mapping(mapping_str: str) -> Dict[str, str]:
+    """Parse comma-separated environment mapping string into dict.
+    
+    Format: "from:to,from:to,..."
+    Example: "staging:stage,production:prod"
+    
+    Args:
+        mapping_str: Comma-separated mappings in format "from:to"
+        
+    Returns:
+        Dict mapping source env suffix to target env name
+        
+    Raises:
+        ValueError: If no valid mappings found
+    """
+    if not mapping_str or not mapping_str.strip():
+        raise ValueError("Environment mapping string cannot be empty")
+    
+    env_mappings: Dict[str, str] = {}
+    errors: List[str] = []
+    
+    for idx, pair in enumerate(mapping_str.split(','), 1):
+        pair = pair.strip()
+        if not pair:
+            continue
+            
+        if ':' not in pair:
+            errors.append(f"Mapping #{idx} '{pair}': missing colon (expected format 'from:to')")
+            continue
+            
+        if pair.count(':') > 1:
+            errors.append(f"Mapping #{idx} '{pair}': multiple colons found (use format 'from:to')")
+            continue
+            
+        from_env, to_env = pair.split(':', 1)
+        from_env = from_env.strip()
+        to_env = to_env.strip()
+        
+        if not from_env:
+            errors.append(f"Mapping #{idx} '{pair}': empty source environment")
+            continue
+            
+        if not to_env:
+            errors.append(f"Mapping #{idx} '{pair}': empty target environment")
+            continue
+            
+        # Valid mapping
+        env_mappings[from_env] = to_env
+    
+    # Report all errors
+    for error in errors:
+        print_error(f"  {error}")
+    
+    if not env_mappings:
+        raise ValueError(f"No valid mappings found. Found {len(errors)} error(s).")
+    
+    return env_mappings
+
+
+def handle_add_env_mapping(args: Namespace) -> int:
+    """Handle adding environment mapping(s) to the server group."""
+    if not args.add_env_mapping:
+        print_error("No mapping specified")
+        return 1
+    
+    try:
+        new_mappings = parse_env_mapping(args.add_env_mapping)
+    except ValueError as e:
+        print_error(f"Invalid mapping format: {e}")
+        print_info("\nFormat: 'from:to,from:to,...'")
+        print_info("Example: cdc manage-server-group --add-env-mapping 'staging:stage,production:prod'")
+        return 1
+    
+    # Load existing mappings
+    mappings = load_env_mappings()
+    
+    added: List[str] = []
+    updated: List[str] = []
+    
+    for from_env, to_env in new_mappings.items():
+        if from_env in mappings:
+            if mappings[from_env] != to_env:
+                old_val = mappings[from_env]
+                mappings[from_env] = to_env
+                updated.append(f"{from_env}: {old_val} → {to_env}")
+            # else: same value, skip
+        else:
+            mappings[from_env] = to_env
+            added.append(f"{from_env} → {to_env}")
+    
+    if added or updated:
+        save_env_mappings(mappings)
+        
+        if added:
+            print_success(f"✓ Added {len(added)} environment mapping(s):")
+            for m in added:
+                print_info(f"  • {m}")
+        
+        if updated:
+            print_success(f"✓ Updated {len(updated)} environment mapping(s):")
+            for m in updated:
+                print_info(f"  • {m}")
+    else:
+        print_warning("No changes made (mappings already exist with same values)")
+    
+    print_info(f"\nCurrent env_mappings:")
+    for from_env, to_env in sorted(mappings.items()):
+        print_info(f"  {from_env} → {to_env}")
     
     return 0
 

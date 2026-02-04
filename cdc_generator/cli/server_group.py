@@ -48,10 +48,12 @@ from cdc_generator.helpers.helpers_logging import print_header, print_info, prin
 from cdc_generator.validators.manage_server_group import (
     load_schema_exclude_patterns,
     load_database_exclude_patterns,
+    load_env_mappings,
     list_server_groups,
     handle_add_group,
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
+    handle_add_env_mapping,
     handle_update,
     handle_info,
 )
@@ -109,6 +111,12 @@ def main() -> int:
     parser.add_argument("--add-to-schema-excludes", help="Add a pattern to the schema exclude list (persisted in server_group.yaml).")
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
+    
+    # Environment mappings management
+    parser.add_argument("--add-env-mapping", 
+                       help="Add environment mapping(s) in format 'from:to,from:to' (e.g., 'staging:stage,production:prod').")
+    parser.add_argument("--list-env-mappings", action="store_true",
+                       help="List current environment mappings.")
     
     args = parser.parse_args()
 
@@ -197,6 +205,25 @@ def main() -> int:
     # Handle add to schema excludes
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
+    
+    # Handle list env mappings
+    if args.list_env_mappings:
+        mappings = load_env_mappings()
+        print_header("Environment Mappings")
+        if mappings:
+            print_info("Database environment suffixes will be mapped as follows:")
+            for from_env, to_env in sorted(mappings.items()):
+                print_info(f"  • {from_env} → {to_env}")
+            print_info("\nThese mappings are applied when extracting environment from database names.")
+        else:
+            print_warning("No environment mappings defined.")
+            print_info("Add mappings to normalize environment suffixes:")
+            print_info("  cdc manage-server-group --add-env-mapping 'staging:stage,production:prod'")
+        return 0
+    
+    # Handle add env mapping
+    if args.add_env_mapping:
+        return handle_add_env_mapping(args)
     
     # Handle info
     if args.info:

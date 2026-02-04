@@ -6,7 +6,7 @@ except ImportError:
     yaml = None  # type: ignore[assignment]
 
 from pathlib import Path
-from typing import List, Optional, Dict, Any, cast
+from typing import List, Optional, Dict, Any, cast, Callable
 import os
 
 from .types import ServerGroupConfig, ServerGroupFile
@@ -28,6 +28,78 @@ def get_implementation_root() -> Path:
 
 PROJECT_ROOT = get_implementation_root()
 SERVER_GROUPS_FILE = PROJECT_ROOT / "server_group.yaml"
+
+
+# ============================================================================
+# Comment-Preserving YAML Save
+# ============================================================================
+# IMPORTANT: All modifications to server_group.yaml MUST use this function
+# to preserve header comments and metadata.
+
+def save_server_group_preserving_comments(
+    updater: Callable[[Dict[str, Any]], None],
+    error_context: str = "update server group"
+) -> None:
+    """Save server_group.yaml while preserving all header comments.
+    
+    This is the ONLY function that should write to server_group.yaml.
+    All other save functions must use this to preserve metadata comments.
+    
+    Args:
+        updater: Function that receives the parsed config dict and modifies it in-place.
+                 The updater should find the server group and update the desired field.
+        error_context: Description of operation for error messages.
+    
+    Raises:
+        RuntimeError: If save fails or no server group found.
+    
+    Example:
+        def update_env_mappings(config: Dict[str, Any]) -> None:
+            for group_data in config.values():
+                if isinstance(group_data, dict) and 'pattern' in group_data:
+                    group_data['env_mappings'] = {'staging': 'stage'}
+        
+        save_server_group_preserving_comments(update_env_mappings, "save env mappings")
+    """
+    try:
+        # Read entire file to preserve comments
+        with open(SERVER_GROUPS_FILE, 'r') as f:
+            file_content = f.read()
+        
+        # Split into comment header and YAML content
+        lines = file_content.split('\n')
+        
+        # Find where the YAML data starts (first non-comment, non-blank line)
+        yaml_start_idx = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#'):
+                yaml_start_idx = i
+                break
+        
+        # Preserve all lines before YAML starts (header comments)
+        header_lines = lines[:yaml_start_idx]
+        
+        # Parse YAML content
+        yaml_content = '\n'.join(lines[yaml_start_idx:])
+        config: Dict[str, Any] = yaml.safe_load(yaml_content) or {}  # type: ignore[misc]
+        
+        # Apply the update
+        updater(config)
+        
+        # Regenerate YAML content
+        yaml_output = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        
+        # Combine header with updated YAML
+        final_content = '\n'.join(header_lines) + '\n' + yaml_output
+        
+        with open(SERVER_GROUPS_FILE, 'w') as f:
+            f.write(final_content)
+            
+    except FileNotFoundError:
+        raise RuntimeError(f"Failed to {error_context}: server_group.yaml not found")
+    except Exception as e:
+        raise RuntimeError(f"Failed to {error_context}: {e}")
 
 
 def load_server_groups() -> ServerGroupFile:
@@ -114,46 +186,66 @@ def load_schema_exclude_patterns() -> List[str]:
 def save_database_exclude_patterns(patterns: List[str]) -> None:
     """Save database exclude patterns to server_group.yaml.
     
-    Directly updates the YAML file, preserving the flat format structure.
+    Uses centralized save function to preserve header comments.
     """
-    try:
-        with open(SERVER_GROUPS_FILE) as f:
-            config: Dict[str, Any] = yaml.safe_load(f) or {}  # type: ignore[misc]
-        
-        # Find and update the server group
-        for _group_name, group_data in config.items():
+    def updater(config: Dict[str, Any]) -> None:
+        for group_data in config.values():
             if isinstance(group_data, dict) and 'pattern' in group_data:
                 group_data['database_exclude_patterns'] = patterns
-                
-                # Write back the config
-                with open(SERVER_GROUPS_FILE, 'w') as f:
-                    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)  # type: ignore[misc]
                 return
-        
         raise RuntimeError("No server group found to update")
-    except Exception as e:
-        raise RuntimeError(f"Failed to save database exclude patterns: {e}")
+    
+    save_server_group_preserving_comments(updater, "save database exclude patterns")
 
 
 def save_schema_exclude_patterns(patterns: List[str]) -> None:
     """Save schema exclude patterns to server_group.yaml.
     
-    Directly updates the YAML file, preserving the flat format structure.
+    Uses centralized save function to preserve header comments.
+    """
+    def updater(config: Dict[str, Any]) -> None:
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                group_data['schema_exclude_patterns'] = patterns
+                return
+        raise RuntimeError("No server group found to update")
+    
+    save_server_group_preserving_comments(updater, "save schema exclude patterns")
+
+
+def load_env_mappings() -> Dict[str, str]:
+    """Load environment mappings from server_group.yaml.
+    
+    Format: server_group_name as root key with env_mappings field.
+    env_mappings is a dict mapping source env suffix to target env name.
+    Example: {"staging": "stage", "production": "prod"}
     """
     try:
         with open(SERVER_GROUPS_FILE) as f:
-            config: Dict[str, Any] = yaml.safe_load(f) or {}  # type: ignore[misc]
+            config = yaml.safe_load(f)  # type: ignore[misc]
         
-        # Find and update the server group
-        for _group_name, group_data in config.items():
+        # Flat format: server_group_name as root key with 'pattern' field
+        for group_data in config.values():
             if isinstance(group_data, dict) and 'pattern' in group_data:
-                group_data['schema_exclude_patterns'] = patterns
-                
-                # Write back the config
-                with open(SERVER_GROUPS_FILE, 'w') as f:
-                    yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)  # type: ignore[misc]
-                return
+                mappings = cast(Optional[Dict[str, str]], group_data.get('env_mappings'))  # type: ignore[misc]
+                if mappings:
+                    return mappings
         
+        return {}
+    except Exception:
+        return {}
+
+
+def save_env_mappings(mappings: Dict[str, str]) -> None:
+    """Save environment mappings to server_group.yaml.
+    
+    Uses centralized save function to preserve header comments.
+    """
+    def updater(config: Dict[str, Any]) -> None:
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                group_data['env_mappings'] = mappings
+                return
         raise RuntimeError("No server group found to update")
-    except Exception as e:
-        raise RuntimeError(f"Failed to save schema exclude patterns: {e}")
+    
+    save_server_group_preserving_comments(updater, "save env mappings")

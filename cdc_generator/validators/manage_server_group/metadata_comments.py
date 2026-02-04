@@ -117,32 +117,45 @@ def validate_output_has_metadata(output_lines: List[str]) -> None:
     Required elements:
         - File header with "AUTO-GENERATED FILE"
         - At least one separator line
-        - "server_group:" key
+        - A top-level server group key (e.g., "adopus:", "asma:")
     
     Usage:
         Call this immediately before writing output_lines to server_group.yaml
         in ANY function that modifies the file.
     """
     if not output_lines:
-        raise ValueError("Cannot write empty server_group.yaml file")
+        raise ValueError(
+            "Cannot write empty server_group.yaml file.\n"
+            "  💡 Ensure you have at least one server group configured."
+        )
     
     # Check for file header
     has_header = any("AUTO-GENERATED FILE" in line for line in output_lines[:20])
     if not has_header:
         raise ValueError(
-            "Missing file header in server_group.yaml output. "
-            "MUST call ensure_file_header_exists() before writing."
+            "Missing file header in server_group.yaml output.\n"
+            "  💡 Call ensure_file_header_exists() before building output."
         )
     
-    # Check for server_group: key
-    has_server_group_key = any(line.strip() == "server_group:" for line in output_lines)
+    # Check for a top-level server group key (line ending with ":" at column 0, not a comment)
+    has_server_group_key = any(
+        line.endswith(':') and not line.startswith('#') and not line.startswith(' ')
+        for line in output_lines
+    )
     if not has_server_group_key:
-        raise ValueError("Missing 'server_group:' key in output")
+        raise ValueError(
+            "Missing server group key in server_group.yaml output.\n"
+            "  💡 Expected a top-level key like 'adopus:' or 'asma:' at the start of a line.\n"
+            "  💡 Check that the server group name is valid and the YAML structure is correct."
+        )
     
     # Check for at least one separator
     has_separator = any("========" in line for line in output_lines)
     if not has_separator:
-        raise ValueError("Missing separator lines in output")
+        raise ValueError(
+            "Missing separator lines in server_group.yaml output.\n"
+            "  💡 Each server group section should have a separator comment above it."
+        )
 
 
 def add_metadata_stats_comments(
@@ -150,7 +163,8 @@ def add_metadata_stats_comments(
     total_tables: int,
     avg_tables: int,
     env_stats_line: str = "",
-    db_list_lines: Optional[List[str]] = None
+    db_list_lines: Optional[List[str]] = None,
+    service_names: Optional[List[str]] = None
 ) -> List[str]:
     """Generate metadata statistics comments for server group.
     
@@ -160,6 +174,7 @@ def add_metadata_stats_comments(
         avg_tables: Average tables per database
         env_stats_line: Optional per-environment statistics
         db_list_lines: Optional database list for display
+        service_names: Optional list of service names
         
     Returns:
         List of formatted comment lines with statistics
@@ -169,11 +184,16 @@ def add_metadata_stats_comments(
     """
     stats_comments = [
         get_update_timestamp_comment(),
-        f"# ? Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db"
+        f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db"
     ]
     
+    # Add services line if provided
+    if service_names:
+        service_list = ", ".join(sorted(service_names))
+        stats_comments.append(f"# ? Services ({len(service_names)}): {service_list}")
+    
     if env_stats_line:
-        stats_comments.append(f"# ? Per Environment: {env_stats_line}")
+        stats_comments.append(f"# Per Environment: {env_stats_line}")
     
     if db_list_lines:
         stats_comments.append("# Databases:")
