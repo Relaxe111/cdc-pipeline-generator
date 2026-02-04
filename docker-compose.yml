@@ -5,6 +5,8 @@ services:
     container_name: cdc-generator-dev
     volumes:
       - .:/workspace
+      - ../adopus-cdc-pipeline:/implementations/adopus
+      - ../asma-cdc-pipeline:/implementations/asma
       - ~/.ssh:/root/.ssh:ro
       - ~/.gitconfig:/root/.gitconfig:ro
     environment:
