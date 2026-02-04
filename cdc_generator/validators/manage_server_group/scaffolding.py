@@ -402,6 +402,11 @@ def _create_vscode_settings() -> Dict[str, Any]:
             "**/*.pyc": True,
             ".lsn_cache": True
         },
+        "files.readonlyInclude": {
+            "server_group.yaml": True,
+            "services/**/*.yaml": True,
+            "generated/**/*.yaml": True
+        },
         "search.exclude": {
             "**/generated": True,
             "**/.venv": True
