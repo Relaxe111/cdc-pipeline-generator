@@ -444,9 +444,16 @@ def handle_set_kafka_topology(args: Namespace) -> int:
     for srv_name, srv_config in servers.items():
         srv = cast(Dict[str, Any], srv_config)
         if new_topology == 'per-server':
-            postfix = f"_{srv_name.upper()}"
-            srv['kafka_bootstrap_servers'] = f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
+            # For per-server topology:
+            # - 'default' server uses ${KAFKA_BOOTSTRAP_SERVERS} (no postfix)
+            # - Other servers use ${KAFKA_BOOTSTRAP_SERVERS_<NAME>}
+            if srv_name == 'default':
+                srv['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
+            else:
+                postfix = f"_{srv_name.upper()}"
+                srv['kafka_bootstrap_servers'] = f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
         else:
+            # For shared topology: all servers use the same Kafka cluster
             srv['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
     
     # Save the updated configuration

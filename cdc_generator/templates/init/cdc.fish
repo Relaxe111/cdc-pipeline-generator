@@ -177,7 +177,10 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_f
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-server" -l add-server -d "Add new server (e.g., 'analytics', 'reporting')" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-servers" -l list-servers -d "List all configured servers"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --remove-server" -l remove-server -d "Remove a server configuration" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --set-kafka-topology" -l set-kafka-topology -d "Change Kafka topology" -r -f -a "shared per-server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --set-kafka-topology" -l set-kafka-topology -d "Change Kafka topology (shared|per-server)" -r
+# Kafka topology values - only show when completing value for --set-kafka-topology
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "shared" -d "Same Kafka cluster for all servers"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "per-server" -d "Separate Kafka cluster per server"
 
 # Creation flags (only show when --create is present in the command line)
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
