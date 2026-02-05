@@ -61,19 +61,32 @@ _INTERESTING_ENV_KEYWORDS = (
 _ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
 
 
-def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig) -> ExtractedIdentifiers:
+def extract_identifiers(
+    db_name: str, 
+    server_group_config: ServerGroupConfig, 
+    server_name: str = "default"
+) -> ExtractedIdentifiers:
     """
     Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
     
     Args:
         db_name: Database name to parse
         server_group_config: Server group configuration with extraction patterns
+        server_name: Name of the server being scanned (default: "default")
         
     Returns:
         ExtractedIdentifiers with customer, service, env, suffix
     """
     pattern_type = server_group_config.get('pattern')
-    extraction_pattern = server_group_config.get('extraction_pattern', '')
+    
+    # Try to get per-server extraction pattern first, fallback to global (deprecated)
+    servers = server_group_config.get('servers', {})
+    server_config = servers.get(server_name, {})
+    extraction_pattern = server_config.get('extraction_pattern', '')
+    
+    # Fallback to global extraction_pattern (deprecated)
+    if not extraction_pattern:
+        extraction_pattern = server_group_config.get('extraction_pattern', '')
     
     # If extraction pattern is provided and not empty, use it
     if extraction_pattern:
@@ -455,8 +468,8 @@ def list_mssql_databases(
             """)
             table_count = cursor.fetchone()[0]
             
-            # Extract identifiers using configured pattern
-            identifiers = extract_identifiers(db_name, server_group_config)
+            # Extract identifiers using configured pattern (per-server or global)
+            identifiers = extract_identifiers(db_name, server_group_config, server_name)
             
             databases.append({
                 'name': db_name,
@@ -582,8 +595,8 @@ def list_postgres_databases(
             """)
             table_count = db_cursor.fetchone()[0]
             
-            # Extract identifiers using configured pattern
-            identifiers = extract_identifiers(db_name, server_group_config)
+            # Extract identifiers using configured pattern (per-server or global)
+            identifiers = extract_identifiers(db_name, server_group_config, server_name)
             
             databases.append({
                 'name': db_name,

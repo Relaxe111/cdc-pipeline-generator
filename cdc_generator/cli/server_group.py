@@ -62,6 +62,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_list_servers,
     handle_remove_server,
     handle_set_kafka_topology,
+    handle_set_extraction_pattern,
 )
 
 # Import flag validator
@@ -121,6 +122,10 @@ def main() -> int:
     parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
                        help="Change the Kafka topology. 'shared' = same Kafka for all servers, "
                             "'per-server' = isolated Kafka per server.")
+    parser.add_argument("--set-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
+                       help="Set extraction pattern for a specific server. "
+                            "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). "
+                            "Example: --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
     
     args = parser.parse_args()
 
@@ -205,6 +210,9 @@ def main() -> int:
     
     if args.set_kafka_topology:
         return handle_set_kafka_topology(args)
+    
+    if args.set_extraction_pattern:
+        return handle_set_extraction_pattern(args)
     
     # Handle info
     if args.info:

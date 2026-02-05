@@ -285,19 +285,25 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         # Restore all preserved comments (including header, exclude patterns, etc.)
         # But update the timestamp and metadata
         timestamp_updated = False
+        in_metadata_section = False  # Track if we're in a metadata section to skip
+        
         for i, comment in enumerate(preserved_comments):
-            # Update timestamp
+            # Update timestamp - this marks the start of metadata section
             if 'Updated at:' in comment:
                 output_lines.append(f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
                 timestamp_updated = True
-                # Add global stats right after timestamp
-                output_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
-                output_lines.append(f"# ? Services ({num_services}): {service_list}")
-                if env_stats_line:
-                    output_lines.append(f"# Per Environment: {env_stats_line}")
+                in_metadata_section = True
                 
-                # Add per-server breakdown
-                per_server_lines = generate_per_server_stats(databases)
+                # Add per-server breakdown with global stats embedded
+                per_server_lines = generate_per_server_stats(
+                    databases,
+                    total_dbs,
+                    total_tables,
+                    avg_tables,
+                    service_list,
+                    num_services,
+                    env_stats_line
+                )
                 output_lines.extend(per_server_lines)
                 
                 # Add database list
@@ -305,31 +311,40 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                     output_lines.append(f"# Databases:")
                     for line in db_list_lines:
                         output_lines.append(f"#{line}")
-            # Skip old stats lines (they'll be regenerated)
-            # Note: 'Services:' without '?' prefix is legacy format to skip
-            elif any(keyword in comment for keyword in ['Total:', 'Total Databases:', 'Per Environment:', 'Databases:', 'Avg Tables']) or \
-                 ('Services:' in comment and '? Services' not in comment):
                 continue
-            # Skip old per-server sections (will be regenerated)
-            elif 'Server:' in comment and '========' not in comment:
+            
+            # Skip all metadata-related lines (will be regenerated)
+            # This includes: Total, Services, Per Environment, Databases, Server sections, service lists
+            if any(keyword in comment for keyword in [
+                'Total:', 'Total Databases:', 
+                'Per Environment:', 
+                'Databases:', 
+                'Avg Tables',
+                '? Services',
+                'Environments:',
+                'Server:',
+                '? Service:',
+                '# *  ',
+                '# !  ',
+                '# TODO:',
+            ]) or (comment.startswith('#  ') and '=' not in comment) or comment.strip() == '#':
+                in_metadata_section = True
                 continue
-            # Skip database list continuation lines (old format without service names)
-            # This includes lines starting with "#  " or "# *  " or "# !  " or "# ?  " or "# TODO:" or "# Service:" or "# ? Service:"
-            # Also skip standalone "#" lines (blank comment lines from service separators)
-            # IMPORTANT: Do NOT skip "# ? Services" line - that's the services count header!
-            elif ((comment.startswith('#  ') or comment.startswith('# *  ') or 
-                   comment.startswith('# !  ') or 
-                   (comment.startswith('# ?  ') and 'Services' not in comment) or  # Preserve "# ? Services (N):" line
-                   comment.startswith('# TODO:') or
-                   comment.startswith('# Service:') or comment.startswith('# ? Service:') or comment.strip() == '#') and 
-                  not any(keyword in comment for keyword in ['='])):
+            
+            # Skip separator lines that are part of server sections
+            if '============' in comment and in_metadata_section:
                 continue
+            
+            # If we hit a non-metadata line, we're out of the metadata section
+            if comment.strip() and not comment.strip().startswith('#'):
+                in_metadata_section = False
+            
             # Skip excessive blank lines before server_group: (keep only essential structure)
-            elif comment.strip() == '' and i > 0 and output_lines and output_lines[-1].strip() == '':
+            if comment.strip() == '' and i > 0 and output_lines and output_lines[-1].strip() == '':
                 continue
-                continue
-            else:
-                output_lines.append(comment)
+            
+            # Keep this line (it's not metadata)
+            output_lines.append(comment)
         
         # If no timestamp was in original comments, add it with stats
         if not timestamp_updated and preserved_comments:
@@ -337,15 +352,18 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             for i, line in enumerate(output_lines):
                 if '============' in line and i > 0:
                     output_lines.insert(i, f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
-                    output_lines.insert(i + 1, f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
-                    output_lines.insert(i + 2, f"# ? Services ({num_services}): {service_list}")
-                    idx = i + 3
-                    if env_stats_line:
-                        output_lines.insert(idx, f"# Per Environment: {env_stats_line}")
-                        idx += 1
+                    idx = i + 1
                     
-                    # Add per-server breakdown
-                    per_server_lines = generate_per_server_stats(databases)
+                    # Add per-server breakdown with global stats embedded
+                    per_server_lines = generate_per_server_stats(
+                        databases,
+                        total_dbs,
+                        total_tables,
+                        avg_tables,
+                        service_list,
+                        num_services,
+                        env_stats_line
+                    )
                     for server_line in per_server_lines:
                         output_lines.insert(idx, server_line)
                         idx += 1

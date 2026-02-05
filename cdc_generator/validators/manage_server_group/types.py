@@ -95,12 +95,16 @@ class ServerConfig(TypedDict, total=False):
     The kafka_bootstrap_servers value depends on kafka_topology:
     - shared: All servers use same value (e.g., ${KAFKA_BOOTSTRAP_SERVERS})
     - per-server: Each server has postfixed value (e.g., ${KAFKA_BOOTSTRAP_SERVERS_EUROPE})
+    
+    extraction_pattern: Regex to extract identifiers from database names.
+    Different servers may have different naming conventions.
     """
     host: str
     port: Union[str, int]
     user: str
     password: str
     kafka_bootstrap_servers: str
+    extraction_pattern: str
 
 
 class DatabaseEntry(TypedDict, total=False):
@@ -175,7 +179,7 @@ class ServerGroupConfig(TypedDict, total=False):
     
     # Filtering and extraction
     include_pattern: str                    # Regex to filter databases
-    extraction_pattern: str                 # Regex to extract identifiers from db names
+    extraction_pattern: str                 # DEPRECATED: Global pattern, use servers.{name}.extraction_pattern instead
     database_ref: str                       # Reference database for schema discovery (db-per-tenant)
     database_exclude_patterns: List[str]
     schema_exclude_patterns: List[str]

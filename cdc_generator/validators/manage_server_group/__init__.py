@@ -62,6 +62,7 @@ from .cli_handlers import (
     handle_list_servers,
     handle_remove_server,
     handle_set_kafka_topology,
+    handle_set_extraction_pattern,
     validate_multi_server_config,
 )
 
@@ -114,5 +115,6 @@ __all__ = [
     'handle_list_servers',
     'handle_remove_server',
     'handle_set_kafka_topology',
+    'handle_set_extraction_pattern',
     'validate_multi_server_config',
 ]

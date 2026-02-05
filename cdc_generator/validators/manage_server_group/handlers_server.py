@@ -491,3 +491,95 @@ def handle_set_kafka_topology(args: Namespace) -> int:
     except Exception as e:
         print_error(f"Failed to save configuration: {e}")
         return 1
+
+
+def handle_set_extraction_pattern(args: Namespace) -> int:
+    """Handle setting extraction pattern for a specific server.
+    
+    Args:
+        args: Parsed arguments with:
+            - set_extraction_pattern: [server_name, pattern]
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
+        
+    Example:
+        cdc manage-server-group --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'
+    """
+    server_name, pattern = args.set_extraction_pattern
+    server_name = server_name.lower()
+    
+    # Load existing configuration
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("server_group.yaml not found. Run 'cdc scaffold' first.")
+        return 1
+    
+    # Get single server group
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+    
+    server_group_name = server_group.get('name', 'unknown')
+    servers = server_group.get('servers', {})
+    
+    # Validate server exists
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found in server group.")
+        print_info(f"Available servers: {', '.join(servers.keys())}")
+        return 1
+    
+    # Validate regex pattern
+    import re
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        print_error(f"Invalid regex pattern: {e}")
+        return 1
+    
+    # Update pattern
+    print_header(f"Setting Extraction Pattern for Server: {server_name}")
+    
+    server_config = cast(Dict[str, Any], servers[server_name])
+    old_pattern = server_config.get('extraction_pattern', '')
+    
+    if old_pattern == pattern:
+        print_warning(f"Server '{server_name}' already has this extraction pattern.")
+        return 0
+    
+    server_config['extraction_pattern'] = pattern
+    
+    # Save configuration
+    try:
+        output_lines: List[str] = []
+        header_comments = get_file_header_comments()
+        output_lines.extend(header_comments)
+        output_lines.append("")
+        
+        pattern_type = server_group.get('pattern', 'db-per-tenant')
+        pattern_label = str(pattern_type)
+        output_lines.append("# ============================================================================")
+        output_lines.append(f"# {str(server_group_name).title()} Server Group ({pattern_label})")
+        output_lines.append("# ============================================================================")
+        output_lines.append(f"{server_group_name}:")
+        
+        sg_yaml = yaml.dump(server_group, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        sg_lines = sg_yaml.strip().split('\n')
+        for line in sg_lines:
+            output_lines.append(f"  {line}")
+        
+        with open(SERVER_GROUPS_FILE, 'w') as f:
+            f.write('\n'.join(output_lines))
+            f.write('\n')
+        
+        print_success(f"✓ Set extraction pattern for server '{server_name}'")
+        if old_pattern:
+            print_info(f"  Old: {old_pattern}")
+        print_info(f"  New: {pattern}")
+        
+        return 0
+    except Exception as e:
+        print_error(f"Failed to save configuration: {e}")
+        return 1

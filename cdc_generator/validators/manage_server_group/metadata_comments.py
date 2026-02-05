@@ -247,22 +247,36 @@ def add_metadata_stats_comments(
     return stats_comments
 
 
-def generate_per_server_stats(databases: List[Dict[str, object]]) -> List[str]:
+def generate_per_server_stats(
+    databases: List[Dict[str, object]],
+    total_dbs: int,
+    total_tables: int,
+    avg_tables: int,
+    service_list: str,
+    num_services: int,
+    env_stats_line: str
+) -> List[str]:
     """Generate per-server statistics breakdown for header comments.
     
     Args:
         databases: List of database info dicts with 'server', 'environment', 'table_count' fields
+        total_dbs: Total databases across all servers
+        total_tables: Total tables across all servers
+        avg_tables: Average tables per database
+        service_list: Comma-separated list of service names
+        num_services: Number of services
+        env_stats_line: Per-environment statistics line
         
     Returns:
-        List of formatted comment lines showing stats grouped by server
+        List of formatted comment lines showing stats grouped by server with global stats
         
     Example:
         >>> dbs = [
         ...     {'server': 'default', 'environment': 'auth', 'table_count': 10},
         ...     {'server': 'prod', 'environment': 'adcuris', 'table_count': 50}
         ... ]
-        >>> lines = generate_per_server_stats(dbs)
-        >>> '# Server: default' in lines[0]
+        >>> lines = generate_per_server_stats(dbs, 2, 60, 30, 'service1', 1, 'dev: 1 dbs')
+        >>> '# Server: default' in lines[1]
         True
     """
     from collections import defaultdict
@@ -301,6 +315,12 @@ def generate_per_server_stats(databases: List[Dict[str, object]]) -> List[str]:
         if envs:
             env_list = ", ".join(envs)
             comment_lines.append(f"# Environments: {env_list}")
+        
+        # Add global stats under each server section
+        comment_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
+        comment_lines.append(f"# ? Services ({num_services}): {service_list}")
+        if env_stats_line:
+            comment_lines.append(f"# Per Environment: {env_stats_line}")
         
         comment_lines.append("#")
     
