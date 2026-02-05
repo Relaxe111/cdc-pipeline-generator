@@ -10,11 +10,15 @@ Usage:
     # Inspect the database and update server_group.yaml
     cdc manage-server-group --update
 
+    # Inspect a specific server
+    cdc manage-server-group --update default
+    cdc manage-server-group --update prod
+
+    # Inspect all servers
+    cdc manage-server-group --update --all
+
     # Show information about the configured server group
     cdc manage-server-group --info
-
-    # List all server groups (there should only be one)
-    cdc manage-server-group --list
 
     # Manage database/schema exclude patterns
     cdc manage-server-group --list-ignore-patterns
@@ -24,7 +28,6 @@ Usage:
 
 Note:
 To create a new server group, use 'cdc scaffold <name>' command.
-The '--create' flag is deprecated but kept for backwards compatibility.
 
 Example:
     cdc scaffold myproject --pattern db-shared --source-type postgres \\
@@ -34,7 +37,7 @@ Example:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, cast
+from typing import cast
 
 # When executed directly (python cdc_generator/cli/server_group.py), ensure the
 # project root is on sys.path so package imports succeed.
@@ -43,14 +46,13 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(project_root))
 
 from cdc_generator.helpers.helpers_logging import print_header, print_info, print_error, print_warning
+from cdc_generator.helpers.yaml_loader import ConfigDict
 
 # Import from modular package
 from cdc_generator.validators.manage_server_group import (
     load_schema_exclude_patterns,
     load_database_exclude_patterns,
     load_env_mappings,
-    list_server_groups,
-    handle_add_group,
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_add_env_mapping,
@@ -62,16 +64,8 @@ from cdc_generator.validators.manage_server_group import (
     handle_set_kafka_topology,
 )
 
-
-def _default_connection_placeholders(source_type: str) -> Dict[str, str]:
-    """Return default environment variable placeholders for the source database."""
-    prefix = 'POSTGRES_SOURCE' if source_type == 'postgres' else 'MSSQL_SOURCE'
-    return {
-        'host': f"${{{prefix}_HOST}}",
-        'port': f"${{{prefix}_PORT}}",
-        'user': f"${{{prefix}_USER}}",
-        'password': f"${{{prefix}_PASSWORD}}",
-    }
+# Import flag validator
+from cdc_generator.validators.flag_validator import validate_manage_server_group_flags
 
 
 def main() -> int:
@@ -84,30 +78,24 @@ def main() -> int:
     )
     
     # Primary actions
-    parser.add_argument("--create", metavar="NAME", help="Scaffold a new server_group.yaml with the given name.")
-    parser.add_argument("--update", action="store_true", help="Update the server group by inspecting the source database.")
-    parser.add_argument("--list", action="store_true", help="List the configured server group.")
+    parser.add_argument(
+        "--update",
+        nargs="?",
+        const="default",
+        metavar="SERVER",
+        help=(
+            "Update the server group by inspecting the source database. "
+            "Optionally provide a server name (default: 'default')."
+        ),
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Update all servers (use with --update).",
+    )
     parser.add_argument("--info", action="store_true", help="Show detailed information for the server group.")
     parser.add_argument("--view-services", action="store_true", help="View environment-grouped services (db-shared mode).")
 
-    # Arguments for --create
-    parser.add_argument("--pattern", choices=["db-per-tenant", "db-shared"],
-                       help="Server group pattern (required for --create).")
-    parser.add_argument("--source-type", choices=["postgres", "mssql"],
-                       help="Source database type (required for --create).")
-    parser.add_argument("--host", help="Database host (default: ${POSTGRES_SOURCE_HOST}/${MSSQL_SOURCE_HOST}).")
-    parser.add_argument("--port", help="Database port (default: ${POSTGRES_SOURCE_PORT}/${MSSQL_SOURCE_PORT}).")
-    parser.add_argument("--user", help="Database user (default: ${POSTGRES_SOURCE_USER}/${MSSQL_SOURCE_USER}).")
-    parser.add_argument("--password", help="Database password (default: ${POSTGRES_SOURCE_PASSWORD}/${MSSQL_SOURCE_PASSWORD}).")
-    
-    # Pattern extraction configuration
-    parser.add_argument("--extraction-pattern", 
-                       help="Regex pattern with named groups to extract identifiers from database names (required for --create). "
-                            "For db-per-tenant: use 'customer' group. For db-shared: use 'service', 'env', 'suffix' groups. "
-                            "Leave empty to use simple fallback matching.")
-    parser.add_argument("--environment-aware", action="store_true",
-                       help="Enable environment-aware grouping (required for db-shared with --create).")
-    
     # Exclude patterns management
     parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in server_group.yaml).")
     parser.add_argument("--list-ignore-patterns", action="store_true", 
@@ -136,55 +124,19 @@ def main() -> int:
     
     args = parser.parse_args()
 
-    # Handle --create (DEPRECATED - kept for backwards compatibility)
-    if args.create:
-        print_warning("⚠️  The '--create' flag is deprecated.")
-        print_info("📌 Please use 'cdc scaffold' instead:")
-        print_info(f"   cdc scaffold {args.create} \\")
-        if args.pattern:
-            print_info(f"       --pattern {args.pattern} \\")
-        if args.source_type:
-            print_info(f"       --source-type {args.source_type} \\")
-        if hasattr(args, 'extraction_pattern') and args.extraction_pattern is not None:
-            print_info(f"       --extraction-pattern \"{args.extraction_pattern}\" \\")
-        if args.pattern == "db-shared" and args.environment_aware:
-            print_info(f"       --environment-aware")
-        print_info("")
-        
-        missing: List[str] = []
-        if not args.pattern:
-            missing.append("--pattern")
-        if not args.source_type:
-            missing.append("--source-type")
-        
-        # extraction-pattern is required for --create but can be empty string for fallback
-        if not hasattr(args, 'extraction_pattern') or args.extraction_pattern is None:
-            missing.append("--extraction-pattern")
-        
-        # db-shared specific validation
-        if args.pattern == "db-shared":
-            if not args.environment_aware:
-                missing.append("--environment-aware")
-        
-        if missing:
-            print_error("Missing required options for --create:")
-            for flag in missing:
-                print_info(f"  • {flag}")
-            print_info("\nNotes:")
-            print_info("  --extraction-pattern: Can be empty string '' to use simple fallback matching")
-            if args.pattern == "db-shared":
-                print_info("  --environment-aware: Required for db-shared pattern")
-            return 1
-        
-        placeholders = _default_connection_placeholders(args.source_type)
-        args.host = args.host or placeholders['host']
-        args.port = args.port or placeholders['port']
-        args.user = args.user or placeholders['user']
-        args.password = args.password or placeholders['password']
-        # For backwards compatibility with the handler, we map the new names to the old ones.
-        args.add_group = args.create
-        args.mode = args.pattern
-        return handle_add_group(args)
+    # Validate flag combinations (Python-based validation)
+    validation_result = validate_manage_server_group_flags(args)
+    
+    if validation_result.level == 'error':
+        print_error(validation_result.message or "Invalid flag combination")
+        if validation_result.suggestion:
+            print(validation_result.suggestion)
+        return 1
+    
+    if validation_result.level == 'warning':
+        print(validation_result.message or "")
+        print()  # Blank line before proceeding
+
     
     # Handle list schema exclude patterns
     if args.list_schema_excludes:
@@ -275,8 +227,14 @@ def main() -> int:
             if sources:
                 print_header("Environment-Grouped Sources")
                 for source_name, source_data in sorted(sources.items()):
-                    src = cast(Dict[str, Any], source_data)
-                    schemas = src.get('schemas', [])
+                    # Type is already dict from YAML structure
+                    src = cast(ConfigDict, source_data)
+                    schemas_raw = src.get('schemas', [])
+                    # Runtime validation: schemas must be a list of strings
+                    if isinstance(schemas_raw, list):
+                        schemas = [str(s) for s in schemas_raw]
+                    else:
+                        schemas = []
                     print_info(f"\n📦 Source: {source_name}")
                     print_info(f"   Schemas (shared): {', '.join(schemas)}")
                     
@@ -286,10 +244,14 @@ def main() -> int:
                             continue  # Already displayed
                         if isinstance(value, dict) and 'database' in value:
                             env = key
-                            env_data = cast(Dict[str, Any], value)
-                            server = str(env_data.get('server', 'default'))
-                            database = str(env_data.get('database', ''))
-                            table_count = int(env_data.get('table_count', 0))
+                            env_data = value  # Type is already Dict[str, ConfigValue]
+                            # Extract with defaults and explicit type conversion
+                            server_raw = env_data.get('server', 'default')
+                            database_raw = env_data.get('database', '')
+                            table_count_raw = env_data.get('table_count', 0)
+                            server = str(server_raw)
+                            database = str(database_raw)
+                            table_count = int(table_count_raw) if isinstance(table_count_raw, (int, str)) else 0
                             print_info(f"   🌍 {env}:")
                             print_info(f"       Server: {server}")
                             print_info(f"       Database: {database}")
@@ -302,17 +264,18 @@ def main() -> int:
             print_error(f"Failed to view services: {e}")
             return 1
     
-    # Handle list
-    if args.list:
-        list_server_groups()
-        return 0
     
     # Handle update (the primary action)
-    if args.update:
+    if args.all and args.update is None:
+        print_error("'--all' requires '--update'.")
+        print_info("Example: cdc manage-server-group --update --all")
+        return 1
+
+    if args.update is not None:
         return handle_update(args)
     
     # No action specified
-    print_error("No action specified. Use --create, --update, --list, or --info.")
+    print_error("No action specified. Use --update or --info.")
     parser.print_help()
     return 1
 

@@ -1,5 +1,17 @@
 # Coding Guidelines (AI Quick Reference)
 
+> **⚡ Quick lookup for AI agents - Optimized for fast parsing and decision-making**
+
+## 🚨 Type Safety Policy (STRICT)
+
+**NEVER use `# type: ignore` (except `import-untyped` for external packages)**
+
+Instead:
+1. **Cast** based on YAML inspection: `cast(Optional[List[str]], data.get('key'))`
+2. **Check** before use: `if x is not None and isinstance(x, list):`
+3. **Document** expected structure in docstring
+4. **Validate** with clear error messages
+
 > **For detailed documentation see [_docs/development/CODING_STANDARDS.md](../_docs/development/CODING_STANDARDS.md)**
 
 ## 🎯 Critical Rules
@@ -8,9 +20,9 @@
 |------|-------|-----|
 | **File Size** | Max 600 lines (ideal 200-400) | AI reads entire file in one operation |
 | **Function Size** | Max 100 lines (ideal 10-50) | Single responsibility, easy reasoning |
-| **Type Hints** | Required all new code | AI understands data flow instantly |
-| **Avoid `Any`** | Use TypedDict/explicit types | Self-documenting, catches bugs early |
-| **Runtime Validation** | Validate external data | YAML/JSON/API data needs structure checks |
+| **Type Hints** | Required all parameters/returns | AI understands data flow instantly |
+| **NO `type: ignore`** | Write explicit types instead | Forces runtime checks, prevents silent fails |
+| **Runtime Validation** | Check YAML/JSON before use | Structure may be invalid/missing |
 | **PostgreSQL Quotes** | Always `"schema"."table"` | Preserves MSSQL PascalCase |
 | **Pattern-Agnostic** | Never hardcode asma/adopus | Use `server_group_type` field |
 | **YAML Preservation** | Use `ruamel.yaml` | Preserve comments/structure |
@@ -92,7 +104,53 @@ printf '%s\n' 'line1' > file.txt
 # Runtime: os.getenv('POSTGRES_HOST')
 ```
 
-### 6. Type Safety - Avoid `Any`
+### 6. YAML Type Safety (STRICT - NO `type: ignore`)
+
+```python
+from typing import cast, Optional, List, Dict, Any
+
+# ✅ MANDATORY: Inspect YAML + cast + runtime check
+def get_patterns(group_data: Dict[str, Any]) -> List[str]:
+    """Get exclude patterns from server group.
+    
+    Expected YAML structure:
+        database_exclude_patterns:
+          - pattern1
+          - pattern2
+    """
+    # 1. Cast based on YAML inspection
+    patterns = cast(Optional[List[str]], group_data.get('database_exclude_patterns'))
+    
+    # 2. Runtime validation before use
+    if patterns is None:
+        return []
+    
+    if not isinstance(patterns, list):
+        raise ValueError(f"Invalid patterns: expected list, got {type(patterns)}")
+    
+    # 3. Validate items
+    return [p for p in patterns if isinstance(p, str)]
+
+# ❌ NEVER use type: ignore (except import-untyped for external packages)
+def bad_example(data: Dict[str, Any]) -> List[str]:
+    return data.get('patterns')  # type: ignore  # ❌ NO!
+
+# ✅ ONLY exception: External packages without stubs
+try:
+    import pymssql  # type: ignore[import-untyped]
+except ImportError:
+    pass
+```
+
+**Checklist for YAML/JSON data:**
+- [ ] Inspected source YAML to know structure
+- [ ] Documented expected structure in docstring
+- [ ] Used `cast()` with explicit type
+- [ ] Added `isinstance()` or `is not None` check
+- [ ] Handle missing/invalid with clear error
+- [ ] NO `type: ignore` (except import-untyped)
+
+### 7. Avoid `Any` - Use Explicit Types
 ```python
 # ❌ Avoid Any - hides data structure
 def process(config: Dict[str, Any]) -> Any:
@@ -134,7 +192,10 @@ def load_config(path: Path) -> ServerConfig:
 ## ✅ Pre-Commit
 
 - [ ] File <600, function <100 lines
-- [ ] Type hints + docstrings with examples
+- [ ] Type hints on ALL params/returns
+- [ ] NO `type: ignore` (except import-untyped)
+- [ ] YAML data: cast() + isinstance() checks
+- [ ] Docstrings with expected YAML structure
 - [ ] Descriptive names (verb+noun)
 - [ ] Single responsibility
 - [ ] Pattern-agnostic

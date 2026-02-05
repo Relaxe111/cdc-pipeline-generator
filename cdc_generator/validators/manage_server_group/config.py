@@ -107,9 +107,21 @@ def load_server_groups() -> ServerGroupFile:
     
     Returns:
         ServerGroupFile: Dict mapping server group names to their configs
+        
+    Raises:
+        FileNotFoundError: If server_group.yaml not found in current directory or parents
     """
     if not SERVER_GROUPS_FILE.exists():
-        raise FileNotFoundError(f"Server groups file not found: {SERVER_GROUPS_FILE}")
+        from cdc_generator.helpers.helpers_logging import print_error, Colors
+        print_error(f"Configuration file not found: server_group.yaml")
+        print(f"\n{Colors.YELLOW}Expected location:{Colors.ENDC}")
+        print(f"  {SERVER_GROUPS_FILE}")
+        print(f"\n{Colors.CYAN}To fix this:{Colors.ENDC}")
+        print(f"  1. Navigate to your CDC implementation directory (e.g., /implementations/adopus/)")
+        print(f"  2. Or initialize a new implementation with: {Colors.BOLD}cdc scaffold{Colors.ENDC}")
+        print(f"  3. Or create server_group.yaml manually in your project root")
+        print()
+        raise SystemExit(1)
     
     with open(SERVER_GROUPS_FILE) as f:
         return cast(ServerGroupFile, yaml.safe_load(f) or {})  # type: ignore[misc]

@@ -5,13 +5,9 @@ Supports both new service-based format (services/) and legacy format (2-customer
 """
 
 from pathlib import Path
-from ruamel.yaml import YAML
 from typing import Any, Dict, List, Optional
 
-# Initialize ruamel.yaml to preserve comments
-yaml = YAML()
-yaml.preserve_quotes = True
-yaml.default_flow_style = False
+from cdc_generator.helpers.yaml_loader import yaml
 
 
 def get_project_root() -> Path:

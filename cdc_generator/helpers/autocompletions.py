@@ -88,19 +88,62 @@ def list_available_services_from_server_group() -> List[str]:
         
         # Extract sources from server_group structure (flat format)
         # Look for root key with 'pattern' field (server group marker)
-        sources_dict: Dict[str, Any] = {}
+        sources_obj: object = {}
         
         for group_data in config.values():
             if isinstance(group_data, dict) and 'pattern' in group_data:
+                group_dict = cast(Dict[str, Any], group_data)
                 # Found server group - check for 'sources' key
-                sources_dict = group_data.get('sources', {})
-                if not sources_dict:
+                sources_obj = group_dict.get('sources', {})
+                if not sources_obj:
                     # Fallback to legacy 'services' key
-                    sources_dict = group_data.get('services', {})
+                    sources_obj = group_dict.get('services', {})
                 break
         
-        if isinstance(sources_dict, dict):
+        if isinstance(sources_obj, dict):
+            sources_dict = cast(Dict[str, Any], sources_obj)
             return sorted(sources_dict.keys())
+        
+        return []
+    
+    except Exception:
+        return []
+
+
+def list_servers_from_server_group() -> List[str]:
+    """
+    List server names defined in server_group.yaml (servers: section).
+    
+    Used for --update server selection autocompletion.
+    
+    Returns:
+        List of server names from server_group.yaml
+    """
+    if yaml is None:
+        return []
+    
+    server_group_file = find_file_upward('server_group.yaml')
+    if not server_group_file:
+        return []
+    
+    try:
+        with open(server_group_file) as f:
+            config = yaml.safe_load(f)
+        
+        if not config:
+            return []
+        
+        servers_obj: object = {}
+        
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                group_dict = cast(Dict[str, Any], group_data)
+                servers_obj = group_dict.get('servers', {})
+                break
+        
+        if isinstance(servers_obj, dict):
+            servers_dict = cast(Dict[str, Any], servers_obj)
+            return sorted(servers_dict.keys())
         
         return []
     
@@ -263,6 +306,11 @@ def main() -> int:
         databases = list_databases_from_server_group()
         for db in databases:
             print(db)
+
+    elif command == '--list-server-names':
+        servers = list_servers_from_server_group()
+        for server in servers:
+            print(server)
     
     elif command == '--list-schemas':
         if len(sys.argv) < 3:

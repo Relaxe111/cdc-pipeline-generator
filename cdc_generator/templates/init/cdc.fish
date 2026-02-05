@@ -1,36 +1,9 @@
 # Fish shell completions for cdc command
 # Auto-generated completions for CDC Pipeline CLI
 
-function __cdc_has_manage_server_group_create --description "Check if --create flag is present for manage-server-group"
-    for token in (commandline -opc)
-        if test "$token" = "--create"
-            return 0
-        end
-    end
-    return 1
-end
-
-function __cdc_has_add_server --description "Check if --add-server flag is present for manage-server-group"
-    for token in (commandline -opc)
-        if test "$token" = "--add-server"
-            return 0
-        end
-    end
-    return 1
-end
-
-function __cdc_flag_not_used --description "Check if a flag has NOT been used yet"
-    set -l flag $argv[1]
-    set -l tokens (commandline -opc)
-    
-    # Check if flag already exists in command line
-    for token in $tokens
-        if test "$token" = "$flag"
-            return 1  # Flag already used
-        end
-    end
-    return 0  # Flag not used yet
-end
+# Fish shell completions for cdc command
+# Auto-generated completions for CDC Pipeline CLI
+# Note: Flag validation is handled by Python. Fish completions show all available options.
 
 function __cdc_last_token_is --description "Check if last token equals given value"
     set -l expected $argv[1]
@@ -66,6 +39,7 @@ complete -c cdc -n "__fish_use_subcommand" -a "nuke-local" -d "Complete cleanup 
 complete -c cdc -n "__fish_use_subcommand" -a "clean" -d "Clean CDC change tracking tables"
 complete -c cdc -n "__fish_use_subcommand" -a "schema-docs" -d "Generate database schema documentation"
 complete -c cdc -n "__fish_use_subcommand" -a "reload-pipelines" -d "Regenerate and reload Redpanda Connect pipelines"
+complete -c cdc -n "__fish_use_subcommand" -a "reload-cdc-autocompletions" -d "Reload Fish shell completions after modifying cdc.fish"
 complete -c cdc -n "__fish_use_subcommand" -a "help" -d "Show help message"
 
 # Global flags (only show when no subcommand is active)
@@ -86,17 +60,19 @@ complete -c cdc -n "__fish_seen_subcommand_from init" -l type -d "Implementation
 complete -c cdc -n "__fish_seen_subcommand_from init" -l target-dir -d "Target directory (default: current)" -r -F
 complete -c cdc -n "__fish_seen_subcommand_from init" -l git-init -d "Initialize git repository"
 
-# scaffold subcommand options
+# scaffold subcommand options (all flags shown, validation in Python)
 complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l update -d "Update existing project scaffold with latest structure"
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --kafka-topology" -l kafka-topology -d "Kafka topology (shared or per-server)" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --port" -l port -d "Database port" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l pattern -d "Server group pattern (db-per-tenant|db-shared)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --pattern" -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l source-type -d "Source database type (postgres|mssql)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --source-type" -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l kafka-topology -d "Kafka topology (shared or per-server)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from scaffold" -l password -d "Database password (use \${VAR} for env vars)" -r
 
 # Scaffold flag values - only show when completing value for specific flag
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --pattern" -f -a "db-per-tenant" -d "One database per tenant"
@@ -157,47 +133,51 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns
 complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --server" -l server -d "Server name for multi-server setups (default: 'default')" -r
 
 # manage-server-group subcommand options
+# Note: All flags are shown regardless of context. Python validation handles invalid combinations.
+
 # General actions
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --update" -l update -d "Update server group from database inspection"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list" -l list -d "List all server groups"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --info" -l info -d "Show detailed server group information"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --create" -l create -d "Create new server group" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l update -d "Update server group from database inspection"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l info -d "Show detailed server group information"
+
+# --update options: Server name completion (dynamic from server_group.yaml)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --update" -f -a "(
+    python3 -m cdc_generator.helpers.autocompletions --list-server-names 2>/dev/null
+)" -d "Server name to update"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l all -d "Update all servers (use with --update)"
 
 # Exclude patterns
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-to-ignore-list" -l add-to-ignore-list -d "Add pattern(s) to database exclude list" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-ignore-patterns" -l list-ignore-patterns -d "List current database exclude patterns"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-to-schema-excludes" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-schema-excludes" -l list-schema-excludes -d "List current schema exclude patterns"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-ignore-list -d "Add pattern(s) to database exclude list" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-ignore-patterns -d "List current database exclude patterns"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-to-schema-excludes -d "Add pattern(s) to schema exclude list" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-schema-excludes -d "List current schema exclude patterns"
 
 # Environment mappings
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-env-mapping" -l add-env-mapping -d "Add env mapping(s) 'from:to,from:to' (e.g., 'staging:stage,production:prod')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-env-mappings" -l list-env-mappings -d "List current environment mappings"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-env-mapping -d "Add env mapping(s) 'from:to,from:to' (e.g., 'staging:stage,production:prod')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-env-mappings -d "List current environment mappings"
 
 # Multi-server management
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-server" -l add-server -d "Add new server (e.g., 'analytics', 'reporting')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-servers" -l list-servers -d "List all configured servers"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --remove-server" -l remove-server -d "Remove a server configuration" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --set-kafka-topology" -l set-kafka-topology -d "Change Kafka topology (shared|per-server)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-server -d "Add new server (e.g., 'analytics', 'reporting')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-servers -d "List all configured servers"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l remove-server -d "Remove a server configuration" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l set-kafka-topology -d "Change Kafka topology (shared|per-server)" -r
 # Kafka topology values - only show when completing value for --set-kafka-topology
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "shared" -d "Same Kafka cluster for all servers"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "per-server" -d "Separate Kafka cluster per server"
 
-# Creation flags (only show when --create is present in the command line)
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --port" -l port -d "Database port" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (flag, no value needed)"
+# Creation flags (used with --create)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l pattern -d "Server group pattern (db-per-tenant|db-shared)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --pattern" -f -a "db-per-tenant db-shared"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l source-type -d "Source database type (postgres|mssql)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --source-type" -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l password -d "Database password (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
 
-# Add server flags (only show when --add-server is present)
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --source-type" -l source-type -d "Server database type" -r -f -a "postgres mssql"
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --port" -l port -d "Database port" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
+# Add server flags (used with --add-server, same as create but no pattern)
+# Note: --source-type, --host, --port, --user, --password are already defined above and work for --add-server too
 
 # generate subcommand - complete with customer names dynamically
 complete -c cdc -n "__fish_seen_subcommand_from generate" -l all -d "Generate for all customers"

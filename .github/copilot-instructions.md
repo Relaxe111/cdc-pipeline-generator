@@ -310,6 +310,18 @@ cd /implementations/adopus
 cdc generate  # Uses your modified generator code
 ```
 
+**Reload Fish shell completions (after modifying cdc.fish):**
+```bash
+# ✅ ALWAYS use this after modifying cdc_generator/templates/init/cdc.fish
+cdc reload-cdc-autocompletions
+```
+
+**⚠️ IMPORTANT: When modifying Fish completions:**
+- Edit: `cdc_generator/templates/init/cdc.fish`
+- Reload: `cdc reload-cdc-autocompletions` (in dev container)
+- The reload command copies updated completions to system directory and reloads them
+- Test with `cdc <subcommand> <TAB>` to verify completions work
+
 ---
 
 ## 📚 Reference Documentation

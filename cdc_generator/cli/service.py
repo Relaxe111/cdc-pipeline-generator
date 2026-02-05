@@ -14,10 +14,10 @@ Usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, cast
+from typing import Dict, List, Tuple, cast
 
 try:
-    import yaml  # type: ignore
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
@@ -29,6 +29,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
     print_error,
 )
+from cdc_generator.helpers.yaml_loader import ConfigDict, ConfigValue
 from cdc_generator.validators.manage_service.mssql_inspector import inspect_mssql_schema  
 from cdc_generator.validators.manage_service.postgres_inspector import inspect_postgres_schema  
 from cdc_generator.validators.manage_service.table_operations import (
@@ -134,17 +135,23 @@ Examples:
             config = load_service_config(args.service)
             
             # Try new hierarchical format first (shared.source_tables)
-            source_tables: List[Dict[str, Any]] = config.get('shared', {}).get('source_tables', [])
+            shared_raw = config.get('shared', {})
+            shared = shared_raw if isinstance(shared_raw, dict) else {}
+            source_tables_raw = shared.get('source_tables', [])
+            source_tables = cast(List[ConfigDict], source_tables_raw) if isinstance(source_tables_raw, list) else []
             
             # If not found, try old flat format (source.tables)
             if not source_tables:
-                old_tables: Dict[str, Any] = config.get('source', {}).get('tables', {})
+                source_raw = config.get('source', {})
+                source = source_raw if isinstance(source_raw, dict) else {}
+                old_tables_raw = source.get('tables', {})
+                old_tables = old_tables_raw if isinstance(old_tables_raw, dict) else {}
                 if old_tables:
                     # Convert old format to display
                     print_header(f"Source Tables in '{args.service}'")
                     
                     # Group by schema
-                    schema_tables: Dict[str, List[Tuple[str, Any]]] = {}
+                    schema_tables: Dict[str, List[Tuple[str, ConfigValue]]] = {}
                     for table_key, table_props in sorted(old_tables.items()):
                         key_str = str(table_key)
                         if '.' in key_str:
@@ -163,14 +170,14 @@ Examples:
                         
                         for table_name, table_properties in schema_tables[schema_name]:
                             table_count += 1
-                            pk: str = ''
+                            old_pk: str = ''
                             if isinstance(table_properties, dict):
-                                pk_value = cast(str, table_properties.get('primary_key', '')) # type: ignore
-                                pk = pk_value if pk_value else ''
+                                pk_value = cast(str, table_properties.get('primary_key', ''))  # type: ignore[misc]
+                                old_pk = pk_value if pk_value else ''
                             
                             # Table name with optional PK
-                            if pk:
-                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET} {Colors.DIM}(PK: {pk}){Colors.RESET}")
+                            if old_pk:
+                                print(f"  {Colors.CYAN}{table_name}{Colors.RESET} {Colors.DIM}(PK: {old_pk}){Colors.RESET}")
                             else:
                                 print(f"  {Colors.CYAN}{table_name}{Colors.RESET}")
                         
@@ -190,7 +197,11 @@ Examples:
             # Group by schema
             for schema_group in source_tables:
                 schema_name = schema_group.get('schema')
-                tables = schema_group.get('tables', [])
+                tables_raw = schema_group.get('tables', [])
+                # Runtime validation: tables must be a list
+                if not isinstance(tables_raw, list):
+                    continue
+                tables = tables_raw
                 
                 if tables:
                     print(f"{Colors.BOLD}{Colors.BLUE}{schema_name}{Colors.RESET}")
@@ -198,11 +209,15 @@ Examples:
                         table_count += 1
                         if isinstance(table, str):
                             print(f"  {Colors.CYAN}{table}{Colors.RESET}")
-                        else:
-                            table_name = table.get('name', 'Unknown')
-                            pk = table.get('primary_key')
-                            ignore_cols = table.get('ignore_columns', [])
-                            track_cols = table.get('track_columns', [])
+                        elif isinstance(table, dict):
+                            table_name_raw = table.get('name', 'Unknown')
+                            table_name = str(table_name_raw)
+                            pk_raw = table.get('primary_key')
+                            pk: str | None = str(pk_raw) if pk_raw else None
+                            ignore_cols_raw = table.get('ignore_columns', [])
+                            ignore_cols = [str(c) for c in ignore_cols_raw] if isinstance(ignore_cols_raw, list) else []
+                            track_cols_raw = table.get('track_columns', [])
+                            track_cols = [str(c) for c in track_cols_raw] if isinstance(track_cols_raw, list) else []
                             
                             # Table name with optional PK
                             if pk:
@@ -336,11 +351,16 @@ Examples:
     if args.service and args.inspect:
         # Load service config to detect database type
         from cdc_generator.helpers.service_config import load_service_config, get_project_root
-        config: dict[str, Any] = load_service_config(args.service)  
+        config: ConfigDict = load_service_config(args.service)  
         
         # Try to get database type from source.type first (legacy format)
-        db_type = config.get('source', {}).get('type')
-        server_group: str | None = config.get('server_group')
+        source_raw = config.get('source', {})
+        source_dict = source_raw if isinstance(source_raw, dict) else {}
+        db_type_raw = source_dict.get('type') if source_dict else None
+        db_type = str(db_type_raw) if db_type_raw and isinstance(db_type_raw, str) else None
+        
+        server_group_raw = config.get('server_group')
+        server_group: str | None = str(server_group_raw) if isinstance(server_group_raw, str) else None
         
         # If not found, try from server group (new format)
         if not db_type and server_group:
@@ -409,7 +429,9 @@ Examples:
             # If server_group is set but not found in server_group.yaml
             if not server_group_found:
                 # Check if we have source.type as fallback
-                if config.get('source', {}).get('type'):
+                source_fallback_raw = config.get('source', {})
+                source_fallback = source_fallback_raw if isinstance(source_fallback_raw, dict) else {}
+                if source_fallback and source_fallback.get('type'):
                     print_warning(f"Server group '{server_group}' not found in server_group.yaml, using source.type")
                     allowed_schemas = [args.schema] if args.schema else []
                 else:
@@ -429,6 +451,11 @@ Examples:
         if schema and schema not in allowed_schemas:
             print_error(f"Schema '{schema}' not allowed for service '{args.service}'")
             print_error(f"Allowed schemas: {', '.join(allowed_schemas)}")
+            return 1
+        
+        # Runtime validation: db_type must be a string at this point
+        if not isinstance(db_type, str):
+            print_error(f"Database type must be a string, got {type(db_type)}")
             return 1
         
         schema_msg = f"schemas: {', '.join(allowed_schemas)}" if args.all else f"schema: {schema}"

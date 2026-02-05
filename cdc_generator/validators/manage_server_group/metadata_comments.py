@@ -12,8 +12,15 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from typing import List, Optional
+from typing import List, Optional, Dict, TypedDict, Set
 from datetime import datetime, timezone
+
+
+class ServerStats(TypedDict):
+    """Statistics for a single server."""
+    databases: int
+    tables: int
+    environments: Set[str]
 
 
 def get_file_header_comments() -> List[str]:
@@ -238,3 +245,63 @@ def add_metadata_stats_comments(
             stats_comments.append(f"#{line}")
     
     return stats_comments
+
+
+def generate_per_server_stats(databases: List[Dict[str, object]]) -> List[str]:
+    """Generate per-server statistics breakdown for header comments.
+    
+    Args:
+        databases: List of database info dicts with 'server', 'environment', 'table_count' fields
+        
+    Returns:
+        List of formatted comment lines showing stats grouped by server
+        
+    Example:
+        >>> dbs = [
+        ...     {'server': 'default', 'environment': 'auth', 'table_count': 10},
+        ...     {'server': 'prod', 'environment': 'adcuris', 'table_count': 50}
+        ... ]
+        >>> lines = generate_per_server_stats(dbs)
+        >>> '# Server: default' in lines[0]
+        True
+    """
+    from collections import defaultdict
+    
+    # Helper to create default stats dict
+    def _create_default_stats() -> ServerStats:
+        return ServerStats(databases=0, tables=0, environments=set())
+    
+    # Group by server
+    server_stats: Dict[str, ServerStats] = defaultdict(_create_default_stats)
+    
+    for db in databases:
+        server = str(db.get('server', 'default'))
+        server_stats[server]['databases'] += 1
+        
+        table_count = db.get('table_count', 0)
+        if isinstance(table_count, int):
+            server_stats[server]['tables'] += table_count
+        
+        env = db.get('environment', '')
+        if env and isinstance(env, str):
+            server_stats[server]['environments'].add(env)
+    
+    # Build comment lines
+    comment_lines: List[str] = []
+    
+    for server_name in sorted(server_stats.keys()):
+        stats = server_stats[server_name]
+        envs = sorted(stats['environments'])
+        
+        comment_lines.append("# ============================================================================")
+        comment_lines.append(f"# Server: {server_name}")
+        comment_lines.append("# ============================================================================")
+        comment_lines.append(f"# Databases: {stats['databases']} | Tables: {stats['tables']}")
+        
+        if envs:
+            env_list = ", ".join(envs)
+            comment_lines.append(f"# Environments: {env_list}")
+        
+        comment_lines.append("#")
+    
+    return comment_lines

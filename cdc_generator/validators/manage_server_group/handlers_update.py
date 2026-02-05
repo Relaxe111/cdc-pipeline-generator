@@ -134,6 +134,79 @@ def _inspect_server_databases(
     return databases
 
 
+def _merge_with_existing_sources(
+    server_group: ServerGroupConfig,
+    scanned_databases: List[DatabaseInfo],
+    updated_servers: set[str]
+) -> List[DatabaseInfo]:
+    """Merge scanned databases with existing sources, preserving other servers' data.
+    
+    Args:
+        server_group: Current server group configuration
+        scanned_databases: Newly scanned databases from updated servers
+        updated_servers: Set of server names that were updated
+        
+    Returns:
+        Combined list of DatabaseInfo with preserved + updated data
+        
+    Example:
+        >>> existing = server_group.get('sources', {})
+        >>> merged = _merge_with_existing_sources(server_group, new_dbs, {'prod'})
+        >>> # Returns all databases, with prod updated and default preserved
+    """
+    merged_databases: List[DatabaseInfo] = []
+    
+    # Get existing sources from configuration
+    existing_sources = server_group.get('sources', {})
+    
+    if not existing_sources:
+        # No existing data - return scanned databases as-is
+        return scanned_databases
+    
+    # Track which source+env combinations we've already added from scanned data
+    scanned_keys: set[tuple[str, str]] = set()
+    for db in scanned_databases:
+        service = db.get('service', db['name'])
+        env = db.get('environment', 'default')
+        scanned_keys.add((service, env))
+    
+    # Add scanned databases first (these are the updates)
+    merged_databases.extend(scanned_databases)
+    
+    # Now add databases from OTHER servers (preserve them)
+    for source_name, source_config in existing_sources.items():
+        # source_config contains 'schemas' key and environment keys
+        schemas = source_config.get('schemas', [])
+        
+        for key, value in source_config.items():
+            if key == 'schemas':
+                continue  # Skip schemas key
+            
+            # This is an environment key (e.g., 'prod', 'default', 'adcuris')
+            env = key
+            if not isinstance(value, dict):
+                continue
+            
+            env_server = value.get('server', 'default')
+            
+            # Only preserve if this server was NOT updated
+            if env_server not in updated_servers:
+                # Check if we already have this source+env from scanned data
+                if (source_name, env) not in scanned_keys:
+                    # Preserve this database
+                    preserved_db: DatabaseInfo = {
+                        'name': value.get('database', source_name),
+                        'service': source_name,
+                        'environment': env,
+                        'server': env_server,
+                        'table_count': value.get('table_count', 0),
+                        'schemas': schemas if isinstance(schemas, list) else []
+                    }
+                    merged_databases.append(preserved_db)
+    
+    return merged_databases
+
+
 def _apply_updates(sg_name: str, all_databases: List[DatabaseInfo]) -> bool:
     """Apply database updates to YAML, schemas, and completions.
     
@@ -164,6 +237,34 @@ def _apply_updates(sg_name: str, all_databases: List[DatabaseInfo]) -> bool:
     regenerate_all_validation_schemas([sg_name])  # type: ignore[list-item]
     
     return True
+
+
+def _select_servers_for_update(
+    servers: dict[str, ServerConfig],
+    server_name: Optional[str],
+    update_all: bool,
+) -> Optional[dict[str, ServerConfig]]:
+    """Select which servers to update based on args.
+    
+    Args:
+        servers: All configured servers
+        server_name: Optional server name from CLI
+        update_all: Whether --all was provided
+        
+    Returns:
+        Dict of servers to update, or None on error
+    """
+    if update_all:
+        return servers
+    
+    selected = server_name or 'default'
+    if selected not in servers:
+        available = ", ".join(sorted(servers.keys()))
+        print_error(f"Server '{selected}' not found in server group")
+        print_info(f"Available servers: {available}")
+        return None
+    
+    return {selected: servers[selected]}
 
 
 def _handle_connection_error(error: Exception, sg_name: str) -> int:
@@ -206,10 +307,10 @@ def handle_update(args: Namespace) -> int:
     """Handle updating server group from database inspection.
     
     Since each implementation has only one server group, we update it directly.
-    Iterates over all servers in the 'servers' dict and inspects each one.
+    Defaults to updating only the 'default' server unless --all is provided.
     
     Args:
-        args: Parsed command-line arguments (not used, but required for handler signature)
+        args: Parsed command-line arguments (server selection via --update/--all)
         
     Returns:
         Exit code (0 for success, 1 for error)
@@ -260,10 +361,29 @@ def handle_update(args: Namespace) -> int:
         database_exclude_patterns = server_group.get('database_exclude_patterns', [])
         schema_exclude_patterns = server_group.get('schema_exclude_patterns', [])
         
-        # Collect databases from ALL servers
-        all_databases: List[DatabaseInfo] = []
+        # Select which servers to update (default only unless --all or specific name)
+        servers_to_update = _select_servers_for_update(
+            servers,
+            getattr(args, 'update', None),
+            bool(getattr(args, 'all', False)),
+        )
+        if servers_to_update is None:
+            return 1
         
-        for server_name, server_config in servers.items():
+        if len(servers_to_update) == len(servers):
+            print_info(f"Updating all servers: {', '.join(sorted(servers_to_update.keys()))}")
+        else:
+            selected_name = next(iter(servers_to_update.keys()))
+            if selected_name == 'default':
+                print_info("Updating default server")
+            else:
+                print_info(f"Updating server: {selected_name}")
+        
+        # Collect databases from selected servers (sequential)
+        scanned_databases: List[DatabaseInfo] = []
+        updated_server_names: set[str] = set()
+        
+        for server_name, server_config in servers_to_update.items():
             databases = _inspect_server_databases(
                 server_name,
                 server_config,
@@ -275,14 +395,25 @@ def handle_update(args: Namespace) -> int:
             )
             if databases is None:
                 return 1  # Error already printed
-            all_databases.extend(databases)
+            scanned_databases.extend(databases)
+            updated_server_names.add(server_name)
+        
+        # CRITICAL: Preserve databases from servers NOT being updated
+        # Load existing sources and merge with scanned databases
+        all_databases = _merge_with_existing_sources(
+            server_group,
+            scanned_databases,
+            updated_server_names
+        )
         
         # Handle empty results
         if not all_databases:
             print_warning(f"No databases found for server group '{sg_name}'")
             return 0
         
-        print_success(f"\nTotal: {len(all_databases)} database(s) across {len(servers)} server(s)")
+        print_success(
+            f"\nTotal: {len(all_databases)} database(s) across {len(servers_to_update)} server(s)"
+        )
         
         # Apply updates
         if _apply_updates(sg_name, all_databases):

@@ -24,6 +24,7 @@ Commands:
     clean                Clean CDC change tracking tables
     schema-docs          Generate database schema documentation
     reload-pipelines     Regenerate and reload Redpanda Connect pipelines
+    reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
     help                 Show this help message
 
 Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
@@ -219,6 +220,11 @@ LOCAL_COMMANDS = {
         "description": "Regenerate and reload Redpanda Connect pipelines",
         "usage": "cdc reload-pipelines [customer...]"
     },
+    "reload-cdc-autocompletions": {
+        "script": "scripts/reload-cdc-autocompletions.sh",
+        "description": "Reload Fish shell completions after modifying cdc.fish",
+        "usage": "cdc reload-cdc-autocompletions"
+    },
 }
 
 
@@ -345,6 +351,26 @@ def main():
     
     # Get script paths
     paths = get_script_paths(workspace_root, is_dev_container)
+    
+    # Special handling for reload-cdc-autocompletions (shell command, not Python)
+    if command == "reload-cdc-autocompletions":
+        import subprocess
+        try:
+            # Check if we're in dev container
+            if is_dev_container:
+                cmd = [
+                    "fish", "-c",
+                    "cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish && . /usr/share/fish/vendor_completions.d/cdc.fish && echo '✓ Fish completions reloaded successfully'"
+                ]
+                result = subprocess.run(cmd)
+                return result.returncode
+            else:
+                print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
+                print("   Enter the container with: docker compose exec dev fish")
+                return 1
+        except Exception as e:
+            print(f"❌ Error reloading completions: {e}")
+            return 1
     
     # Execute command
     if command in GENERATOR_COMMANDS:

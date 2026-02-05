@@ -13,6 +13,7 @@ from .metadata_comments import (
     ensure_file_header_exists,
     validate_output_has_metadata,
     is_header_line,
+    generate_per_server_stats,
 )
 from cdc_generator.helpers.helpers_logging import print_error, print_info
 
@@ -289,11 +290,17 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             if 'Updated at:' in comment:
                 output_lines.append(f"# Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
                 timestamp_updated = True
-                # Add stats right after timestamp
+                # Add global stats right after timestamp
                 output_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
                 output_lines.append(f"# ? Services ({num_services}): {service_list}")
                 if env_stats_line:
                     output_lines.append(f"# Per Environment: {env_stats_line}")
+                
+                # Add per-server breakdown
+                per_server_lines = generate_per_server_stats(databases)
+                output_lines.extend(per_server_lines)
+                
+                # Add database list
                 if db_list_lines:
                     output_lines.append(f"# Databases:")
                     for line in db_list_lines:
@@ -302,6 +309,9 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             # Note: 'Services:' without '?' prefix is legacy format to skip
             elif any(keyword in comment for keyword in ['Total:', 'Total Databases:', 'Per Environment:', 'Databases:', 'Avg Tables']) or \
                  ('Services:' in comment and '? Services' not in comment):
+                continue
+            # Skip old per-server sections (will be regenerated)
+            elif 'Server:' in comment and '========' not in comment:
                 continue
             # Skip database list continuation lines (old format without service names)
             # This includes lines starting with "#  " or "# *  " or "# !  " or "# ?  " or "# TODO:" or "# Service:" or "# ? Service:"
@@ -333,6 +343,13 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
                     if env_stats_line:
                         output_lines.insert(idx, f"# Per Environment: {env_stats_line}")
                         idx += 1
+                    
+                    # Add per-server breakdown
+                    per_server_lines = generate_per_server_stats(databases)
+                    for server_line in per_server_lines:
+                        output_lines.insert(idx, server_line)
+                        idx += 1
+                    
                     if db_list_lines:
                         output_lines.insert(idx, f"# Databases:")
                         for line_idx, line in enumerate(db_list_lines, start=1):

@@ -2,7 +2,8 @@
 
 from pathlib import Path
 from typing import List, Dict, Optional
-from ruamel.yaml import YAML
+
+from cdc_generator.helpers.yaml_loader import yaml
 from cdc_generator.helpers.helpers_logging import print_error
 
 
@@ -26,11 +27,6 @@ def get_implementation_root() -> Path:
 PROJECT_ROOT = get_implementation_root()
 SERVICES_DIR = PROJECT_ROOT / "services"
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
-
-# Initialize ruamel.yaml to preserve comments and formatting
-yaml = YAML()
-yaml.preserve_quotes = True
-yaml.default_flow_style = False
 
 
 def get_available_services() -> List[str]:
