@@ -48,6 +48,43 @@ def get_file_header_comments() -> List[str]:
     ]
 
 
+# Markers that identify header lines (to avoid duplicating)
+_HEADER_MARKERS = [
+    "============",
+    "AUTO-GENERATED FILE",
+    "DO NOT EDIT DIRECTLY",
+    "Use 'cdc manage-server-group' commands",
+    "This file contains the server group configuration",
+    "Changes made directly to this file may be overwritten",
+    "Common commands:",
+    "cdc manage-server-group --update",
+    "cdc manage-server-group --info",
+    "cdc manage-server-group --add-to-ignore-list",
+    "cdc manage-server-group --add-to-schema-excludes",
+    "For detailed documentation, see:",
+    "CDC_CLI.md in the implementation repository",
+    "cdc-pipeline-generator/_docs/",
+]
+
+
+def is_header_line(line: str) -> bool:
+    """Check if a line is part of the file header (should not be preserved as metadata).
+    
+    Args:
+        line: A single line from the YAML file
+        
+    Returns:
+        True if this line is part of the file header and should be skipped
+        
+    Example:
+        >>> is_header_line("# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY")
+        True
+        >>> is_header_line("# Updated at: 2026-02-05 02:19:13 UTC")
+        False
+    """
+    return any(marker in line for marker in _HEADER_MARKERS)
+
+
 def get_update_timestamp_comment() -> str:
     """Get a formatted timestamp comment for when the file was last updated.
     

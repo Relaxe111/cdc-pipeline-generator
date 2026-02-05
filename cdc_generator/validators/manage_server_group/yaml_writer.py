@@ -12,6 +12,7 @@ from .config import SERVER_GROUPS_FILE, get_single_server_group
 from .metadata_comments import (
     ensure_file_header_exists,
     validate_output_has_metadata,
+    is_header_line,
 )
 from cdc_generator.helpers.helpers_logging import print_error, print_info
 
@@ -85,8 +86,11 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
             for i in range(sg_line_idx):
                 line = lines[i]
                 if line.strip().startswith('#') or line.strip() == '':
-                    # Skip server group header separators and titles (they'll be regenerated)
-                    if '============' in line or 'Server Group' in line:
+                    # Skip ALL header lines (they'll be regenerated fresh)
+                    if is_header_line(line):
+                        continue
+                    # Skip empty comment lines (just "# " or "#")
+                    if line.strip() in ('#', '# '):
                         continue
                     preserved_comments.append(line)
         
@@ -260,16 +264,16 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         # Build the complete YAML content with comments
         output_lines: List[str] = []
         
-        # Count services - use service_groups for db-shared (more accurate)
-        # Fallback to existing services in server_group config if service_groups is empty
+        # Count sources/services - use service_groups for db-shared (more accurate)
+        # Fallback to existing sources/services in server_group config if service_groups is empty
         if pattern == 'db-shared' and service_groups:
             num_services = len(service_groups)
             service_list = ", ".join(sorted(service_groups.keys()))
-        elif pattern == 'db-shared' and 'services' in server_group:
-            # Use existing services from config
-            existing_services = server_group.get('services', {})
-            num_services = len(existing_services)
-            service_list = ", ".join(sorted(existing_services.keys()))
+        elif pattern == 'db-shared' and ('sources' in server_group or 'services' in server_group):
+            # Use existing sources from config (fallback to services for legacy)
+            existing_sources = server_group.get('sources', server_group.get('services', {}))
+            num_services = len(existing_sources)
+            service_list = ", ".join(sorted(existing_sources.keys()))
         elif service_envs:
             num_services = len(service_envs)
             service_list = ", ".join(sorted(service_envs.keys()))
@@ -362,73 +366,93 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         
         if environment_aware and sg.get('pattern') == 'db-shared':
             # Group databases by service and environment
-            service_data: Dict[str, Dict[str, Any]] = {}
+            source_data: Dict[str, Dict[str, Any]] = {}
             for db in databases:
                 service = db.get('service', db['name'])
                 env = db.get('environment', '')
+                server_name = db.get('server', 'default')  # Get server from db info
                 
-                if service not in service_data:
-                    service_data[service] = {
+                if service not in source_data:
+                    source_data[service] = {
                         'schemas': set(),  # Collect all unique schemas across environments
                         'environments': {}
                     }
                 
-                # Add schemas to service-level set
+                # Add schemas to source-level set
                 for schema in db['schemas']:
-                    service_data[service]['schemas'].add(schema)
+                    source_data[service]['schemas'].add(schema)
                 
                 # Store database for this environment (only one database per env)
                 if env:
-                    if env not in service_data[service]['environments']:
-                        service_data[service]['environments'][env] = {
+                    if env not in source_data[service]['environments']:
+                        source_data[service]['environments'][env] = {
+                            'server': server_name,  # Add server reference
                             'database': db['name'],
                             'table_count': db.get('table_count', 0)
                         }
                     else:
-                        # If multiple databases for same service+env, append to database name
-                        existing = service_data[service]['environments'][env]['database']
+                        # If multiple databases for same source+env, append to database name
+                        existing = source_data[service]['environments'][env]['database']
                         if isinstance(existing, str):
-                            service_data[service]['environments'][env]['database'] = [existing, db['name']]
+                            source_data[service]['environments'][env]['database'] = [existing, db['name']]
                         else:
-                            service_data[service]['environments'][env]['database'].append(db['name'])
-                        service_data[service]['environments'][env]['table_count'] += db.get('table_count', 0)
+                            source_data[service]['environments'][env]['database'].append(db['name'])
+                        source_data[service]['environments'][env]['table_count'] += db.get('table_count', 0)
             
-            # Convert to final YAML structure
-            sg['services'] = {}
-            for service, data in sorted(service_data.items()):
-                sg['services'][service] = {
-                    'schemas': sorted(data['schemas'])  # Shared schemas at service level
+            # Convert to final YAML structure using 'sources' key
+            sg['sources'] = {}
+            for source_name, data in sorted(source_data.items()):
+                sg['sources'][source_name] = {
+                    'schemas': sorted(data['schemas'])  # Shared schemas at source level
                 }
-                # Add each environment as a direct key under service
+                # Add each environment as a direct key under source
                 for env, env_data in sorted(data['environments'].items()):
-                    sg['services'][service][env] = env_data
+                    sg['sources'][source_name][env] = env_data
             
-            # Remove old databases key
+            # Remove old services/databases keys
+            if 'services' in sg:
+                del sg['services']
             if 'databases' in sg:
                 del sg['databases']
         else:
-            # db-per-tenant: service name as root key with databases list
+            # db-per-tenant: source name (customer) as root key with single 'default' environment
             # Collect all unique schemas across all databases
             all_schemas: set[str] = set()
             for db in databases:
                 for schema in db.get('schemas', []):
                     all_schemas.add(schema)
             
-            # Use server_group_name as the single service
-            sg['services'] = {
-                server_group_name: {
-                    'schemas': sorted(all_schemas),
-                    'databases': [
-                        {
-                            'name': db['name'],
+            # Group by customer name (extracted from db name)
+            source_data: Dict[str, Dict[str, Any]] = {}
+            for db in databases:
+                customer = db.get('customer', db['name'])
+                server_name = db.get('server', 'default')
+                
+                if customer not in source_data:
+                    source_data[customer] = {
+                        'schemas': set(db.get('schemas', [])),
+                        'default': {
+                            'server': server_name,
+                            'database': db['name'],
                             'table_count': db.get('table_count', 0)
                         }
-                        for db in databases
-                    ]
-                }
-            }
+                    }
+                else:
+                    # Merge schemas
+                    for schema in db.get('schemas', []):
+                        source_data[customer]['schemas'].add(schema)
             
-            # Remove old databases key from root level
+            # Convert to final YAML structure using 'sources' key
+            sg['sources'] = {}
+            for source_name, data in sorted(source_data.items()):
+                sg['sources'][source_name] = {
+                    'schemas': sorted(data['schemas']),
+                    'default': data['default']
+                }
+            
+            # Remove old services/databases keys
+            if 'services' in sg:
+                del sg['services']
             if 'databases' in sg:
                 del sg['databases']
         

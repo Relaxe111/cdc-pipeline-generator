@@ -50,8 +50,6 @@ services:
     container_name: {container_prefix}-dev
     volumes:
       - .:/workspace
-      - ../adopus-cdc-pipeline:/implementations/adopus
-      - ../asma-cdc-pipeline:/implementations/asma
       - ~/.ssh:/root/.ssh:ro
       - ~/.gitconfig:/root/.gitconfig:ro
     environment:
@@ -248,18 +246,28 @@ volumes:
 """
 
 
-def get_env_example_template(server_group_name: str, pattern: str, source_type: str) -> str:
-    """Generate .env.example template.
+def get_env_example_template(
+    server_group_name: str, 
+    pattern: str, 
+    source_type: str,
+    kafka_topology: str = "shared",
+    servers: "dict[str, dict[str, str]] | None" = None,
+) -> str:
+    """Generate .env.example template with multi-server support.
     
     Args:
         server_group_name: Name of the server group
         pattern: 'db-per-tenant' or 'db-shared'
         source_type: 'mssql' or 'postgres'
+        kafka_topology: 'shared' or 'per-server'
+        servers: Dict of server configurations (optional, for multi-server support)
         
     Returns:
         Complete .env.example content as string
     """
-    source_prefix = "POSTGRES_SOURCE" if source_type == "postgres" else "MSSQL_SOURCE"
+    # Default to single 'default' server if not provided
+    if servers is None:
+        servers = {"default": {"type": source_type}}
     
     content = f"""# =============================================================================
 # Environment Variables for {server_group_name.title()} CDC Pipeline
@@ -278,28 +286,46 @@ def get_env_example_template(server_group_name: str, pattern: str, source_type: 
 #   PostgreSQL: postgres / postgres / {server_group_name}_db
 # =============================================================================
 
-# ===========================================================================
-# Source Database Configuration ({source_type.upper()})
-# ===========================================================================
-{source_prefix}_HOST=
-{source_prefix}_PORT={"5432" if source_type == "postgres" else "1433"}
-{source_prefix}_USER=
-{source_prefix}_PASSWORD=
-{source_prefix}_DB=
 """
 
-    if source_type == "mssql":
-        content += """
+    # Generate source database config for each server
+    for server_name, server_config in servers.items():
+        server_type = server_config.get("type", source_type)
+        server_source_prefix = "POSTGRES_SOURCE" if server_type == "postgres" else "MSSQL_SOURCE"
+        
+        # Non-default servers get postfix
+        postfix = "" if server_name == "default" else f"_{server_name.upper()}"
+        
+        if server_name == "default":
+            content += f"""# ===========================================================================
+# Source Database Configuration ({server_type.upper()})
 # ===========================================================================
+"""
+        else:
+            content += f"""# ===========================================================================
+# Source Database Configuration - {server_name.upper()} Server ({server_type.upper()})
+# ===========================================================================
+"""
+        
+        content += f"""{server_source_prefix}_HOST{postfix}=
+{server_source_prefix}_PORT{postfix}={"5432" if server_type == "postgres" else "1433"}
+{server_source_prefix}_USER{postfix}=
+{server_source_prefix}_PASSWORD{postfix}=
+{server_source_prefix}_DB{postfix}=
+
+"""
+
+        if server_type == "mssql" and server_name == "default":
+            content += """# ===========================================================================
 # Optional: Local MSSQL Configuration (for testing)
 # ===========================================================================
 # Used when running with --profile local-mssql
 MSSQL_SA_PASSWORD=YourStrong!Passw0rd
 MSSQL_PORT=1433
+
 """
 
-    content += """
-# ===========================================================================
+    content += """# ===========================================================================
 # Target PostgreSQL Configuration
 # ===========================================================================
 POSTGRES_LOCAL_USER=postgres
@@ -307,13 +333,33 @@ POSTGRES_LOCAL_PASSWORD=postgres
 POSTGRES_LOCAL_DB=""" + f"{server_group_name}_db" + """
 POSTGRES_PORT=5432
 
+"""
+
+    # Kafka configuration based on topology
+    if kafka_topology == "per-server":
+        content += """# ===========================================================================
+# Redpanda/Kafka Configuration (per-server topology)
 # ===========================================================================
-# Redpanda/Kafka Configuration
+# Each server has its own Kafka cluster
+"""
+        for server_name in servers.keys():
+            postfix = f"_{server_name.upper()}"
+            content += f"""KAFKA_BOOTSTRAP_SERVERS{postfix}=redpanda:9092
+"""
+        content += """REDPANDA_SCHEMA_REGISTRY=http://redpanda:8081
+
+"""
+    else:
+        content += """# ===========================================================================
+# Redpanda/Kafka Configuration (shared topology)
 # ===========================================================================
+KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
 REDPANDA_BROKERS=redpanda:9092
 REDPANDA_SCHEMA_REGISTRY=http://redpanda:8081
 
-# ===========================================================================
+"""
+
+    content += """# ===========================================================================
 # CDC Pipeline Configuration
 # ===========================================================================
 CDC_BUFFER_SIZE=1000

@@ -8,12 +8,13 @@ from cdc_generator.helpers.helpers_logging import print_header, print_success
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
-def create_service(service_name: str, server_group: str) -> None:
+def create_service(service_name: str, server_group: str, server: str = "default") -> None:
     """Create a new service configuration file.
     
     Args:
         service_name: Name of the service to create
         server_group: Server group name (e.g., 'adopus', 'asma')
+        server: Server name for multi-server setups (default: 'default')
     """
     services_dir = PROJECT_ROOT / 'services'
     services_dir.mkdir(exist_ok=True)
@@ -77,6 +78,7 @@ def create_service(service_name: str, server_group: str) -> None:
         template: Dict[str, Any] = {
             'service': service_name,
             'server_group': server_group,
+            'server': server,  # Multi-server support: which server this service uses
             'source': {
                 'type': 'mssql',
                 'validation_database': validation_database or 'database_name',
@@ -160,6 +162,7 @@ def create_service(service_name: str, server_group: str) -> None:
         template: Dict[str, Any] = {
             'service': service_name,
             'server_group': server_group,
+            'server': server,  # Multi-server support: which server this service uses
             'source': {
                 'type': 'postgres',  # or 'mssql'
                 'validation_database': validation_database or 'database_name',  # Database to use for schema inspection

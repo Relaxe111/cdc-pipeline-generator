@@ -69,11 +69,15 @@ Examples:
   
   # Validate service configuration
   cdc manage-service --service adopus --validate-config
+  
+  # Multi-server: Create service on specific server
+  cdc manage-service --service analytics_data --create-service --server analytics
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--service", required=False, help="Service name from services/*.yaml (required for most operations)")
     parser.add_argument("--create-service", action="store_true", help="Create a new service configuration file")
+    parser.add_argument("--server", help="Server name for multi-server setups (default: 'default'). Use with --create-service.")
     parser.add_argument("--list-source-tables", action="store_true", help="List all source tables configured in this service")
     parser.add_argument("--add-source-table", help="Add single table to service (format: schema.table)")
     parser.add_argument("--add-source-tables", nargs='+', help="Add multiple tables to service (space-separated, format: schema.table schema.table)")
@@ -297,8 +301,11 @@ Examples:
             print_error(f"❌ Could not find server group for service '{args.service}'")
             print_error(f"Add service mapping to server_group.yaml")
             return 1
+        
+        # Get server name (defaults to 'default' for multi-server support)
+        server_name = getattr(args, 'server', None) or 'default'
             
-        create_service(args.service, server_group)
+        create_service(args.service, server_group, server=server_name)
         return 0
     
     # Handle validate-config operation (comprehensive)

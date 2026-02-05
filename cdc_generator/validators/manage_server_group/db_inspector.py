@@ -382,9 +382,19 @@ def list_mssql_databases(
     server_group_config: ServerGroupConfig,
     include_pattern: Optional[str] = None, 
     database_exclude_patterns: Optional[List[str]] = None,
-    schema_exclude_patterns: Optional[List[str]] = None
+    schema_exclude_patterns: Optional[List[str]] = None,
+    server_name: str = "default",
 ) -> List[DatabaseInfo]:
-    """List all databases on MSSQL server."""
+    """List all databases on MSSQL server.
+    
+    Args:
+        server_config: Server connection configuration
+        server_group_config: Full server group configuration for extraction patterns
+        include_pattern: Regex pattern to include only matching databases
+        database_exclude_patterns: Patterns to exclude databases
+        schema_exclude_patterns: Patterns to exclude schemas
+        server_name: Name of this server (for multi-server support)
+    """
     print_info(f"Connecting to MSSQL server...")
     
     # Use provided patterns or empty lists
@@ -450,6 +460,7 @@ def list_mssql_databases(
             
             databases.append({
                 'name': db_name,
+                'server': server_name,  # Tag with server name for multi-server
                 'service': identifiers['service'] or db_name,
                 'environment': identifiers['env'],
                 'customer': identifiers['customer'],
@@ -481,9 +492,19 @@ def list_postgres_databases(
     server_group_config: ServerGroupConfig,
     include_pattern: Optional[str] = None,
     database_exclude_patterns: Optional[List[str]] = None,
-    schema_exclude_patterns: Optional[List[str]] = None
+    schema_exclude_patterns: Optional[List[str]] = None,
+    server_name: str = "default",
 ) -> List[DatabaseInfo]:
-    """List all databases on PostgreSQL server."""
+    """List all databases on PostgreSQL server.
+    
+    Args:
+        server_config: Server connection configuration
+        server_group_config: Full server group configuration for extraction patterns
+        include_pattern: Regex pattern to include only matching databases
+        database_exclude_patterns: Patterns to exclude databases
+        schema_exclude_patterns: Patterns to exclude schemas
+        server_name: Name of this server (for multi-server support)
+    """
     print_info(f"Connecting to PostgreSQL server...")
     
     # Use provided patterns or empty lists
@@ -566,6 +587,7 @@ def list_postgres_databases(
             
             databases.append({
                 'name': db_name,
+                'server': server_name,  # Tag with server name for multi-server
                 'service': identifiers['service'] or db_name,
                 'environment': identifiers['env'],
                 'customer': identifiers['customer'],

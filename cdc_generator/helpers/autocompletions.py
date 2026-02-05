@@ -65,12 +65,12 @@ def list_existing_services() -> List[str]:
 
 def list_available_services_from_server_group() -> List[str]:
     """
-    List services defined in server_group.yaml (services: section).
+    List sources defined in server_group.yaml (sources: section).
     
-    Used for --create-service flag autocompletion (shows services that can be created).
+    Used for --create-service flag autocompletion (shows sources that can be created).
     
     Returns:
-        List of service names from server_group.yaml
+        List of source names from server_group.yaml
     """
     if yaml is None:
         return []
@@ -86,26 +86,21 @@ def list_available_services_from_server_group() -> List[str]:
         if not config:
             return []
         
-        # Extract services from server_group structure
-        # Check both possible locations: direct services dict or nested in server_group
-        services_dict = config.get('services', {})
+        # Extract sources from server_group structure (flat format)
+        # Look for root key with 'pattern' field (server group marker)
+        sources_dict: Dict[str, Any] = {}
         
-        # If not found at top level, check inside server_group
-        if not services_dict:
-            server_group = config.get('server_group', {})
-            if isinstance(server_group, dict):
-                server_group_dict = cast(Dict[str, Any], server_group)
-                # server_group might contain a single group, check first value
-                for group_data in server_group_dict.values():
-                    if isinstance(group_data, dict):
-                        group_dict = cast(Dict[str, Any], group_data)
-                        if 'services' in group_dict:
-                            services_dict = group_dict.get('services', {})
-                            break
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                # Found server group - check for 'sources' key
+                sources_dict = group_data.get('sources', {})
+                if not sources_dict:
+                    # Fallback to legacy 'services' key
+                    sources_dict = group_data.get('services', {})
+                break
         
-        if isinstance(services_dict, dict):
-            services_dict_typed = cast(Dict[str, Any], services_dict)
-            return sorted(services_dict_typed.keys())
+        if isinstance(sources_dict, dict):
+            return sorted(sources_dict.keys())
         
         return []
     

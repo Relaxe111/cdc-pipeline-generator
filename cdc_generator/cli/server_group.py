@@ -56,6 +56,10 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_env_mapping,
     handle_update,
     handle_info,
+    handle_add_server,
+    handle_list_servers,
+    handle_remove_server,
+    handle_set_kafka_topology,
 )
 
 
@@ -117,6 +121,18 @@ def main() -> int:
                        help="Add environment mapping(s) in format 'from:to,from:to' (e.g., 'staging:stage,production:prod').")
     parser.add_argument("--list-env-mappings", action="store_true",
                        help="List current environment mappings.")
+    
+    # Multi-server management
+    parser.add_argument("--add-server", metavar="NAME",
+                       help="Add a new server configuration (e.g., 'analytics', 'reporting'). "
+                            "Use with --source-type, --host, --port, --user, --password.")
+    parser.add_argument("--list-servers", action="store_true",
+                       help="List all configured servers in the server group.")
+    parser.add_argument("--remove-server", metavar="NAME",
+                       help="Remove a server configuration. Cannot remove 'default' or servers with services.")
+    parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
+                       help="Change the Kafka topology. 'shared' = same Kafka for all servers, "
+                            "'per-server' = isolated Kafka per server.")
     
     args = parser.parse_args()
 
@@ -225,6 +241,19 @@ def main() -> int:
     if args.add_env_mapping:
         return handle_add_env_mapping(args)
     
+    # Handle multi-server management
+    if args.add_server:
+        return handle_add_server(args)
+    
+    if args.list_servers:
+        return handle_list_servers(args)
+    
+    if args.remove_server:
+        return handle_remove_server(args)
+    
+    if args.set_kafka_topology:
+        return handle_set_kafka_topology(args)
+    
     # Handle info
     if args.info:
         return handle_info(args)
@@ -240,28 +269,34 @@ def main() -> int:
                 print_error("No server group found in configuration")
                 return 1
             
-            if 'services' in server_group:
-                print_header("Environment-Grouped Services")
-                for service_name, service_data in sorted(server_group['services'].items()):
-                    schemas = service_data.get('schemas', [])
-                    print_info(f"\n📦 Service: {service_name}")
+            # Check for 'sources' key (new structure) or fallback to 'services' (legacy)
+            sources = server_group.get('sources', server_group.get('services', {}))
+            
+            if sources:
+                print_header("Environment-Grouped Sources")
+                for source_name, source_data in sorted(sources.items()):
+                    src = cast(Dict[str, Any], source_data)
+                    schemas = src.get('schemas', [])
+                    print_info(f"\n📦 Source: {source_name}")
                     print_info(f"   Schemas (shared): {', '.join(schemas)}")
                     
-                    # Display each environment
-                    for key, value in sorted(service_data.items()):
+                    # Display each environment with server reference
+                    for key, value in sorted(src.items()):
                         if key == 'schemas':
                             continue  # Already displayed
                         if isinstance(value, dict) and 'database' in value:
                             env = key
                             env_data = cast(Dict[str, Any], value)
+                            server = str(env_data.get('server', 'default'))
                             database = str(env_data.get('database', ''))
                             table_count = int(env_data.get('table_count', 0))
                             print_info(f"   🌍 {env}:")
+                            print_info(f"       Server: {server}")
                             print_info(f"       Database: {database}")
                             print_info(f"       Tables: {table_count}")
             else:
-                print_warning("Server group is not using environment-aware grouping.")
-                print_info("Run 'cdc manage-server-group --update' to regenerate with grouping enabled.")
+                print_warning("Server group has no sources configured.")
+                print_info("Run 'cdc manage-server-group --update' to discover databases.")
             return 0
         except Exception as e:
             print_error(f"Failed to view services: {e}")

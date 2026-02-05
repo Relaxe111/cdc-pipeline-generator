@@ -1,19 +1,26 @@
+# CDC Pipeline Generator - Development Container
 services:
   dev:
-    image: asmacarma/cdc-pipeline-generator:latest
-    hostname: cdc-generator-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     container_name: cdc-generator-dev
+    hostname: cdc-generator-dev
+    network_mode: host
+    env_file:
+      - .env
     volumes:
       - .:/workspace
-      - ../adopus-cdc-pipeline:/implementations/adopus
-      - ../asma-cdc-pipeline:/implementations/asma
-      - ~/.ssh:/root/.ssh:ro
+      - ../adopus-cdc-pipeline:/implementations/adopus:rw
+      - ../asma-cdc-pipeline:/implementations/asma:rw
+      - /workspace/.venv
+      - /var/run/docker.sock:/var/run/docker.sock
       - ~/.gitconfig:/root/.gitconfig:ro
+      - ~/.ssh:/root/.ssh:ro
     environment:
-      PYTHONPATH: /workspace
+      - PYTHONPATH=/workspace
+      - PYTHONUNBUFFERED=1
     working_dir: /workspace
+    command: tail -f /dev/null
     stdin_open: true
     tty: true
-    entrypoint: ""
-    command: fish
-    # No depends_on - dev container is standalone script runner

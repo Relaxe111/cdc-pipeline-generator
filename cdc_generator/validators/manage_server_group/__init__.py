@@ -58,6 +58,11 @@ from .cli_handlers import (
     handle_add_env_mapping,
     handle_update,
     handle_info,
+    handle_add_server,
+    handle_list_servers,
+    handle_remove_server,
+    handle_set_kafka_topology,
+    validate_multi_server_config,
 )
 
 __all__ = [
@@ -105,4 +110,9 @@ __all__ = [
     'handle_add_env_mapping',
     'handle_update',
     'handle_info',
+    'handle_add_server',
+    'handle_list_servers',
+    'handle_remove_server',
+    'handle_set_kafka_topology',
+    'validate_multi_server_config',
 ]

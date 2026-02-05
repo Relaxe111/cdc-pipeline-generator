@@ -10,6 +10,15 @@ function __cdc_has_manage_server_group_create --description "Check if --create f
     return 1
 end
 
+function __cdc_has_add_server --description "Check if --add-server flag is present for manage-server-group"
+    for token in (commandline -opc)
+        if test "$token" = "--add-server"
+            return 0
+        end
+    end
+    return 1
+end
+
 function __cdc_flag_not_used --description "Check if a flag has NOT been used yet"
     set -l flag $argv[1]
     set -l tokens (commandline -opc)
@@ -83,6 +92,7 @@ complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_use
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (empty string for fallback)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --kafka-topology" -l kafka-topology -d "Kafka topology (shared or per-server)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --port" -l port -d "Database port" -r
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
@@ -93,6 +103,8 @@ complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_i
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --pattern" -f -a "db-shared" -d "Shared database for all tenants"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --source-type" -f -a "postgres" -d "PostgreSQL database"
 complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --source-type" -f -a "mssql" -d "Microsoft SQL Server"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --kafka-topology" -f -a "shared" -d "Same Kafka cluster for all servers"
+complete -c cdc -n "__fish_seen_subcommand_from scaffold; and __cdc_last_token_is --kafka-topology" -f -a "per-server" -d "Separate Kafka cluster per server"
 
 
 # manage-service subcommand options
@@ -141,6 +153,8 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l env -d "Envir
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l primary-key -d "Primary key column name" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r
+# Multi-server: server selection (for --create-service)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --server" -l server -d "Server name for multi-server setups (default: 'default')" -r
 
 # manage-server-group subcommand options
 # General actions
@@ -159,6 +173,12 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_f
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-env-mapping" -l add-env-mapping -d "Add env mapping(s) 'from:to,from:to' (e.g., 'staging:stage,production:prod')" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-env-mappings" -l list-env-mappings -d "List current environment mappings"
 
+# Multi-server management
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --add-server" -l add-server -d "Add new server (e.g., 'analytics', 'reporting')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --list-servers" -l list-servers -d "List all configured servers"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --remove-server" -l remove-server -d "Remove a server configuration" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_flag_not_used --set-kafka-topology" -l set-kafka-topology -d "Change Kafka topology" -r -f -a "shared per-server"
+
 # Creation flags (only show when --create is present in the command line)
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --pattern" -l pattern -d "Server group pattern" -r -f -a "db-per-tenant db-shared"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --source-type" -l source-type -d "Source database type" -r -f -a "postgres mssql"
@@ -168,6 +188,13 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_h
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --extraction-pattern" -l extraction-pattern -d "Regex pattern with named groups (e.g., '^AdOpus(?P<customer>.+)\$')" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_manage_server_group_create; and __cdc_flag_not_used --environment-aware" -l environment-aware -d "Enable environment-aware grouping (flag, no value needed)"
+
+# Add server flags (only show when --add-server is present)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --source-type" -l source-type -d "Server database type" -r -f -a "postgres mssql"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --host" -l host -d "Database host (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --port" -l port -d "Database port" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --user" -l user -d "Database user (use \${VAR} for env vars)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_has_add_server; and __cdc_flag_not_used --password" -l password -d "Database password (use \${VAR} for env vars)" -r
 
 # generate subcommand - complete with customer names dynamically
 complete -c cdc -n "__fish_seen_subcommand_from generate" -l all -d "Generate for all customers"

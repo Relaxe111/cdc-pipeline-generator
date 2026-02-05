@@ -19,7 +19,9 @@ def scaffold_project_structure(
     server_group_name: str,
     pattern: str,
     source_type: str,
-    project_root: Path
+    project_root: Path,
+    kafka_topology: str = "shared",
+    servers: "dict[str, dict[str, str]] | None" = None,
 ) -> None:
     """Create complete directory structure and template files for new implementation.
     
@@ -37,6 +39,8 @@ def scaffold_project_structure(
         pattern: 'db-per-tenant' or 'db-shared'
         source_type: 'mssql' or 'postgres'
         project_root: Root directory of the implementation
+        kafka_topology: 'shared' or 'per-server' (default: 'shared')
+        servers: Dict of server configurations for multi-server support
     """
     # Create directory structure
     directories = [
@@ -63,7 +67,10 @@ def scaffold_project_structure(
     # Create template files
     files_to_create = {
         "docker-compose.yml": get_docker_compose_template(server_group_name, pattern),
-        ".env.example": get_env_example_template(server_group_name, pattern, source_type),
+        ".env.example": get_env_example_template(
+            server_group_name, pattern, source_type, 
+            kafka_topology=kafka_topology, servers=servers
+        ),
         "README.md": get_readme_template(server_group_name, pattern),
         ".gitignore": get_gitignore_template(),
     }

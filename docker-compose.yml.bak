@@ -1,56 +1,19 @@
-# CDC Pipeline Generator - Development Container
 services:
   dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: cdc-generator-dev
+    image: asmacarma/cdc-pipeline-generator:latest
     hostname: cdc-generator-dev
-    network_mode: host
-    env_file:
-      - .env
+    container_name: cdc-generator-dev
     volumes:
       - .:/workspace
-      - ../adopus-cdc-pipeline:/implementations/adopus:rw
-      - ../asma-cdc-pipeline:/implementations/asma:rw
-      - /workspace/.venv
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ~/.gitconfig:/root/.gitconfig:ro
+      - ../adopus-cdc-pipeline:/implementations/adopus
+      - ../asma-cdc-pipeline:/implementations/asma
       - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
     environment:
-      - PYTHONPATH=/workspace
-      - PYTHONUNBUFFERED=1
+      PYTHONPATH: /workspace
     working_dir: /workspace
-    command: tail -f /dev/null
     stdin_open: true
     tty: true
-
-  test-postgres:
-    image: postgres:15-alpine
-    container_name: cdc-generator-test-db
-    environment:
-      
-      #POSTGRES_SOURCE_URL: ${POSTGRES_SOURCE_URL}
-      POSTGRES_SOURCE_HOST: ${POSTGRES_SOURCE_HOST}
-      POSTGRES_SOURCE_DOCKER_URL: ${POSTGRES_SOURCE_DOCKER_URL}
-      POSTGRES_SOURCE_USER: ${POSTGRES_SOURCE_USER}
-      POSTGRES_SOURCE_PASSWORD: ${POSTGRES_SOURCE_PASSWORD}
-      POSTGRES_SOURCE_DB: ${POSTGRES_SOURCE_DB}
-      POSTGRES_SOURCE_PORT: ${POSTGRES_SOURCE_PORT}
-      
-      #MSSQL_SOURCE_URL: ${MSSQL_SOURCE_URL}
-      MSSQL_SOURCE_HOST: ${MSSQL_SOURCE_HOST}
-      MSSQL_SOURCE_PORT: ${MSSQL_SOURCE_PORT}
-      MSSQL_SOURCE_USER: ${MSSQL_SOURCE_USER}
-      MSSQL_SOURCE_PASSWORD: ${MSSQL_SOURCE_PASSWORD}
-      #MSSQL_SOURCE_DB: ${MSSQL_SOURCE_DB}
-
-    ports:
-      - "5433:5432"
-    volumes:
-      - test-postgres-data:/var/lib/postgresql/data
-    profiles:
-      - testing
-
-volumes:
-  test-postgres-data:
+    entrypoint: ""
+    command: fish
+    # No depends_on - dev container is standalone script runner

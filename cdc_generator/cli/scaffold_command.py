@@ -46,15 +46,35 @@ from cdc_generator.helpers.helpers_logging import (
 )
 
 
-def _default_connection_placeholders(source_type: str) -> Dict[str, str]:
-    """Return default environment variable placeholders for the source database."""
+def _default_connection_placeholders(source_type: str, server_name: str = "default") -> Dict[str, str]:
+    """Return default environment variable placeholders for the source database.
+    
+    Args:
+        source_type: 'postgres' or 'mssql'
+        server_name: Server name for postfix (default has no postfix)
+    """
     prefix = 'POSTGRES_SOURCE' if source_type == 'postgres' else 'MSSQL_SOURCE'
+    postfix = '' if server_name == 'default' else f'_{server_name.upper()}'
     return {
-        'host': f"${{{prefix}_HOST}}",
-        'port': f"${{{prefix}_PORT}}",
-        'user': f"${{{prefix}_USER}}",
-        'password': f"${{{prefix}_PASSWORD}}",
+        'host': f"${{{prefix}_HOST{postfix}}}",
+        'port': f"${{{prefix}_PORT{postfix}}}",
+        'user': f"${{{prefix}_USER{postfix}}}",
+        'password': f"${{{prefix}_PASSWORD{postfix}}}",
     }
+
+
+def _kafka_bootstrap_placeholder(kafka_topology: str, server_name: str = "default") -> str:
+    """Return Kafka bootstrap servers placeholder.
+    
+    Args:
+        kafka_topology: 'shared' or 'per-server'
+        server_name: Server name for postfix (only used if per-server)
+    """
+    if kafka_topology == 'shared':
+        return "${KAFKA_BOOTSTRAP_SERVERS}"
+    else:
+        postfix = f"_{server_name.upper()}"
+        return f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
 
 
 class ScaffoldArgumentParser(argparse.ArgumentParser):
@@ -226,6 +246,13 @@ Connection Defaults:
     )
     
     parser.add_argument(
+        "--kafka-topology",
+        choices=["shared", "per-server"],
+        default="shared",
+        help="Kafka/Redpanda distribution: 'shared' (one for all servers) or 'per-server' (isolated per server). Default: shared",
+    )
+    
+    parser.add_argument(
         "--host",
         help="Database host (default: ${POSTGRES_SOURCE_HOST} or ${MSSQL_SOURCE_HOST})",
     )
@@ -283,12 +310,18 @@ Connection Defaults:
             print_info("  --environment-aware: Required for db-shared pattern")
         return 1
     
-    # Set default connection placeholders
-    placeholders = _default_connection_placeholders(args.source_type)
+    # Set default connection placeholders for 'default' server
+    placeholders = _default_connection_placeholders(args.source_type, server_name="default")
     args.host = args.host or placeholders['host']
     args.port = args.port or placeholders['port']
     args.user = args.user or placeholders['user']
     args.password = args.password or placeholders['password']
+    
+    # Set Kafka bootstrap servers based on topology
+    args.kafka_bootstrap_servers = _kafka_bootstrap_placeholder(
+        args.kafka_topology, 
+        server_name="default"
+    )
     
     # Map to handler expected names for backwards compatibility
     args.add_group = args.name

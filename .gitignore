@@ -53,3 +53,11 @@ generated/
 
 # Docker
 .dockerignore
+
+# Added by cdc scaffold --update
+*.pyc
+.lsn_cache/
+generated/pipelines/*
+generated/schemas/*
+generated/table-definitions/*
+!generated/**/.gitkeep
