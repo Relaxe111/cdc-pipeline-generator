@@ -281,22 +281,24 @@ Examples:
         if server_groups_file.exists() and yaml is not None:
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
-                for sg_name, sg in server_groups_data.get('server_group', {}).items():
-                    # For db-per-tenant: group name IS the service name
-                    if sg.get('pattern') == 'db-per-tenant':
-                        defined_services.add(sg_name)
-                        if sg_name == args.service:
-                            server_group = sg_name
-                            print_info(f"Auto-detected server group: {server_group}")
-                    # For db-shared: collect all database service names
-                    elif sg.get('pattern') == 'db-shared':
-                        for db in sg.get('databases', []):
-                            svc = db.get('service')
-                            if svc:
-                                defined_services.add(svc)
-                                if svc == args.service:
-                                    server_group = sg_name
-                                    print_info(f"Auto-detected server group: {server_group} (from database {db.get('name')})")
+                
+                # New structure: single server group at root with sources
+                for sg_name, sg_data in server_groups_data.items():
+                    if isinstance(sg_data, dict) and 'sources' in sg_data:
+                        # This is a server group with sources
+                        for source_name in sg_data.get('sources', {}).keys():
+                            defined_services.add(source_name)
+                            if source_name == args.service:
+                                server_group = sg_name
+                                print_info(f"Auto-detected server group: {server_group}")
+                
+                # If no server group found and there's only one, use it (common case)
+                if not server_group and len(server_groups_data) == 1:
+                    sg_name = list(server_groups_data.keys())[0]
+                    sg_data = server_groups_data[sg_name]
+                    if isinstance(sg_data, dict) and 'sources' in sg_data:
+                        server_group = sg_name
+                        print_info(f"Using only server group: {server_group}")
         
         # Check which services already have config files
         if services_dir.exists():
