@@ -77,7 +77,7 @@ Examples:
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--service", required=False, help="Service name from services/*.yaml (required for most operations)")
-    parser.add_argument("--create-service", action="store_true", help="Create a new service configuration file")
+    parser.add_argument("--create-service", metavar="SERVICE_NAME", help="Create a new service configuration file with the given name")
     parser.add_argument("--server", help="Server name for multi-server setups (default: 'default'). Use with --create-service.")
     parser.add_argument("--list-source-tables", action="store_true", help="List all source tables configured in this service")
     parser.add_argument("--add-source-table", help="Add single table to service (format: schema.table)")
@@ -105,6 +105,10 @@ Examples:
     parser.add_argument("--sink-table", help="Sink table name (legacy)")
     
     args = parser.parse_args()
+    
+    # If --create-service is used, treat its value as the service name
+    if args.create_service:
+        args.service = args.create_service
     
     # Auto-detect service if not specified and only one service exists
     if not args.service:

@@ -1,7 +1,7 @@
 """Common database inspection utilities for CDC pipeline."""
 
 import os
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 from cdc_generator.helpers.helpers_logging import print_error, print_warning
 from cdc_generator.helpers.service_config import load_service_config, load_customer_config
 

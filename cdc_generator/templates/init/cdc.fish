@@ -129,8 +129,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l env -d "Envir
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l primary-key -d "Primary key column name" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r
-# Multi-server: server selection (for --create-service)
-complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_flag_not_used --server" -l server -d "Server name for multi-server setups (default: 'default')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l server -d "Server name for multi-server setups (default: 'default')" -r
 
 # manage-server-group subcommand options
 # Note: All flags are shown regardless of context. Python validation handles invalid combinations.
