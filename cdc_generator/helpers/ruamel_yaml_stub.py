@@ -18,11 +18,11 @@ class YAMLInterface:
     """
     preserve_quotes: bool
     default_flow_style: bool
-    
+
     def __init__(self) -> None:
         """Initialize YAML loader."""
         ...
-    
+
     def load(self, stream: TextIO) -> object:
         """Load YAML from stream with comment preservation.
         

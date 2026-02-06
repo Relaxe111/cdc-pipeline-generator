@@ -27,13 +27,12 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 from cdc_generator.helpers.helpers_logging import (
+    print_error,
     print_header,
     print_info,
     print_success,
-    print_error,
     print_warning,
 )
 
@@ -51,7 +50,7 @@ def get_project_root() -> Path:
     )
 
 
-def run_docker_compose(args: List[str]) -> int:
+def run_docker_compose(args: list[str]) -> int:
     """Run docker compose command with error handling."""
     try:
         cmd = ["docker", "compose"] + args
@@ -148,7 +147,7 @@ Services:
         return 0
 
     # Determine which profiles to start
-    profiles: List[str] = []
+    profiles: list[str] = []
 
     if args.full:
         profiles.append("full")
@@ -175,7 +174,7 @@ Services:
         return 0
 
     # Start services with the appropriate profiles
-    compose_args: List[str] = []
+    compose_args: list[str] = []
     for profile in profiles:
         compose_args.extend(["--profile", profile])
     compose_args.extend(["up", "-d"])

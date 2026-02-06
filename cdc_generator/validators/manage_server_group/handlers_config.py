@@ -1,21 +1,21 @@
 """CLI handlers for configuration management (exclude patterns, env mappings)."""
 
-from typing import Dict, List
 from argparse import Namespace
+
+from cdc_generator.helpers.helpers_logging import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 from .config import (
     load_database_exclude_patterns,
+    load_env_mappings,
     load_schema_exclude_patterns,
     save_database_exclude_patterns,
+    save_env_mappings,
     save_schema_exclude_patterns,
-    load_env_mappings,
-    save_env_mappings
-)
-from cdc_generator.helpers.helpers_logging import (
-    print_info, 
-    print_success, 
-    print_warning, 
-    print_error
 )
 
 
@@ -38,41 +38,41 @@ def handle_add_ignore_pattern(args: Namespace) -> int:
     if not args.add_to_ignore_list:
         print_error("No pattern specified")
         return 1
-    
+
     patterns = load_database_exclude_patterns()
-    
+
     # Support comma-separated patterns
     input_patterns = [p.strip() for p in args.add_to_ignore_list.split(',')]
-    
-    added: List[str] = []
-    skipped: List[str] = []
-    
+
+    added: list[str] = []
+    skipped: list[str] = []
+
     for pattern in input_patterns:
         if not pattern:
             continue
-        
+
         if pattern in patterns:
             skipped.append(pattern)
             continue
-        
+
         patterns.append(pattern)
         added.append(pattern)
-    
+
     if added:
         save_database_exclude_patterns(patterns)
         print_success(f"✓ Added {len(added)} pattern(s) to database exclude list:")
         for p in added:
             print_info(f"  • {p}")
-    
+
     if skipped:
         print_warning(f"Already in list ({len(skipped)}): {', '.join(skipped)}")
-    
+
     if not added and not skipped:
         print_error("No valid patterns provided")
         return 1
-    
+
     print_info(f"\nCurrent database exclude patterns: {patterns}")
-    
+
     return 0
 
 
@@ -95,45 +95,45 @@ def handle_add_schema_exclude(args: Namespace) -> int:
     if not args.add_to_schema_excludes:
         print_error("No pattern specified")
         return 1
-    
+
     patterns = load_schema_exclude_patterns()
-    
+
     # Support comma-separated patterns
     input_patterns = [p.strip() for p in args.add_to_schema_excludes.split(',')]
-    
-    added: List[str] = []
-    skipped: List[str] = []
-    
+
+    added: list[str] = []
+    skipped: list[str] = []
+
     for pattern in input_patterns:
         if not pattern:
             continue
-        
+
         if pattern in patterns:
             skipped.append(pattern)
             continue
-        
+
         patterns.append(pattern)
         added.append(pattern)
-    
+
     if added:
         save_schema_exclude_patterns(patterns)
         print_success(f"✓ Added {len(added)} pattern(s) to schema exclude list:")
         for p in added:
             print_info(f"  • {p}")
-    
+
     if skipped:
         print_warning(f"Already in list ({len(skipped)}): {', '.join(skipped)}")
-    
+
     if not added and not skipped:
         print_error("No valid patterns provided")
         return 1
-    
+
     print_info(f"\nCurrent schema exclude patterns: {patterns}")
-    
+
     return 0
 
 
-def parse_env_mapping(mapping_str: str) -> Dict[str, str]:
+def parse_env_mapping(mapping_str: str) -> dict[str, str]:
     """Parse comma-separated environment mapping string into dict.
     
     Format: "from:to,from:to,..."
@@ -153,45 +153,45 @@ def parse_env_mapping(mapping_str: str) -> Dict[str, str]:
     """
     if not mapping_str or not mapping_str.strip():
         raise ValueError("Environment mapping string cannot be empty")
-    
-    env_mappings: Dict[str, str] = {}
-    errors: List[str] = []
-    
+
+    env_mappings: dict[str, str] = {}
+    errors: list[str] = []
+
     for idx, pair in enumerate(mapping_str.split(','), 1):
         pair = pair.strip()
         if not pair:
             continue
-            
+
         if ':' not in pair:
             errors.append(f"Mapping #{idx} '{pair}': missing colon (expected format 'from:to')")
             continue
-            
+
         if pair.count(':') > 1:
             errors.append(f"Mapping #{idx} '{pair}': multiple colons found (use format 'from:to')")
             continue
-            
+
         from_env, to_env = pair.split(':', 1)
         from_env = from_env.strip()
         to_env = to_env.strip()
-        
+
         if not from_env:
             errors.append(f"Mapping #{idx} '{pair}': empty source environment")
             continue
-            
+
         if not to_env:
             errors.append(f"Mapping #{idx} '{pair}': empty target environment")
             continue
-            
+
         # Valid mapping
         env_mappings[from_env] = to_env
-    
+
     # Report all errors
     for error in errors:
         print_error(f"  {error}")
-    
+
     if not env_mappings:
         raise ValueError(f"No valid mappings found. Found {len(errors)} error(s).")
-    
+
     return env_mappings
 
 
@@ -212,7 +212,7 @@ def handle_add_env_mapping(args: Namespace) -> int:
     if not args.add_env_mapping:
         print_error("No mapping specified")
         return 1
-    
+
     try:
         new_mappings = parse_env_mapping(args.add_env_mapping)
     except ValueError as e:
@@ -220,13 +220,13 @@ def handle_add_env_mapping(args: Namespace) -> int:
         print_info("\nFormat: 'from:to,from:to,...'")
         print_info("Example: cdc manage-server-group --add-env-mapping 'staging:stage,production:prod'")
         return 1
-    
+
     # Load existing mappings
     mappings = load_env_mappings()
-    
-    added: List[str] = []
-    updated: List[str] = []
-    
+
+    added: list[str] = []
+    updated: list[str] = []
+
     for from_env, to_env in new_mappings.items():
         if from_env in mappings:
             if mappings[from_env] != to_env:
@@ -237,24 +237,24 @@ def handle_add_env_mapping(args: Namespace) -> int:
         else:
             mappings[from_env] = to_env
             added.append(f"{from_env} → {to_env}")
-    
+
     if added or updated:
         save_env_mappings(mappings)
-        
+
         if added:
             print_success(f"✓ Added {len(added)} environment mapping(s):")
             for m in added:
                 print_info(f"  • {m}")
-        
+
         if updated:
             print_success(f"✓ Updated {len(updated)} environment mapping(s):")
             for m in updated:
                 print_info(f"  • {m}")
     else:
         print_warning("No changes made (mappings already exist with same values)")
-    
-    print_info(f"\nCurrent env_mappings:")
+
+    print_info("\nCurrent env_mappings:")
     for from_env, to_env in sorted(mappings.items()):
         print_info(f"  {from_env} → {to_env}")
-    
+
     return 0

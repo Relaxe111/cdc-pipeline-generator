@@ -12,18 +12,18 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from typing import List, Optional, Dict, TypedDict, Set
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TypedDict
 
 
 class ServerStats(TypedDict):
     """Statistics for a single server."""
     databases: int
     tables: int
-    environments: Set[str]
+    environments: set[str]
 
 
-def get_file_header_comments() -> List[str]:
+def get_file_header_comments() -> list[str]:
     """Get the standard file header comments that MUST appear at the top of server_group.yaml.
     
     Returns:
@@ -102,10 +102,10 @@ def get_update_timestamp_comment() -> str:
         Call this when updating database/schema information to track when the
         configuration was last synchronized with the source database.
     """
-    return f"# ? Updated at: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    return f"# ? Updated at: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
 
 
-def ensure_file_header_exists(preserved_comments: List[str]) -> List[str]:
+def ensure_file_header_exists(preserved_comments: list[str]) -> list[str]:
     """Ensure file header comments exist in the preserved comments list.
     
     This is the CRITICAL function that prevents metadata comments from disappearing.
@@ -130,24 +130,24 @@ def ensure_file_header_exists(preserved_comments: List[str]) -> List[str]:
     has_auto_generated = any("AUTO-GENERATED FILE" in c for c in preserved_comments)
     has_command_hint = any("cdc manage-server-group" in c for c in preserved_comments)
     has_separator = any("========" in c for c in preserved_comments)
-    
+
     # If we have all markers, the header exists
     if has_auto_generated and has_command_hint and has_separator:
         return preserved_comments
-    
+
     # Header is missing or incomplete - add/prepend it
     header = get_file_header_comments()
-    
+
     if not preserved_comments:
         # No preserved comments at all
         return header
-    
+
     # Some comments exist but header is missing - prepend header
     # Add a blank line between header and existing comments
     return header + [""] + preserved_comments
 
 
-def validate_output_has_metadata(output_lines: List[str]) -> None:
+def validate_output_has_metadata(output_lines: list[str]) -> None:
     """Validate that output has required metadata comments before writing to file.
     
     This is a SAFETY CHECK to prevent accidentally writing files without metadata.
@@ -172,7 +172,7 @@ def validate_output_has_metadata(output_lines: List[str]) -> None:
             "Cannot write empty server_group.yaml file.\n"
             "  💡 Ensure you have at least one server group configured."
         )
-    
+
     # Check for file header
     has_header = any("AUTO-GENERATED FILE" in line for line in output_lines[:20])
     if not has_header:
@@ -180,7 +180,7 @@ def validate_output_has_metadata(output_lines: List[str]) -> None:
             "Missing file header in server_group.yaml output.\n"
             "  💡 Call ensure_file_header_exists() before building output."
         )
-    
+
     # Check for a top-level server group key (line ending with ":" at column 0, not a comment)
     has_server_group_key = any(
         line.endswith(':') and not line.startswith('#') and not line.startswith(' ')
@@ -192,7 +192,7 @@ def validate_output_has_metadata(output_lines: List[str]) -> None:
             "  💡 Expected a top-level key like 'adopus:' or 'asma:' at the start of a line.\n"
             "  💡 Check that the server group name is valid and the YAML structure is correct."
         )
-    
+
     # Check for at least one separator
     has_separator = any("========" in line for line in output_lines)
     if not has_separator:
@@ -207,9 +207,9 @@ def add_metadata_stats_comments(
     total_tables: int,
     avg_tables: int,
     env_stats_line: str = "",
-    db_list_lines: Optional[List[str]] = None,
-    service_names: Optional[List[str]] = None
-) -> List[str]:
+    db_list_lines: list[str] | None = None,
+    service_names: list[str] | None = None
+) -> list[str]:
     """Generate metadata statistics comments for server group.
     
     Args:
@@ -230,32 +230,32 @@ def add_metadata_stats_comments(
         get_update_timestamp_comment(),
         f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db"
     ]
-    
+
     # Add services line if provided
     if service_names:
         service_list = ", ".join(sorted(service_names))
         stats_comments.append(f"# ? Services ({len(service_names)}): {service_list}")
-    
+
     if env_stats_line:
         stats_comments.append(f"# Per Environment: {env_stats_line}")
-    
+
     if db_list_lines:
         stats_comments.append("# Databases:")
         for line in db_list_lines:
             stats_comments.append(f"#{line}")
-    
+
     return stats_comments
 
 
 def generate_per_server_stats(
-    databases: List[Dict[str, object]],
+    databases: list[dict[str, object]],
     total_dbs: int,
     total_tables: int,
     avg_tables: int,
     service_list: str,
     num_services: int,
     env_stats_line: str
-) -> List[str]:
+) -> list[str]:
     """Generate unified statistics for all servers.
     
     Args:
@@ -280,57 +280,57 @@ def generate_per_server_stats(
         True
     """
     from collections import defaultdict
-    
+
     # Helper to create default stats dict
     def _create_default_stats() -> ServerStats:
         return ServerStats(databases=0, tables=0, environments=set())
-    
+
     # Collect all unique environments across all servers
-    all_environments: Set[str] = set()
+    all_environments: set[str] = set()
     for db in databases:
         env = db.get('environment', '')
         if env and isinstance(env, str):
             all_environments.add(env)
-    
+
     # Group by server (still needed for per-server summary)
-    server_stats: Dict[str, ServerStats] = defaultdict(_create_default_stats)
-    
+    server_stats: dict[str, ServerStats] = defaultdict(_create_default_stats)
+
     for db in databases:
         server = str(db.get('server', 'default'))
         server_stats[server]['databases'] += 1
-        
+
         table_count = db.get('table_count', 0)
         if isinstance(table_count, int):
             server_stats[server]['tables'] += table_count
-        
+
         env = db.get('environment', '')
         if env and isinstance(env, str):
             server_stats[server]['environments'].add(env)
-    
+
     # Build comment lines
-    comment_lines: List[str] = []
-    
+    comment_lines: list[str] = []
+
     # Single unified header with all stats
     comment_lines.append("# ============================================================================")
     comment_lines.append("# Server Group Summary")
     comment_lines.append("# ============================================================================")
     comment_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
     comment_lines.append(f"# Services ({num_services}): {service_list}")
-    
+
     if all_environments:
         env_list = ", ".join(sorted(all_environments))
         comment_lines.append(f"# Environments: {env_list}")
-    
+
     if env_stats_line:
         comment_lines.append(f"# Per Environment: {env_stats_line}")
-    
+
     # Add per-server breakdown (compact)
     comment_lines.append("#")
     comment_lines.append("# Per Server:")
     for server_name in sorted(server_stats.keys()):
         stats = server_stats[server_name]
         comment_lines.append(f"#   {server_name}: {stats['databases']} dbs, {stats['tables']} tables")
-    
+
     comment_lines.append("#")
-    
+
     return comment_lines

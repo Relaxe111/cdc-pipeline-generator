@@ -9,26 +9,18 @@ Usage:
     python generate_pipelines.py --list             # List all customers
 """
 
-import os
-import sys
-import re
 import json
-from pathlib import Path
-import yaml
+import re
+import sys
 from datetime import datetime
-from cdc_generator.helpers.helpers_batch import (
-    map_pg_type, 
-    build_staging_case,
-    # Legacy functions kept for reference
-    build_delete_case, 
-    build_upsert_case,
-    build_batch_delete_case,
-    build_batch_upsert_case
-)
-from cdc_generator.helpers.service_config import load_customer_config, get_all_customers
+from pathlib import Path
+
+import yaml
 
 # Import validation functions
 from cdc_generator.cli.service import validate_service_config
+from cdc_generator.helpers.helpers_batch import build_staging_case
+from cdc_generator.helpers.service_config import get_all_customers, load_customer_config
 
 
 def get_services_for_customers(customers: list) -> set:
@@ -38,10 +30,10 @@ def get_services_for_customers(customers: list) -> set:
     """
     services = set()
     services_dir = Path(__file__).parent.parent / "services"
-    
+
     if not services_dir.exists():
         return services
-    
+
     # Check each service file to see if it contains any of our customers
     for service_file in services_dir.glob("*.yaml"):
         try:
@@ -49,13 +41,13 @@ def get_services_for_customers(customers: list) -> set:
                 service_config = yaml.safe_load(f)
                 service_customers = service_config.get('customers', [])
                 customer_names = {c.get('name') for c in service_customers if c.get('name')}
-                
+
                 # If any of our target customers are in this service, include it
                 if any(customer in customer_names for customer in customers):
                     services.add(service_file.stem)
         except Exception:
             continue
-    
+
     return services
 
 
@@ -63,7 +55,7 @@ def normalize_for_comparison(content: str) -> str:
     """Remove timestamp line from content for comparison purposes."""
     lines = content.split('\n')
     normalized_lines = [
-        line for line in lines 
+        line for line in lines
         if not line.startswith('# Generated:')
     ]
     return '\n'.join(normalized_lines)
@@ -73,7 +65,7 @@ def should_write_file(file_path: Path, new_content: str) -> bool:
     """Check if file should be written by comparing content (ignoring timestamp)."""
     if not file_path.exists():
         return True  # New file, write it
-    
+
     existing_content = file_path.read_text()
     return normalize_for_comparison(existing_content) != normalize_for_comparison(new_content)
 
@@ -111,17 +103,17 @@ def load_template(template_name: str) -> str:
 def load_generated_table_definitions() -> dict:
     """Load generated table definitions from generated/table-definitions/"""
     generated_dir = GENERATED_ROOT / 'table-definitions'
-    
+
     if not generated_dir.exists():
         return {}
-        
+
     tables_by_name = {}
     for yaml_file in sorted(generated_dir.glob('*.yaml')):
         with open(yaml_file) as f:
             table_def = yaml.safe_load(f)
             if table_def and 'name' in table_def:
                 tables_by_name[table_def['name']] = table_def
-                
+
     return tables_by_name
 
 
@@ -133,23 +125,23 @@ def get_primary_key_from_schema(service_name: str, schema_name: str, table_name:
     """
     # Find validation schema file
     schemas_dir = PROJECT_ROOT / '.vscode' / 'schemas'
-    
+
     if not schemas_dir.exists():
         return None, None
-    
+
     # Find schema file matching service (might have different database name)
     schema_files = list(schemas_dir.glob('*.service-validation.schema.json'))
-    
+
     for schema_file in schema_files:
         try:
             with open(schema_file) as f:
                 validation_schema = json.load(f)
-            
+
             # Navigate to table definitions in shared.source_tables
             shared = validation_schema.get('properties', {}).get('shared', {})
             source_tables = shared.get('properties', {}).get('source_tables', {})
             items = source_tables.get('items', {})
-            
+
             # Look for schema group
             if 'anyOf' in items:
                 for schema_group in items['anyOf']:
@@ -158,7 +150,7 @@ def get_primary_key_from_schema(service_name: str, schema_name: str, table_name:
                         # Found matching schema, now find table
                         tables = schema_group.get('properties', {}).get('tables', {})
                         table_items = tables.get('items', {})
-                        
+
                         if 'anyOf' in table_items:
                             for table_def in table_items['anyOf']:
                                 table_name_def = table_def.get('properties', {}).get('name', {})
@@ -166,7 +158,7 @@ def get_primary_key_from_schema(service_name: str, schema_name: str, table_name:
                                     # Found the table, extract primary_key
                                     pk_def = table_def.get('properties', {}).get('primary_key', {})
                                     pk_desc = pk_def.get('description', '')
-                                    
+
                                     # Parse primary key from description
                                     # Format: "Primary key: 'column_name'" or "Primary key: ['col1', 'col2']"
                                     if 'Primary key:' in pk_desc:
@@ -179,7 +171,7 @@ def get_primary_key_from_schema(service_name: str, schema_name: str, table_name:
                                             pass
         except Exception:
             continue
-    
+
     return None, None
 
 
@@ -199,36 +191,36 @@ def generate_customer_pipelines(customer: str, environments: list = None):
     """
     print(f"\n📦 Customer: {customer}")
     print("-" * 60)
-    
+
     # Load customer config
     try:
         config = load_customer_config(customer)
     except FileNotFoundError as e:
         print(f"   ✗ {e}")
         return
-    
+
     customer_name = config.get("customer", customer)
     schema = config.get("schema", customer)
-    
+
     # Load generated table definitions
     generated_tables = load_generated_table_definitions()
-    
+
     # Load source template only (sink is consolidated)
     source_template = load_template("source-pipeline.yaml")
-    
+
     # Determine which environments to generate
     env_configs = config.get("environments", {})
     if environments:
         env_configs = {k: v for k, v in env_configs.items() if k in environments}
-    
+
     if not env_configs:
-        print(f"   ⚠️  No environments configured")
+        print("   ⚠️  No environments configured")
         return
-    
+
     # Generate for each environment
     for env_name, env_config in env_configs.items():
         print(f"\n   🌍 Environment: {env_name}")
-        
+
         # Build variable substitution map
         variables = {
             "CUSTOMER": customer_name,
@@ -236,49 +228,49 @@ def generate_customer_pipelines(customer: str, environments: list = None):
             "SCHEMA": schema,
             "DATABASE_NAME": preserve_env_vars(env_config.get("database_name", customer_name)),
             "TOPIC_PREFIX": preserve_env_vars(env_config.get("topic_prefix", f"{env_name}-{customer_name}")),
-            
+
             # MSSQL connection (preserves ${VAR} format if present)
             "MSSQL_HOST": preserve_env_vars(env_config.get("mssql", {}).get("host", "localhost")),
             "MSSQL_PORT": preserve_env_vars(env_config.get("mssql", {}).get("port", 1433)),
             "MSSQL_USER": preserve_env_vars(env_config.get("mssql", {}).get("user", "sa")),
             "MSSQL_PASSWORD": preserve_env_vars(env_config.get("mssql", {}).get("password", "password")),
-            
+
             # PostgreSQL connection
             "POSTGRES_URL": preserve_env_vars(env_config.get("postgres", {}).get("url", "postgres://postgres:postgres@postgres:5432/consolidated_db?sslmode=disable")),
-            
+
             # Kafka/Redpanda
             "KAFKA_BOOTSTRAP_SERVERS": preserve_env_vars(env_config.get("kafka", {}).get("bootstrap_servers", env_config.get("kafka_bootstrap_servers", "localhost:19092"))),
-            
+
             # CDC Tables - build comma-separated list for table.include.list
             "TABLE_INCLUDE_LIST": build_table_include_list(config),
-            
+
             # Sink topics - dynamic list based on configured tables
             "SINK_TOPICS": build_sink_topics(
-                config, 
+                config,
                 preserve_env_vars(env_config.get("topic_prefix", f"{env_name}-{customer_name}")),
                 generated_tables
             ),
         }
-        
+
         # Build source table inputs for multi-table CDC polling
         source_inputs = build_source_table_inputs(config, variables, generated_tables)
         variables["SOURCE_TABLE_INPUTS"] = source_inputs
-        
+
         # Build table routing map for main pipeline (pass service name for schema lookup)
         service_name = config.get('service', 'adopus')  # Default to adopus for now
         table_routing = build_table_routing_map(service_name, config, variables, generated_tables)
         variables["TABLE_ROUTING"] = table_routing
-        
+
         # Substitute variables in source template only
         source_pipeline = substitute_variables(source_template, variables)
-        
+
         # Create output directory for customer source
         output_dir = GENERATED_DIR / env_name / customer_name
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Write source pipeline file with DO NOT EDIT warning
         source_path = output_dir / "source-pipeline.yaml"
-        
+
         header = """# ============================================================================
 # DO NOT EDIT THIS FILE - IT IS AUTO-GENERATED
 # ============================================================================
@@ -294,12 +286,12 @@ def generate_customer_pipelines(customer: str, environments: list = None):
 # ============================================================================
 
 """
-        
+
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         header_formatted = header.format(customer=customer_name, env=env_name, timestamp=timestamp)
-        
+
         source_content = header_formatted + source_pipeline
-        
+
         # Only write files if content has actually changed (ignoring timestamp)
         if should_write_file(source_path, source_content):
             source_path.write_text(source_content)
@@ -315,39 +307,39 @@ def generate_consolidated_sink(env_name: str, customers: list = None):
     """
     print(f"\n🔗 Consolidated Sink: {env_name}")
     print("-" * 60)
-    
+
     if customers is None:
         customers = get_all_customers()
-    
+
     # Load generated table definitions
     generated_tables = load_generated_table_definitions()
-    
+
     # Load sink template
     sink_template = load_template("sink-pipeline.yaml")
-    
+
     # Aggregate all topics and table cases across customers
     all_topics = []
     all_table_cases = []
     postgres_url = None  # Will be set from first customer's config
-    
+
     for customer in customers:
         try:
             config = load_customer_config(customer)
         except FileNotFoundError:
             continue
-        
+
         schema = config.get("schema", customer)
         env_config = config.get("environments", {}).get(env_name)
-        
+
         if not env_config:
             continue  # Customer doesn't have this environment
-        
+
         # Get PostgreSQL URL (same for all customers in consolidated setup)
         # Strip customer-specific URL parameters like search_path or currentSchema
         # since we use schema-qualified table names instead
         if postgres_url is None:
             raw_url = preserve_env_vars(
-                env_config.get("postgres", {}).get("url", 
+                env_config.get("postgres", {}).get("url",
                     "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable")
             )
             # Remove customer-specific parameters (search_path, currentSchema, options)
@@ -358,31 +350,31 @@ def generate_consolidated_sink(env_name: str, customers: list = None):
                 postgres_url = raw_url.split('?currentSchema=')[0]
             else:
                 postgres_url = raw_url
-        
+
         # Build topics for this customer
         topic_prefix = preserve_env_vars(env_config.get("topic_prefix", f"{env_name}.{customer}"))
         source_tables = config.get('cdc_tables', [])
-        
+
         for t in source_tables:
             table_name = t['table']
             table_schema = t.get('schema', 'dbo')
             # topic_prefix already includes database name, just add schema.table
             topic = f'"{topic_prefix}.{table_schema}.{table_name}"'
             all_topics.append(topic)
-        
+
         # Build table cases for this customer
         for table_config in source_tables:
             table_name = table_config['table']
-            
+
             table_def = generated_tables.get(table_name)
             if not table_def or 'fields' not in table_def:
                 print(f"   [WARNING] No generated field metadata for {table_name} - skipping")
                 continue
-            
+
             fields = table_def['fields']
             mssql_fields = [f['mssql'] for f in fields]
             postgres_fields = [f['postgres'] for f in fields]
-            
+
             staging_case = build_staging_case(
                 table_name=table_name,
                 schema=schema,
@@ -391,32 +383,32 @@ def generate_consolidated_sink(env_name: str, customers: list = None):
                 mssql_fields=mssql_fields
             )
             all_table_cases.append(staging_case)
-    
+
     if not all_topics:
         print(f"   ⚠️  No customers configured for environment {env_name}")
         return
-    
+
     # Build consolidated variables
     topics_yaml = "\n".join([f"      - {t}" for t in all_topics])
     table_cases_yaml = "\n".join(all_table_cases)
     # Indent table cases to match template
     table_cases_yaml = table_cases_yaml.replace("\n", "\n      ")
-    
+
     variables = {
         "ENV": env_name,
         "SINK_TOPICS": "\n" + topics_yaml,
         "TABLE_CASES": table_cases_yaml,
     }
-    
+
     # Substitute variables in sink template
     sink_pipeline = substitute_variables(sink_template, variables)
-    
+
     # Create output directory for consolidated sink
     output_dir = GENERATED_DIR / env_name
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     sink_path = output_dir / "sink-pipeline.yaml"
-    
+
     header = """# ============================================================================
 # DO NOT EDIT THIS FILE - IT IS AUTO-GENERATED
 # ============================================================================
@@ -433,13 +425,13 @@ def generate_consolidated_sink(env_name: str, customers: list = None):
 # ============================================================================
 
 """
-    
+
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     customer_list = ", ".join(sorted([c for c in customers if load_customer_config(c).get("environments", {}).get(env_name)]))
     header_formatted = header.format(env=env_name, customers=customer_list, timestamp=timestamp)
-    
+
     sink_content = header_formatted + sink_pipeline
-    
+
     if should_write_file(sink_path, sink_content):
         sink_path.write_text(sink_content)
         print(f"   ✓ Generated: {sink_path.relative_to(SCRIPT_DIR.parent)}")
@@ -454,7 +446,7 @@ def build_table_include_list(config: dict) -> str:
     if not source_tables:
         # Default fallback
         return "dbo.Actor,dbo.AdgangLinjer"
-    
+
     # Build list: schema.table
     table_list = [f"{t['schema']}.{t['table']}" for t in source_tables]
     return ",".join(table_list)
@@ -463,10 +455,10 @@ def build_table_include_list(config: dict) -> str:
 def build_sink_topics(config: dict, topic_prefix: str, generated_tables: dict) -> str:
     """Build comma-separated list of Kafka topics for the sink to subscribe to."""
     source_tables = config.get('cdc_tables', [])
-    
+
     # topics list for yaml
     topics = []
-    
+
     if not source_tables:
         # Default fallback topics
         topics = [
@@ -477,7 +469,7 @@ def build_sink_topics(config: dict, topic_prefix: str, generated_tables: dict) -
         for t in source_tables:
             table_name = t['table']
             schema = t.get('schema', 'dbo')
-            
+
             # Use generated metadata if available
             table_def = generated_tables.get(table_name)
             if table_def and 'topic_format' in table_def:
@@ -486,7 +478,7 @@ def build_sink_topics(config: dict, topic_prefix: str, generated_tables: dict) -
             else:
                 # Fallback to standard format
                 topics.append(f"{topic_prefix}.{schema}.{table_name}")
-            
+
     # Format for YAML list
     return "\n".join([f"      - \"{topic}\"" for topic in topics]).strip()
 
@@ -496,7 +488,7 @@ def build_source_table_inputs(config: dict, variables: dict, generated_tables: d
     source_tables = config.get('cdc_tables', [])
     if not source_tables:
         return ""
-    
+
     inputs = []
     # Build DSN using variables from customer config (preserves env var references)
     mssql_user = variables['MSSQL_USER']
@@ -505,41 +497,41 @@ def build_source_table_inputs(config: dict, variables: dict, generated_tables: d
     mssql_port = variables['MSSQL_PORT']
     mssql_database = variables['DATABASE_NAME']
     dsn = f"sqlserver://{mssql_user}:{mssql_password}@{mssql_host}:{mssql_port}?database={mssql_database}"
-    
+
     for table_config in source_tables:
         table_name = table_config['table']
         schema = table_config.get('schema', 'dbo')
-        
+
         # Get field definitions from generated table metadata
         table_def = generated_tables.get(table_name)
         if not table_def or 'fields' not in table_def:
             print(f"[WARNING] No generated field metadata for {table_name} - skipping source input")
             continue
-        
+
         fields = table_def['fields']
-        
+
         # Build column list with CDC metadata columns (with brackets for MSSQL)
         columns = ['"[__$start_lsn]"', '"[__$end_lsn]"', '"[__$seqval]"', '"[__$operation]"', '"[__$update_mask]"']
-        
+
         # Add all business columns from table definition
         for field in fields:
             mssql_col = field['mssql']
             columns.append(f'"{mssql_col}"')
-        
+
         # Format columns for YAML
         columns_yaml = "\n".join([f"              - {col}" for col in columns])
-        
+
         # Build using generate input with sql_raw processor for LSN-filtered CDC polling
         table_label = table_name.lower()
         cache_key = f"{table_label}_last_lsn"
-        
+
         # Build column list for SELECT - convert LSN to hex string in SQL to avoid encoding issues
         # Use CONVERT(VARCHAR(22), [__$start_lsn], 1) to get '0x' prefixed hex string
         select_columns = "CONVERT(VARCHAR(22), [__$start_lsn], 1) AS __lsn_hex, [__$operation], [__$update_mask]"
         for field in fields:
             mssql_col = field['mssql']
             select_columns += f", {mssql_col}"
-        
+
         input_yaml = f"""- label: {table_label}_cdc
   generate:
     interval: 5s
@@ -579,22 +571,22 @@ def build_source_table_inputs(config: dict, variables: dict, generated_tables: d
         meta source_table = "{table_name}"
         meta max_lsn = this.get("__lsn_hex")
         root = this"""
-        
+
         inputs.append(input_yaml)
-    
+
     # Return inputs with consistent indentation
     # The template has {{SOURCE_TABLE_INPUTS}} at an indentation of 6 spaces.
     # We want the First line to have NO extra indentation (it replaces {{VAR}}),
     # and subsequent lines to have 6 spaces.
-    
+
     result = ""
     for i, inp in enumerate(inputs):
         if i > 0:
             result += "\n\n      " # Space between inputs, with 6 spaces indentation
-        
+
         # Add the input, and for every newline add 6 spaces
         result += inp.replace("\n", "\n      ")
-    
+
     return result
 
 
@@ -603,16 +595,16 @@ def build_lsn_init_values(config: dict) -> str:
     source_tables = config.get('cdc_tables', [])
     if not source_tables:
         return ""
-    
+
     init_values = []
     for table_config in source_tables:
         table_name = table_config['table']
         table_label = table_name.lower()
         cache_key = f"{table_label}_last_lsn"
-        
+
         # Initialize each table's LSN to zero (start from beginning)
         init_values.append(f'        {cache_key}: "0x00000000000000000000"')
-    
+
     return "\n".join(init_values)
 
 
@@ -621,23 +613,23 @@ def build_table_routing_map(service_name: str, config: dict, variables: dict, ge
     source_tables = config.get('cdc_tables', [])
     if not source_tables:
         return ""
-    
+
     topic_prefix = variables['TOPIC_PREFIX']
     cases = []
-    
+
     for table_config in source_tables:
         table_name = table_config['table']
         schema = table_config.get('schema', 'dbo')
-        
+
         # Get table definition
         table_def = generated_tables.get(table_name)
         if not table_def:
             continue
-            
+
         # Use generated metadata if available, otherwise fallback to manual construction
         key_expr = table_def.get('kafka_key')
         topic_format = table_def.get('topic_format')
-        
+
         if key_expr and topic_format:
             # Use metadata from auto-generated definition
             # Replace placeholder with actual prefix
@@ -649,7 +641,7 @@ def build_table_routing_map(service_name: str, config: dict, variables: dict, ge
             # 3. Fallback to 'id'
             primary_key = table_def.get('primary_key')
             pk_source = 'yaml' if primary_key else None
-            
+
             if not primary_key:
                 # Try to read from validation schema
                 schema_pk, source = get_primary_key_from_schema(service_name, schema, table_name)
@@ -657,19 +649,19 @@ def build_table_routing_map(service_name: str, config: dict, variables: dict, ge
                     primary_key = schema_pk
                     pk_source = 'schema'
                     print(f"  ℹ️  {schema}.{table_name}: Using primary_key from schema: {primary_key}")
-            
+
             if not primary_key:
                 # Final fallback
                 primary_key = 'id'
                 pk_source = 'fallback'
                 print(f"  ⚠️  {schema}.{table_name}: No primary_key found, using fallback 'id'")
-            
+
             # Validate if user specified primary_key matches schema
             if pk_source == 'yaml':
                 schema_pk, _ = get_primary_key_from_schema(service_name, schema, table_name)
                 if schema_pk and schema_pk != primary_key:
                     print(f"  ⚠️  {schema}.{table_name}: primary_key mismatch! YAML={primary_key}, Schema={schema_pk}")
-            
+
             # Build kafka key expression (use payload.after or payload.before for the data)
             if isinstance(primary_key, list):
                 # Composite key
@@ -678,15 +670,15 @@ def build_table_routing_map(service_name: str, config: dict, variables: dict, ge
             else:
                 # Single key
                 key_expr = f'$data.{primary_key}.string().or(\"\")'
-            
+
             full_topic = f"{topic_prefix}.{schema}.{table_name}"
-        
+
         case = f'''$table_name == "{table_name}" => {{
   "topic": "{full_topic}",
   "key": {key_expr}
 }}'''
         cases.append(case)
-    
+
     # Indent by 10 spaces (8 for match + 2 for case)
     # Re-aligning: the placeholder {{TABLE_ROUTING}} is at 8 spaces.
     # We want the output to be at 10 spaces.
@@ -697,9 +689,9 @@ def build_table_routing_map(service_name: str, config: dict, variables: dict, ge
             result += "\n\n          "
         else:
             result += "  " # Add 2 spaces for the first line to reach col 10
-        
+
         result += case.replace("\n", "\n          ")
-    
+
     return result
 
 
@@ -718,31 +710,31 @@ def build_sink_table_cases(config: dict, schema: str, postgres_url: str, generat
     source_tables = config.get('cdc_tables', [])
     if not source_tables:
         return ""
-    
+
     cases = []
-    
+
     for table_config in source_tables:
         table_name = table_config['table']
-        
+
         # Get fields from generated table definition
         table_def = generated_tables.get(table_name)
         if not table_def or 'fields' not in table_def:
             # Skip tables without generated field metadata
             print(f"[WARNING] No generated field metadata for {table_name} - skipping")
             continue
-        
+
         fields = table_def['fields']
-        
+
         # Build field lists from generated table definition
         mssql_fields = []
         postgres_fields = []
-        
+
         for field in fields:
             mssql_name = field['mssql']
             postgres_name = field['postgres']
             mssql_fields.append(mssql_name)
             postgres_fields.append(postgres_name)
-        
+
         # Generate staging table case (all operations go to staging)
         staging_case = build_staging_case(
             table_name=table_name,
@@ -751,9 +743,9 @@ def build_sink_table_cases(config: dict, schema: str, postgres_url: str, generat
             postgres_fields=postgres_fields,
             mssql_fields=mssql_fields
         )
-        
+
         cases.append(staging_case)
-    
+
     # Indent everything by 6 spaces to match the template cases block
     result = "\n".join(cases)
     return result.replace("\n", "\n      ") # First line not prefixed as it replaces {{VAR}} already at col 6
@@ -772,17 +764,17 @@ def normalize_table_name(name: str) -> str:
         'ø': 'o', 'Ø': 'O',
         'æ': 'ae', 'Æ': 'AE'
     }
-    
+
     result = name
     for norwegian_char, replacement in replacements.items():
         result = result.replace(norwegian_char, replacement)
-    
+
     return result
 
 
 def main():
     args = sys.argv[1:]
-    
+
     # Handle --help or -h flag
     if "--help" in args or "-h" in args:
         print("""
@@ -801,7 +793,7 @@ Output Structure:
     generated/pipelines/{env}/sink-pipeline.yaml               # Consolidated sink per env
 """)
         return
-    
+
     # Handle --list flag
     if "--list" in args:
         customers = get_all_customers()
@@ -809,7 +801,7 @@ Output Structure:
         for c in sorted(customers):
             print(f"  - {c}")
         return
-    
+
     # Determine customers and environments to generate
     if len(args) == 0:
         # Generate all
@@ -823,35 +815,35 @@ Output Structure:
         # Generate specific environment for specific customer
         customers = [args[0]]
         environments = [args[1]]
-    
+
     if not customers:
         print("No customers found. Create customer configs in 2-customers/<customer>.yaml")
         return
-    
+
     print("=" * 60)
     print("🚀 Redpanda Connect Pipeline Generator")
     print("=" * 60)
-    
+
     # Validate service configurations for customers being generated
     services_to_validate = get_services_for_customers(customers)
-    
+
     if services_to_validate:
         print(f"\n📋 Validating {len(services_to_validate)} service(s): {', '.join(sorted(services_to_validate))}")
         validation_failed = False
-        
+
         for service_name in sorted(services_to_validate):
             print(f"\n  → Validating {service_name}...")
             if not validate_service_config(service_name):
                 validation_failed = True
                 print(f"    ✗ Validation failed for {service_name}")
-        
+
         if validation_failed:
             print("\n❌ Service validation failed. Fix errors before generating pipelines.")
             print("   Run: cdc manage-service --service <name> --validate-config")
             sys.exit(1)
-        
+
         print("\n  ✅ All service configurations validated successfully\n")
-    
+
     # Generate source pipelines per customer
     for customer in customers:
         try:
@@ -860,7 +852,7 @@ Output Structure:
             print(f"\n   ✗ Error generating {customer}: {e}")
             import traceback
             traceback.print_exc()
-    
+
     # Generate consolidated sinks per environment
     # Collect all unique environments from the customers being processed
     env_set = set()
@@ -874,7 +866,7 @@ Output Structure:
             env_set.update(customer_envs)
         except FileNotFoundError:
             continue
-    
+
     for env_name in sorted(env_set):
         try:
             # For consolidated sink, use ALL customers (not just the ones being regenerated)
@@ -885,7 +877,7 @@ Output Structure:
             print(f"\n   ✗ Error generating consolidated sink for {env_name}: {e}")
             import traceback
             traceback.print_exc()
-    
+
     print("\n" + "=" * 60)
     print("✅ Pipeline generation complete!")
     print("=" * 60)

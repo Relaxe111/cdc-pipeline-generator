@@ -1,11 +1,9 @@
 """VS Code settings creation for project scaffolding."""
 
-from typing import Dict, List
-
 
 # Type definitions for VS Code settings structure
-FilePatterns = Dict[str, bool]
-FilesAssociations = Dict[str, str]
+FilePatterns = dict[str, bool]
+FilesAssociations = dict[str, str]
 
 
 class VSCodeSettingsDict:
@@ -15,13 +13,13 @@ class VSCodeSettingsDict:
     Actual return is Dict since VS Code settings have dynamic keys.
     """
     files_associations: FilesAssociations
-    yaml_schemas: Dict[str, str]
+    yaml_schemas: dict[str, str]
     files_exclude: FilePatterns
     files_readonly_include: FilePatterns
     search_exclude: FilePatterns
 
 
-def create_vscode_settings() -> Dict[str, object]:
+def create_vscode_settings() -> dict[str, object]:
     """Create .vscode/settings.json with useful defaults.
     
     Returns:
@@ -61,7 +59,7 @@ def create_vscode_settings() -> Dict[str, object]:
     }
 
 
-def get_gitignore_patterns() -> List[str]:
+def get_gitignore_patterns() -> list[str]:
     """Get list of patterns for .gitignore.
     
     Returns:
@@ -85,7 +83,7 @@ def get_gitignore_patterns() -> List[str]:
     ]
 
 
-def get_scaffold_directories() -> List[str]:
+def get_scaffold_directories() -> list[str]:
     """Get list of directories to create in scaffold.
     
     Returns:
@@ -104,7 +102,7 @@ def get_scaffold_directories() -> List[str]:
     ]
 
 
-def get_generated_subdirs() -> List[str]:
+def get_generated_subdirs() -> list[str]:
     """Get list of generated subdirectories that need .gitkeep.
     
     Returns:

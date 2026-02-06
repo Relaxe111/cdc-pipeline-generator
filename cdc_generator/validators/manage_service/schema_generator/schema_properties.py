@@ -1,9 +1,9 @@
 """JSON Schema property builders for different configuration patterns."""
 
-from typing import Dict, List, Any
+from typing import Any
 
 
-def build_environments_schema() -> Dict[str, Any]:
+def build_environments_schema() -> dict[str, Any]:
     """Build environments schema (db-per-tenant pattern)."""
     return {
         "type": "object",
@@ -63,7 +63,7 @@ def build_environments_schema() -> Dict[str, Any]:
     }
 
 
-def build_single_environment_schema() -> Dict[str, Any]:
+def build_single_environment_schema() -> dict[str, Any]:
     """Build single environment schema (db-shared pattern)."""
     return {
         "type": "object",
@@ -98,9 +98,9 @@ def build_single_environment_schema() -> Dict[str, Any]:
     }
 
 
-def build_customers_schema() -> Dict[str, Any]:
+def build_customers_schema() -> dict[str, Any]:
     """Build customers array schema (db-per-tenant pattern)."""
-    env_override_schema: Dict[str, Any] = {
+    env_override_schema: dict[str, Any] = {
         "type": "object",
         "description": "Customer+environment-specific overrides",
         "properties": {
@@ -144,7 +144,7 @@ def build_customers_schema() -> Dict[str, Any]:
             }
         }
     }
-    
+
     return {
         "type": "array",
         "description": "Customer-specific configurations (db-per-tenant only). Inherits from environments root and specific environments.",
@@ -171,7 +171,7 @@ def build_customers_schema() -> Dict[str, Any]:
     }
 
 
-def build_conditional_requirements() -> List[Dict[str, Any]]:
+def build_conditional_requirements() -> list[dict[str, Any]]:
     """Build conditional validation rules (allOf)."""
     return [
         {
@@ -217,7 +217,7 @@ def build_conditional_requirements() -> List[Dict[str, Any]]:
     ]
 
 
-def add_table_definitions(json_schema: Dict[str, Any], schemas_data: Dict[str, Any]) -> None:
+def add_table_definitions(json_schema: dict[str, Any], schemas_data: dict[str, Any]) -> None:
     """Add table definitions to JSON Schema.
     
     Modifies json_schema in place to add:
@@ -228,19 +228,19 @@ def add_table_definitions(json_schema: Dict[str, Any], schemas_data: Dict[str, A
         json_schema: The JSON Schema dict to modify
         schemas_data: Dict[schema_name, Dict[table_name, table_metadata]]
     """
-    all_table_refs: List[Dict[str, Any]] = []
-    all_table_names: List[str] = []
-    
+    all_table_refs: list[dict[str, Any]] = []
+    all_table_names: list[str] = []
+
     for schema_name, tables in schemas_data.items():
         for table_name, table_info in tables.items():
             all_table_names.append(table_name)
             # Deduplicate column names
             column_names = list(dict.fromkeys([col['name'] for col in table_info['columns']]))
             primary_key = table_info['primary_key']
-            
+
             # Create unique definition name
             def_name = f"{schema_name}_{table_name}_table"
-            
+
             # Create table definition
             json_schema["definitions"][def_name] = {
                 "type": "object",
@@ -276,10 +276,10 @@ def add_table_definitions(json_schema: Dict[str, Any], schemas_data: Dict[str, A
                     "required": ["ignore_columns", "include_columns"]
                 }
             }
-            
+
             # Add reference to anyOf list
             all_table_refs.append({"$ref": f"#/definitions/{def_name}"})
-    
+
     # Add all table references to anyOf, plus allow simple string format with enum
     # Deduplicate table names (tables can exist in multiple schemas)
     all_table_refs.append({
@@ -287,6 +287,6 @@ def add_table_definitions(json_schema: Dict[str, Any], schemas_data: Dict[str, A
         "description": "Table name (simplified format when no additional properties needed)",
         "enum": sorted(list(set(all_table_names)))
     })
-    
+
     # Set anyOf for source_tables (used by both db-per-tenant and db-shared modes)
     json_schema["properties"]["source_tables"]["items"]["properties"]["tables"]["items"]["anyOf"] = all_table_refs

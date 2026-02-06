@@ -2,13 +2,19 @@
 
 import json
 import os
-import re
-import yaml
 from pathlib import Path
-from typing import Optional, List, Dict
-from cdc_generator.helpers.helpers_logging import print_header, print_info, print_success, print_error, Colors
+
+import yaml
+
+from cdc_generator.helpers.helpers_logging import (
+    Colors,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+)
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
-from cdc_generator.helpers.service_config import load_service_config, load_customer_config
+from cdc_generator.helpers.service_config import load_customer_config, load_service_config
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 SERVICES_DIR = PROJECT_ROOT / 'services'
@@ -32,41 +38,41 @@ def load_schemas_from_yaml(service: str, schema_filter: str = None) -> dict:
         Dict[schema_name, Dict[table_name, table_metadata]]
     """
     service_schemas_dir = PROJECT_ROOT / 'service-schemas' / service
-    
+
     if not service_schemas_dir.exists():
         return {}
-    
+
     schemas_data = {}
-    
+
     # Iterate through schema directories
     for schema_dir in service_schemas_dir.iterdir():
         if not schema_dir.is_dir():
             continue
-        
+
         schema_name = schema_dir.name
-        
+
         # Apply schema filter if provided
         if schema_filter and schema_name != schema_filter:
             continue
-        
+
         schemas_data[schema_name] = {}
-        
+
         # Load all table YAML files in this schema
         for table_file in schema_dir.glob('*.yaml'):
             try:
                 with open(table_file) as f:
                     table_data = yaml.safe_load(f)
-                
+
                 table_name = table_data.get('table')
                 if not table_name:
                     continue
-                
+
                 columns = table_data.get('columns', [])
-                
+
                 # Extract primary key(s) from columns
                 primary_keys = [col['name'] for col in columns if col.get('primary_key')]
                 primary_key = primary_keys[0] if len(primary_keys) == 1 else primary_keys if primary_keys else None
-                
+
                 # Store in schema data structure (matches database query format)
                 schemas_data[schema_name][table_name] = {
                     'columns': columns,
@@ -74,11 +80,11 @@ def load_schemas_from_yaml(service: str, schema_filter: str = None) -> dict:
                 }
             except Exception as e:
                 print_error(f"Failed to load {table_file}: {e}")
-    
+
     return schemas_data
 
 
-def generate_service_validation_schema(service: str, env: str = 'nonprod', schema_filter: Optional[str] = None) -> bool:
+def generate_service_validation_schema(service: str, env: str = 'nonprod', schema_filter: str | None = None) -> bool:
     """Generate JSON Schema for service YAML validation based on database schema.
     
     Args:
@@ -91,7 +97,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
     """
     try:
         config = load_service_config(service)
-        
+
         # Check if this is a PostgreSQL service - use YAML-based generation instead of database introspection
         server_group = config.get('server_group')
         use_yaml_schemas = False
@@ -104,32 +110,32 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                         if sg.get('name') == server_group:
                             server_type = sg.get('server', {}).get('type')
                             pattern = sg.get('pattern')
-                            
+
                             # Use YAML-based generation for PostgreSQL services
                             if server_type == 'postgres':
                                 use_yaml_schemas = True
                                 print_info(f"Using YAML-based schema generation for PostgreSQL service '{service}'")
-        
+
         # For YAML-based generation (PostgreSQL), skip MSSQL dependencies
         if not use_yaml_schemas:
             if not HAS_PYMSSQL:
                 print_error("pymssql not installed - use: pip install pymssql")
                 return False
-            
+
             reference_customer = config.get('reference', 'avansas')
             customer_config = load_customer_config(reference_customer)
-            
+
             # Get the specific environment config
             env_config = customer_config.get('environments', {}).get(env, {})
             if not env_config:
                 print_error(f"Environment '{env}' not found for customer '{reference_customer}'")
                 return False
-        
+
         # Load all server groups from server_group.yaml
         server_groups_file = PROJECT_ROOT / 'server_group.yaml'
         all_server_groups = {}
         all_database_names_by_group = {}
-        
+
         if server_groups_file.exists():
             with open(server_groups_file) as f:
                 server_groups_data = yaml.safe_load(f)
@@ -147,54 +153,54 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                             elif isinstance(db, dict):
                                 db_names.add(db.get('name'))
                     all_database_names_by_group[group_name] = db_names
-        
+
         # Get current server group and mode
         server_group = config.get('server_group')
         if server_group:
             mode = all_server_groups.get(server_group, {}).get('pattern', 'db-per-tenant')
         else:
             mode = config.get('mode', 'db-per-tenant')
-        
+
         # Get database names for current server group
         database_names = all_database_names_by_group.get(server_group, set())
-        
+
         # For YAML-based generation, skip database connection
         if use_yaml_schemas:
             schema_msg = f"schema: {schema_filter}" if schema_filter else "all schemas"
             print_header(f"Generating validation schema from service-schemas/{service} ({schema_msg})")
-            
+
             # Load schemas from YAML files
             schemas_data = load_schemas_from_yaml(service, schema_filter)
-            
+
             if not schemas_data:
                 print_error(f"No schemas found in service-schemas/{service}" + (f" matching '{schema_filter}'" if schema_filter else ""))
                 print_info(f"Make sure YAML files exist in service-schemas/{service}/{{schema}}/{{table}}.yaml")
                 return False
-            
+
             # Display loaded schemas
             for schema_name in sorted(schemas_data.keys()):
                 print_info(f"Processing schema: {schema_name}")
                 total_tables = len(schemas_data[schema_name])
                 for idx, table_name in enumerate(sorted(schemas_data[schema_name].keys()), 1):
                     print(f"  {Colors.CYAN}[{idx}/{total_tables}]{Colors.RESET} {table_name}")
-            
+
             # Get schema names for validation
             schema_names = sorted(schemas_data.keys())
             database = config.get('source', {}).get('validation_database', service)
-        
+
         else:
             # MSSQL database introspection path
             # Extract connection info
             mssql = env_config.get('mssql', {})
-            
+
             # Get database name from source.validation_database or fallback to env_config.database_name
             source_config = config.get('source', {})
             database = source_config.get('validation_database') or env_config.get('database_name')
-            
+
             if not database:
-                print_error(f"No validation_database found in source config and no database_name in environment config")
+                print_error("No validation_database found in source config and no database_name in environment config")
                 return False
-            
+
             # Expand environment variables (support ${VAR} format)
             def expand_env(value):
                 """Expand ${VAR} and $VAR patterns."""
@@ -203,37 +209,37 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                 # Replace ${VAR} with $VAR for os.path.expandvars
                 value = value.replace('${', '$').replace('}', '')
                 return os.path.expandvars(value)
-            
+
             host = expand_env(mssql.get('host', 'localhost'))
             port = int(expand_env(mssql.get('port', '1433')))
             user = expand_env(mssql.get('user', 'sa'))
             password = expand_env(mssql.get('password', ''))
-            
+
             schema_msg = f"schema: {schema_filter}" if schema_filter else "all schemas"
             print_header(f"Generating validation schema from service-schemas/{service} ({schema_msg})")
-            
+
             # Load schemas from YAML files instead of querying database
             schemas_data = load_schemas_from_yaml(service, schema_filter)
-            
+
             if not schemas_data:
                 print_error(f"No schemas found in service-schemas/{service}" + (f" matching '{schema_filter}'" if schema_filter else ""))
                 print_info(f"Make sure YAML files exist in service-schemas/{service}/{{schema}}/{{table}}.yaml")
                 return False
-            
+
             # Display loaded schemas
             for schema_name in sorted(schemas_data.keys()):
                 print_info(f"Processing schema: {schema_name}")
                 total_tables = len(schemas_data[schema_name])
                 for idx, table_name in enumerate(sorted(schemas_data[schema_name].keys()), 1):
                     print(f"  {Colors.CYAN}[{idx}/{total_tables}]{Colors.RESET} {table_name}")
-            
+
             # Get schema names for validation
             schema_names = sorted(schemas_data.keys())
-        
+
         # Database introspection no longer needed - using YAML files
         # conn = pymssql.connect(server=host, port=port, database=database, user=user, password=password)
         # cursor = conn.cursor(as_dict=True)
-        
+
         # Commented out - no longer querying database
         # # Get schemas (filtered if specified)
         # if schema_filter:
@@ -251,17 +257,17 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         #         ORDER BY TABLE_SCHEMA
         #     """)
         # schemas = [row['TABLE_SCHEMA'] for row in cursor.fetchall()]
-        
+
         # if not schemas:
         #     print_error(f"No schemas found" + (f" matching '{schema_filter}'" if schema_filter else ""))
         #     return False
-        
+
         # # Build schema data per database schema
         # schemas_data = {}
-        
+
         # for schema_name in schemas:
         #     print_info(f"Processing schema: {schema_name}")
-        #     
+        #
         #     # Get tables in this schema
         #     cursor.execute(f"""
         #         SELECT TABLE_NAME
@@ -269,18 +275,18 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         #         WHERE TABLE_SCHEMA = '{schema_name}' AND TABLE_TYPE = 'BASE TABLE'
         #         ORDER BY TABLE_NAME
         #     """)
-        #     
+        #
         #     table_rows = cursor.fetchall()
         #     total_tables = len(table_rows)
-        #     
+        #
         #     tables = {}
         #     for idx, row in enumerate(table_rows, 1):
         #         table_name = row['TABLE_NAME']
         #         print(f"  {Colors.CYAN}[{idx}/{total_tables}]{Colors.RESET} {table_name}")
-        #         
+        #
         #         # Get columns for this table
         #         cursor.execute(f"""
-        #             SELECT 
+        #             SELECT
         #                 c.COLUMN_NAME,
         #                 c.DATA_TYPE,
         #                 c.IS_NULLABLE,
@@ -298,7 +304,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         #             WHERE c.TABLE_SCHEMA = '{schema_name}' AND c.TABLE_NAME = '{table_name}'
         #             ORDER BY c.ORDINAL_POSITION
         #         """)
-        #         
+        #
         #         columns = []
         #         primary_keys = []
         #         for col_row in cursor.fetchall():
@@ -311,39 +317,39 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         #             })
         #             if col_row['IS_PRIMARY_KEY']:
         #                 primary_keys.append(col_name)
-        #         
+        #
         #         tables[table_name] = {
         #             'columns': columns,
         #             'primary_key': primary_keys[0] if len(primary_keys) == 1 else primary_keys if primary_keys else None
         #         }
-        #     
+        #
         #     schemas_data[schema_name] = tables
-        
+
         # conn.close()  # No longer needed - using YAML files
-        
+
         # Generate mini schemas for keys (BEFORE determining schema_ref so shared schemas exist)
         generate_service_enum_schema()
         generate_server_group_enum_schema()
         generate_database_name_schemas()
         generate_schema_name_schemas()
         generate_table_names_enum_schema(service, schemas_data)
-        
+
         # Determine schema reference (use shared if schema list has shared version)
         schema_names = sorted(schemas_data.keys())
-        
+
         # Try to find shared schema for this schema list
         if len(schema_names) == 1:
             shared_name = schema_names[0]
         else:
             shared_name = '_'.join(schema_names)
-        
+
         shared_schema_file = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'schema_name' / 'shared' / f'{shared_name}.schema.json'
-        
+
         if shared_schema_file.exists():
             schema_ref = f"keys/schema_name/shared/{shared_name}.schema.json"
         else:
             schema_ref = f"keys/schema_name/{database}.schema.json"
-        
+
         # Generate comprehensive JSON Schema with both structural and table validation
         json_schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -735,7 +741,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                 }
             ]
         }
-        
+
         # Create table definitions
         all_table_refs = []
         all_table_names = []
@@ -745,10 +751,10 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                 # Deduplicate column names
                 column_names = list(dict.fromkeys([col['name'] for col in table_info['columns']]))
                 primary_key = table_info['primary_key']
-                
+
                 # Create unique definition name
                 def_name = f"{schema_name}_{table_name}_table"
-                
+
                 # Create table definition
                 json_schema["definitions"][def_name] = {
                     "type": "object",
@@ -784,32 +790,32 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                         "required": ["ignore_columns", "include_columns"]
                     }
                 }
-                
+
                 # Add reference to anyOf list
                 all_table_refs.append({"$ref": f"#/definitions/{def_name}"})
-        
+
         # Add all table references to anyOf, plus allow simple string format with enum
         # Deduplicate table names (tables can exist in multiple schemas)
         all_table_refs.append({
-            "type": "string", 
+            "type": "string",
             "description": "Table name (simplified format when no additional properties needed)",
             "enum": sorted(list(set(all_table_names)))
         })
         # Set anyOf for source_tables (used by both db-per-tenant and db-shared modes)
         json_schema["properties"]["source_tables"]["items"]["properties"]["tables"]["items"]["anyOf"] = all_table_refs
-        
+
         # Save JSON Schema
         output_dir = PROJECT_ROOT / '.vscode' / 'schemas'
         output_dir.mkdir(parents=True, exist_ok=True)
         output_file = output_dir / f'{database}.service-validation.schema.json'
-        
+
         with open(output_file, 'w') as f:
             json.dump(json_schema, f, indent=2)
-        
+
         print_success(f"\nGenerated validation schema: {output_file}")
         print_info(f"  {len(schemas_data)} schemas: {', '.join(schemas_data.keys())}")
         print_info(f"  Total tables: {sum(len(t) for t in schemas_data.values())}")
-        
+
         # Detect case-variant column names across all tables
         all_columns = set()
         case_variants = {}
@@ -821,15 +827,15 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
                     if col_lower not in case_variants:
                         case_variants[col_lower] = set()
                     case_variants[col_lower].add(col_name)
-        
+
         # Find columns with multiple case variations
         overlapping_columns = {col_lower: sorted(variants) for col_lower, variants in case_variants.items() if len(variants) > 1}
         has_case_variants = len(overlapping_columns) > 0
-        
+
         # Add schema comment to service YAML
         service_yaml_path = SERVICES_DIR / f'{service}.yaml'
         schema_comment = f"# yaml-language-server: $schema=../.vscode/schemas/{database}.service-validation.schema.json"
-        
+
         # Build informational header
         info_header = f"""# The redhat.vscode-yaml extension shows ALL possible column names from ALL tables
 # in autocomplete suggestions, not just columns for the specific table being edited.
@@ -853,7 +859,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
 #   • true:  Existing DB - only enable CDC, never modify database (nonprod/prod)
 #
 """
-        
+
         # Build warning comment if case variants exist
         warning_comment = ""
         if has_case_variants:
@@ -862,7 +868,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
             for col_lower, variants in sorted(overlapping_columns.items()):
                 overlap_list.append(f"#   - {', '.join(variants)}")
             overlap_section = '\n'.join(overlap_list)
-            
+
             warning_comment = f"""#
 # ⚠️  CASE SENSITIVITY WARNING
 # The following columns exist with different casing across tables:
@@ -870,14 +876,14 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
 #
 # Always verify the exact column name casing for your specific table.
 """
-        
+
         final_comment = f"# 📝 To verify column names for a specific table:\n#    cdc manage-service --service {service} --inspect --schema {{schema_name}}\n# ==================================================================================\n"
-        
+
         full_header = schema_comment + '\n' + info_header + warning_comment + final_comment
-        
-        with open(service_yaml_path, 'r') as f:
+
+        with open(service_yaml_path) as f:
             content = f.read()
-        
+
         # Remove ALL old header comments (everything before first non-comment line)
         lines = content.split('\n')
         first_non_comment_idx = 0
@@ -885,18 +891,18 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
             if line and not line.startswith('#'):
                 first_non_comment_idx = i
                 break
-        
+
         # Keep only the actual YAML content
         yaml_content = '\n'.join(lines[first_non_comment_idx:])
-        
+
         # Write new header + content
         with open(service_yaml_path, 'w') as f:
             f.write(full_header + '\n' + yaml_content)
-        
+
         print_success(f"\n✓ Updated schema validation in {service}.yaml")
-        
+
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to generate validation schema: {e}")
         import traceback
@@ -904,7 +910,7 @@ def generate_service_validation_schema(service: str, env: str = 'nonprod', schem
         return False
 
 
-def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]) -> bool:
+def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict]) -> bool:
     """Save detailed table schema information to YAML file.
     
     Args:
@@ -919,28 +925,28 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
     if not HAS_PYMSSQL:
         print_error("pymssql not installed - use: pip install pymssql")
         return False
-    
+
     try:
         print_info(f"Saving detailed schema for {len(tables)} tables...")
         output_dir = PROJECT_ROOT / 'generated' / 'schemas'
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         config = load_service_config(service)
         reference = config.get('reference', 'avansas')
         customer_config = load_customer_config(reference)
         env_config = customer_config.get('environments', {}).get(env, {})
         database = env_config.get('database_name', 'unknown')
-        
+
         schema_data = {
             'database': database,
             'schema': schema,
             'service': service,
             'tables': {}
         }
-        
+
         # Connect and get detailed schema
         mssql = env_config.get('mssql', {})
-        
+
         # Expand environment variables (support ${VAR} format)
         def expand_env(value):
             """Expand ${VAR} and $VAR patterns."""
@@ -948,12 +954,12 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
                 return value
             value = value.replace('${', '$').replace('}', '')
             return os.path.expandvars(value)
-        
+
         host = expand_env(mssql.get('host', 'localhost'))
         port = int(expand_env(mssql.get('port', '1433')))
         user = expand_env(mssql.get('user', 'sa'))
         password = expand_env(mssql.get('password', ''))
-        
+
         conn = create_mssql_connection(
             host=host,
             port=port,
@@ -962,11 +968,11 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
             password=password
         )
         cursor = conn.cursor()
-        
+
         for i, table in enumerate(tables, 1):
             table_name = table['TABLE_NAME']
             print(f"  [{i}/{len(tables)}] {table_name}")
-            
+
             # Get detailed column info
             cursor.execute(f"""
                 SELECT 
@@ -989,7 +995,7 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
                     AND c.TABLE_NAME = '{table_name}'
                 ORDER BY c.ORDINAL_POSITION
             """)
-            
+
             columns = []
             primary_keys = []
             for row in cursor:
@@ -1002,23 +1008,23 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: List[Dict]
                 })
                 if is_pk:
                     primary_keys.append(col_name)
-            
+
             schema_data['tables'][table_name] = {
                 'columns': columns,
                 'primary_key': primary_keys[0] if len(primary_keys) == 1 else primary_keys if primary_keys else None
             }
-        
+
         conn.close()
-        
+
         # Save to YAML
         output_file = output_dir / f'{database}_{schema}.yaml'
         with open(output_file, 'w') as f:
             yaml.dump(schema_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        
+
         print_success(f"\nSchema saved to {output_file}")
         print_info(f"  {len(tables)} tables documented")
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to save schema: {e}")
         import traceback
@@ -1045,11 +1051,11 @@ def generate_table_names_enum_schema(service: str, schemas_data: dict) -> bool:
             for table_name in tables.keys():
                 qualified_name = f"{schema_name}.{table_name}"
                 table_names.append(qualified_name)
-        
+
         if not table_names:
             print_info(f"No tables found for service '{service}'")
             return True
-        
+
         # Create the mini schema
         schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1059,20 +1065,20 @@ def generate_table_names_enum_schema(service: str, schemas_data: dict) -> bool:
             "type": "string",
             "enum": sorted(table_names)
         }
-        
+
         # Save to keys/table_name directory
         keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'table_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
+
         output_file = keys_dir / f'{service}.schema.json'
         with open(output_file, 'w') as f:
             json.dump(schema, f, indent=2)
-        
+
         print_success(f"Generated table_name mini schema: {output_file}")
         print_info(f"  {len(table_names)} tables: {', '.join(sorted(table_names)[:5])}{'...' if len(table_names) > 5 else ''}")
-        
+
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to generate table_name mini schema: {e}")
         import traceback
@@ -1097,15 +1103,15 @@ def generate_service_enum_schema() -> bool:
         if not server_groups_file.exists():
             print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
-        
+
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
-        
+
         services = set()
-        
+
         for group_name, group in data.get('server_group', {}).items():
             group_type = group.get('server_group_type')
-            
+
             if group_type == 'db-per-tenant':
                 # For db-per-tenant: group name IS the service name
                 services.add(group_name)
@@ -1115,7 +1121,7 @@ def generate_service_enum_schema() -> bool:
                     service_name = db.get('service')
                     if service_name:
                         services.add(service_name)
-        
+
         # Create the mini schema for service key only
         schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1125,20 +1131,20 @@ def generate_service_enum_schema() -> bool:
             "type": "string",
             "enum": sorted(list(services))
         }
-        
+
         # Save to keys directory
         keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys'
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
+
         output_file = keys_dir / 'service.schema.json'
         with open(output_file, 'w') as f:
             json.dump(schema, f, indent=2)
-        
+
         print_success(f"Generated service mini schema: {output_file}")
         print_info(f"  {len(services)} services: {', '.join(sorted(services))}")
-        
+
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to generate service mini schema: {e}")
         import traceback
@@ -1161,12 +1167,12 @@ def generate_server_group_enum_schema() -> bool:
         if not server_groups_file.exists():
             print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
-        
+
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
-        
+
         server_groups = list(data.get('server_group', {}).keys())
-        
+
         # Create the mini schema for server_group key only
         schema = {
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1176,20 +1182,20 @@ def generate_server_group_enum_schema() -> bool:
             "type": "string",
             "enum": sorted(server_groups)
         }
-        
+
         # Save to keys directory
         keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys'
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
+
         output_file = keys_dir / 'server_group.schema.json'
         with open(output_file, 'w') as f:
             json.dump(schema, f, indent=2)
-        
+
         print_success(f"Generated server_group mini schema: {output_file}")
         print_info(f"  {len(server_groups)} groups: {', '.join(sorted(server_groups))}")
-        
+
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to generate server_group mini schema: {e}")
         import traceback
@@ -1212,34 +1218,34 @@ def generate_database_name_schemas() -> bool:
         if not server_groups_file.exists():
             print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
-        
+
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
-        
+
         keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'database_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
+
         generated_count = 0
-        
+
         for group_name, group in data.get('server_group', {}).items():
-            
+
             # Extract database names from this server group
             db_names = []
-            
+
             # For db-per-tenant, include database_ref if it exists
             group_type = group.get('pattern')
             database_ref = group.get('database_ref')
             if group_type == 'db-per-tenant' and database_ref:
                 db_names.append(database_ref)
-            
+
             for db in group.get('databases', []):
                 db_name = db.get('name')
                 if db_name:
                     db_names.append(db_name)
-            
+
             if not db_names:
                 continue
-            
+
             # Create mini schema for this server group's databases
             schema = {
                 "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1249,17 +1255,17 @@ def generate_database_name_schemas() -> bool:
                 "type": "string",
                 "enum": sorted(set(db_names))  # Use set to deduplicate if database_ref is also in databases list
             }
-            
+
             output_file = keys_dir / f'{group_name}.schema.json'
             with open(output_file, 'w') as f:
                 json.dump(schema, f, indent=2)
-            
+
             print_success(f"Generated database_name/{group_name} mini schema: {output_file}")
             print_info(f"  {len(db_names)} databases")
             generated_count += 1
-        
+
         return generated_count > 0
-        
+
     except Exception as e:
         print_error(f"Failed to generate database_name mini schemas: {e}")
         import traceback
@@ -1284,47 +1290,47 @@ def generate_schema_name_schemas() -> bool:
         if not server_groups_file.exists():
             print_error(f"server_group.yaml not found at {server_groups_file}")
             return False
-        
+
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
-        
+
         keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'schema_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Group databases by their schema list (sorted tuple for consistent matching)
         schema_groups = {}  # tuple(sorted_schemas) -> [db_names]
         databases_to_generate = []
-        
+
         # First pass: collect all databases and group by schema list
         for group_name, group in data.get('server_group', {}).items():
             group_type = group.get('pattern')
             database_ref = group.get('database_ref')
-            
+
             for db in group.get('databases', []):
                 db_name = db.get('name')
                 schemas = db.get('schemas', [])
-                
+
                 if not db_name or not schemas:
                     continue
-                
+
                 # Group by schema list (include ALL databases for shared detection)
                 schema_key = tuple(sorted(schemas))
                 if schema_key not in schema_groups:
                     schema_groups[schema_key] = []
                 schema_groups[schema_key].append(db_name)
-                
+
                 # For db-per-tenant, only process database_ref for file generation
                 if group_type == 'db-per-tenant' and database_ref:
                     if db_name != database_ref:
                         continue
-                
+
                 databases_to_generate.append((db_name, schemas))
-        
+
         # Create shared schemas for schema lists used by 2+ databases
         shared_schemas_created = {}  # schema_key -> shared_filename
         shared_dir = keys_dir / 'shared'
         shared_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for schema_key, db_names in schema_groups.items():
             if len(db_names) >= 2:  # Shared if used by 2+ databases
                 # Create a readable filename from schema list
@@ -1333,7 +1339,7 @@ def generate_schema_name_schemas() -> bool:
                     shared_name = schemas_list[0]
                 else:
                     shared_name = '_'.join(schemas_list)
-                
+
                 shared_file = shared_dir / f'{shared_name}.schema.json'
                 schema = {
                     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1343,19 +1349,19 @@ def generate_schema_name_schemas() -> bool:
                     "type": "string",
                     "enum": schemas_list
                 }
-                
+
                 with open(shared_file, 'w') as f:
                     json.dump(schema, f, indent=2)
-                
+
                 shared_schemas_created[schema_key] = shared_name
-        
+
         # Second pass: generate individual schemas or skip if shared exists
         generated_count = 0
         skipped_for_shared = []
-        
+
         for db_name, schemas in databases_to_generate:
             schema_key = tuple(sorted(schemas))
-            
+
             # If shared version exists, skip individual file creation
             if schema_key in shared_schemas_created:
                 skipped_for_shared.append(db_name)
@@ -1364,7 +1370,7 @@ def generate_schema_name_schemas() -> bool:
                 if old_file.exists():
                     old_file.unlink()
                 continue
-            
+
             # Create mini schema for this database's schemas (unique schema list)
             schema = {
                 "$schema": "http://json-schema.org/draft-07/schema#",
@@ -1374,13 +1380,13 @@ def generate_schema_name_schemas() -> bool:
                 "type": "string",
                 "enum": sorted(schemas)
             }
-            
+
             output_file = keys_dir / f'{db_name}.schema.json'
             with open(output_file, 'w') as f:
                 json.dump(schema, f, indent=2)
-            
+
             generated_count += 1
-        
+
         if generated_count > 0 or shared_schemas_created:
             msg = f"Generated {generated_count} schema_name mini schemas"
             if shared_schemas_created:
@@ -1389,9 +1395,9 @@ def generate_schema_name_schemas() -> bool:
                 if skipped_for_shared:
                     msg += f" [replaced {len(skipped_for_shared)} individual schemas]"
             print_success(msg)
-        
+
         return generated_count > 0 or len(shared_schemas_created) > 0
-        
+
     except Exception as e:
         print_error(f"Failed to generate schema_name mini schemas: {e}")
         import traceback

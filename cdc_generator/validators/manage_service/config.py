@@ -1,26 +1,23 @@
 """Configuration management for CDC service files."""
 
-from pathlib import Path
-from typing import List, Dict, Optional
 
-from cdc_generator.helpers.yaml_loader import yaml
 from cdc_generator.helpers.helpers_logging import print_error
 from cdc_generator.helpers.service_config import get_project_root
-
+from cdc_generator.helpers.yaml_loader import yaml
 
 PROJECT_ROOT = get_project_root()
 SERVICES_DIR = PROJECT_ROOT / "services"
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 
-def get_available_services() -> List[str]:
+def get_available_services() -> list[str]:
     """Get list of available services from services/ directory."""
     if not SERVICES_DIR.exists():
         return []
     return [f.stem for f in SERVICES_DIR.glob("*.yaml")]
 
 
-def load_service_schema_tables(service: str, schema: str) -> List[str]:
+def load_service_schema_tables(service: str, schema: str) -> list[str]:
     """Load table names from service-schemas/{service}/{schema}/*.yaml"""
     schema_dir = SERVICE_SCHEMAS_DIR / service / schema
     if not schema_dir.exists():
@@ -28,7 +25,7 @@ def load_service_schema_tables(service: str, schema: str) -> List[str]:
     return sorted([f.stem for f in schema_dir.glob("*.yaml")])
 
 
-def get_table_schema_definition(service: str, schema: str, table: str) -> Optional[Dict]:
+def get_table_schema_definition(service: str, schema: str, table: str) -> dict | None:
     """Load table definition from service-schemas/{service}/{schema}/{table}.yaml"""
     table_file = SERVICE_SCHEMAS_DIR / service / schema / f"{table}.yaml"
     if not table_file.exists():
@@ -37,7 +34,7 @@ def get_table_schema_definition(service: str, schema: str, table: str) -> Option
         return yaml.load(f)
 
 
-def save_service_config(service: str, config: Dict) -> bool:
+def save_service_config(service: str, config: dict) -> bool:
     """Save service configuration to file, preserving comments."""
     try:
         service_file = SERVICES_DIR / f"{service}.yaml"
@@ -59,16 +56,16 @@ def detect_service_mode(service: str) -> str:
     from cdc_generator.helpers.service_config import load_service_config
     try:
         config = load_service_config(service)
-        
+
         # Try new server_group field first
         server_group = config.get('server_group')
         if server_group:
             # Map server_group to mode
             if server_group == 'adopus':
                 return 'db-per-tenant'
-            elif server_group == 'asma':
+            if server_group == 'asma':
                 return 'db-shared'
-        
+
         # Fall back to legacy mode field
         return config.get('mode', 'db-per-tenant')
     except:

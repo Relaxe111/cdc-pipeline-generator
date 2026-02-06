@@ -45,40 +45,45 @@ if __package__ in (None, ""):
     project_root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(project_root))
 
-from cdc_generator.helpers.helpers_logging import print_header, print_info, print_error, print_warning
-from cdc_generator.helpers.yaml_loader import ConfigDict
-
-# Import from modular package
-from cdc_generator.validators.manage_server_group import (
-    load_schema_exclude_patterns,
-    load_database_exclude_patterns,
-    handle_add_ignore_pattern,
-    handle_add_schema_exclude,
-    handle_update,
-    handle_info,
-    handle_add_server,
-    handle_list_servers,
-    handle_remove_server,
-    handle_set_kafka_topology,
-    handle_set_extraction_pattern,
-    handle_add_extraction_pattern,
-    handle_list_extraction_patterns,
-    handle_remove_extraction_pattern,
+from cdc_generator.helpers.helpers_logging import (
+    print_error,
+    print_header,
+    print_info,
+    print_warning,
 )
+from cdc_generator.helpers.yaml_loader import ConfigDict
 
 # Import flag validator
 from cdc_generator.validators.flag_validator import validate_manage_server_group_flags
 
+# Import from modular package
+from cdc_generator.validators.manage_server_group import (
+    handle_add_extraction_pattern,
+    handle_add_ignore_pattern,
+    handle_add_schema_exclude,
+    handle_add_server,
+    handle_info,
+    handle_list_extraction_patterns,
+    handle_list_servers,
+    handle_remove_extraction_pattern,
+    handle_remove_server,
+    handle_set_extraction_pattern,
+    handle_set_kafka_topology,
+    handle_update,
+    load_database_exclude_patterns,
+    load_schema_exclude_patterns,
+)
+
 
 def main() -> int:
     # Note: .env loading handled by implementations, not generator library
-    
+
     parser = argparse.ArgumentParser(
         description="Manage the server_group.yaml file for your implementation.",
         prog="cdc manage-server-group",  # Use the alias in help messages
         formatter_class=argparse.RawTextHelpFormatter
     )
-    
+
     # Primary actions
     parser.add_argument(
         "--update",
@@ -100,12 +105,12 @@ def main() -> int:
 
     # Exclude patterns management
     parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in server_group.yaml).")
-    parser.add_argument("--list-ignore-patterns", action="store_true", 
+    parser.add_argument("--list-ignore-patterns", action="store_true",
                        help="List current database exclude patterns.")
     parser.add_argument("--add-to-schema-excludes", help="Add a pattern to the schema exclude list (persisted in server_group.yaml).")
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
-    
+
     # Multi-server management
     parser.add_argument("--add-server", metavar="NAME",
                        help="Add a new server configuration (e.g., 'analytics', 'reporting'). "
@@ -121,7 +126,7 @@ def main() -> int:
                        help="Set extraction pattern for a specific server. "
                             "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). "
                             "Example: --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
-    
+
     # Extraction pattern management (ordered multi-pattern approach)
     parser.add_argument("--add-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
                        help="Add an extraction pattern to a server. Patterns are tried in order (first match wins). "
@@ -145,23 +150,23 @@ def main() -> int:
                        help="Remove an extraction pattern by index. "
                             "Use --list-extraction-patterns to see indices. "
                             "Example: --remove-extraction-pattern prod 0")
-    
+
     args = parser.parse_args()
 
     # Validate flag combinations (Python-based validation)
     validation_result = validate_manage_server_group_flags(args)
-    
+
     if validation_result.level == 'error':
         print_error(validation_result.message or "Invalid flag combination")
         if validation_result.suggestion:
             print(validation_result.suggestion)
         return 1
-    
+
     if validation_result.level == 'warning':
         print(validation_result.message or "")
         print()  # Blank line before proceeding
 
-    
+
     # Handle list schema exclude patterns
     if args.list_schema_excludes:
         patterns = load_schema_exclude_patterns()
@@ -175,7 +180,7 @@ def main() -> int:
             print_info("You can add patterns to a comment in server_group.yaml, for example:")
             print_info("  # schema_exclude_patterns: ['hdb_catalog', 'hdb_views', 'sessions']")
         return 0
-    
+
     # Handle list ignore patterns
     if args.list_ignore_patterns:
         patterns = load_database_exclude_patterns()
@@ -189,58 +194,61 @@ def main() -> int:
             print_info("You can add patterns to a comment in server_group.yaml, for example:")
             print_info("  # database_exclude_patterns: ['test', 'dev', 'backup']")
         return 0
-    
+
     # Handle add to ignore list
     if args.add_to_ignore_list:
         return handle_add_ignore_pattern(args)
-    
+
     # Handle add to schema excludes
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
-    
+
     # Handle multi-server management
     if args.add_server:
         return handle_add_server(args)
-    
+
     if args.list_servers:
         return handle_list_servers(args)
-    
+
     if args.remove_server:
         return handle_remove_server(args)
-    
+
     if args.set_kafka_topology:
         return handle_set_kafka_topology(args)
-    
+
     if args.set_extraction_pattern:
         return handle_set_extraction_pattern(args)
-    
+
     if args.add_extraction_pattern:
         return handle_add_extraction_pattern(args)
-    
+
     if args.list_extraction_patterns is not None:
         return handle_list_extraction_patterns(args)
-    
+
     if args.remove_extraction_pattern:
         return handle_remove_extraction_pattern(args)
-    
+
     # Handle info
     if args.info:
         return handle_info(args)
-    
+
     # Handle view-services
     if args.view_services:
-        from cdc_generator.validators.manage_server_group.config import load_server_groups, get_single_server_group
+        from cdc_generator.validators.manage_server_group.config import (
+            get_single_server_group,
+            load_server_groups,
+        )
         try:
             config = load_server_groups()
             server_group = get_single_server_group(config)
-            
+
             if not server_group:
                 print_error("No server group found in configuration")
                 return 1
-            
+
             # Check for 'sources' key (new structure) or fallback to 'services' (legacy)
             sources = server_group.get('sources', server_group.get('services', {}))
-            
+
             if sources:
                 print_header("Environment-Grouped Sources")
                 for source_name, source_data in sorted(sources.items()):
@@ -254,7 +262,7 @@ def main() -> int:
                         schemas = []
                     print_info(f"\n📦 Source: {source_name}")
                     print_info(f"   Schemas (shared): {', '.join(schemas)}")
-                    
+
                     # Display each environment with server reference
                     for key, value in sorted(src.items()):
                         if key == 'schemas':
@@ -280,8 +288,8 @@ def main() -> int:
         except Exception as e:
             print_error(f"Failed to view services: {e}")
             return 1
-    
-    
+
+
     # Handle update (the primary action)
     if args.all and args.update is None:
         print_error("'--all' requires '--update'.")
@@ -290,7 +298,7 @@ def main() -> int:
 
     if args.update is not None:
         return handle_update(args)
-    
+
     # No action specified
     print_error("No action specified. Use --update or --info.")
     parser.print_help()

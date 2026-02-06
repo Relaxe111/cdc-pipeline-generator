@@ -1,15 +1,16 @@
 """JSON Schema builder for service validation (main schema assembly)."""
 
 from pathlib import Path
-from typing import Dict, Any, List
-from cdc_generator.helpers.helpers_logging import print_success, print_error
+from typing import Any
+
+from cdc_generator.helpers.helpers_logging import print_error, print_success
 
 from .schema_properties import (
+    add_table_definitions,
+    build_conditional_requirements,
+    build_customers_schema,
     build_environments_schema,
     build_single_environment_schema,
-    build_customers_schema,
-    build_conditional_requirements,
-    add_table_definitions
 )
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -21,8 +22,8 @@ def build_json_schema_structure(
     database: str,
     server_group: str,
     schema_ref: str,
-    schemas_data: Dict[str, Any]
-) -> Dict[str, Any]:
+    schemas_data: dict[str, Any]
+) -> dict[str, Any]:
     """Build the comprehensive JSON Schema structure for service validation.
     
     Args:
@@ -35,7 +36,7 @@ def build_json_schema_structure(
     Returns:
         Complete JSON Schema dict
     """
-    json_schema: Dict[str, Any] = {
+    json_schema: dict[str, Any] = {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": f"{service.title()} Service Validation Schema",
         "description": f"Comprehensive validation schema for {service} service: structure + table content validation (from service-schemas/{service})",
@@ -104,14 +105,14 @@ def build_json_schema_structure(
         },
         "allOf": build_conditional_requirements()
     }
-    
+
     # Add table definitions
     add_table_definitions(json_schema, schemas_data)
-    
+
     return json_schema
 
 
-def update_service_yaml_header(service: str, database: str, schemas_data: Dict[str, Any]) -> bool:
+def update_service_yaml_header(service: str, database: str, schemas_data: dict[str, Any]) -> bool:
     """Update service YAML file with schema validation comment and informational header.
     
     Args:
@@ -125,9 +126,9 @@ def update_service_yaml_header(service: str, database: str, schemas_data: Dict[s
     try:
         service_yaml_path = SERVICES_DIR / f'{service}.yaml'
         schema_comment = f"# yaml-language-server: $schema=../.vscode/schemas/{database}.service-validation.schema.json"
-        
+
         # Detect case-variant column names
-        case_variants: Dict[str, set[str]] = {}
+        case_variants: dict[str, set[str]] = {}
         for _schema_name, tables in schemas_data.items():
             for _table_name, table_info in tables.items():
                 for col in table_info['columns']:
@@ -136,10 +137,10 @@ def update_service_yaml_header(service: str, database: str, schemas_data: Dict[s
                     if col_lower not in case_variants:
                         case_variants[col_lower] = set()
                     case_variants[col_lower].add(col_name)
-        
+
         overlapping_columns = {col_lower: sorted(variants) for col_lower, variants in case_variants.items() if len(variants) > 1}
         has_case_variants = len(overlapping_columns) > 0
-        
+
         # Build informational header
         info_header = f"""# The redhat.vscode-yaml extension shows ALL possible column names from ALL tables
 # in autocomplete suggestions, not just columns for the specific table being edited.
@@ -163,15 +164,15 @@ def update_service_yaml_header(service: str, database: str, schemas_data: Dict[s
 #   • true:  Existing DB - only enable CDC, never modify database (nonprod/prod)
 #
 """
-        
+
         # Build warning comment if case variants exist
         warning_comment = ""
         if has_case_variants:
-            overlap_list: List[str] = []
+            overlap_list: list[str] = []
             for col_lower, variants in sorted(overlapping_columns.items()):
                 overlap_list.append(f"#   - {', '.join(variants)}")
             overlap_section = '\n'.join(overlap_list)
-            
+
             warning_comment = f"""#
 # ⚠️  CASE SENSITIVITY WARNING
 # The following columns exist with different casing across tables:
@@ -179,14 +180,14 @@ def update_service_yaml_header(service: str, database: str, schemas_data: Dict[s
 #
 # Always verify the exact column name casing for your specific table.
 """
-        
+
         final_comment = f"# 📝 To verify column names for a specific table:\n#    cdc manage-service --service {service} --inspect --schema {{schema_name}}\n# ==================================================================================\n"
-        
+
         full_header = schema_comment + '\n' + info_header + warning_comment + final_comment
-        
-        with open(service_yaml_path, 'r') as f:
+
+        with open(service_yaml_path) as f:
             content = f.read()
-        
+
         # Remove ALL old header comments (everything before first non-comment line)
         lines = content.split('\n')
         first_non_comment_idx = 0
@@ -194,17 +195,17 @@ def update_service_yaml_header(service: str, database: str, schemas_data: Dict[s
             if line and not line.startswith('#'):
                 first_non_comment_idx = i
                 break
-        
+
         # Keep only the actual YAML content
         yaml_content = '\n'.join(lines[first_non_comment_idx:])
-        
+
         # Write new header + content
         with open(service_yaml_path, 'w') as f:
             f.write(full_header + '\n' + yaml_content)
-        
+
         print_success(f"\n✓ Updated schema validation in {service}.yaml")
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to update service YAML header: {e}")
         return False

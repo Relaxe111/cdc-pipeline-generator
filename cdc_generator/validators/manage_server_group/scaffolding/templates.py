@@ -12,7 +12,7 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
         Complete docker-compose.yml content as string
     """
     container_prefix = server_group_name.replace('_', '-')
-    
+
     return f"""# =============================================================================
 # Docker Compose: Infrastructure for {server_group_name.title()} CDC Pipeline
 # =============================================================================
@@ -247,8 +247,8 @@ volumes:
 
 
 def get_env_example_template(
-    server_group_name: str, 
-    pattern: str, 
+    server_group_name: str,
+    pattern: str,
     source_type: str,
     kafka_topology: str = "shared",
     servers: "dict[str, dict[str, str]] | None" = None,
@@ -268,7 +268,7 @@ def get_env_example_template(
     # Default to single 'default' server if not provided
     if servers is None:
         servers = {"default": {"type": source_type}}
-    
+
     content = f"""# =============================================================================
 # Environment Variables for {server_group_name.title()} CDC Pipeline
 # =============================================================================
@@ -292,10 +292,10 @@ def get_env_example_template(
     for server_name, server_config in servers.items():
         server_type = server_config.get("type", source_type)
         server_source_prefix = "POSTGRES_SOURCE" if server_type == "postgres" else "MSSQL_SOURCE"
-        
+
         # Non-default servers get postfix
         postfix = "" if server_name == "default" else f"_{server_name.upper()}"
-        
+
         if server_name == "default":
             content += f"""# ===========================================================================
 # Source Database Configuration ({server_type.upper()})
@@ -306,7 +306,7 @@ def get_env_example_template(
 # Source Database Configuration - {server_name.upper()} Server ({server_type.upper()})
 # ===========================================================================
 """
-        
+
         content += f"""{server_source_prefix}_HOST{postfix}=
 {server_source_prefix}_PORT{postfix}={"5432" if server_type == "postgres" else "1433"}
 {server_source_prefix}_USER{postfix}=
@@ -381,7 +381,7 @@ def get_readme_template(server_group_name: str, pattern: str) -> str:
         Complete README.md content as string
     """
     pattern_desc = "db-per-tenant" if pattern == "db-per-tenant" else "db-shared"
-    
+
     return f"""# {server_group_name.title()} CDC Pipeline
 
 CDC (Change Data Capture) pipeline for {server_group_name} using Redpanda Connect.
@@ -481,16 +481,16 @@ generated/schemas/*
 
 # Re-export pipeline templates from dedicated module
 from .pipeline_templates import (
-    get_source_pipeline_template,
     get_sink_pipeline_template,
+    get_source_pipeline_template,
 )
 
 __all__ = [
     "get_docker_compose_template",
     "get_env_example_template",
-    "get_readme_template",
     "get_gitignore_template",
-    "get_source_pipeline_template",
+    "get_readme_template",
     "get_sink_pipeline_template",
+    "get_source_pipeline_template",
 ]
 

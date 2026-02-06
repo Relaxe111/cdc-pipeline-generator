@@ -30,10 +30,10 @@ Commands:
 Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
 """
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
-import os
+
 
 def detect_environment():
     """
@@ -46,18 +46,18 @@ def detect_environment():
             - is_dev_container: True if running inside dev container
     """
     cwd = Path.cwd()
-    
+
     # Check if we're in the dev container
     if cwd.parts[:2] == ('/', 'workspace'):
         # In dev container at /workspace (generator root)
         return Path('/workspace'), None, True
-    elif cwd.parts[:3] == ('/', 'implementations', 'adopus'):
+    if cwd.parts[:3] == ('/', 'implementations', 'adopus'):
         # In dev container at /implementations/adopus
         return Path('/implementations/adopus'), 'adopus', True
-    elif cwd.parts[:3] == ('/', 'implementations', 'asma'):
+    if cwd.parts[:3] == ('/', 'implementations', 'asma'):
         # In dev container at /implementations/asma
         return Path('/implementations/asma'), 'asma', True
-    
+
     # Check if we're in an implementation directory on host
     # Look for server_group.yaml as indicator
     if (cwd / 'server_group.yaml').exists():
@@ -65,12 +65,11 @@ def detect_environment():
         # Try to detect which one from path
         if 'adopus-cdc-pipeline' in str(cwd):
             return cwd, 'adopus', False
-        elif 'asma-cdc-pipeline' in str(cwd):
+        if 'asma-cdc-pipeline' in str(cwd):
             return cwd, 'asma', False
-        else:
-            # Unknown implementation, use current dir
-            return cwd, None, False
-    
+        # Unknown implementation, use current dir
+        return cwd, None, False
+
     # Try to find implementation root by walking up
     current = cwd
     while current != current.parent:
@@ -82,7 +81,7 @@ def detect_environment():
                 impl_name = 'asma'
             return current, impl_name, False
         current = current.parent
-    
+
     # Fallback: assume we're in current directory
     return cwd, None, False
 
@@ -102,7 +101,7 @@ def get_script_paths(workspace_root, is_dev_container):
         # In dev container - check if generator files exist locally
         generator_root = Path('/workspace')
         generator_candidate = generator_root / 'cdc_generator'
-        
+
         if generator_candidate.exists() and (generator_candidate / 'cli').exists():
             # Generator development mode - use local files
             return {
@@ -110,33 +109,30 @@ def get_script_paths(workspace_root, is_dev_container):
                 'scripts': workspace_root / 'scripts',
                 'root': workspace_root,
             }
-        else:
-            # User project with installed package - use python -m
-            return {
-                'generator': None,  # Use installed package
-                'scripts': workspace_root / 'scripts',
-                'root': workspace_root,
-            }
-    else:
-        # On host - try to find generator
-        # Look for generator as sibling directory
-        parent = workspace_root.parent
-        generator_candidate = parent / 'cdc-pipeline-generator'
-        
-        if generator_candidate.exists():
-            return {
-                'generator': generator_candidate / 'cdc_generator',
-                'scripts': workspace_root / 'scripts',
-                'root': workspace_root,
-            }
-        else:
-            # Fallback: assume generator is installed as package
-            # Scripts will be run via python -m
-            return {
-                'generator': None,  # Use installed package
-                'scripts': workspace_root / 'scripts',
-                'root': workspace_root,
-            }
+        # User project with installed package - use python -m
+        return {
+            'generator': None,  # Use installed package
+            'scripts': workspace_root / 'scripts',
+            'root': workspace_root,
+        }
+    # On host - try to find generator
+    # Look for generator as sibling directory
+    parent = workspace_root.parent
+    generator_candidate = parent / 'cdc-pipeline-generator'
+
+    if generator_candidate.exists():
+        return {
+            'generator': generator_candidate / 'cdc_generator',
+            'scripts': workspace_root / 'scripts',
+            'root': workspace_root,
+        }
+    # Fallback: assume generator is installed as package
+    # Scripts will be run via python -m
+    return {
+        'generator': None,  # Use installed package
+        'scripts': workspace_root / 'scripts',
+        'root': workspace_root,
+    }
 
 
 # Commands that use generator library
@@ -231,29 +227,29 @@ LOCAL_COMMANDS = {
 def print_help(workspace_root, implementation_name, is_dev_container):
     """Print help message with all available commands."""
     print(__doc__)
-    
+
     # Show environment info
     if is_dev_container:
         if implementation_name:
             print(f"📍 Environment: Dev container - /implementations/{implementation_name}")
         else:
-            print(f"📍 Environment: Dev container - /workspace (generator)")
+            print("📍 Environment: Dev container - /workspace (generator)")
     else:
         print(f"📍 Environment: Host - {workspace_root}")
         if implementation_name:
             print(f"   Implementation: {implementation_name}")
-    
+
     print("\n📦 Commands using generator library:")
     for cmd, info in GENERATOR_COMMANDS.items():
         print(f"  {cmd:20} - {info['description']}")
-    
+
     print("\n🔧 Commands using local scripts:")
     for cmd, info in LOCAL_COMMANDS.items():
         desc = info['description']
         if 'usage' in info:
             desc += f"\n  {' ' * 20}   Usage: {info['usage']}"
         print(f"  {cmd:20} - {desc}")
-    
+
     print("\n💡 Tip: Run commands from implementation directory or dev container")
 
 
@@ -271,7 +267,7 @@ def run_generator_command(command, paths, extra_args, workspace_root):
         int: Exit code
     """
     cmd_info = GENERATOR_COMMANDS[command]
-    
+
     if paths['generator'] is None:
         # Use installed package
         cmd = ["python3", "-m", cmd_info['module']] + extra_args
@@ -280,10 +276,10 @@ def run_generator_command(command, paths, extra_args, workspace_root):
         script_path = paths['generator'] / cmd_info['script']
         if not script_path.exists():
             print(f"❌ Error: Generator script not found: {script_path}")
-            print(f"   Make sure cdc-pipeline-generator is properly set up.")
+            print("   Make sure cdc-pipeline-generator is properly set up.")
             return 1
         cmd = ["python3", str(script_path)] + extra_args
-    
+
     # Execute from implementation workspace root
     try:
         result = subprocess.run(cmd, cwd=workspace_root)
@@ -308,14 +304,14 @@ def run_local_command(command, paths, extra_args, workspace_root):
     """
     cmd_info = LOCAL_COMMANDS[command]
     script_path = workspace_root / cmd_info['script']
-    
+
     if not script_path.exists():
         print(f"❌ Error: Script not found: {script_path}")
-        print(f"   This command requires an implementation workspace.")
+        print("   This command requires an implementation workspace.")
         return 1
-    
+
     cmd = ["python3", str(script_path)] + extra_args
-    
+
     try:
         result = subprocess.run(cmd, cwd=workspace_root)
         return result.returncode
@@ -331,27 +327,27 @@ def main():
         workspace_root, implementation_name, is_dev_container = detect_environment()
         print_help(workspace_root, implementation_name, is_dev_container)
         return 0
-    
+
     command = sys.argv[1]
     extra_args = sys.argv[2:] if len(sys.argv) > 2 else []
-    
+
     # Special handling for 'init' and 'scaffold' - run anywhere without environment detection
     if command == "init":
         from cdc_generator.cli.init_project import init_project
         return init_project(extra_args)
-    
+
     if command == "scaffold":
         from cdc_generator.cli.scaffold_command import main as scaffold_main
         # Override sys.argv to make argparse work correctly
         sys.argv = [sys.argv[0]] + extra_args
         return scaffold_main()
-    
+
     # For other commands, detect environment
     workspace_root, implementation_name, is_dev_container = detect_environment()
-    
+
     # Get script paths
     paths = get_script_paths(workspace_root, is_dev_container)
-    
+
     # Special handling for reload-cdc-autocompletions (shell command, not Python)
     if command == "reload-cdc-autocompletions":
         import subprocess
@@ -364,23 +360,21 @@ def main():
                 ]
                 result = subprocess.run(cmd)
                 return result.returncode
-            else:
-                print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
-                print("   Enter the container with: docker compose exec dev fish")
-                return 1
+            print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
+            print("   Enter the container with: docker compose exec dev fish")
+            return 1
         except Exception as e:
             print(f"❌ Error reloading completions: {e}")
             return 1
-    
+
     # Execute command
     if command in GENERATOR_COMMANDS:
         return run_generator_command(command, paths, extra_args, workspace_root)
-    elif command in LOCAL_COMMANDS:
+    if command in LOCAL_COMMANDS:
         return run_local_command(command, paths, extra_args, workspace_root)
-    else:
-        print(f"❌ Unknown command: {command}")
-        print(f"\nRun 'cdc help' to see available commands.")
-        return 1
+    print(f"❌ Unknown command: {command}")
+    print("\nRun 'cdc help' to see available commands.")
+    return 1
 
 
 if __name__ == "__main__":

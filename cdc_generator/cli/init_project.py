@@ -3,11 +3,10 @@
 Initialize a new CDC Pipeline project with dev container setup.
 """
 
-import sys
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-from importlib import resources
 
 
 def copy_template_files(target_dir: Path):
@@ -15,9 +14,9 @@ def copy_template_files(target_dir: Path):
     try:
         # Use importlib.resources to access package data
         import cdc_generator.templates.init as init_templates
-        
+
         templates_path = Path(init_templates.__file__).parent
-        
+
         files_to_copy = [
             'docker-compose.yml',
             'Dockerfile.dev',
@@ -26,22 +25,22 @@ def copy_template_files(target_dir: Path):
             '.gitignore',
             'cdc.fish'
         ]
-        
+
         for file_name in files_to_copy:
             src = templates_path / file_name
             dst = target_dir / file_name
-            
+
             if dst.exists():
                 print(f"⚠️  {file_name} already exists, skipping...")
                 continue
-            
+
             shutil.copy2(src, dst)
             print(f"✅ Created {file_name}")
-            
+
     except Exception as e:
         print(f"❌ Error copying templates: {e}")
         return False
-    
+
     return True
 
 
@@ -54,7 +53,7 @@ def create_directory_structure(target_dir: Path):
         'generated/schemas',
         'generated/table-definitions',
     ]
-    
+
     for dir_path in directories:
         full_path = target_dir / dir_path
         full_path.mkdir(parents=True, exist_ok=True)
@@ -86,7 +85,7 @@ POSTGRES_TARGET_DB=cdc_target
 # Redpanda Connect
 REDPANDA_CONNECT_VERSION=latest
 """
-    
+
     env_file = target_dir / '.env.example'
     env_file.write_text(env_content)
     print("✅ Created .env.example")
@@ -108,14 +107,14 @@ def init_git_repo(target_dir: Path):
         print("⚠️  Git not found, skipping repository initialization")
     except Exception as e:
         print(f"⚠️  Could not initialize git: {e}")
-    
+
     return False
 
 
 def build_container(target_dir: Path):
     """Build and start the dev container."""
     print("\n🐳 Building dev container...")
-    
+
     try:
         # Check if docker compose is available
         result = subprocess.run(
@@ -123,11 +122,11 @@ def build_container(target_dir: Path):
             capture_output=True,
             text=True
         )
-        
+
         if result.returncode != 0:
             print("❌ Docker Compose not found. Please install Docker.")
             return False
-        
+
         # Build and start container
         print("   This may take a few minutes on first run...")
         result = subprocess.run(
@@ -135,14 +134,13 @@ def build_container(target_dir: Path):
             cwd=target_dir,
             capture_output=False  # Show output to user
         )
-        
+
         if result.returncode == 0:
             print("\n✅ Dev container built and started!")
             return True
-        else:
-            print("\n❌ Failed to build container")
-            return False
-            
+        print("\n❌ Failed to build container")
+        return False
+
     except FileNotFoundError:
         print("❌ Docker not found. Please install Docker first.")
         return False
@@ -159,13 +157,13 @@ def init_project(args):
         args: Command-line arguments (currently unused)
     """
     target_dir = Path.cwd()
-    
+
     # Check if directory is empty (allow .git, .gitignore, README.md)
     existing_files = [
-        f for f in target_dir.iterdir() 
+        f for f in target_dir.iterdir()
         if f.name not in ['.git', '.gitignore', 'README.md', '.DS_Store']
     ]
-    
+
     if existing_files:
         print("⚠️  Current directory is not empty!")
         print(f"   Found: {', '.join(f.name for f in existing_files[:5])}")
@@ -173,31 +171,31 @@ def init_project(args):
         if response.lower() != 'y':
             print("Aborted.")
             return 1
-    
+
     print("\n🚀 Initializing CDC Pipeline project...\n")
-    
+
     # Step 1: Create directory structure
     print("📁 Creating directory structure...")
     create_directory_structure(target_dir)
-    
+
     # Step 2: Copy template files
     print("\n📄 Copying template files...")
     if not copy_template_files(target_dir):
         return 1
-    
+
     # Step 3: Create .env.example
     print("\n🔧 Creating environment configuration...")
     create_env_example(target_dir)
-    
+
     # Step 4: Initialize git (optional)
     print("\n🔨 Setting up version control...")
     init_git_repo(target_dir)
-    
+
     # Step 5: Ask to build container
     print("\n" + "="*60)
     print("✅ Project initialized successfully!")
     print("="*60)
-    
+
     response = input("\n🐳 Build and start dev container now? [Y/n]: ")
     if response.lower() != 'n':
         if build_container(target_dir):
@@ -207,17 +205,15 @@ def init_project(args):
             print("Inside the container, run:")
             print("   cdc manage-service --create <service-name>")
             return 0
-        else:
-            print("\n⚠️  Container build failed. You can try manually:")
-            print("   docker compose up -d --build")
-            return 1
-    else:
-        print("\n📝 Next steps:")
-        print("   1. Edit server-groups.yaml with your database details")
-        print("   2. Copy .env.example to .env and configure")
-        print("   3. Build container: docker compose up -d --build")
-        print("   4. Enter container: docker compose exec dev fish")
-        return 0
+        print("\n⚠️  Container build failed. You can try manually:")
+        print("   docker compose up -d --build")
+        return 1
+    print("\n📝 Next steps:")
+    print("   1. Edit server-groups.yaml with your database details")
+    print("   2. Copy .env.example to .env and configure")
+    print("   3. Build container: docker compose up -d --build")
+    print("   4. Enter container: docker compose exec dev fish")
+    return 0
 
 
 if __name__ == "__main__":

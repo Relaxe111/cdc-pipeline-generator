@@ -21,33 +21,33 @@ Example:
 """
 
 from .create import scaffold_project_structure
-from .update import update_scaffold
 
 # Template functions (for use by create.py and external callers if needed)
 from .templates import (
     get_docker_compose_template,
     get_env_example_template,
-    get_readme_template,
     get_gitignore_template,
-    get_source_pipeline_template,
+    get_readme_template,
     get_sink_pipeline_template,
-)
-
-# Settings functions
-from .vscode_settings import (
-    create_vscode_settings,
-    get_gitignore_patterns,
-    get_scaffold_directories,
-    get_generated_subdirs,
+    get_source_pipeline_template,
 )
 
 # Type definitions
 from .types import (
+    DirectoryList,
     FilePatterns,
     FilesAssociations,
-    VSCodeSettings,
-    DirectoryList,
     PatternList,
+    VSCodeSettings,
+)
+from .update import update_scaffold
+
+# Settings functions
+from .vscode_settings import (
+    create_vscode_settings,
+    get_generated_subdirs,
+    get_gitignore_patterns,
+    get_scaffold_directories,
 )
 
 __all__ = [

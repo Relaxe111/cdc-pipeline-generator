@@ -23,35 +23,32 @@ def bloblang_field(field_name: str) -> str:
 def map_pg_type(pg_type: str) -> str:
     """Map PostgreSQL type to proper array type."""
     pg_type_lower = pg_type.lower().strip()
-    
+
     if 'int' in pg_type_lower or 'serial' in pg_type_lower:
         if 'bigint' in pg_type_lower or 'bigserial' in pg_type_lower:
             return 'bigint'
-        elif 'smallint' in pg_type_lower or 'smallserial' in pg_type_lower:
+        if 'smallint' in pg_type_lower or 'smallserial' in pg_type_lower:
             return 'smallint'
-        else:
-            return 'integer'
-    elif 'numeric' in pg_type_lower or 'decimal' in pg_type_lower:
+        return 'integer'
+    if 'numeric' in pg_type_lower or 'decimal' in pg_type_lower:
         return 'numeric'
-    elif 'float' in pg_type_lower or 'double' in pg_type_lower or 'real' in pg_type_lower:
+    if 'float' in pg_type_lower or 'double' in pg_type_lower or 'real' in pg_type_lower:
         return 'double precision'
-    elif 'bool' in pg_type_lower:
+    if 'bool' in pg_type_lower:
         return 'boolean'
-    elif 'timestamp' in pg_type_lower:
+    if 'timestamp' in pg_type_lower:
         if 'timestamptz' in pg_type_lower or 'with time zone' in pg_type_lower:
             return 'timestamptz'
-        else:
-            return 'timestamp'
-    elif 'date' in pg_type_lower:
+        return 'timestamp'
+    if 'date' in pg_type_lower:
         return 'date'
-    elif 'time' in pg_type_lower:
+    if 'time' in pg_type_lower:
         return 'time'
-    elif 'json' in pg_type_lower:
+    if 'json' in pg_type_lower:
         return 'jsonb' if 'jsonb' in pg_type_lower else 'json'
-    elif 'uuid' in pg_type_lower:
+    if 'uuid' in pg_type_lower:
         return 'uuid'
-    else:
-        return 'text'
+    return 'text'
 
 
 def normalize_table_name(name: str) -> str:
@@ -67,11 +64,11 @@ def normalize_table_name(name: str) -> str:
         'ø': 'o', 'Ø': 'O',
         'æ': 'ae', 'Æ': 'AE'
     }
-    
+
     result = name
     for norwegian_char, replacement in replacements.items():
         result = result.replace(norwegian_char, replacement)
-    
+
     return result
 
 
@@ -94,7 +91,7 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
         YAML configuration string for DELETE case
     """
     table_normalized = normalize_table_name(table_name)
-    
+
     # Build WHERE clause for composite or single primary keys
     if len(pk_fields) == 1:
         # Single primary key
@@ -106,7 +103,7 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
         except (ValueError, IndexError):
             # Fallback: assume same name
             pk_mssql = pk_pg
-        
+
         where_clause = f'"{pk_pg}" = $1'
         args_mapping = f'this.{pk_mssql}'
     else:
@@ -119,13 +116,13 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
                 pk_mssql = mssql_fields[pk_idx]
             except (ValueError, IndexError):
                 pk_mssql = pk_pg
-            
+
             where_parts.append(f'"{pk_pg}" = ${i}')
             args_list.append(bloblang_field(pk_mssql))
-        
+
         where_clause = " AND ".join(where_parts)
         args_mapping = ", ".join(args_list)
-    
+
     return f"""# DELETE for {table_name}
 - check: 'this.__routing_table == "{table_name}" && this.__cdc_operation == "DELETE"'
   output:
@@ -158,7 +155,7 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
         YAML configuration string for INSERT/UPDATE case
     """
     table_normalized = normalize_table_name(table_name)
-    
+
     # Build columns list (business fields + metadata fields)
     all_columns = list(postgres_fields) + [
         '__sync_timestamp',
@@ -168,12 +165,12 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
         '__source_ts_ms',
         '__cdc_operation'
     ]
-    
+
     # Build args_mapping (map MSSQL fields to PostgreSQL + add metadata)
     args_list: list[str] = []
     for mssql_field in mssql_fields:
         args_list.append(bloblang_field(mssql_field))
-    
+
     # Add metadata values
     args_list.extend([
         'this.__sync_timestamp',
@@ -183,21 +180,21 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
         'this.__source_ts_ms',
         'this.__cdc_operation'
     ])
-    
+
     # Build columns YAML (indented list with SQL quotes for PostgreSQL case sensitivity)
     # Use single-quoted YAML strings containing double-quoted SQL identifiers
     columns_yaml = "\n".join([f'        - \'"{col}"\'' for col in all_columns])
-    
+
     # Build args_mapping YAML
     args_yaml = ", ".join(args_list)
-    
+
     # Build ON CONFLICT clause with quoted column names for case sensitivity
     if len(pk_fields) == 1:
         conflict_target = f'("{pk_fields[0]}")'
     else:
         quoted_pks = [f'"{pk}"' for pk in pk_fields]
         conflict_target = f"({', '.join(quoted_pks)})"
-    
+
     # Build UPDATE SET clause with quoted column names (all non-PK fields + metadata fields)
     # Don't update the PK fields themselves in the SET clause
     update_fields = [f for f in postgres_fields if f not in pk_fields]
@@ -211,9 +208,9 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
         '"__cdc_operation" = EXCLUDED."__cdc_operation"'
     ])
     update_set = ", ".join(update_parts)
-    
+
     suffix = f"ON CONFLICT {conflict_target} DO UPDATE SET {update_set}"
-    
+
     return f"""# INSERT/UPDATE for {table_name}
 - check: 'this.__routing_table == "{table_name}" && (this.__cdc_operation == "INSERT" || this.__cdc_operation == "UPDATE")'
   output:
@@ -253,7 +250,7 @@ def build_batch_upsert_case(table_name: str, schema: str, postgres_url: str,
     """
     # Extract business fields (exclude metadata)
     postgres_fields = postgres_fields_with_meta[:len(mssql_fields)]
-    
+
     return build_upsert_case(
         table_name, schema, postgres_url,
         postgres_fields, mssql_fields, pk_fields
@@ -280,7 +277,7 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
     """
     table_normalized = normalize_table_name(table_name)
     stg_table = f"stg_{table_normalized}"
-    
+
     # Build columns list (business fields + all metadata fields including kafka tracking)
     all_columns = list(postgres_fields) + [
         '__sync_timestamp',
@@ -293,12 +290,12 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
         '__kafka_partition',
         '__kafka_timestamp'
     ]
-    
+
     # Build args_mapping (map MSSQL fields to PostgreSQL + add metadata)
     args_list: list[str] = []
     for mssql_field in mssql_fields:
         args_list.append(bloblang_field(mssql_field))
-    
+
     # Add metadata values
     args_list.extend([
         'this.__sync_timestamp',
@@ -311,13 +308,13 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
         'this.__kafka_partition',
         'this.__kafka_timestamp'
     ])
-    
+
     # Build columns YAML (indented list with SQL quotes for PostgreSQL case sensitivity)
     columns_yaml = "\n".join([f'        - \'"{col}"\'' for col in all_columns])
-    
+
     # Build args_mapping YAML
     args_yaml = ", ".join(args_list)
-    
+
     # Check BOTH schema and table for consolidated routing
     return f"""# Staging INSERT for {schema}.{table_name}
 - check: 'this.__routing_schema == "{schema}" && this.__routing_table == "{table_name}"'

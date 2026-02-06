@@ -5,15 +5,15 @@ service and environment identifiers using ordered regex patterns.
 """
 
 import re
-from typing import Optional, Tuple, List
+
 from cdc_generator.validators.manage_server_group.types import ExtractionPattern
 
 
 def match_extraction_patterns(
-    db_name: str, 
-    patterns: List[ExtractionPattern],
+    db_name: str,
+    patterns: list[ExtractionPattern],
     server_name: str = "default"
-) -> Optional[Tuple[str, str]]:
+) -> tuple[str, str] | None:
     """Extract service and environment from database name using ordered patterns.
     
     Patterns are tried in order. First match wins. Each pattern can:
@@ -61,27 +61,27 @@ def match_extraction_patterns(
         regex = pattern_config.get("pattern")
         if not regex:
             continue
-        
+
         # Validate: if env is hardcoded, it must appear in the pattern
         fixed_env = pattern_config.get("env")
         if fixed_env and fixed_env not in regex:
             # Skip invalid pattern (env not in regex)
             continue
-        
+
         match = re.match(regex, db_name)
         if not match:
             continue
-        
+
         # Extract service from named group (required)
         service = match.group("service") if "service" in match.groupdict() else None
         if not service:
             continue
-        
+
         # Apply strip_patterns to service name (regex-based)
         strip_patterns = pattern_config.get("strip_patterns", [])
         for pattern_to_strip in strip_patterns:
             service = re.sub(pattern_to_strip, "", service)
-        
+
         # Determine env: priority order
         # 1. Fixed env from config
         # 2. Captured env from regex
@@ -91,17 +91,17 @@ def match_extraction_patterns(
             env = match.group("env") if "env" in match.groupdict() else None
         if not env:
             env = server_name  # Fallback to server name
-        
+
         # Apply env_mapping if configured (per-pattern transformation)
         env_mapping = pattern_config.get("env_mapping", {})
         env = env_mapping.get(env, env) if env_mapping else env
-        
+
         return (service, env)
-    
+
     return None
 
 
-def match_single_pattern(db_name: str, pattern: str) -> Optional[Tuple[str, str]]:
+def match_single_pattern(db_name: str, pattern: str) -> tuple[str, str] | None:
     """Extract service and environment from database name using single regex pattern.
     
     Backward compatibility helper for extraction_pattern field.
@@ -121,11 +121,11 @@ def match_single_pattern(db_name: str, pattern: str) -> Optional[Tuple[str, str]
     match = re.match(pattern, db_name)
     if not match:
         return None
-    
+
     service = match.group("service") if "service" in match.groupdict() else None
     env = match.group("env") if "env" in match.groupdict() else None
-    
+
     if service and env:
         return (service, env)
-    
+
     return None

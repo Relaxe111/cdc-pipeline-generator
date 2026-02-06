@@ -1,22 +1,29 @@
 """Interactive prompts for CLI workflows (legacy functionality)."""
 
-from typing import List, Dict, Optional
-from cdc_generator.helpers.helpers_logging import print_info, print_success, print_warning, print_error, print_header, Colors
+
+from cdc_generator.helpers.helpers_logging import (
+    Colors,
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 
-def prompt_select(prompt: str, options: List[str], allow_empty: bool = False) -> Optional[str]:
+def prompt_select(prompt: str, options: list[str], allow_empty: bool = False) -> str | None:
     """Interactive prompt to select from a list of options."""
     if not options:
         print_error(f"No options available for: {prompt}")
         return None
-    
+
     print_info(f"\n{prompt}")
     for i, option in enumerate(options, 1):
         print(f"  {i}. {option}")
-    
+
     if allow_empty:
-        print(f"  0. Skip")
-    
+        print("  0. Skip")
+
     while True:
         try:
             choice = input(f"\nSelect (1-{len(options)}): ").strip()
@@ -31,16 +38,16 @@ def prompt_select(prompt: str, options: List[str], allow_empty: bool = False) ->
             return None
 
 
-def prompt_multiselect(prompt: str, options: List[str]) -> List[str]:
+def prompt_multiselect(prompt: str, options: list[str]) -> list[str]:
     """Interactive prompt to select multiple items from a list."""
     if not options:
         return []
-    
+
     print_info(f"\n{prompt}")
     for i, option in enumerate(options, 1):
         print(f"  {i}. {option}")
-    print(f"  0. Done")
-    
+    print("  0. Done")
+
     selected = []
     while True:
         try:
@@ -61,15 +68,15 @@ def prompt_multiselect(prompt: str, options: List[str]) -> List[str]:
         except (ValueError, KeyboardInterrupt):
             print_error("\nCancelled")
             return []
-    
+
     return selected
 
 
-def prompt_mappings(source_columns: List[str], sink_columns: List[str]) -> Dict[str, str]:
+def prompt_mappings(source_columns: list[str], sink_columns: list[str]) -> dict[str, str]:
     """Interactive prompt to create column mappings."""
     print_header("Column Mappings")
     print_info("Map source columns to sink columns (empty to skip)")
-    
+
     mappings = {}
     for src_col in source_columns:
         print(f"\n{Colors.CYAN}Source column: {src_col}{Colors.RESET}")
@@ -77,7 +84,7 @@ def prompt_mappings(source_columns: List[str], sink_columns: List[str]) -> Dict[
         for i, sink_col in enumerate(sink_columns, 1):
             print(f"  {i}. {sink_col}")
         print("  0. Skip (no mapping)")
-        
+
         try:
             choice = input(f"Map to (0-{len(sink_columns)}): ").strip()
             if choice == "0" or not choice:
@@ -89,11 +96,11 @@ def prompt_mappings(source_columns: List[str], sink_columns: List[str]) -> Dict[
         except (ValueError, KeyboardInterrupt):
             print_error("\nCancelled")
             return {}
-    
+
     return mappings
 
 
-def validate_table_compatibility(source_def: Dict, sink_def: Dict, mappings: Dict[str, str]) -> bool:
+def validate_table_compatibility(source_def: dict, sink_def: dict, mappings: dict[str, str]) -> bool:
     """Validate that source and sink tables are compatible.
     
     TODO: Add actual validation logic:

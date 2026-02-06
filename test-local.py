@@ -7,7 +7,6 @@ Usage: ./test-local.py
 import subprocess
 import sys
 
-
 IMAGE_NAME = "cdc-local:test"
 
 
@@ -15,9 +14,8 @@ def run_command(cmd: list[str], interactive: bool = False) -> int:
     """Run a command and return exit code."""
     if interactive:
         return subprocess.run(cmd).returncode
-    else:
-        result = subprocess.run(cmd, capture_output=False)
-        return result.returncode
+    result = subprocess.run(cmd, capture_output=False)
+    return result.returncode
 
 
 def build_image() -> bool:
@@ -79,13 +77,13 @@ def run_all_tests() -> bool:
         test_scaffold_help,
         test_interactive_fish,
     ]
-    
+
     print("\n🧪 Running automated tests...\n")
-    
+
     for test in tests:
         if not test():
             return False
-    
+
     return True
 
 
@@ -94,16 +92,16 @@ def main() -> int:
     # Build image
     if not build_image():
         return 1
-    
+
     # Run tests
     if not run_all_tests():
         return 1
-    
+
     # Success
     print("\n✅ All tests passed!")
     print("\n📦 Ready to push? Run:")
     print("   git push origin master")
-    
+
     return 0
 
 

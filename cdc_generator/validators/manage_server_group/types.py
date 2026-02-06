@@ -81,7 +81,7 @@ adopus:
         table_count: 200
 ```
 """
-from typing import Dict, List, Union, Literal, TypedDict, TypeAlias
+from typing import Literal, TypeAlias, TypedDict
 
 
 class ExtractionPattern(TypedDict, total=False):
@@ -130,8 +130,8 @@ class ExtractionPattern(TypedDict, total=False):
     """
     pattern: str
     env: str
-    strip_patterns: List[str]
-    env_mapping: Dict[str, str]
+    strip_patterns: list[str]
+    env_mapping: dict[str, str]
     description: str
 
 
@@ -155,13 +155,13 @@ class ServerConfig(TypedDict, total=False):
     Each pattern can have its own regex, fixed env, and strip_suffixes.
     """
     host: str
-    port: Union[str, int]
+    port: str | int
     user: str
     password: str
     kafka_bootstrap_servers: str
     extraction_pattern: str
-    extraction_patterns: List[ExtractionPattern]
-    environments: List[str]
+    extraction_patterns: list[ExtractionPattern]
+    environments: list[str]
 
 
 class DatabaseEntry(TypedDict, total=False):
@@ -197,7 +197,7 @@ class SourceConfig(TypedDict, total=False):
             database: {db_name}
             table_count: {count}
     """
-    schemas: List[str]
+    schemas: list[str]
     # Dynamic environment keys - common ones typed for autocompletion
     dev: DatabaseEntry
     stage: DatabaseEntry
@@ -221,36 +221,36 @@ class ServerGroupConfig(TypedDict, total=False):
     """
     # Runtime-injected field (not in YAML)
     name: str
-    
+
     # Core configuration
     pattern: Literal['db-shared', 'db-per-tenant']
     type: Literal['postgres', 'mssql']  # Database type (enforced for all servers)
     description: str
-    
+
     # Multi-server configuration
-    servers: Dict[str, ServerConfig]
+    servers: dict[str, ServerConfig]
     kafka_topology: Literal['shared', 'per-server']
-    
+
     # Feature flags
     environment_aware: bool
-    
+
     # Filtering and extraction
     include_pattern: str                    # Regex to filter databases
     extraction_pattern: str                 # DEPRECATED: Global pattern, use servers.{name}.extraction_pattern instead
     database_ref: str                       # Reference database for schema discovery (db-per-tenant)
-    database_exclude_patterns: List[str]
-    schema_exclude_patterns: List[str]
-    env_mappings: Dict[str, str]           # e.g., {"production": "prod", "staging": "stage"}
-    
+    database_exclude_patterns: list[str]
+    schema_exclude_patterns: list[str]
+    env_mappings: dict[str, str]           # e.g., {"production": "prod", "staging": "stage"}
+
     # Unified source storage
     # For db-shared: source name = service name
     # For db-per-tenant: source name = customer name
-    sources: Dict[str, SourceConfig]
+    sources: dict[str, SourceConfig]
 
 
 # Type alias for the full configuration file
 # Key is server group name (e.g., 'asma', 'adopus')
-ServerGroupFile: TypeAlias = Dict[str, ServerGroupConfig]
+ServerGroupFile: TypeAlias = dict[str, ServerGroupConfig]
 
 
 class DatabaseInfo(TypedDict):
@@ -264,7 +264,7 @@ class DatabaseInfo(TypedDict):
     service: str        # Inferred service/source name
     environment: str    # Inferred environment (dev, stage, prod, default)
     customer: str       # For db-per-tenant: customer name
-    schemas: List[str]
+    schemas: list[str]
     table_count: int
 
 

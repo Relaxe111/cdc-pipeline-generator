@@ -5,10 +5,9 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from pathlib import Path
-from typing import List
-import sys
 import os
+import sys
+from pathlib import Path
 
 
 def find_server_group_file() -> Path | None:
@@ -21,7 +20,7 @@ def find_server_group_file() -> Path | None:
     return None
 
 
-def list_databases_from_server_group() -> List[str]:
+def list_databases_from_server_group() -> list[str]:
     """Extract database names from server_group.yaml for completions.
     
     Returns:
@@ -30,17 +29,17 @@ def list_databases_from_server_group() -> List[str]:
     server_group_file = find_server_group_file()
     if not server_group_file:
         return []
-    
+
     try:
         with open(server_group_file) as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
-        
+
         if not config:
             return []
-        
-        databases: List[str] = []
+
+        databases: list[str] = []
         server_group = config.get('server_group', {})
-        
+
         # Iterate through all server groups (should be only one in implementations)
         for group_data in server_group.values():
             if isinstance(group_data, dict):
@@ -51,9 +50,9 @@ def list_databases_from_server_group() -> List[str]:
                             db_name = db.get('name')
                             if db_name:
                                 databases.append(str(db_name))
-        
+
         return sorted(set(databases))
-    
+
     except Exception:
         # Silently fail for completions - don't break the shell
         return []

@@ -9,8 +9,13 @@ Usage:
 
 import argparse
 from pathlib import Path
-from typing import Optional
-from cdc_generator.helpers.helpers_logging import print_header, print_success, print_error, print_info
+
+from cdc_generator.helpers.helpers_logging import (
+    print_error,
+    print_header,
+    print_info,
+    print_success,
+)
 
 
 def create_project_structure(project_name: str, project_type: str, target_dir: Path) -> bool:
@@ -43,14 +48,14 @@ def create_project_structure(project_name: str, project_type: str, target_dir: P
             "docs",
             "scripts",
         ]
-        
+
         for dir_path in directories:
             (target_dir / dir_path).mkdir(parents=True, exist_ok=True)
             print_info(f"Created: {dir_path}/")
-        
+
         # Create server_group.yaml template
         pattern = "db-per-tenant" if project_type == "adopus" else "db-shared"
-        
+
         # For db-per-tenant, service field is implicit (group name)
         # For db-shared, service is specified per database
         server_groups_template = f"""# Server Groups Configuration
@@ -83,10 +88,10 @@ server_group:
       - dbo
       - public
 """
-        
+
         (target_dir / "server_group.yaml").write_text(server_groups_template)
         print_success("Created: server_group.yaml")
-        
+
         # Create docker-compose.yml template
         docker_compose_template = """version: '3.8'
 
@@ -106,10 +111,10 @@ services:
     stdin_open: true
     tty: true
 """
-        
+
         (target_dir / "docker-compose.yml").write_text(docker_compose_template)
         print_success("Created: docker-compose.yml")
-        
+
         # Create Dockerfile.dev
         dockerfile_template = """FROM python:3.13-slim
 
@@ -127,10 +132,10 @@ RUN pip install --no-cache-dir cdc-pipeline-generator
 SHELL ["/usr/bin/fish", "-c"]
 CMD ["/usr/bin/fish"]
 """
-        
+
         (target_dir / "Dockerfile.dev").write_text(dockerfile_template)
         print_success("Created: Dockerfile.dev")
-        
+
         # Create .env.example
         env_example = """# Source Database (MSSQL)
 SOURCE_DB_HOST=mssql-server
@@ -146,10 +151,10 @@ REPLICA_DB_NAME=replica
 REPLICA_DB_USER=postgres
 REPLICA_DB_PASSWORD=postgres
 """
-        
+
         (target_dir / ".env.example").write_text(env_example)
         print_success("Created: .env.example")
-        
+
         # Create README.md
         readme_template = f"""# {project_name}
 
@@ -188,10 +193,10 @@ CDC Pipeline implementation using cdc-pipeline-generator.
 
 See `_docs/` for detailed documentation.
 """
-        
+
         (target_dir / "README.md").write_text(readme_template)
         print_success("Created: README.md")
-        
+
         # Create .gitignore
         gitignore = """# Python
 __pycache__/
@@ -221,18 +226,18 @@ generated/
 .DS_Store
 Thumbs.db
 """
-        
+
         (target_dir / ".gitignore").write_text(gitignore)
         print_success("Created: .gitignore")
-        
+
         return True
-        
+
     except Exception as e:
         print_error(f"Failed to create project structure: {e}")
         return False
 
 
-def main(args: Optional[argparse.Namespace] = None) -> int:
+def main(args: argparse.Namespace | None = None) -> int:
     """Main entry point for cdc init command."""
     parser = argparse.ArgumentParser(
         description="Initialize a new CDC pipeline project",
@@ -249,50 +254,50 @@ Examples:
   cdc init --name my-project --type adopus --target-dir /path/to/project
         """
     )
-    
+
     parser.add_argument(
         "--name",
         required=True,
         help="Project name (e.g., adopus-cdc-pipeline)"
     )
-    
+
     parser.add_argument(
         "--type",
         required=True,
         choices=["adopus", "asma"],
         help="Implementation type: adopus (db-per-tenant) or asma (db-shared)"
     )
-    
+
     parser.add_argument(
         "--target-dir",
         type=Path,
         default=Path.cwd(),
         help="Target directory (default: current directory)"
     )
-    
+
     parser.add_argument(
         "--git-init",
         action="store_true",
         help="Initialize git repository after scaffolding"
     )
-    
+
     args = parser.parse_args()
-    
+
     target_dir = args.target_dir.resolve()
-    
+
     print_header(f"Initializing CDC Pipeline Project: {args.name}")
     print_info(f"Type: {args.type}")
     print_info(f"Location: {target_dir}")
-    
+
     # Check if directory is empty
     if target_dir.exists() and any(target_dir.iterdir()):
         print_error(f"Directory {target_dir} is not empty. Please use an empty directory.")
         return 1
-    
+
     # Create project structure
     if not create_project_structure(args.name, args.type, target_dir):
         return 1
-    
+
     # Initialize git if requested
     if args.git_init:
         import subprocess
@@ -301,7 +306,7 @@ Examples:
             print_success("Initialized git repository")
         except Exception as e:
             print_error(f"Failed to initialize git: {e}")
-    
+
     print_success(f"\n✓ Project '{args.name}' initialized successfully!")
     print_info("\nNext steps:")
     print_info(f"  1. cd {target_dir}")
@@ -309,7 +314,7 @@ Examples:
     print_info("  3. docker compose up -d")
     print_info("  4. docker compose exec dev fish")
     print_info(f"  5. cdc manage-service --service {args.name} --create-service")
-    
+
     return 0
 
 

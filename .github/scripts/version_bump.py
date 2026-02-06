@@ -7,7 +7,6 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
 
 
 def get_latest_tag() -> str:
@@ -24,7 +23,7 @@ def get_latest_tag() -> str:
         return "v0.1.18"
 
 
-def get_commits_since_tag(tag: str) -> List[str]:
+def get_commits_since_tag(tag: str) -> list[str]:
     """Get commit messages since the given tag."""
     try:
         result = subprocess.run(
@@ -47,27 +46,27 @@ def get_commits_since_tag(tag: str) -> List[str]:
         return [c for c in commits if c]
 
 
-def parse_version(version_str: str) -> Tuple[int, int, int]:
+def parse_version(version_str: str) -> tuple[int, int, int]:
     """Parse version string (with or without 'v' prefix) into (major, minor, patch)."""
     version = version_str.lstrip('v')
     parts = version.split('.')
     return int(parts[0]), int(parts[1]), int(parts[2])
 
 
-def determine_bump_type(commits: List[str]) -> str:
+def determine_bump_type(commits: list[str]) -> str:
     """Determine version bump type based on conventional commits."""
     # Check for breaking changes (! in commit)
     if any('!' in commit for commit in commits):
         return 'major'
-    
+
     # Check for features (feat:)
     if any(re.match(r'^feat(\(.+\))?:', commit, re.IGNORECASE) for commit in commits):
         return 'minor'
-    
+
     # Check for fixes/chore (fix:, chore:)
     if any(re.match(r'^(fix|chore)(\(.+\))?:', commit, re.IGNORECASE) for commit in commits):
         return 'patch'
-    
+
     # Default to patch
     return 'patch'
 
@@ -75,20 +74,20 @@ def determine_bump_type(commits: List[str]) -> str:
 def bump_version(old_version: str, bump_type: str) -> str:
     """Bump version based on bump type."""
     major, minor, patch = parse_version(old_version)
-    
+
     if bump_type == 'major':
         return f"{major + 1}.0.0"
-    elif bump_type == 'minor':
+    if bump_type == 'minor':
         return f"{major}.{minor + 1}.0"
-    else:  # patch
-        return f"{major}.{minor}.{patch + 1}"
+    # patch
+    return f"{major}.{minor}.{patch + 1}"
 
 
 def update_pyproject_toml(new_version: str) -> None:
     """Update version in pyproject.toml."""
     pyproject_path = Path(__file__).parent.parent.parent / 'pyproject.toml'
     content = pyproject_path.read_text()
-    
+
     # Replace version line
     new_content = re.sub(
         r'^version = ".*"',
@@ -96,7 +95,7 @@ def update_pyproject_toml(new_version: str) -> None:
         content,
         flags=re.MULTILINE
     )
-    
+
     pyproject_path.write_text(new_content)
     print(f"Updated pyproject.toml to version {new_version}")
 
@@ -104,12 +103,12 @@ def update_pyproject_toml(new_version: str) -> None:
 def set_github_output(name: str, value: str, multiline: bool = False) -> None:
     """Set GitHub Actions output."""
     github_output_file = os.environ.get('GITHUB_OUTPUT')
-    
+
     if not github_output_file:
         # Fallback to stdout if not in GitHub Actions
         print(f"{name}={value}")
         return
-    
+
     with open(github_output_file, 'a') as f:
         if multiline:
             f.write(f"{name}<<EOF\n")
@@ -125,11 +124,11 @@ def main() -> None:
     latest_tag = get_latest_tag()
     old_version = latest_tag.lstrip('v')
     print(f"Latest tag: {latest_tag}")
-    
+
     # Get commits since tag
     commits = get_commits_since_tag(latest_tag)
     print(f"Found {len(commits)} commits since {latest_tag}")
-    
+
     # If no new commits, exit successfully without bumping
     if not commits or all(not commit.strip() for commit in commits):
         print("No new commits since last tag. Skipping version bump.")
@@ -138,24 +137,24 @@ def main() -> None:
         set_github_output('new_version', old_version)
         set_github_output('bump_type', 'none')
         return
-    
+
     # Determine bump type
     bump_type = determine_bump_type(commits)
     print(f"Bump type: {bump_type}")
-    
+
     # Calculate new version
     new_version = bump_version(old_version, bump_type)
     print(f"Version bump: {old_version} → {new_version}")
-    
+
     # Update pyproject.toml
     update_pyproject_toml(new_version)
-    
+
     # Set GitHub Actions outputs
     set_github_output('should_skip', 'false')
     set_github_output('old_version', old_version)
     set_github_output('new_version', new_version)
     set_github_output('bump_type', bump_type)
-    
+
     # Write commits for release notes (multiline)
     commits_text = '\n'.join(f"- {commit}" for commit in commits)
     set_github_output('commits', commits_text, multiline=True)

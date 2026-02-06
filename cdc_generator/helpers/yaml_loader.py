@@ -5,7 +5,7 @@ Provides validated ruamel.yaml instance with proper type hints.
 """
 
 from pathlib import Path
-from typing import Dict, List, Protocol, TextIO, Union, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, TextIO, Union, cast
 
 if TYPE_CHECKING:
     from cdc_generator.helpers.ruamel_yaml_stub import YAMLInterface
@@ -15,15 +15,15 @@ else:
 
 
 # Recursive type for nested YAML structures
-ConfigValue = Union[str, int, float, bool, None, 'ConfigDict', List['ConfigValue']]
-ConfigDict = Dict[str, ConfigValue]
+ConfigValue = Union[str, int, float, bool, None, 'ConfigDict', list['ConfigValue']]
+ConfigDict = dict[str, ConfigValue]
 
 
 class YAMLLoader(Protocol):
     """Protocol for YAML loader with comment preservation."""
     preserve_quotes: bool
     default_flow_style: bool
-    
+
     def load(self, stream: TextIO) -> ConfigValue:
         """Load YAML from stream."""
         ...
@@ -40,8 +40,8 @@ def _validate_yaml_loader(obj: object) -> None:
     for attr in required_attrs:
         if not hasattr(obj, attr):
             raise AttributeError(f"YAML object missing required attribute: {attr}")
-    
-    load_method = getattr(obj, 'load')
+
+    load_method = obj.load
     if not callable(load_method):
         raise TypeError("YAML.load is not callable")
 
@@ -60,10 +60,10 @@ def _create_yaml_loader() -> YAMLLoader:
     yaml_obj: YAMLInterface = YAMLInterface()
     yaml_obj.preserve_quotes = True
     yaml_obj.default_flow_style = False
-    
+
     # Validate interface at runtime
     _validate_yaml_loader(yaml_obj)
-    
+
     # After validation, cast to our Protocol type
     return cast(YAMLLoader, yaml_obj)
 
@@ -89,7 +89,7 @@ def load_yaml_file(file_path: Path) -> ConfigDict:
     """
     if not file_path.exists():
         raise FileNotFoundError(f"YAML file not found: {file_path}")
-    
+
     with open(file_path) as f:
         raw: ConfigValue = yaml.load(f)
         return cast(ConfigDict, raw)

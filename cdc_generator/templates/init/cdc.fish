@@ -119,7 +119,26 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service; and string match
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-tables -d "Add multiple tables (space-separated)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect -d "Inspect database schema and list tables"
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r
+
+# Dynamic schema completion - lists schemas from server_group.yaml for the current service
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r -f -a "(
+    # Extract --service value from command line
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    
+    # Find --service argument value
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-schemas \"\$service_name\" 2>/dev/null
+    end
+)"
+
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l save -d "Save detailed table schemas to YAML"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l generate-validation -d "Generate JSON Schema for validation"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-hierarchy -d "Validate hierarchical inheritance"
@@ -127,8 +146,58 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-conf
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l all -d "Process all schemas"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l env -d "Environment (nonprod/prod)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l primary-key -d "Primary key column name" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r
+
+# Dynamic column completion for --track-columns and --ignore-columns
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r -f -a "(
+    # Extract --service and --add-source-table values from command line
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l table_spec ''
+    
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--add-source-table'
+            set table_spec \$cmd[(math \$i + 1)]
+        end
+    end
+    
+    if test -n \"\$service_name\" -a -n \"\$table_spec\"
+        # Parse schema.table from table_spec
+        set -l parts (string split -- '.' \"\$table_spec\")
+        if test (count \$parts) -eq 2
+            set -l schema \$parts[1]
+            set -l table \$parts[2]
+            python3 -m cdc_generator.helpers.autocompletions --list-columns \"\$service_name\" \"\$schema\" \"\$table\" 2>/dev/null
+        end
+    end
+)"
+
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r -f -a "(
+    # Extract --service and --add-source-table values from command line
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l table_spec ''
+    
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--add-source-table'
+            set table_spec \$cmd[(math \$i + 1)]
+        end
+    end
+    
+    if test -n \"\$service_name\" -a -n \"\$table_spec\"
+        # Parse schema.table from table_spec
+        set -l parts (string split -- '.' \"\$table_spec\")
+        if test (count \$parts) -eq 2
+            set -l schema \$parts[1]
+            set -l table \$parts[2]
+            python3 -m cdc_generator.helpers.autocompletions --list-columns \"\$service_name\" \"\$schema\" \"\$table\" 2>/dev/null
+        end
+    end
+)"
+
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l server -d "Server name for multi-server setups (default: 'default')" -r
 
 # manage-server-group subcommand options
