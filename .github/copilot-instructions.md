@@ -76,6 +76,26 @@ config = yaml.safe_load(...)  # No validation, no types
 | [Architecture](.github/instructions-architecture.md) | Understanding patterns, service structure |
 | [Development Workflow](.github/instructions-dev-workflow.md) | Dev container, testing, common tasks |
 | [Redpanda Connect](_docs/redpanda-connect/README.md) | Pipeline templates, Bloblang syntax |
+| [Decisions](.github/decisions/) | Past architectural decisions and rationale |
+
+---
+
+## 🔄 Context Triggers
+
+**Auto-load files based on task type:**
+
+| Task | Files to Load |
+|------|--------------|
+| Service YAML changes | `services/*.yaml` + `server_group.yaml` + `validators/manage_service/` |
+| Pipeline generation | `pipeline-templates/*.yaml` + `core/pipeline_generator.py` |
+| Server group changes | `server_group.yaml` + `validators/manage_server_group/` |
+| CLI command work | `cli/commands.py` + `cli/*.py` |
+| Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/instructions-type-safety.md) |
+| Adding helpers | `helpers/*.py` (check existing before creating new) |
+| Schema validation | `validators/manage_service/schema_generator/` |
+| DB inspection | `helpers/helpers_mssql.py` + `validators/*/db_inspector.py` |
+| Bloblang/templates | `pipeline-templates/*.yaml` + [Redpanda docs](_docs/redpanda-connect/README.md) |
+| Architecture decisions | `.github/decisions/` + [architecture](.github/instructions-architecture.md) |
 
 ---
 
