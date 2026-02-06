@@ -30,6 +30,12 @@ from cdc_generator.helpers.helpers_logging import (
     print_error,
 )
 from cdc_generator.helpers.yaml_loader import ConfigDict, ConfigValue
+from cdc_generator.validators.manage_server_group.config import (
+    load_server_groups,
+    get_server_group_for_service,
+    get_all_defined_services,
+)
+from cdc_generator.validators.manage_server_group.types import ServerGroupFile, ServerGroupConfig
 from cdc_generator.validators.manage_service.mssql_inspector import inspect_mssql_schema  
 from cdc_generator.validators.manage_service.postgres_inspector import inspect_postgres_schema  
 from cdc_generator.validators.manage_service.table_operations import (
@@ -370,14 +376,16 @@ Examples:
         
         # If not found, try from server group (new format)
         if not db_type and server_group:
-            server_groups_file = get_project_root() / 'server_group.yaml'
-            if server_groups_file.exists() and yaml is not None:
-                with open(server_groups_file) as f:
-                    server_groups_data = yaml.safe_load(f)
-                    server_group_dict = server_groups_data.get('server_group', {})
-                    if server_group in server_group_dict:
-                        sg = server_group_dict[server_group]
-                        db_type = sg.get('server', {}).get('type')
+            try:
+                server_groups_data = load_server_groups()
+                # Find the server group config
+                for sg_name, sg_data in server_groups_data.items():
+                    if sg_name == server_group:
+                        # Get type from server group (enforced for all servers)
+                        db_type = sg_data.get('type')
+                        break
+            except (SystemExit, FileNotFoundError, ValueError):
+                pass
         
         if not db_type:
             print_error(f"Could not determine database type for service '{args.service}'")
@@ -394,43 +402,44 @@ Examples:
         server_group_found = False
         
         if server_group:
-            server_groups_file = get_project_root() / 'server_group.yaml'
-            
-            if server_groups_file.exists() and yaml is not None:
-                with open(server_groups_file) as f:
-                    server_groups_data = yaml.safe_load(f)
-                    server_group_dict = server_groups_data.get('server_group', {})
-                    if server_group in server_group_dict:
-                        sg = server_group_dict[server_group]
+            try:
+                server_groups_data = load_server_groups()
+                
+                # Find the server group config
+                for sg_name, sg_data in server_groups_data.items():
+                    if sg_name == server_group:
                         server_group_found = True
-                            
-                        # For db-per-tenant: get schemas from database_ref
-                        if sg.get('pattern') == 'db-per-tenant':
-                            database_ref = sg.get('database_ref')
+                        
+                        # For db-per-tenant: get schemas from sources via database_ref
+                        if sg_data.get('pattern') == 'db-per-tenant':
+                            database_ref = sg_data.get('database_ref')
                             if not database_ref:
                                 print_error(f"No database_ref defined for server group '{server_group}'")
                                 return 1
-                                
-                            # Find the reference database
-                                for db in sg.get('databases', []):
-                                    if db.get('name') == database_ref:
-                                        allowed_schemas = db.get('schemas', [])
-                                        break
-                                
-                                if not allowed_schemas:
-                                    print_error(f"Reference database '{database_ref}' not found in databases list for server group '{server_group}'")
-                                    return 1
                             
-                            # For db-shared: find database matching service name
-                            elif sg.get('pattern') == 'db-shared':
-                                for db in sg.get('databases', []):
-                                    if db.get('service') == args.service:
-                                        allowed_schemas = db.get('schemas', [])
-                                        break
-                                
-                                if not allowed_schemas:
-                                    print_error(f"No database with service='{args.service}' found in server group '{server_group}'")
-                                    return 1
+                            # Find reference in sources
+                            sources = sg_data.get('sources', {})
+                            if database_ref in sources:
+                                source_config = sources[database_ref]
+                                allowed_schemas = source_config.get('schemas', [])
+                            else:
+                                print_error(f"Reference database '{database_ref}' not found in sources for server group '{server_group}'")
+                                return 1
+                        
+                        # For db-shared: get schemas from service's source entry
+                        elif sg_data.get('pattern') == 'db-shared':
+                            sources = sg_data.get('sources', {})
+                            if args.service in sources:
+                                source_config = sources[args.service]
+                                allowed_schemas = source_config.get('schemas', [])
+                            else:
+                                print_error(f"Service '{args.service}' not found in sources for server group '{server_group}'")
+                                return 1
+                        break
+            except (SystemExit, FileNotFoundError, ValueError) as e:
+                if isinstance(e, ValueError):
+                    print_error(f"❌ Invalid server_group.yaml structure: {e}")
+                    return 1
             
             # If server_group is set but not found in server_group.yaml
             if not server_group_found:

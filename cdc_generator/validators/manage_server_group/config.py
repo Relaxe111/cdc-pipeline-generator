@@ -127,6 +127,40 @@ def load_server_groups() -> ServerGroupFile:
         return cast(ServerGroupFile, yaml.safe_load(f) or {})  # type: ignore[misc]
 
 
+def validate_server_group_structure(group_data: Any, name: str) -> None:
+    """Validate server group has expected structure.
+    
+    Raises ValueError with helpful message if structure is invalid.
+    This provides runtime validation beyond TypedDict static checking.
+    
+    Args:
+        group_data: Server group configuration dict
+        name: Server group name (for error messages)
+    
+    Raises:
+        ValueError: If structure is invalid
+    """
+    if not isinstance(group_data, dict):
+        raise ValueError(f"Server group '{name}' must be a dict, got {type(group_data).__name__}")
+    
+    # Required fields
+    if 'pattern' not in group_data:
+        raise ValueError(f"Server group '{name}' missing required field 'pattern'")
+    
+    if group_data['pattern'] not in ('db-shared', 'db-per-tenant'):
+        raise ValueError(f"Server group '{name}' has invalid pattern '{group_data['pattern']}' (must be 'db-shared' or 'db-per-tenant')")
+    
+    # New structure requires 'sources' at root level
+    if 'sources' not in group_data:
+        raise ValueError(
+            f"Server group '{name}' missing required field 'sources'.\n"
+            f"Expected structure: {name}.sources (not {name}.server_group.databases)"
+        )
+    
+    if not isinstance(group_data['sources'], dict):
+        raise ValueError(f"Server group '{name}' field 'sources' must be a dict")
+
+
 def get_single_server_group(config: ServerGroupFile) -> Optional[ServerGroupConfig]:
     """Get the single server group from configuration.
     
@@ -134,23 +168,77 @@ def get_single_server_group(config: ServerGroupFile) -> Optional[ServerGroupConf
     
     Since each implementation has only one server group, this returns the first one found.
     Adds 'name' field to the returned dict for compatibility.
+    Validates structure at runtime.
     
     Args:
         config: Loaded server groups configuration (ServerGroupFile)
         
     Returns:
         ServerGroupConfig with 'name' field injected, or None if no server group exists
+        
+    Raises:
+        ValueError: If server group structure is invalid
     """
     # Flat format: name as root key with 'pattern' field
     # Look for any top-level key that has a 'pattern' field (server group marker)
     for name, group_data in config.items():
         if 'pattern' in group_data:
+            # Validate structure before returning
+            validate_server_group_structure(group_data, name)
+            
             # Create a mutable copy with the name injected
             result = dict(group_data)
             result['name'] = name
             return cast(ServerGroupConfig, result)
     
     return None
+
+
+def get_server_group_for_service(service_name: str, config: Optional[ServerGroupFile] = None) -> Optional[str]:
+    """Find which server group a service belongs to.
+    
+    Args:
+        service_name: Service/source name to look up
+        config: Optional pre-loaded config (will load if not provided)
+        
+    Returns:
+        Server group name if found, None otherwise
+    """
+    if config is None:
+        try:
+            config = load_server_groups()
+        except SystemExit:
+            return None
+    
+    for sg_name, sg_data in config.items():
+        if 'sources' in sg_data:
+            if service_name in sg_data.get('sources', {}):
+                return sg_name
+    
+    return None
+
+
+def get_all_defined_services(config: Optional[ServerGroupFile] = None) -> set[str]:
+    """Get set of all services defined in server_group.yaml.
+    
+    Args:
+        config: Optional pre-loaded config (will load if not provided)
+        
+    Returns:
+        Set of service names from all server groups
+    """
+    if config is None:
+        try:
+            config = load_server_groups()
+        except SystemExit:
+            return set()
+    
+    services: set[str] = set()
+    for sg_data in config.values():
+        if 'sources' in sg_data:
+            services.update(sg_data.get('sources', {}).keys())
+    
+    return services
 
 
 def load_database_exclude_patterns() -> List[str]:
