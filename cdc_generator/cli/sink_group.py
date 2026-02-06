@@ -219,7 +219,15 @@ def _create_standalone_sink(
     # Always add sink_ prefix
     sink_group_name = f"sink_{base_name}" if not base_name.startswith("sink_") else base_name
     sink_type = args.type or "postgres"
+    pattern = args.pattern or "db-shared"
+    environment_aware = args.environment_aware
     source_group_name = args.for_source_group
+
+    # Validation: environment_aware is required for db-shared pattern
+    if pattern == "db-shared" and not environment_aware:
+        print_error("--environment-aware flag is required when --pattern is db-shared")
+        print_info("Use: cdc manage-sink-groups --add-new-sink-group <name> --pattern db-shared --environment-aware")
+        return 1
 
     if not source_group_name:
         if not source_groups:
@@ -241,13 +249,23 @@ def _create_standalone_sink(
         sink_group_name,
         source_group_name,
         sink_type,
+        pattern,
+        environment_aware,
+        getattr(args, 'database_exclude_patterns', None),
+        getattr(args, 'schema_exclude_patterns', None),
     )
 
     sink_groups[sink_group_name] = new_sink_group
 
     print_success(f"Created standalone sink group '{sink_group_name}'")
     print_info(f"Type: {sink_type}")
+    print_info(f"Pattern: {pattern}")
+    print_info(f"Environment Aware: {environment_aware}")
     print_info(f"Source group: {source_group_name}")
+    if getattr(args, 'database_exclude_patterns', None):
+        print_info(f"Database exclude patterns: {args.database_exclude_patterns}")
+    if getattr(args, 'schema_exclude_patterns', None):
+        print_info(f"Schema exclude patterns: {args.schema_exclude_patterns}")
     print_info("\nNext steps:")
     print_info(f"1. Add servers to sink group '{sink_group_name}' using --add-server")
     print_info("2. Edit services/*.yaml to add sink configurations")
@@ -344,6 +362,119 @@ def handle_list(_args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_inspect_command(args: argparse.Namespace) -> int:
+    """Inspect databases on a standalone sink server."""
+    from cdc_generator.validators.manage_server_group.db_inspector import (
+        list_mssql_databases,
+        list_postgres_databases,
+    )
+
+    sink_file = get_sink_file_path()
+    source_file = get_source_group_file_path()
+
+    # Require --sink-group argument
+    if not args.sink_group:
+        print_error("Error: --inspect requires --sink-group <name>")
+        print_info("Usage: cdc manage-sink-groups --inspect --sink-group <name>")
+        return 1
+
+    try:
+        sink_groups = load_sink_groups(sink_file)
+    except FileNotFoundError:
+        print_error(f"Sink groups file not found: {sink_file}")
+        return 1
+
+    sink_group_name = args.sink_group
+    if sink_group_name not in sink_groups:
+        print_error(f"Sink group '{sink_group_name}' not found.")
+        print_info(f"Available sink groups: {list(sink_groups.keys())}")
+        return 1
+
+    sink_group = sink_groups[sink_group_name]
+
+    # Validate: inspection only for standalone sink groups
+    # Inherited sink groups have source_ref in servers (created via --create)
+    # Standalone sink groups have their own server configs (created via --add-new-sink-group)
+    servers = sink_group.get("servers", {})
+    if servers:
+        first_server = next(iter(servers.values()))
+        if "source_ref" in first_server:
+            print_error(f"Error: Cannot inspect inherited sink group '{sink_group_name}'")
+            print_info("Inspection is only available for standalone sink groups (created with --add-new-sink-group)")
+            print_info("Inherited sink groups (created with --create) use source_ref and inherit from source groups.")
+            return 1
+
+    # Load source groups for resolution
+    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+
+    # Resolve sink group
+    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
+
+    # Get server to inspect
+    server_name = args.server or "default"
+    servers = resolved.get("servers", {})
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found in sink group '{sink_group_name}'")
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    sink_type = resolved.get("type", "postgres")
+
+    # Get exclude patterns
+    database_exclude_patterns = resolved.get("database_exclude_patterns")
+    schema_exclude_patterns = resolved.get("schema_exclude_patterns")
+
+    print_header(f"Inspecting Sink Server: {server_name} ({sink_type})")
+
+    try:
+        if sink_type == "mssql":
+            databases = list_mssql_databases(
+                server_config=server_config,  # type: ignore[arg-type]
+                server_group_config=resolved,  # type: ignore[arg-type]
+                include_pattern=args.include_pattern,
+                database_exclude_patterns=database_exclude_patterns,
+                schema_exclude_patterns=schema_exclude_patterns,
+                server_name=server_name,
+            )
+        elif sink_type == "postgres":
+            databases = list_postgres_databases(
+                server_config=server_config,  # type: ignore[arg-type]
+                server_group_config=resolved,  # type: ignore[arg-type]
+                include_pattern=args.include_pattern,
+                database_exclude_patterns=database_exclude_patterns,
+                schema_exclude_patterns=schema_exclude_patterns,
+                server_name=server_name,
+            )
+        else:
+            print_error(f"Inspection not supported for sink type: {sink_type}")
+            print_info("Only 'postgres' and 'mssql' sink types support inspection.")
+            return 1
+
+        # Display results
+        print_success(f"\nFound {len(databases)} database(s):\n")
+        for db in databases:
+            schemas_str = ", ".join(db["schemas"])
+            print(f"  {db['name']}")
+            print(f"    Service:     {db['service']}")
+            print(f"    Environment: {db['environment'] or 'N/A'}")
+            print(f"    Schemas:     {schemas_str}")
+            print(f"    Tables:      {db['table_count']}")
+            print()
+
+        print_info("Note: Use this information to manually configure sink destinations.")
+        print_info("Future enhancement: Add databases to sink group configuration automatically.")
+
+    except ImportError as e:
+        print_error(f"Database driver not installed: {e}")
+        return 1
+    except Exception as e:
+        print_error(f"Failed to inspect databases: {e}")
+        return 1
+
+    return 0
+
+
 def handle_info_command(args: argparse.Namespace) -> int:
     """Show detailed information about a sink group."""
     sink_file = get_sink_file_path()
@@ -370,11 +501,20 @@ def handle_info_command(args: argparse.Namespace) -> int:
     resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
 
     print_header(f"Sink Group: {sink_group_name}")
-    print(f"Source Group:     {resolved.get('source_group', 'N/A')}")
-    print(f"Pattern:          {resolved.get('pattern', 'N/A')}")
-    print(f"Type:             {resolved.get('type', 'N/A')}")
-    print(f"Kafka Topology:   {resolved.get('kafka_topology', 'N/A')}")
-    print(f"Description:      {resolved.get('description', 'N/A')}")
+    print(f"Source Group:      {resolved.get('source_group', 'N/A')}")
+    print(f"Pattern:           {resolved.get('pattern', 'N/A')}")
+    print(f"Type:              {resolved.get('type', 'N/A')}")
+    print(f"Kafka Topology:    {resolved.get('kafka_topology', 'N/A')}")
+    print(f"Environment Aware: {resolved.get('environment_aware', False)}")
+    print(f"Description:       {resolved.get('description', 'N/A')}")
+    
+    # Show exclude patterns if present
+    if resolved.get('database_exclude_patterns'):
+        db_patterns = resolved.get('database_exclude_patterns', [])
+        print(f"Database Exclude:  {', '.join(db_patterns)}")
+    if resolved.get('schema_exclude_patterns'):
+        schema_patterns = resolved.get('schema_exclude_patterns', [])
+        print(f"Schema Exclude:    {', '.join(schema_patterns)}")
 
     if resolved.get("_inherited_from"):
         print(f"Inherited From:   {resolved.get('_inherited_from', 'N/A')}")
@@ -464,17 +604,13 @@ def _build_server_config(args: argparse.Namespace, sink_group: dict[str, Any]) -
     using pattern: ${<DB_TYPE>_SINK_<FIELD>_<SERVERGROUP>_<SERVER>}
 
     Example: sink_asma + nonprod + postgres → ${POSTGRES_SINK_HOST_ASMA_NONPROD}
+    
+    Note: Type is inherited from sink group level, not duplicated at server level.
     """
     server_config: dict[str, object] = {}
 
-    # Determine server type
-    if args.type:
-        server_config["type"] = args.type
-        server_type = args.type
-    else:
-        # Default to sink group type
-        server_type = sink_group.get("type", "postgres")
-        server_config["type"] = server_type
+    # Determine server type for env var generation (but don't add to config)
+    server_type = sink_group.get("type", "postgres")
 
     # Get sink group name and server name for env var generation
     # Strip 'sink_' prefix if present
@@ -501,6 +637,12 @@ def _build_server_config(args: argparse.Namespace, sink_group: dict[str, Any]) -
     server_config["user"] = args.user if args.user else user_env
     server_config["password"] = args.password if args.password else password_env
 
+    # Add extraction patterns if provided
+    if getattr(args, 'extraction_patterns', None):
+        # Parse patterns from command line (expecting JSON-like format or simple patterns)
+        # For now, store as-is - validation/parsing happens elsewhere
+        server_config["extraction_patterns"] = args.extraction_patterns
+
     return server_config
 
 
@@ -509,12 +651,11 @@ def _validate_server_config(
 ) -> str | None:
     """Validate server config, return error message or None if valid.
 
-    Note: Host/port are now optional - will use env variable placeholders if not provided.
+    Note: Type is inherited from sink group level.
+    Host/port are optional - will use env variable placeholders if not provided.
     """
-    if "type" not in server_config:
-        return "Server type required (--type or sink group must have type)"
-
-    # No longer require host/port - will use env vars as defaults
+    # Type is inherited from sink group, not required at server level
+    # Host/port are optional (env vars used as defaults)
     return None
 
 
@@ -559,9 +700,9 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
 
     save_sink_groups(sink_groups, sink_file)
 
-    server_type = server_config["type"]
+    server_type = sink_group.get("type", "postgres")
     print_success(f"Added server '{server_name}' to sink group '{sink_group_name}'")
-    print_info(f"Server type: {server_type}")
+    print_info(f"Server type: {server_type} (inherited from sink group)")
     
     # Show what was configured
     host = server_config.get("host", "N/A")
@@ -742,6 +883,29 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         help=f"{Colors.YELLOW}🗂️  Type of sink (default: postgres){Colors.RESET}",
     )
     parser.add_argument(
+        "--pattern",
+        choices=["db-shared", "db-per-tenant"],
+        default="db-shared",
+        help=f"{Colors.CYAN}🏗️  Pattern for sink group (default: db-shared){Colors.RESET}",
+    )
+    parser.add_argument(
+        "--environment-aware",
+        action="store_true",
+        help=f"{Colors.GREEN}🌍 Enable environment-aware grouping (required for db-shared){Colors.RESET}",
+    )
+    parser.add_argument(
+        "--database-exclude-patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help=f"{Colors.YELLOW}🚫 Regex patterns for excluding databases (space-separated){Colors.RESET}",
+    )
+    parser.add_argument(
+        "--schema-exclude-patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help=f"{Colors.YELLOW}🚫 Regex patterns for excluding schemas (space-separated){Colors.RESET}",
+    )
+    parser.add_argument(
         "--for-source-group",
         metavar="NAME",
         help=f"{Colors.CYAN}📡 Source group this standalone sink consumes from{Colors.RESET}",
@@ -757,6 +921,23 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "--info",
         metavar="NAME",
         help=f"{Colors.BLUE}ℹ️  Show detailed information about a sink group{Colors.RESET}",
+    )
+
+    # Inspection actions (standalone sink groups only)
+    parser.add_argument(
+        "--inspect",
+        action="store_true",
+        help=f"{Colors.CYAN}🔍 Inspect databases on sink server (standalone sink groups only){Colors.RESET}",
+    )
+    parser.add_argument(
+        "--server",
+        metavar="NAME",
+        help=f"{Colors.BLUE}🖥️  Server name to inspect (default: 'default'){Colors.RESET}",
+    )
+    parser.add_argument(
+        "--include-pattern",
+        metavar="PATTERN",
+        help=f"{Colors.GREEN}✅ Only include databases matching regex pattern{Colors.RESET}",
     )
 
     # Validation
@@ -802,6 +983,12 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         metavar="PASSWORD",
         help=f"{Colors.YELLOW}🔑 Server password{Colors.RESET}",
     )
+    parser.add_argument(
+        "--extraction-patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help=f"{Colors.CYAN}🔍 Regex extraction patterns for server (space-separated, use quotes){Colors.RESET}",
+    )
 
     # Sink group management
     parser.add_argument(
@@ -818,6 +1005,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "add_new_sink_group": (args.add_new_sink_group, lambda: handle_add_new_sink_group(args)),
         "list": (args.list, lambda: handle_list(args)),
         "info": (args.info, lambda: handle_info_command(args)),
+        "inspect": (args.inspect, lambda: handle_inspect_command(args)),
         "validate": (args.validate, lambda: handle_validate_command(args)),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "remove_server": (args.remove_server, lambda: handle_remove_server_command(args)),

@@ -37,6 +37,8 @@ class SinkServerStandalone(TypedDict, total=False):
     base_url: str
     method: str
     headers: dict[str, str]
+    # Discovery patterns (same as source groups)
+    extraction_patterns: list[dict[str, object]]  # regex patterns for db name extraction
 
 
 SinkServerConfig = SinkServerSourceRef | SinkServerStandalone
@@ -83,11 +85,12 @@ class SinkGroupInherited(TypedDict, total=False):
     Used for db-shared patterns where sink structure mirrors source.
     All servers use source_ref to inherit connection config.
 
-    Note: source_group, pattern, type, kafka_topology are auto-deduced:
+    Note: source_group, pattern, type, kafka_topology, environment_aware are auto-deduced:
     - source_group: from sink group name (strip 'sink_' prefix)
     - pattern: 'inherited' if any server has source_ref
     - type: from first server's connection string
     - kafka_topology: inherited from source group's server_group_type
+    - environment_aware: inherited from source group
     """
 
     # Optional (auto-deduced if not specified):
@@ -95,6 +98,7 @@ class SinkGroupInherited(TypedDict, total=False):
     pattern: str  # db-shared, db-per-tenant
     type: str  # postgres, mssql, http_client, http_server
     kafka_topology: str  # shared, per-server, per-service
+    environment_aware: bool  # inherited from source group
     description: str
     # Required:
     servers: dict[str, SinkServerConfig]
@@ -109,11 +113,12 @@ class SinkGroupStandalone(TypedDict, total=False):
     Used for external sinks (analytics warehouse, webhooks, etc.)
     that don't mirror source infrastructure.
 
-    Note: source_group, pattern, type, kafka_topology are auto-deduced:
+    Note: source_group, pattern, type, kafka_topology, environment_aware are auto-deduced:
     - source_group: required (must specify which source feeds this)
     - pattern: 'standalone' if no servers have source_ref
     - type: from first server's type field or connection string
     - kafka_topology: inherited from source group if not specified
+    - environment_aware: inherited from source group
     """
 
     # Required for standalone:
@@ -122,7 +127,11 @@ class SinkGroupStandalone(TypedDict, total=False):
     pattern: str  # db-shared, db-per-tenant
     type: str  # postgres, mssql, http_client, http_server
     kafka_topology: str  # optional — defaults to source group's topology
+    environment_aware: bool  # inherited from source group
     description: str
+    # Discovery/filtering patterns (same as source groups)
+    database_exclude_patterns: list[str]  # regex patterns for excluding databases
+    schema_exclude_patterns: list[str]  # regex patterns for excluding schemas
     # Required:
     servers: dict[str, SinkServerConfig]
     sources: dict[str, SinkSource]

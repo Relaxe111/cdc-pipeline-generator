@@ -276,8 +276,17 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l source-gr
     python3 -m cdc_generator.helpers.autocompletions --list-server-group-names 2>/dev/null
 )"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l add-new-sink-group -d "Add new standalone sink group (auto-prefixes with 'sink_')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l type -d "Type of sink (postgres|mssql|http_client|http_server)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l type -d "Type of sink (postgres|mssql|http_client|http_server)" -x
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "postgres mssql http_client http_server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "postgres" -d "PostgreSQL database"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "mssql" -d "Microsoft SQL Server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "http_client" -d "HTTP client sink"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "http_server" -d "HTTP server sink"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l pattern -d "Pattern for sink group (db-shared|db-per-tenant)" -x
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-shared db-per-tenant"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-shared" -d "Shared database for all tenants"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-per-tenant" -d "One database per tenant"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l for-source-group -d "Source group this standalone sink consumes from" -r -f -a "(
     python3 -m cdc_generator.helpers.autocompletions --list-server-group-names 2>/dev/null
 )"
@@ -287,6 +296,15 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l list -d "
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l info -d "Show detailed information about a sink group" -r -f -a "(
     python3 -m cdc_generator.helpers.autocompletions --list-sink-group-names 2>/dev/null
 )"
+
+# Inspection actions (standalone sink groups only)
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l inspect -d "Inspect databases on sink server (standalone sink groups only)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l server -d "Server name to inspect (default: 'default')" -r -f -a "(
+    # TODO: dynamic server completion per sink group
+    echo 'default'
+    echo 'prod'
+)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l include-pattern -d "Only include databases matching regex pattern" -r
 
 # Validation
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l validate -d "Validate sink group configuration"

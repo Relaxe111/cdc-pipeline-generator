@@ -130,6 +130,26 @@ def deduce_kafka_topology(
     return None
 
 
+def deduce_environment_aware(
+    source_group_name: str | None,
+    source_groups: dict[str, Any],
+) -> bool:
+    """Deduce environment_aware from source group.
+
+    Args:
+        source_group_name: Name of source group to inherit from
+        source_groups: All source server groups
+
+    Returns:
+        environment_aware value from source group, defaults to False
+    """
+    if not source_group_name or source_group_name not in source_groups:
+        return False
+
+    source_group = source_groups[source_group_name]
+    return bool(source_group.get("environment_aware", False))
+
+
 def load_sink_groups(sink_file_path: Path) -> dict[str, SinkGroupConfig]:
     """Load sink server groups from sink-groups.yaml.
 
@@ -208,9 +228,8 @@ def resolve_source_ref(
         )
         raise ValueError(msg)
 
-    # Copy server config, exclude extraction_patterns (not relevant for sinks)
+    # Copy server config (including extraction_patterns for standalone sinks)
     source_config = dict(servers[server_name])
-    source_config.pop("extraction_patterns", None)
 
     return source_config
 
@@ -297,6 +316,13 @@ def resolve_sink_group(
         )
         if deduced_topology:
             resolved["kafka_topology"] = deduced_topology
+
+    # Deduce environment_aware if not specified
+    if "environment_aware" not in resolved:
+        resolved["environment_aware"] = deduce_environment_aware(
+            source_group_name,
+            source_groups,
+        )
 
     # Resolve all servers
     resolved_servers: dict[str, ResolvedSinkServer] = {}
@@ -392,6 +418,10 @@ def create_standalone_sink_group(
     sink_group_name: str,
     source_group_name: str,
     sink_type: str = "postgres",
+    pattern: str = "db-shared",
+    environment_aware: bool = False,
+    database_exclude_patterns: list[str] | None = None,
+    schema_exclude_patterns: list[str] | None = None,
 ) -> SinkGroupConfig:
     """Create standalone sink group scaffold (own servers).
 
@@ -399,18 +429,30 @@ def create_standalone_sink_group(
         sink_group_name: Name for the new sink group
         source_group_name: Source group this sink consumes from
         sink_type: Type of sink (postgres, http_client, etc.)
+        pattern: Pattern for sink group (db-shared or db-per-tenant)
+        environment_aware: Enable environment-aware grouping
+        database_exclude_patterns: Regex patterns for excluding databases
+        schema_exclude_patterns: Regex patterns for excluding schemas
 
     Returns:
         Empty sink group scaffold for manual configuration
     """
     sink_group: dict[str, Any] = {
         "source_group": source_group_name,
-        "pattern": "db-shared",
+        "pattern": pattern,
         "type": sink_type,
+        "environment_aware": environment_aware,
         "description": f"Standalone sink group for {sink_group_name}",
         "servers": {},
         "sources": {},
     }
+    
+    # Add exclude patterns if provided
+    if database_exclude_patterns:
+        sink_group["database_exclude_patterns"] = database_exclude_patterns
+    if schema_exclude_patterns:
+        sink_group["schema_exclude_patterns"] = schema_exclude_patterns
+    
     # Note: servers inherit 'type' from sink group level, no need to specify per-server
 
     return cast(SinkGroupConfig, sink_group)
