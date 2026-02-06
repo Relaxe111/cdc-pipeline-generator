@@ -351,11 +351,6 @@ def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
         sys.argv = [sys.argv[0], *extra_args]
         return scaffold_main()
 
-    if command == "check":
-        from cdc_generator.cli.check_command import run_check
-
-        return run_check(extra_args)
-
     return None
 
 
