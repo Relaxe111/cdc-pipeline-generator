@@ -1,11 +1,10 @@
 """Service creation and scaffolding."""
 
 import yaml  # type: ignore
-from pathlib import Path
 from typing import Dict, Any
 from cdc_generator.helpers.helpers_logging import print_header, print_success
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.validators.manage_server_group.config import load_server_groups
 
 
 def create_service(service_name: str, server_group: str, server: str = "default") -> None:
@@ -16,15 +15,14 @@ def create_service(service_name: str, server_group: str, server: str = "default"
         server_group: Server group name (e.g., 'adopus', 'asma')
         server: Server name for multi-server setups (default: 'default')
     """
-    services_dir = PROJECT_ROOT / 'services'
+    project_root = get_project_root()
+    services_dir = project_root / 'services'
     services_dir.mkdir(exist_ok=True)
     
     service_file = services_dir / f'{service_name}.yaml'
     
-    # Load server_group.yaml to get server_group_type and database info
-    server_groups_file = PROJECT_ROOT / 'server_group.yaml'
-    with open(server_groups_file) as f:
-        server_groups_data = yaml.safe_load(f)
+    # Load server_group.yaml using typed loader
+    server_groups_data = load_server_groups()
     
     # Find the server group and get its type
     validation_database = None
@@ -32,9 +30,9 @@ def create_service(service_name: str, server_group: str, server: str = "default"
     schemas = []
     pattern = None
     
-    server_group_dict = server_groups_data.get('server_group', {})
-    if server_group in server_group_dict:
-        group = server_group_dict[server_group]
+    # New structure: server group at root level with sources
+    if server_group in server_groups_data:
+        group = server_groups_data[server_group]
         pattern = group.get('pattern')
         
         # Extract database name and schemas based on pattern
@@ -42,19 +40,19 @@ def create_service(service_name: str, server_group: str, server: str = "default"
             # Use database_ref for validation
             validation_database = group.get('database_ref')
             database_name = validation_database
-            # Find schemas for the reference database
-            for db in group.get('databases', []):
-                if db.get('name') == database_name:
-                    schemas = db.get('schemas', ['dbo'])
-                    break
+            # Find schemas from sources using database_ref
+            sources = group.get('sources', {})
+            if database_name and database_name in sources:
+                source_config = sources[database_name]
+                schemas = source_config.get('schemas', ['dbo'])
         elif pattern == 'db-shared':
-            # Find the database that matches this service name
-            for db in group.get('databases', []):
-                if db.get('service') == service_name:
-                    validation_database = db.get('name')
-                    database_name = db.get('name')
-                    schemas = db.get('schemas', ['public'])
-                    break
+            # Find the source that matches this service name
+            sources = group.get('sources', {})
+            if service_name in sources:
+                source_config = sources[service_name]
+                validation_database = service_name
+                database_name = service_name
+                schemas = source_config.get('schemas', ['public'])
     
     if not pattern:
         raise ValueError(f"Server group '{server_group}' not found in server_group.yaml")
