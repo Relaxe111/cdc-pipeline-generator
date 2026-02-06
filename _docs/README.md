@@ -28,7 +28,7 @@ Contributing and coding standards:
 Command-line tool documentation (coming soon):
 - `cdc generate` - Generate pipelines from config
 - `cdc manage-service` - Add/remove tables, inspect schemas
-- `cdc manage-server-group` - Manage server group configs
+- `cdc manage-source-groups` - Manage server group configs
 
 ## 🏗️ Architecture Patterns
 

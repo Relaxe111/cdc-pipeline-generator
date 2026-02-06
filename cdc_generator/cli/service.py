@@ -276,9 +276,9 @@ Examples:
             print_info(f"  cdc manage-service --service {args.service} --add-source-table <schema.table>")
             return 1
 
-        # Auto-detect server-group from server_group.yaml
+        # Auto-detect server-group from source-groups.yaml
         server_group = None
-        server_groups_file = get_project_root() / 'server_group.yaml'
+        server_groups_file = get_project_root() / 'source-groups.yaml'
 
         # Also collect all defined services to show what's available
         defined_services: set[str] = set()
@@ -315,10 +315,10 @@ Examples:
         if defined_services:
             missing_services = defined_services - existing_services
             if not missing_services:
-                print_warning("⚠️  All services defined in server_group.yaml already have configuration files")
+                print_warning("⚠️  All services defined in source-groups.yaml already have configuration files")
                 print_info(f"Existing services: {', '.join(sorted(existing_services))}")
             elif args.service not in defined_services:
-                print_error(f"❌ Service '{args.service}' not found in server_group.yaml")
+                print_error(f"❌ Service '{args.service}' not found in source-groups.yaml")
                 if missing_services:
                     print_info(f"Services defined but not yet created: {', '.join(sorted(missing_services))}")
                     print_info(f"Did you mean one of these? {', '.join(sorted(missing_services))}")
@@ -326,7 +326,7 @@ Examples:
 
         if not server_group:
             print_error(f"❌ Could not find server group for service '{args.service}'")
-            print_error("Add service mapping to server_group.yaml")
+            print_error("Add service mapping to source-groups.yaml")
             return 1
 
         # Get server name (defaults to 'default' for multi-server support)
@@ -361,7 +361,7 @@ Examples:
 
     # Handle inspect operation (auto-detect database type)
     if args.service and args.inspect:
-        # Auto-detect server group and database type from server_group.yaml
+        # Auto-detect server group and database type from source-groups.yaml
         from cdc_generator.helpers.service_config import get_project_root, load_service_config
 
         db_type: str | None = None
@@ -380,7 +380,7 @@ Examples:
 
         if not db_type:
             print_error(f"Could not determine database type for service '{args.service}'")
-            print_error("Service must be defined in server_group.yaml sources")
+            print_error("Service must be defined in source-groups.yaml sources")
             return 1
 
         # Require either --all or explicit --schema
@@ -388,7 +388,7 @@ Examples:
             print_error("Error: --inspect requires either --all (for all schemas) or --schema <name> (for specific schema)")
             return 1
 
-        # Get allowed schemas from server_group.yaml
+        # Get allowed schemas from source-groups.yaml
         allowed_schemas = None
 
         if server_group:
@@ -451,7 +451,7 @@ Examples:
             return 1
 
         if tables:
-            # Filter by allowed schemas from server_group.yaml
+            # Filter by allowed schemas from source-groups.yaml
             if args.all:
                 # When --all, filter to only allowed schemas
                 tables = [t for t in tables if t['TABLE_SCHEMA'] in allowed_schemas]

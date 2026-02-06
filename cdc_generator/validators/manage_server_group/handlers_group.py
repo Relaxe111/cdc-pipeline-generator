@@ -60,7 +60,7 @@ def ensure_project_structure(server_group_name: str, server_group_config: Server
             # Get type from group level (new structure)
             sg_type = server_group_config.get('type', 'postgres')
             print_info("⚠️  Missing core files detected. Consider running scaffolding:")
-            print_info(f"   cdc manage-server-group --create {server_group_name} --pattern {server_group_config.get('pattern', 'db-shared')} \\")
+            print_info(f"   cdc manage-source-groups --create {server_group_name} --pattern {server_group_config.get('pattern', 'db-shared')} \\")
             print_info(f"       --source-type {sg_type}")
 
 
@@ -148,7 +148,7 @@ def list_server_groups() -> None:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_warning("server_group.yaml not found – creating a new one from scratch.")
+        print_warning("source-groups.yaml not found – creating a new one from scratch.")
         config = {'server_group': {}}
     print_header("Server Groups")
 
@@ -211,7 +211,7 @@ def handle_add_group(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_warning("server_group.yaml not found. Creating a fresh configuration.")
+        print_warning("source-groups.yaml not found. Creating a fresh configuration.")
         config = {}
 
     # Check if group already exists (flat structure: name is root key with 'pattern' field)
@@ -328,9 +328,9 @@ def handle_add_group(args: Namespace) -> int:
     print_info("\n📋 Next steps:")
     print_info("  1. cp .env.example .env")
     print_info("  2. Edit .env with your database credentials")
-    print_info("  3. cdc manage-server-group --update")
+    print_info("  3. cdc manage-source-groups --update")
     if args.mode == 'db-per-tenant':
-        print_info("  4. Update service field in server_group.yaml")
+        print_info("  4. Update service field in source-groups.yaml")
     print_info("  5. docker compose up -d")
 
     return 0

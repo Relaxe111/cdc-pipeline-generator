@@ -28,14 +28,14 @@ from .yaml_writer import update_server_group_yaml
 
 
 def _show_config_file_help() -> None:
-    """Display help message for missing server_group.yaml file.
+    """Display help message for missing source-groups.yaml file.
     
     Example:
         >>> _show_config_file_help()
         # Prints example YAML configuration
     """
-    print_error("File 'server_group.yaml' not found in the project root.")
-    print_info("\n💡 To get started, create a 'server_group.yaml' file in your repository root.")
+    print_error("File 'source-groups.yaml' not found in the project root.")
+    print_info("\n💡 To get started, create a 'source-groups.yaml' file in your repository root.")
     print_info("   Here is an example for a PostgreSQL 'db-shared' setup:")
     print_info(
         "\n"
@@ -286,7 +286,7 @@ def _handle_connection_error(error: Exception, sg_name: str) -> int:
         print_error(str(error))
         print_info(
             "Export the missing variable inside the dev container (e.g. `set -x NAME value`) "
-            "or replace the placeholder in server_group.yaml before running --update."
+            "or replace the placeholder in source-groups.yaml before running --update."
         )
     elif isinstance(error, PostgresConnectionError):
         print_error("PostgreSQL Connection Failed")
@@ -331,7 +331,7 @@ def handle_update(args: Namespace) -> int:
     # Get the single server group
     server_group = get_single_server_group(config)
     if not server_group:
-        print_error("No server group found in server_group.yaml")
+        print_error("No server group found in source-groups.yaml")
         return 1
 
     # Extract configuration
@@ -348,7 +348,7 @@ def handle_update(args: Namespace) -> int:
 
     # Validate type
     if not sg_type:
-        print_error("No 'type' found at group level. Add 'type: postgres' or 'type: mssql' to your server_group.yaml")
+        print_error("No 'type' found at group level. Add 'type: postgres' or 'type: mssql' to your source-groups.yaml")
         return 1
 
     try:

@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 """
-Manage the server group configuration file (server_group.yaml).
+Manage the server group configuration file (source-groups.yaml).
 
-This command helps you keep your server_group.yaml file up-to-date by
+This command helps you keep your source-groups.yaml file up-to-date by
 inspecting the source database and populating it with the correct database
 and schema information based on your configuration.
 
 Usage:
-    # Inspect the database and update server_group.yaml
-    cdc manage-server-group --update
+    # Inspect the database and update source-groups.yaml
+    cdc manage-source-groups --update
 
     # Inspect a specific server
-    cdc manage-server-group --update default
-    cdc manage-server-group --update prod
+    cdc manage-source-groups --update default
+    cdc manage-source-groups --update prod
 
     # Inspect all servers
-    cdc manage-server-group --update --all
+    cdc manage-source-groups --update --all
 
     # Show information about the configured server group
-    cdc manage-server-group --info
+    cdc manage-source-groups --info
 
     # Manage database/schema exclude patterns
-    cdc manage-server-group --list-ignore-patterns
-    cdc manage-server-group --add-to-ignore-list "pattern_to_ignore"
-    cdc manage-server-group --list-schema-excludes
-    cdc manage-server-group --add-to-schema-excludes "schema_to_exclude"
+    cdc manage-source-groups --list-ignore-patterns
+    cdc manage-source-groups --add-to-ignore-list "pattern_to_ignore"
+    cdc manage-source-groups --list-schema-excludes
+    cdc manage-source-groups --add-to-schema-excludes "schema_to_exclude"
 
 Note:
 To create a new server group, use 'cdc scaffold <name>' command.
@@ -79,8 +79,8 @@ def main() -> int:
     # Note: .env loading handled by implementations, not generator library
 
     parser = argparse.ArgumentParser(
-        description="Manage the server_group.yaml file for your implementation.",
-        prog="cdc manage-server-group",  # Use the alias in help messages
+        description="Manage the source-groups.yaml file for your implementation.",
+        prog="cdc manage-source-groups",  # Use the alias in help messages
         formatter_class=argparse.RawTextHelpFormatter
     )
 
@@ -104,10 +104,10 @@ def main() -> int:
     parser.add_argument("--view-services", action="store_true", help="View environment-grouped services (db-shared mode).")
 
     # Exclude patterns management
-    parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in server_group.yaml).")
+    parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in source-groups.yaml).")
     parser.add_argument("--list-ignore-patterns", action="store_true",
                        help="List current database exclude patterns.")
-    parser.add_argument("--add-to-schema-excludes", help="Add a pattern to the schema exclude list (persisted in server_group.yaml).")
+    parser.add_argument("--add-to-schema-excludes", help="Add a pattern to the schema exclude list (persisted in source-groups.yaml).")
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
 
@@ -177,7 +177,7 @@ def main() -> int:
                 print_info(f"  • {pattern}")
         else:
             print_warning("No schema exclude patterns defined.")
-            print_info("You can add patterns to a comment in server_group.yaml, for example:")
+            print_info("You can add patterns to a comment in source-groups.yaml, for example:")
             print_info("  # schema_exclude_patterns: ['hdb_catalog', 'hdb_views', 'sessions']")
         return 0
 
@@ -191,7 +191,7 @@ def main() -> int:
                 print_info(f"  • {pattern}")
         else:
             print_warning("No database exclude patterns defined.")
-            print_info("You can add patterns to a comment in server_group.yaml, for example:")
+            print_info("You can add patterns to a comment in source-groups.yaml, for example:")
             print_info("  # database_exclude_patterns: ['test', 'dev', 'backup']")
         return 0
 
@@ -283,7 +283,7 @@ def main() -> int:
                             print_info(f"       Tables: {table_count}")
             else:
                 print_warning("Server group has no sources configured.")
-                print_info("Run 'cdc manage-server-group --update' to discover databases.")
+                print_info("Run 'cdc manage-source-groups --update' to discover databases.")
             return 0
         except Exception as e:
             print_error(f"Failed to view services: {e}")
@@ -293,7 +293,7 @@ def main() -> int:
     # Handle update (the primary action)
     if args.all and args.update is None:
         print_error("'--all' requires '--update'.")
-        print_info("Example: cdc manage-server-group --update --all")
+        print_info("Example: cdc manage-source-groups --update --all")
         return 1
 
     if args.update is not None:

@@ -19,12 +19,12 @@
 │   └── Dockerfile.dev              # Full dev environment (MSSQL, Postgres, Fish)
 │
 ├── adopus-cdc-pipeline/            # Implementation 1 - INFRASTRUCTURE ONLY
-│   ├── server-groups.yaml          # Single server group (adopus)
+│   ├── source-groups.yaml          # Single server group (adopus)
 │   ├── services/                 # Service configs
 │   └── docker-compose.yml          # Infrastructure only (NO dev container)
 │
 └── asma-cdc-pipeline/              # FUTURE: Implementation 2 - INFRASTRUCTURE ONLY
-    ├── server-groups.yaml          # Single server group (asma)
+    ├── source-groups.yaml          # Single server group (asma)
     ├── services/                 # Service configs
     └── docker-compose.yml          # Infrastructure only (NO dev container)
 ```
@@ -42,7 +42,7 @@
 1. **Generator scripts live ONLY in cdc-pipeline-generator**
 2. **ONE dev container in generator** - Mounts both implementation projects
 3. **Reference implementations** - Each pattern documented in examples/
-4. **Single source of truth** - server-groups.yaml per implementation
+4. **Single source of truth** - source-groups.yaml per implementation
 5. **Full dev environment in generator** - MSSQL tools, Postgres, Fish, all deps
 6. **Infrastructure only in implementations** - Databases and Kafka only
 
@@ -90,7 +90,7 @@ cdc-pipeline-generator/
 ├── examples/
 │   ├── db-per-tenant/
 │   │   ├── README.md
-│   │   ├── server-groups.yaml
+│   │   ├── source-groups.yaml
 │   │   ├── services/
 │   │   │   └── adopus.yaml
 │   │   └── templates/
@@ -98,7 +98,7 @@ cdc-pipeline-generator/
 │   │       └── sink-pipeline.yaml
 │   └── db-shared/
 │       ├── README.md
-│       ├── server-groups.yaml
+│       ├── source-groups.yaml
 │       ├── services/
 │       │   └── asma.yaml
 │       └── templates/
@@ -134,7 +134,7 @@ cdc-pipeline-generator/
 - [x] `scripts/helpers_mssql.py` → `cdc_generator/helpers/helpers_mssql.py`
 - [x] `scripts/service_config.py` → `cdc_generator/helpers/service_config.py`
 - [x] `scripts/manage_service/*.py` → `cdc_generator/validators/`
-- [x] `scripts/manage-server-group.py` → `cdc_generator/cli/server_group.py`
+- [x] `scripts/manage-source-groups.py` → `cdc_generator/cli/server_group.py`
 - [x] `scripts/manage-service.py` → `cdc_generator/cli/service.py`
 
 ### Step 2.2: Move and Refactor Core Generator
@@ -164,7 +164,7 @@ cdc-pipeline-generator/
 
 ### Step 2.4: Move CLI Commands
 - [x] Copy manage-service.py logic
-- [x] Copy manage-server-group.py logic
+- [x] Copy manage-source-groups.py logic
 - [ ] Create unified CLI entry point
 - [ ] Add argparse/click CLI interface
 
@@ -181,7 +181,7 @@ cdc-pipeline-generator/
 ## Phase 3: Create Reference Implementations
 
 ### Step 3.1: Create db-per-tenant Example (Adopus Pattern)
-- [x] Copy current `server-groups.yaml` (adopus group only)
+- [x] Copy current `source-groups.yaml` (adopus group only)
 - [x] Copy `services/adopus.yaml` as template
 - [x] Copy `pipeline-templates/*.yaml`
 - [x] Create README.md explaining the pattern
@@ -196,7 +196,7 @@ cdc-pipeline-generator/
 - Expected output structure
 
 ### Step 3.2: Create db-shared Example (Asma Pattern)
-- [x] Create server-groups.yaml with asma group
+- [x] Create source-groups.yaml with asma group
 - [x] Create example service config for asma pattern
 - [x] Create appropriate pipeline templates
 - [x] Create README.md explaining the pattern
@@ -265,13 +265,13 @@ cdc-pipeline-generator/
 
 **Validation:** No dev container files remain
 
-### Step 4.5: Clean Up server-groups.yaml
+### Step 4.5: Clean Up source-groups.yaml
 - [x] Keep ONLY adopus server group
 - [x] Remove asma and other groups
 - [x] Update comments to reflect single-group usage
 
 **Files affected:**
-- `server-groups.yaml`
+- `source-groups.yaml`
 
 **Validation:** Only one server group present
 
@@ -295,7 +295,7 @@ cdc-pipeline-generator/
 
 ### Step 5.1: Document Asma Setup Process
 - [ ] Create guide in generator: `examples/db-shared/SETUP.md`
-- [ ] Document server-groups.yaml for asma
+- [ ] Document source-groups.yaml for asma
 - [ ] Document service configuration
 - [ ] List required environment variables
 
@@ -304,7 +304,7 @@ cdc-pipeline-generator/
 ### Step 5.2: Create asma-cdc-pipeline Skeleton (Optional)
 - [ ] Create project directory structure
 - [ ] Copy docker-compose.yml from adopus (modify for asma)
-- [ ] Copy server-groups.yaml from examples/db-shared
+- [ ] Copy source-groups.yaml from examples/db-shared
 - [ ] Create initial service configs
 - [ ] Add generator mount
 

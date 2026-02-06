@@ -84,7 +84,7 @@ def get_service_db_config(service: str, env: str = 'nonprod') -> dict[str, Any] 
             print_error(f"No validation_database found in service config for '{service}'")
             return None
 
-        # Find the environment with this database in server_group.yaml sources
+        # Find the environment with this database in source-groups.yaml sources
         sources = server_group.get('sources', {})
         service_sources = sources.get(service, {})
 
@@ -125,7 +125,7 @@ def get_service_db_config(service: str, env: str = 'nonprod') -> dict[str, Any] 
                 break
 
         if not env_config_found:
-            print_error(f"Could not find environment config for database '{validation_database}' in server_group.yaml")
+            print_error(f"Could not find environment config for database '{validation_database}' in source-groups.yaml")
             return None
 
         return {

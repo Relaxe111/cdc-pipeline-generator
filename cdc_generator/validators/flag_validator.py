@@ -1,5 +1,5 @@
 """
-Flag combination validation for manage-server-group commands.
+Flag combination validation for manage-source-groups commands.
 
 This module validates flag combinations and provides helpful error messages
 when users specify incompatible or incorrect flag combinations.
@@ -34,7 +34,7 @@ class ValidationResult:
 
 
 class ManageServerGroupFlagValidator:
-    """Validates flag combinations for manage-server-group command."""
+    """Validates flag combinations for manage-source-groups command."""
 
     # Action flags (mutually exclusive)
     ACTIONS = {
@@ -134,8 +134,8 @@ class ManageServerGroupFlagValidator:
                     message="❌ Cannot use both --all and specific server name",
                     suggestion=(
                         "💡 Choose one approach:\n"
-                        "   cdc manage-server-group --update --all          # Update all servers\n"
-                        "   cdc manage-server-group --update prod           # Update specific server"
+                        "   cdc manage-source-groups --update --all          # Update all servers\n"
+                        "   cdc manage-source-groups --update prod           # Update specific server"
                     )
                 )
 
@@ -161,7 +161,7 @@ class ManageServerGroupFlagValidator:
                 message="❌ --add-server requires a server name",
                 suggestion=(
                     "💡 Example:\n"
-                    "   cdc manage-server-group --add-server analytics"
+                    "   cdc manage-source-groups --add-server analytics"
                 )
             )
 
@@ -192,7 +192,7 @@ class ManageServerGroupFlagValidator:
                 valid=False,
                 level='error',
                 message="❌ --remove-server requires a server name",
-                suggestion="💡 Example: cdc manage-server-group --remove-server analytics"
+                suggestion="💡 Example: cdc manage-source-groups --remove-server analytics"
             )
 
         return ValidationResult(valid=True, level='ok')
@@ -215,8 +215,8 @@ class ManageServerGroupFlagValidator:
                 message="❌ --set-kafka-topology requires a value",
                 suggestion=(
                     "💡 Valid values:\n"
-                    "   cdc manage-server-group --set-kafka-topology shared       # Same Kafka for all servers\n"
-                    "   cdc manage-server-group --set-kafka-topology per-server   # Separate Kafka per server"
+                    "   cdc manage-source-groups --set-kafka-topology shared       # Same Kafka for all servers\n"
+                    "   cdc manage-source-groups --set-kafka-topology per-server   # Separate Kafka per server"
                 )
             )
 
@@ -270,7 +270,7 @@ class ManageServerGroupFlagValidator:
 
 
 def validate_manage_server_group_flags(args: argparse.Namespace) -> ValidationResult:
-    """Convenience function to validate manage-server-group flags.
+    """Convenience function to validate manage-source-groups flags.
     
     Args:
         args: Parsed command line arguments

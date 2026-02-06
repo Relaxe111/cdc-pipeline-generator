@@ -205,7 +205,7 @@ Services:
 
         print_info("\nNext steps:")
         print_info("  • Enter dev container: docker compose exec dev fish")
-        print_info("  • Update server group: cdc manage-server-group --update")
+        print_info("  • Update server group: cdc manage-source-groups --update")
         print_info("  • Check status: docker compose ps")
     else:
         print_error("Failed to start services. Check docker compose logs.")

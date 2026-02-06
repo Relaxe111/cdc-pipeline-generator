@@ -2,7 +2,7 @@
 """
 Scaffold a new CDC Pipeline project with server group configuration.
 
-This command creates a complete project structure with server_group.yaml,
+This command creates a complete project structure with source-groups.yaml,
 Docker Compose configuration, pipeline templates, and all necessary directories.
 
 Usage:
@@ -26,7 +26,7 @@ Usage:
         --extraction-pattern "" \\
         --environment-aware
 
-This command replaces 'cdc manage-server-group --create' and provides
+This command replaces 'cdc manage-source-groups --create' and provides
 a cleaner interface for project initialization.
 """
 
@@ -210,7 +210,7 @@ Connection Defaults:
         action="store_true",
         help="Update existing project scaffold with latest structure and configurations. "
              "Adds new directories, merges .vscode/settings.json, updates .gitignore. "
-             "Does not modify server_group.yaml content or services.",
+             "Does not modify source-groups.yaml content or services.",
     )
 
     # Required arguments (for new scaffold)

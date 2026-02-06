@@ -199,7 +199,7 @@ def _build_missing_env_message(field_name: str, missing_vars: list[str]) -> str:
         "\n"
         "Next steps:\n"
         "    - Export the missing variables inside the dev container (set -x VAR_NAME value)\n"
-        "    - Or update server_group.yaml to use literal credentials when appropriate\n"
+        "    - Or update source-groups.yaml to use literal credentials when appropriate\n"
     )
 
 
@@ -225,7 +225,7 @@ def _build_empty_value_message(field_name: str) -> str:
         "\n"
         "Next steps:\n"
         "    - Export the expected variable with a non-empty value\n"
-        "    - Or update server_group.yaml with a literal fallback\n"
+        "    - Or update source-groups.yaml with a literal fallback\n"
     )
 
 

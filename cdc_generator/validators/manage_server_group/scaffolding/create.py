@@ -160,4 +160,4 @@ def _print_next_steps(server_group_name: str) -> None:
     print("   1. cp .env.example .env")
     print("   2. Edit .env with your database credentials")
     print("   3. docker compose up -d")
-    print("   4. cdc manage-server-group --update")
+    print("   4. cdc manage-source-groups --update")

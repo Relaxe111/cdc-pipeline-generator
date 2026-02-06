@@ -262,7 +262,7 @@ pat = ''
 DEFAULT_EXTRACTION_PATTERN = r'^(?P<service>[a-z_]+?)_(?P<env>\w+)$'
 MAX_RETRY_ATTEMPTS = 3
 SUPPORTED_DATABASE_TYPES = ['postgres', 'mssql']
-SERVER_GROUP_YAML_FILENAME = 'server_group.yaml'
+SERVER_GROUP_YAML_FILENAME = 'source-groups.yaml'
 ```
 
 ### Files: Descriptive, Matches Content
@@ -393,7 +393,7 @@ yaml.preserve_quotes = True
 yaml.default_flow_style = False
 
 def update_server_group_yaml(file_path: Path, updates: dict) -> None:
-    """Update server_group.yaml preserving comments."""
+    """Update source-groups.yaml preserving comments."""
     with open(file_path) as f:
         data = yaml.load(f)
     

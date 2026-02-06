@@ -32,7 +32,7 @@ docker compose exec dev fish
 
 | Path | Purpose | Edit? |
 |------|---------|-------|
-| `server-groups.yaml` | Server group definitions | ⚠️ USE CLI |
+| `source-groups.yaml` | Server group definitions | ⚠️ USE CLI |
 | `services/{service}.yaml` | Service config | ⚠️ USE CLI |
 | `pipeline-templates/*.yaml` | Templates with `{{VARS}}` | ✅ EDIT |
 | `generated/pipelines/` | Auto-generated | ❌ READ-ONLY |

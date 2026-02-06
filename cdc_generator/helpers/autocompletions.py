@@ -65,17 +65,17 @@ def list_existing_services() -> list[str]:
 
 def list_available_services_from_server_group() -> list[str]:
     """
-    List sources defined in server_group.yaml (sources: section).
+    List sources defined in source-groups.yaml (sources: section).
     
     Used for --create-service flag autocompletion (shows sources that can be created).
     
     Returns:
-        List of source names from server_group.yaml
+        List of source names from source-groups.yaml
     """
     if yaml is None:
         return []
 
-    server_group_file = find_file_upward('server_group.yaml')
+    server_group_file = find_file_upward('source-groups.yaml')
     if not server_group_file:
         return []
 
@@ -112,17 +112,17 @@ def list_available_services_from_server_group() -> list[str]:
 
 def list_servers_from_server_group() -> list[str]:
     """
-    List server names defined in server_group.yaml (servers: section).
+    List server names defined in source-groups.yaml (servers: section).
     
     Used for --update server selection autocompletion.
     
     Returns:
-        List of server names from server_group.yaml
+        List of server names from source-groups.yaml
     """
     if yaml is None:
         return []
 
-    server_group_file = find_file_upward('server_group.yaml')
+    server_group_file = find_file_upward('source-groups.yaml')
     if not server_group_file:
         return []
 
@@ -151,9 +151,73 @@ def list_servers_from_server_group() -> list[str]:
         return []
 
 
+def list_server_group_names() -> list[str]:
+    """
+    List all server group names from source-groups.yaml.
+    
+    Used for --source-group autocompletion.
+    
+    Returns:
+        List of server group names (top-level keys with 'pattern' field)
+    """
+    if yaml is None:
+        return []
+
+    server_group_file = find_file_upward('source-groups.yaml')
+    if not server_group_file:
+        return []
+
+    try:
+        with open(server_group_file) as f:
+            config = yaml.safe_load(f)
+
+        if not config:
+            return []
+
+        # Find all top-level keys that have 'pattern' field (server groups)
+        groups: list[str] = []
+        for key, value in config.items():
+            if isinstance(value, dict) and 'pattern' in value:
+                groups.append(key)
+
+        return sorted(groups)
+
+    except Exception:
+        return []
+
+
+def list_sink_group_names() -> list[str]:
+    """
+    List all sink group names from sink-groups.yaml.
+    
+    Used for --info and --sink-group autocompletion.
+    
+    Returns:
+        List of sink group names (top-level keys)
+    """
+    if yaml is None:
+        return []
+
+    sink_file = find_file_upward('sink-groups.yaml')
+    if not sink_file:
+        return []
+
+    try:
+        with open(sink_file) as f:
+            config = yaml.safe_load(f)
+
+        if not config:
+            return []
+
+        return sorted(config.keys())
+
+    except Exception:
+        return []
+
+
 def list_databases_from_server_group() -> list[str]:
     """
-    List all databases from server_group.yaml.
+    List all databases from source-groups.yaml.
     
     Used for database-related autocompletions.
     
@@ -163,7 +227,7 @@ def list_databases_from_server_group() -> list[str]:
     if yaml is None:
         return []
 
-    server_group_file = find_file_upward('server_group.yaml')
+    server_group_file = find_file_upward('source-groups.yaml')
     if not server_group_file:
         return []
 
@@ -204,7 +268,7 @@ def list_databases_from_server_group() -> list[str]:
 
 def list_schemas_for_service(service_name: str) -> list[str]:
     """
-    List available schemas for a specific service from server_group.yaml sources.
+    List available schemas for a specific service from source-groups.yaml sources.
     
     Args:
         service_name: Name of the service
@@ -215,7 +279,7 @@ def list_schemas_for_service(service_name: str) -> list[str]:
     if not yaml:
         return []
 
-    server_group_file = find_file_upward('server_group.yaml')
+    server_group_file = find_file_upward('source-groups.yaml')
     if not server_group_file:
         return []
 
@@ -372,6 +436,16 @@ def main() -> int:
         servers = list_servers_from_server_group()
         for server in servers:
             print(server)
+
+    elif command == '--list-server-group-names':
+        groups = list_server_group_names()
+        for group in groups:
+            print(group)
+
+    elif command == '--list-sink-group-names':
+        sink_groups = list_sink_group_names()
+        for group in sink_groups:
+            print(group)
 
     elif command == '--list-schemas':
         if len(sys.argv) < 3:

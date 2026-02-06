@@ -33,7 +33,7 @@ def handle_info(args: Namespace) -> int:
     sg_config = get_single_server_group(config)
 
     if not sg_config:
-        print_error("No server group found in server_group.yaml")
+        print_error("No server group found in source-groups.yaml")
         return 1
 
     sg_name = sg_config.get('name', 'unnamed')

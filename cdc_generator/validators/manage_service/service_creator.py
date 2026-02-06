@@ -23,7 +23,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
     service_file = services_dir / f'{service_name}.yaml'
 
-    # Load server_group.yaml using typed loader
+    # Load source-groups.yaml using typed loader
     server_groups_data = load_server_groups()
 
     # Find the server group and get its type
@@ -67,7 +67,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
             if not validation_database:
                 raise ValueError(
                     f"Could not find validation database for server group '{server_group}'.\n"
-                    f"Expected: sources.{database_ref}.<env>.database in server_group.yaml"
+                    f"Expected: sources.{database_ref}.<env>.database in source-groups.yaml"
                 )
 
         elif pattern == 'db-shared':
@@ -97,11 +97,11 @@ def create_service(service_name: str, server_group: str, server: str = "default"
             if not validation_database:
                 raise ValueError(
                     f"Could not find database for service '{service_name}' in server group '{server_group}'.\n"
-                    f"Expected: sources.{service_name}.<env>.database in server_group.yaml"
+                    f"Expected: sources.{service_name}.<env>.database in source-groups.yaml"
                 )
 
     if not pattern:
-        raise ValueError(f"Server group '{server_group}' not found in server_group.yaml")
+        raise ValueError(f"Server group '{server_group}' not found in source-groups.yaml")
 
     # Check if service exists - update mode
     update_mode = service_file.exists()
@@ -163,7 +163,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
     # If updating, merge with existing configuration
     if update_mode and existing_service:
-        # Update validation_database if found in server_group.yaml
+        # Update validation_database if found in source-groups.yaml
         if validation_database and 'source' in existing_service:
             existing_service['source']['validation_database'] = validation_database
 
@@ -216,13 +216,13 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 #
 # 🚫 DO NOT MANUALLY EDIT:
 #   - service (service name)
-#   - source.validation_database (auto-populated from server_group.yaml)
+#   - source.validation_database (auto-populated from source-groups.yaml)
 #
 # ℹ️  NOTE:
 #   - server_group: Auto-detected (only one per implementation)
-#   - server: Determined by environment (from server_group.yaml)
-#   - source.type: From server_group.yaml type field
-#   - Database connections: From server_group.yaml servers configuration
+#   - server: Determined by environment (from source-groups.yaml)
+#   - source.type: From source-groups.yaml type field
+#   - Database connections: From source-groups.yaml servers configuration
 # ============================================================================
 
 """

@@ -10,7 +10,8 @@ Commands:
     scaffold              Scaffold a new CDC pipeline project with server group configuration
     validate              Validate all customer configurations
     manage-service        Manage service definitions
-    manage-server-group   Manage server groups
+    manage-source-groups   Manage source groups configuration
+    manage-sink-groups  Manage sink groups configuration
     generate [customer]   Generate pipelines
     setup-local          Set up local development environment
     enable <customer> <env>      Enable CDC on MSSQL tables
@@ -80,13 +81,13 @@ def detect_environment() -> tuple[Path, str | None, bool]:
         return dev_result
 
     # Check if we're in an implementation directory on host
-    if (cwd / "server_group.yaml").exists():
+    if (cwd / "source-groups.yaml").exists():
         return cwd, _impl_name_from_path(cwd), False
 
     # Try to find implementation root by walking up
     current = cwd
     while current != current.parent:
-        if (current / "server_group.yaml").exists():
+        if (current / "source-groups.yaml").exists():
             return current, _impl_name_from_path(current), False
         current = current.parent
 
@@ -151,10 +152,15 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "script": "cli/service.py",
         "description": "Manage CDC service definitions",
     },
-    "manage-server-group": {
+    "manage-source-groups": {
         "module": "cdc_generator.cli.server_group",
         "script": "cli/server_group.py",
-        "description": "Manage server groups",
+        "description": "Manage source groups configuration (source-groups.yaml)",
+    },
+    "manage-sink-groups": {
+        "module": "cdc_generator.cli.sink_group",
+        "script": "cli/sink_group.py",
+        "description": "Manage sink groups configuration (sink-groups.yaml)",
     },
     "setup-local": {
         "script": "cli/setup_local.py",

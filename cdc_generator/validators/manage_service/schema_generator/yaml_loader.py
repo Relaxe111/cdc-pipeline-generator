@@ -69,12 +69,12 @@ def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> di
 
 
 def load_server_groups_config() -> dict[str, Any]:
-    """Load server_group.yaml configuration.
+    """Load source-groups.yaml configuration.
     
     Returns:
         Dict with server group configurations
     """
-    server_groups_file = PROJECT_ROOT / 'server_group.yaml'
+    server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
     if not server_groups_file.exists():
         return {}
 
@@ -86,7 +86,7 @@ def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[
     """Extract all database names grouped by server group.
     
     Args:
-        server_groups_data: Parsed server_group.yaml data
+        server_groups_data: Parsed source-groups.yaml data
     
     Returns:
         Dict[group_name, Set[database_names]]

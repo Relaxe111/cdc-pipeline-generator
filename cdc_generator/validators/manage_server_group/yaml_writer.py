@@ -60,7 +60,7 @@ def parse_existing_comments(server_group_name: str) -> list[str]:
 
 
 def update_server_group_yaml(server_group_name: str, databases: list[dict[str, Any]]) -> bool:
-    """Update server_group.yaml with database/schema information."""
+    """Update source-groups.yaml with database/schema information."""
     try:
         # Read the file to preserve comments
         with open(SERVER_GROUPS_FILE) as f:

@@ -11,17 +11,17 @@ from pathlib import Path
 
 
 def find_server_group_file() -> Path | None:
-    """Find server_group.yaml by searching up from current directory."""
+    """Find source-groups.yaml by searching up from current directory."""
     current = Path(os.getcwd())
     for parent in [current, *current.parents[:3]]:  # Search up to 3 levels
-        server_group = parent / "server_group.yaml"
+        server_group = parent / "source-groups.yaml"
         if server_group.exists():
             return server_group
     return None
 
 
 def list_databases_from_server_group() -> list[str]:
-    """Extract database names from server_group.yaml for completions.
+    """Extract database names from source-groups.yaml for completions.
     
     Returns:
         List of database names found in the server group configuration

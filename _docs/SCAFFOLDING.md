@@ -29,7 +29,7 @@ When you create a new server group with `--create`, the generator automatically 
 │       └── prod/
 ├── .vscode/                # VS Code settings
 ├── service-schemas/        # Service schema definitions
-└── server_group.yaml       # Server group configuration
+└── source-groups.yaml       # Server group configuration
 ```
 
 ### Generated Files
@@ -83,7 +83,7 @@ When you create a new server group with `--create`, the generator automatically 
 cd /workspace
 
 # For db-per-tenant pattern (e.g., adopus)
-cdc manage-server-group \
+cdc manage-source-groups \
   --create adopus \
   --pattern db-per-tenant \
   --source-type mssql \
@@ -94,7 +94,7 @@ cdc manage-server-group \
   --password '${MSSQL_SOURCE_PASSWORD}'
 
 # For db-shared pattern (e.g., asma)
-cdc manage-server-group \
+cdc manage-source-groups \
   --create asma \
   --pattern db-shared \
   --source-type postgres \
@@ -110,7 +110,7 @@ cdc manage-server-group \
 
 The generator will:
 
-1. ✅ Create `server_group.yaml` with your configuration
+1. ✅ Create `source-groups.yaml` with your configuration
 2. ✅ Scaffold complete directory structure
 3. ✅ Generate `docker-compose.yml` with server_group-specific naming
 4. ✅ Create `.env.example` template
@@ -129,7 +129,7 @@ cp .env.example .env
 nano .env
 
 # 3. Update server group from database
-cdc manage-server-group --update
+cdc manage-source-groups --update
 
 # 4. Start infrastructure
 docker compose up -d
@@ -146,7 +146,7 @@ cdc generate
 The `--update` command also ensures critical directories exist:
 
 ```bash
-cdc manage-server-group --update
+cdc manage-source-groups --update
 ```
 
 If directories like `services/`, `scripts/`, or `generated/` are missing, they'll be created automatically with a friendly notification.
@@ -214,7 +214,7 @@ The scaffolding **never overwrites existing files**. If a file already exists, i
 If you run `--update` and see:
 ```
 ⚠️  Missing core files detected. Consider running scaffolding:
-   cdc manage-server-group --create ...
+   cdc manage-source-groups --create ...
 ```
 
 This means you're missing `.env.example` or other core files. Run the suggested `--create` command to scaffold everything.

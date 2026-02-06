@@ -86,9 +86,9 @@ config = yaml.safe_load(...)  # No validation, no types
 
 | Task | Files to Load |
 |------|--------------|
-| Service YAML changes | `services/*.yaml` + `server_group.yaml` + `validators/manage_service/` |
+| Service YAML changes | `services/*.yaml` + `source-groups.yaml` + `validators/manage_service/` |
 | Pipeline generation | `pipeline-templates/*.yaml` + `core/pipeline_generator.py` |
-| Server group changes | `server_group.yaml` + `validators/manage_server_group/` |
+| Server group changes | `source-groups.yaml` + `validators/manage_server_group/` |
 | CLI command work | `cli/commands.py` + `cli/*.py` |
 | Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/instructions-type-safety.md) |
 | Adding helpers | `helpers/*.py` (check existing before creating new) |

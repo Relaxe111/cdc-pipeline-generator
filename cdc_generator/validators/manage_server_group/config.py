@@ -13,22 +13,22 @@ from cdc_generator.helpers.service_config import get_project_root
 from .types import ServerGroupConfig, ServerGroupFile
 
 PROJECT_ROOT = get_project_root()
-SERVER_GROUPS_FILE = PROJECT_ROOT / "server_group.yaml"
+SERVER_GROUPS_FILE = PROJECT_ROOT / "source-groups.yaml"
 
 
 # ============================================================================
 # Comment-Preserving YAML Save
 # ============================================================================
-# IMPORTANT: All modifications to server_group.yaml MUST use this function
+# IMPORTANT: All modifications to source-groups.yaml MUST use this function
 # to preserve header comments and metadata.
 
 def save_server_group_preserving_comments(
     updater: Callable[[dict[str, Any]], None],
     error_context: str = "update server group"
 ) -> None:
-    """Save server_group.yaml while preserving all header comments.
+    """Save source-groups.yaml while preserving all header comments.
     
-    This is the ONLY function that should write to server_group.yaml.
+    This is the ONLY function that should write to source-groups.yaml.
     All other save functions must use this to preserve metadata comments.
     
     Args:
@@ -83,7 +83,7 @@ def save_server_group_preserving_comments(
             f.write(final_content)
 
     except FileNotFoundError:
-        raise RuntimeError(f"Failed to {error_context}: server_group.yaml not found")
+        raise RuntimeError(f"Failed to {error_context}: source-groups.yaml not found")
     except Exception as e:
         raise RuntimeError(f"Failed to {error_context}: {e}")
 
@@ -95,17 +95,17 @@ def load_server_groups() -> ServerGroupFile:
         ServerGroupFile: Dict mapping server group names to their configs
         
     Raises:
-        FileNotFoundError: If server_group.yaml not found in current directory or parents
+        FileNotFoundError: If source-groups.yaml not found in current directory or parents
     """
     if not SERVER_GROUPS_FILE.exists():
         from cdc_generator.helpers.helpers_logging import Colors, print_error
-        print_error("Configuration file not found: server_group.yaml")
+        print_error("Configuration file not found: source-groups.yaml")
         print(f"\n{Colors.YELLOW}Expected location:{Colors.ENDC}")
         print(f"  {SERVER_GROUPS_FILE}")
         print(f"\n{Colors.CYAN}To fix this:{Colors.ENDC}")
         print("  1. Navigate to your CDC implementation directory (e.g., /implementations/adopus/)")
         print(f"  2. Or initialize a new implementation with: {Colors.BOLD}cdc scaffold{Colors.ENDC}")
-        print("  3. Or create server_group.yaml manually in your project root")
+        print("  3. Or create source-groups.yaml manually in your project root")
         print()
         raise SystemExit(1)
 
@@ -205,7 +205,7 @@ def get_server_group_for_service(service_name: str, config: ServerGroupFile | No
 
 
 def get_all_defined_services(config: ServerGroupFile | None = None) -> set[str]:
-    """Get set of all services defined in server_group.yaml.
+    """Get set of all services defined in source-groups.yaml.
     
     Args:
         config: Optional pre-loaded config (will load if not provided)
@@ -228,7 +228,7 @@ def get_all_defined_services(config: ServerGroupFile | None = None) -> set[str]:
 
 
 def load_database_exclude_patterns() -> list[str]:
-    """Load database exclude patterns from server_group.yaml.
+    """Load database exclude patterns from source-groups.yaml.
     
     Format: server_group_name as root key with database_exclude_patterns field.
     """
@@ -249,7 +249,7 @@ def load_database_exclude_patterns() -> list[str]:
 
 
 def load_schema_exclude_patterns() -> list[str]:
-    """Load schema exclude patterns from server_group.yaml.
+    """Load schema exclude patterns from source-groups.yaml.
     
     Format: server_group_name as root key with schema_exclude_patterns field.
     """
@@ -270,7 +270,7 @@ def load_schema_exclude_patterns() -> list[str]:
 
 
 def save_database_exclude_patterns(patterns: list[str]) -> None:
-    """Save database exclude patterns to server_group.yaml.
+    """Save database exclude patterns to source-groups.yaml.
     
     Uses centralized save function to preserve header comments.
     """
@@ -285,7 +285,7 @@ def save_database_exclude_patterns(patterns: list[str]) -> None:
 
 
 def save_schema_exclude_patterns(patterns: list[str]) -> None:
-    """Save schema exclude patterns to server_group.yaml.
+    """Save schema exclude patterns to source-groups.yaml.
     
     Uses centralized save function to preserve header comments.
     """
@@ -300,7 +300,7 @@ def save_schema_exclude_patterns(patterns: list[str]) -> None:
 
 
 def load_env_mappings() -> dict[str, str]:
-    """Load environment mappings from server_group.yaml.
+    """Load environment mappings from source-groups.yaml.
     
     Format: server_group_name as root key with env_mappings field.
     env_mappings is a dict mapping source env suffix to target env name.
@@ -323,7 +323,7 @@ def load_env_mappings() -> dict[str, str]:
 
 
 def save_env_mappings(mappings: dict[str, str]) -> None:
-    """Save environment mappings to server_group.yaml.
+    """Save environment mappings to source-groups.yaml.
     
     Uses centralized save function to preserve header comments.
     """

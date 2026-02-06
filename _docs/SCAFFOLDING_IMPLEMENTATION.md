@@ -97,7 +97,7 @@ service-schemas/
 ### 3. Smart Behavior
 
 **--create command:**
-- Creates server_group.yaml
+- Creates source-groups.yaml
 - Scaffolds complete project structure
 - Shows next steps with actual commands
 
@@ -121,7 +121,7 @@ Allows multiple implementations to run simultaneously without conflicts.
 ### Create New Implementation (db-per-tenant)
 
 ```bash
-cdc manage-server-group \
+cdc manage-source-groups \
   --create adopus \
   --pattern db-per-tenant \
   --source-type mssql \
@@ -151,15 +151,15 @@ cdc manage-server-group \
 📋 Next steps:
    1. cp .env.example .env
    2. Edit .env with your database credentials
-   3. cdc manage-server-group --update
-   4. Update service field in server_group.yaml
+   3. cdc manage-source-groups --update
+   4. Update service field in source-groups.yaml
    5. docker compose up -d
 ```
 
 ### Create New Implementation (db-shared)
 
 ```bash
-cdc manage-server-group \
+cdc manage-source-groups \
   --create asma \
   --pattern db-shared \
   --source-type postgres \
@@ -174,7 +174,7 @@ cdc manage-server-group \
 ### Update Existing Implementation
 
 ```bash
-cdc manage-server-group --update
+cdc manage-source-groups --update
 ```
 
 **Output if directories missing:**
@@ -182,7 +182,7 @@ cdc manage-server-group --update
 📂 Created 3 missing directories
 
 ⚠️  Missing core files detected. Consider running scaffolding:
-   cdc manage-server-group --create asma --pattern db-shared \
+   cdc manage-source-groups --create asma --pattern db-shared \
        --source-type postgres
 ```
 

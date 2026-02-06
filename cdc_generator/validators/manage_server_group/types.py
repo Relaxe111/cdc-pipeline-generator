@@ -1,6 +1,6 @@
 """Type definitions for server group configuration.
 
-These TypedDict classes define the structure of server_group.yaml,
+These TypedDict classes define the structure of source-groups.yaml,
 providing type safety, IDE autocompletion, and self-documenting code.
 
 YAML Structure Examples:

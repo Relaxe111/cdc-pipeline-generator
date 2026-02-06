@@ -14,7 +14,7 @@ def get_project_root() -> Path:
     """Get the project root directory of the implementation.
     
     Searches upwards from the current working directory for a directory containing
-    known markers: 'server_group.yaml', 'services/', or '2-customers/'.
+    known markers: 'source-groups.yaml', 'services/', or '2-customers/'.
     This allows the tool to work correctly from any subdirectory within an implementation repo.
     
     Returns:
@@ -26,7 +26,7 @@ def get_project_root() -> Path:
     """
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        server_group = parent / "server_group.yaml"
+        server_group = parent / "source-groups.yaml"
         services_dir = parent / "services"
         customers_dir = parent / "2-customers"
         if server_group.exists() or services_dir.is_dir() or customers_dir.is_dir():

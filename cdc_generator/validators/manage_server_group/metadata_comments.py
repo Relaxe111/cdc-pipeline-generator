@@ -1,10 +1,10 @@
-"""Centralized metadata comment management for server_group.yaml.
+"""Centralized metadata comment management for source-groups.yaml.
 
 This module ensures that file header comments are ALWAYS present and preserved
-across all server_group.yaml write operations. This prevents the recurring issue
+across all source-groups.yaml write operations. This prevents the recurring issue
 of metadata comments disappearing.
 
-CRITICAL: ANY function that writes to server_group.yaml MUST use these utilities.
+CRITICAL: ANY function that writes to source-groups.yaml MUST use these utilities.
 """
 
 try:
@@ -24,29 +24,29 @@ class ServerStats(TypedDict):
 
 
 def get_file_header_comments() -> list[str]:
-    """Get the standard file header comments that MUST appear at the top of server_group.yaml.
+    """Get the standard file header comments that MUST appear at the top of source-groups.yaml.
     
     Returns:
         List of comment lines (including '#' prefix) that form the file header.
     
     Usage:
-        Always call this when creating a new server_group.yaml or when no preserved
+        Always call this when creating a new source-groups.yaml or when no preserved
         comments exist. These comments provide context and guidance to users.
     """
     return [
         "# ============================================================================",
         "# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY",
-        "# Use 'cdc manage-server-group' commands to modify this file",
+        "# Use 'cdc manage-source-groups' commands to modify this file",
         "# ============================================================================",
         "# ",
         "# This file contains the server group configuration for CDC pipelines.",
         "# Changes made directly to this file may be overwritten by CLI commands.",
         "# ",
         "# Common commands:",
-        "#   - cdc manage-server-group --update              # Refresh database/schema info",
-        "#   - cdc manage-server-group --info                # Show configuration details",
-        "#   - cdc manage-server-group --add-to-ignore-list  # Add database exclude patterns",
-        "#   - cdc manage-server-group --add-to-schema-excludes  # Add schema exclude patterns",
+        "#   - cdc manage-source-groups --update              # Refresh database/schema info",
+        "#   - cdc manage-source-groups --info                # Show configuration details",
+        "#   - cdc manage-source-groups --add-to-ignore-list  # Add database exclude patterns",
+        "#   - cdc manage-source-groups --add-to-schema-excludes  # Add schema exclude patterns",
         "# ",
         "# For detailed documentation, see:",
         "#   - CDC_CLI.md in the implementation repository",
@@ -60,14 +60,14 @@ _HEADER_MARKERS = [
     "============",
     "AUTO-GENERATED FILE",
     "DO NOT EDIT DIRECTLY",
-    "Use 'cdc manage-server-group' commands",
+    "Use 'cdc manage-source-groups' commands",
     "This file contains the server group configuration",
     "Changes made directly to this file may be overwritten",
     "Common commands:",
-    "cdc manage-server-group --update",
-    "cdc manage-server-group --info",
-    "cdc manage-server-group --add-to-ignore-list",
-    "cdc manage-server-group --add-to-schema-excludes",
+    "cdc manage-source-groups --update",
+    "cdc manage-source-groups --info",
+    "cdc manage-source-groups --add-to-ignore-list",
+    "cdc manage-source-groups --add-to-schema-excludes",
     "For detailed documentation, see:",
     "CDC_CLI.md in the implementation repository",
     "cdc-pipeline-generator/_docs/",
@@ -123,12 +123,12 @@ def ensure_file_header_exists(preserved_comments: list[str]) -> list[str]:
     
     Key markers to check:
         - "AUTO-GENERATED FILE"
-        - "Use 'cdc manage-server-group' commands"
+        - "Use 'cdc manage-source-groups' commands"
         - At least one separator line ("==========")
     """
     # Check if we have essential header markers
     has_auto_generated = any("AUTO-GENERATED FILE" in c for c in preserved_comments)
-    has_command_hint = any("cdc manage-server-group" in c for c in preserved_comments)
+    has_command_hint = any("cdc manage-source-groups" in c for c in preserved_comments)
     has_separator = any("========" in c for c in preserved_comments)
 
     # If we have all markers, the header exists
@@ -153,7 +153,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     This is a SAFETY CHECK to prevent accidentally writing files without metadata.
     
     Args:
-        output_lines: Lines that will be written to server_group.yaml
+        output_lines: Lines that will be written to source-groups.yaml
         
     Raises:
         ValueError: If required metadata comments are missing
@@ -164,12 +164,12 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
         - A top-level server group key (e.g., "adopus:", "asma:")
     
     Usage:
-        Call this immediately before writing output_lines to server_group.yaml
+        Call this immediately before writing output_lines to source-groups.yaml
         in ANY function that modifies the file.
     """
     if not output_lines:
         raise ValueError(
-            "Cannot write empty server_group.yaml file.\n"
+            "Cannot write empty source-groups.yaml file.\n"
             "  💡 Ensure you have at least one server group configured."
         )
 
@@ -177,7 +177,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     has_header = any("AUTO-GENERATED FILE" in line for line in output_lines[:20])
     if not has_header:
         raise ValueError(
-            "Missing file header in server_group.yaml output.\n"
+            "Missing file header in source-groups.yaml output.\n"
             "  💡 Call ensure_file_header_exists() before building output."
         )
 
@@ -188,7 +188,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     )
     if not has_server_group_key:
         raise ValueError(
-            "Missing server group key in server_group.yaml output.\n"
+            "Missing server group key in source-groups.yaml output.\n"
             "  💡 Expected a top-level key like 'adopus:' or 'asma:' at the start of a line.\n"
             "  💡 Check that the server group name is valid and the YAML structure is correct."
         )
@@ -197,7 +197,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     has_separator = any("========" in line for line in output_lines)
     if not has_separator:
         raise ValueError(
-            "Missing separator lines in server_group.yaml output.\n"
+            "Missing separator lines in source-groups.yaml output.\n"
             "  💡 Each server group section should have a separator comment above it."
         )
 

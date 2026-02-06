@@ -46,7 +46,7 @@ Source (MSSQL):                     Kafka:                      Sink (PostgreSQL
 
 ## Configuration Files
 
-### 1. server-groups.yaml
+### 1. source-groups.yaml
 
 Defines the server group with `server_group_type: db-per-tenant`:
 
@@ -82,7 +82,7 @@ source_tables:
       - name: Fraver
 
 # Customers auto-discovered from databases matching include_pattern
-# in server-groups.yaml
+# in source-groups.yaml
 ```
 
 ### 3. templates/*.yaml
@@ -115,9 +115,9 @@ generated/pipelines/adopus/
 
 ```bash
 # Discover databases from MSSQL server
-cdc-generator manage-server-group --update
+cdc-generator manage-source-groups --update
 
-# This auto-populates databases: section in server-groups.yaml
+# This auto-populates databases: section in source-groups.yaml
 ```
 
 ### 2. Configure Service
@@ -159,9 +159,9 @@ Databases matching `include_pattern` are automatically discovered:
 
 ```bash
 # Run discovery
-cdc-generator manage-server-group --update
+cdc-generator manage-source-groups --update
 
-# Adds to server-groups.yaml:
+# Adds to source-groups.yaml:
 databases:
   - name: AdOpusBrukerforum     # ✅ Matches AdOpus*
   - name: AdOpusFretexDev       # ✅ Matches AdOpus*
@@ -194,7 +194,7 @@ cdc-generator manage-service --service adopus --generate-validation --schema dbo
 
 ## Environment Variables
 
-Required variables (referenced in server-groups.yaml):
+Required variables (referenced in source-groups.yaml):
 
 ```bash
 # Source MSSQL

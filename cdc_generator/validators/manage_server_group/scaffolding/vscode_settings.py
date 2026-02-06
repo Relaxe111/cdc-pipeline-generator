@@ -48,7 +48,7 @@ def create_vscode_settings() -> dict[str, object]:
             ".lsn_cache": True
         },
         "files.readonlyInclude": {
-            "server_group.yaml": True,
+            "source-groups.yaml": True,
             "services/**/*.yaml": True,
             "generated/**/*.yaml": True
         },

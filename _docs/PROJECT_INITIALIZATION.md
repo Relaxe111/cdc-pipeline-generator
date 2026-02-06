@@ -71,7 +71,7 @@ cdc init --name my-project --type adopus --git-init
 # ├── argocd/                  # ArgoCD configurations
 # ├── docs/                    # Documentation
 # ├── scripts/                 # Custom scripts
-# ├── server-groups.yaml       # Server group definitions
+# ├── source-groups.yaml       # Server group definitions
 # ├── docker-compose.yml       # Development environment
 # ├── Dockerfile.dev           # Development container
 # ├── .env.example             # Environment variables template
@@ -142,7 +142,7 @@ cdc-pipelines-development/
 │   └── cdc_generator/
 └── adopus-cdc-pipeline/              # Implementation
     ├── services/
-    ├── server-groups.yaml
+    ├── source-groups.yaml
     └── ...
 ```
 
@@ -165,7 +165,7 @@ cdc manage-service --service proxy --add-source-table public.users
 ```
 my-cdc-pipeline/                      # User's project
 ├── services/
-├── server-groups.yaml
+├── source-groups.yaml
 └── ...
 # cdc-pipeline-generator installed as library via pip/pipx
 ```

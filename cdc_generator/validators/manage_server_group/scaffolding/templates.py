@@ -405,7 +405,7 @@ CDC (Change Data Capture) pipeline for {server_group_name} using Redpanda Connec
 
 3. **Update server group configuration**:
    ```bash
-   cdc manage-server-group --update
+   cdc manage-source-groups --update
    ```
 
 4. **Create service configuration**:
@@ -444,7 +444,7 @@ cd /implementations/{server_group_name}
 │   ├── pipelines/      # Redpanda Connect pipelines
 │   ├── schemas/        # Database schemas
 │   └── pg-migrations/  # PostgreSQL migrations
-├── server_group.yaml   # Server group configuration
+├── source-groups.yaml   # Server group configuration
 ├── docker-compose.yml  # Infrastructure services
 └── .env               # Environment variables (not in git)
 ```

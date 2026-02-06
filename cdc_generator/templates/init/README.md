@@ -17,13 +17,13 @@ Create a new server group (this will automatically update docker-compose.yml wit
 
 ```bash
 # For MSSQL source (db-per-tenant pattern)
-cdc manage-server-group --create my-group \
+cdc manage-source-groups --create my-group \
   --pattern db-per-tenant \
   --source-type mssql \
   --extraction-pattern '(?P<customer_id>\w+)_(?P<env>\w+)'
 
 # For PostgreSQL source (db-shared pattern)
-cdc manage-server-group --create my-group \
+cdc manage-source-groups --create my-group \
   --pattern db-shared \
   --source-type postgresql \
   --extraction-pattern '(?P<customer_id>\w+)' \
@@ -31,7 +31,7 @@ cdc manage-server-group --create my-group \
 ```
 
 This automatically:
-- Creates `server-groups.yaml`
+- Creates `source-groups.yaml`
 - Updates `docker-compose.yml` with MSSQL/PostgreSQL services
 - Adds volume definitions
 - Configures service dependencies
@@ -60,7 +60,7 @@ cdc generate --service my-service --environment dev
 .
 ├── docker-compose.yml           # Dev container configuration
 ├── Dockerfile.dev               # Dev container image
-├── server-groups.yaml           # Server group definitions
+├── source-groups.yaml           # Server group definitions
 ├── 2-services/                  # Service configurations (auto-created)
 ├── 2-customers/                 # Customer configurations (auto-created)
 ├── 3-pipeline-templates/        # Pipeline templates (auto-created)

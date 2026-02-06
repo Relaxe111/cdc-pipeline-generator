@@ -24,7 +24,7 @@ def update_scaffold(project_root: Path) -> bool:
     - docker-compose.yml (only if user confirms, creates backup)
     
     It does NOT modify:
-    - server_group.yaml content (only ensures header exists)
+    - source-groups.yaml content (only ensures header exists)
     - services/*.yaml files
     - Any user data
     
@@ -58,13 +58,13 @@ def update_scaffold(project_root: Path) -> bool:
     # 4. Update .gitignore (append new patterns if missing)
     _update_gitignore(project_root)
 
-    # 5. Check if server_group.yaml exists
-    server_group_path = project_root / "server_group.yaml"
+    # 5. Check if source-groups.yaml exists
+    server_group_path = project_root / "source-groups.yaml"
 
     if server_group_path.exists():
-        print_success("✓ Verified server_group.yaml exists")
+        print_success("✓ Verified source-groups.yaml exists")
     else:
-        print_warning("⚠️  server_group.yaml not found - run 'cdc scaffold <name>' first")
+        print_warning("⚠️  source-groups.yaml not found - run 'cdc scaffold <name>' first")
 
     print_success("\n✅ Scaffold update complete!")
     return True

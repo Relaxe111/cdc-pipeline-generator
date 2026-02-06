@@ -218,7 +218,7 @@ def handle_add_env_mapping(args: Namespace) -> int:
     except ValueError as e:
         print_error(f"Invalid mapping format: {e}")
         print_info("\nFormat: 'from:to,from:to,...'")
-        print_info("Example: cdc manage-server-group --add-env-mapping 'staging:stage,production:prod'")
+        print_info("Example: cdc manage-source-groups --add-env-mapping 'staging:stage,production:prod'")
         return 1
 
     # Load existing mappings

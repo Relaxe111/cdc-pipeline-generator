@@ -46,7 +46,7 @@ Source (PostgreSQL):                Kafka:                      Sink (PostgreSQL
 
 ## Configuration Files
 
-### 1. server-groups.yaml
+### 1. source-groups.yaml
 
 Defines the server group with `server_group_type: db-shared`:
 

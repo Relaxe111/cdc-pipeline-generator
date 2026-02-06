@@ -126,7 +126,7 @@ Remove naming artifacts from captured service name using regex:
 ### Add Extraction Pattern
 
 ```bash
-cdc manage-server-group --add-extraction-pattern SERVER PATTERN \
+cdc manage-source-groups --add-extraction-pattern SERVER PATTERN \
   [--env ENV] [--strip-patterns PATTERNS] [--env-mapping from:to] [--description DESC]
 ```
 
@@ -134,18 +134,18 @@ cdc manage-server-group --add-extraction-pattern SERVER PATTERN \
 
 ```bash
 # Pattern for {service}_db_prod_adcuris
-cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\w+)_db_prod_adcuris$' \
+cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>\w+)_db_prod_adcuris$' \
   --env prod_adcuris \
   --strip-patterns '_db' \
   --env-mapping 'prod_adcuris:prod-adcuris' \
   --description 'Service with _db suffix and prod_adcuris environment'
 
 # Pattern for {service}_{env}
-cdc manage-server-group --add-extraction-pattern default '^(?P<service>\w+)_(?P<env>\w+)$' \
+cdc manage-source-groups --add-extraction-pattern default '^(?P<service>\w+)_(?P<env>\w+)$' \
   --description 'Standard service_env pattern'
 
 # Pattern for single-word databases
-cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\w+)$' \
+cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>\w+)$' \
   --env prod \
   --description 'Single word service name (implicit prod environment)'
 ```
@@ -156,10 +156,10 @@ cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\w+)$' \
 
 ```bash
 # All servers
-cdc manage-server-group --list-extraction-patterns
+cdc manage-source-groups --list-extraction-patterns
 
 # Specific server
-cdc manage-server-group --list-extraction-patterns prod
+cdc manage-source-groups --list-extraction-patterns prod
 ```
 
 **Output:**
@@ -185,17 +185,17 @@ Extraction Patterns (ordered by priority)
 ### Remove Extraction Pattern
 
 ```bash
-cdc manage-server-group --remove-extraction-pattern SERVER INDEX
+cdc manage-source-groups --remove-extraction-pattern SERVER INDEX
 ```
 
 **Example:**
 
 ```bash
 # List patterns first to see indices
-cdc manage-server-group --list-extraction-patterns prod
+cdc manage-source-groups --list-extraction-patterns prod
 
 # Remove pattern at index 2
-cdc manage-server-group --remove-extraction-pattern prod 2
+cdc manage-source-groups --remove-extraction-pattern prod 2
 ```
 
 ---
@@ -334,7 +334,7 @@ servers:
 
 1. **Remove** `environments` field from server config
 2. **Add** extraction patterns using CLI commands (order matters!)
-3. **Test** with `cdc manage-server-group --update`
+3. **Test** with `cdc manage-source-groups --update`
 4. **Verify** service/env decomposition is correct
 
 ---
@@ -424,7 +424,7 @@ extraction_patterns:
 
 1. **List current patterns:**
    ```bash
-   cdc manage-server-group --list-extraction-patterns SERVER
+   cdc manage-source-groups --list-extraction-patterns SERVER
    ```
 
 2. **Check pattern order** - Is a more general pattern matching first?
@@ -450,7 +450,7 @@ extraction_patterns:
 
 3. **Re-scan databases:**
    ```bash
-   cdc manage-server-group --update
+   cdc manage-source-groups --update
    ```
 
 ---

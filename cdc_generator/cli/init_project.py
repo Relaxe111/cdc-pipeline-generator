@@ -20,7 +20,7 @@ def copy_template_files(target_dir: Path):
         files_to_copy = [
             'docker-compose.yml',
             'Dockerfile.dev',
-            'server-groups.yaml',
+            'source-groups.yaml',
             'README.md',
             '.gitignore',
             'cdc.fish'
@@ -208,7 +208,7 @@ def init_project(args: list[str]) -> int:
         print("   docker compose up -d --build")
         return 1
     print("\n📝 Next steps:")
-    print("   1. Edit server-groups.yaml with your database details")
+    print("   1. Edit source-groups.yaml with your database details")
     print("   2. Copy .env.example to .env and configure")
     print("   3. Build container: docker compose up -d --build")
     print("   4. Enter container: docker compose exec dev fish")

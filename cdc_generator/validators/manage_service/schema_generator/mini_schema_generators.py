@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 def generate_service_enum_schema() -> bool:
-    """Generate mini schema for 'service' key from server_group.yaml.
+    """Generate mini schema for 'service' key from source-groups.yaml.
     
     Extracts service names based on pattern:
     - db-per-tenant: uses group name as service name
@@ -24,9 +24,9 @@ def generate_service_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
+        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
         if not server_groups_file.exists():
-            print_error(f"server_group.yaml not found at {server_groups_file}")
+            print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
 
         with open(server_groups_file) as f:
@@ -52,7 +52,7 @@ def generate_service_enum_schema() -> bool:
             "$schema": "http://json-schema.org/draft-07/schema#",
             "$id": "service.schema.json",
             "title": "Service Name Validation",
-            "description": "Valid service names from server_group.yaml (auto-generated)",
+            "description": "Valid service names from source-groups.yaml (auto-generated)",
             "type": "string",
             "enum": sorted(list(services))
         }
@@ -78,7 +78,7 @@ def generate_service_enum_schema() -> bool:
 
 
 def generate_server_group_enum_schema() -> bool:
-    """Generate mini schema for 'server_group' key from server_group.yaml.
+    """Generate mini schema for 'server_group' key from source-groups.yaml.
     
     Extracts all server group names.
     
@@ -88,9 +88,9 @@ def generate_server_group_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
+        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
         if not server_groups_file.exists():
-            print_error(f"server_group.yaml not found at {server_groups_file}")
+            print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
 
         with open(server_groups_file) as f:
@@ -103,7 +103,7 @@ def generate_server_group_enum_schema() -> bool:
             "$schema": "http://json-schema.org/draft-07/schema#",
             "$id": "server_group.schema.json",
             "title": "Server Group Validation",
-            "description": "Valid server group names from server_group.yaml (auto-generated)",
+            "description": "Valid server group names from source-groups.yaml (auto-generated)",
             "type": "string",
             "enum": sorted(server_groups)
         }
@@ -139,9 +139,9 @@ def generate_database_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
+        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
         if not server_groups_file.exists():
-            print_error(f"server_group.yaml not found at {server_groups_file}")
+            print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
 
         with open(server_groups_file) as f:
@@ -211,9 +211,9 @@ def generate_schema_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'server_group.yaml'
+        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
         if not server_groups_file.exists():
-            print_error(f"server_group.yaml not found at {server_groups_file}")
+            print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
 
         with open(server_groups_file) as f:

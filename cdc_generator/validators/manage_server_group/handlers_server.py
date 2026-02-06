@@ -82,7 +82,7 @@ def handle_add_server(args: Namespace) -> int:
         Exit code (0 for success, 1 for error)
         
     Example:
-        cdc manage-server-group --add-server analytics --source-type postgres \\
+        cdc manage-source-groups --add-server analytics --source-type postgres \\
             --host '${POSTGRES_SOURCE_HOST_ANALYTICS}'
     """
     server_name = args.add_server.lower()
@@ -100,7 +100,7 @@ def handle_add_server(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found. Run 'cdc scaffold' first to create a server group.")
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first to create a server group.")
         return 1
 
     # Get the server group
@@ -222,7 +222,7 @@ def handle_list_servers(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found")
+        print_error("source-groups.yaml not found")
         return 1
 
     server_group = get_single_server_group(config)
@@ -311,7 +311,7 @@ def handle_remove_server(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found")
+        print_error("source-groups.yaml not found")
         return 1
 
     server_group = get_single_server_group(config)
@@ -416,7 +416,7 @@ def handle_set_kafka_topology(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found")
+        print_error("source-groups.yaml not found")
         return 1
 
     server_group = get_single_server_group(config)
@@ -508,7 +508,7 @@ def handle_set_extraction_pattern(args: Namespace) -> int:
         Exit code (0 for success, 1 for error)
         
     Example:
-        cdc manage-server-group --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'
+        cdc manage-source-groups --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'
     """
     server_name, pattern = args.set_extraction_pattern
     server_name = server_name.lower()
@@ -517,7 +517,7 @@ def handle_set_extraction_pattern(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found. Run 'cdc scaffold' first.")
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
     # Get single server group
@@ -607,21 +607,21 @@ def handle_add_extraction_pattern(args: Namespace) -> int:
         
     Examples:
         # Pattern for {service}_db_prod_adcuris databases (strip _db suffix)
-        cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' \\
+        cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' \\
             --env prod_adcuris --strip-patterns '_db$' \\
             --description 'Service with _db suffix and prod_adcuris environment'
         
         # Pattern for adopus_db_{service}_prod_adcuris databases (strip _db anywhere)
-        cdc manage-server-group --add-extraction-pattern prod '^(?P<service>adopus_db_\\w+)_prod_adcuris$' \\
+        cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>adopus_db_\\w+)_prod_adcuris$' \\
             --env prod_adcuris --strip-patterns '_db' \\
             --description 'AdOpus service with _db infix and prod_adcuris environment'
         
         # Pattern for {service}_{env} databases
-        cdc manage-server-group --add-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$' \\
+        cdc manage-source-groups --add-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$' \\
             --description 'Standard service_env pattern'
         
         # Pattern for single-word databases (implicit prod env)
-        cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\\w+)$' \\
+        cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>\\w+)$' \\
             --env prod --description 'Single word service name (implicit prod)'
     """
     server_name, pattern = args.add_extraction_pattern
@@ -631,7 +631,7 @@ def handle_add_extraction_pattern(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found. Run 'cdc scaffold' first.")
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
     # Get single server group
@@ -714,8 +714,8 @@ def handle_add_extraction_pattern(args: Namespace) -> int:
             print_info(f"  Description: {pattern_config['description']}")
 
         print_info(f"\n  Total patterns for '{server_name}': {len(current_patterns)}")
-        print_info("\n💡 Tip: Use 'cdc manage-server-group --list-extraction-patterns' to view all patterns")
-        print_info("💡 Tip: Use 'cdc manage-server-group --update' to re-scan databases with new patterns")
+        print_info("\n💡 Tip: Use 'cdc manage-source-groups --list-extraction-patterns' to view all patterns")
+        print_info("💡 Tip: Use 'cdc manage-source-groups --update' to re-scan databases with new patterns")
 
         return 0
     except Exception as e:
@@ -738,7 +738,7 @@ def handle_list_extraction_patterns(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found. Run 'cdc scaffold' first.")
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
     server_group = get_single_server_group(config)
@@ -791,8 +791,8 @@ def handle_list_extraction_patterns(args: Namespace) -> int:
     if not has_any:
         print()
         print_info("💡 Add extraction patterns for a server:")
-        print_info("   cdc manage-server-group --add-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
-        print_info("   cdc manage-server-group --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' \\")
+        print_info("   cdc manage-source-groups --add-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
+        print_info("   cdc manage-source-groups --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' \\")
         print_info("       --env prod_adcuris --strip-suffixes '_db'")
 
     return 0
@@ -809,8 +809,8 @@ def handle_remove_extraction_pattern(args: Namespace) -> int:
         Exit code (0 for success, 1 for error)
         
     Example:
-        cdc manage-server-group --list-extraction-patterns prod
-        cdc manage-server-group --remove-extraction-pattern prod 2
+        cdc manage-source-groups --list-extraction-patterns prod
+        cdc manage-source-groups --remove-extraction-pattern prod 2
     """
     server_name, index_str = args.remove_extraction_pattern
     server_name = server_name.lower()
@@ -825,7 +825,7 @@ def handle_remove_extraction_pattern(args: Namespace) -> int:
     try:
         config = load_server_groups()
     except FileNotFoundError:
-        print_error("server_group.yaml not found. Run 'cdc scaffold' first.")
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
     # Get single server group

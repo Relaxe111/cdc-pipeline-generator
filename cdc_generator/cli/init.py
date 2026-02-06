@@ -53,7 +53,7 @@ def create_project_structure(project_name: str, project_type: str, target_dir: P
             (target_dir / dir_path).mkdir(parents=True, exist_ok=True)
             print_info(f"Created: {dir_path}/")
 
-        # Create server_group.yaml template
+        # Create source-groups.yaml template
         pattern = "db-per-tenant" if project_type == "adopus" else "db-shared"
 
         # For db-per-tenant, service field is implicit (group name)
@@ -89,8 +89,8 @@ server_group:
       - public
 """
 
-        (target_dir / "server_group.yaml").write_text(server_groups_template)
-        print_success("Created: server_group.yaml")
+        (target_dir / "source-groups.yaml").write_text(server_groups_template)
+        print_success("Created: source-groups.yaml")
 
         # Create docker-compose.yml template
         docker_compose_template = """version: '3.8'

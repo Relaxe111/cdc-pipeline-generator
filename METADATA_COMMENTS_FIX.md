@@ -1,7 +1,7 @@
 # Metadata Comments Fix - Testing Guide
 
 ## Problem Fixed
-Metadata header comments in `server_group.yaml` were disappearing when running `cdc manage-server-group --create` and other operations. This happened repeatedly across different development sessions.
+Metadata header comments in `source-groups.yaml` were disappearing when running `cdc manage-source-groups --create` and other operations. This happened repeatedly across different development sessions.
 
 ## Solution Implemented
 Created a centralized **metadata comment manager** (`metadata_comments.py`) that ensures:
@@ -59,12 +59,12 @@ cdc --version
 # Inside container, navigate to adopus implementation
 cd /implementations/adopus
 
-# Backup existing server_group.yaml
-cp server_group.yaml server_group.yaml.backup
+# Backup existing source-groups.yaml
+cp source-groups.yaml source-groups.yaml.backup
 
 # Test 1: --create command (create new file)
-rm server_group.yaml  # Remove to test fresh creation
-cdc manage-server-group --create test-group \\
+rm source-groups.yaml  # Remove to test fresh creation
+cdc manage-source-groups --create test-group \\
     --pattern db-per-tenant \\
     --source-type mssql \\
     --host localhost \\
@@ -73,43 +73,43 @@ cdc manage-server-group --create test-group \\
     --password Test123
 
 # Verify metadata comments exist
-head -n 20 server_group.yaml
+head -n 20 source-groups.yaml
 # Should see:
 # - "AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY"
-# - "Use 'cdc manage-server-group' commands"
+# - "Use 'cdc manage-source-groups' commands"
 # - Multiple separator lines (=============)
 ```
 
 ### Step 4: Test --add-to-ignore-list
 ```fish
 # Restore backup
-rm server_group.yaml
-cp server_group.yaml.backup server_group.yaml
+rm source-groups.yaml
+cp source-groups.yaml.backup source-groups.yaml
 
 # Add a pattern
-cdc manage-server-group --add-to-ignore-list "test_pattern"
+cdc manage-source-groups --add-to-ignore-list "test_pattern"
 
 # Verify metadata comments still present
-head -n 20 server_group.yaml
+head -n 20 source-groups.yaml
 # Should STILL have header comments
 ```
 
 ### Step 5: Test --add-to-schema-excludes
 ```fish
 # Add a schema exclude pattern
-cdc manage-server-group --add-to-schema-excludes "test_schema"
+cdc manage-source-groups --add-to-schema-excludes "test_schema"
 
 # Verify metadata comments still present
-head -n 20 server_group.yaml
+head -n 20 source-groups.yaml
 ```
 
 ### Step 6: Test --update
 ```fish
 # Run update (connects to database)
-cdc manage-server-group --update
+cdc manage-source-groups --update
 
 # Verify metadata comments still present AND timestamp updated
-head -n 30 server_group.yaml
+head -n 30 source-groups.yaml
 # Should have:
 # - File header comments
 # - "Updated at:" timestamp
@@ -118,22 +118,22 @@ head -n 30 server_group.yaml
 
 ## Expected File Structure
 
-After ANY operation, `server_group.yaml` should have this structure:
+After ANY operation, `source-groups.yaml` should have this structure:
 
 ```yaml
 # ============================================================================
 # AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY
-# Use 'cdc manage-server-group' commands to modify this file
+# Use 'cdc manage-source-groups' commands to modify this file
 # ============================================================================
 # 
 # This file contains the server group configuration for CDC pipelines.
 # Changes made directly to this file may be overwritten by CLI commands.
 # 
 # Common commands:
-#   - cdc manage-server-group --update              # Refresh database/schema info
-#   - cdc manage-server-group --info                # Show configuration details
-#   - cdc manage-server-group --add-to-ignore-list  # Add database exclude patterns
-#   - cdc manage-server-group --add-to-schema-excludes  # Add schema exclude patterns
+#   - cdc manage-source-groups --update              # Refresh database/schema info
+#   - cdc manage-source-groups --info                # Show configuration details
+#   - cdc manage-source-groups --add-to-ignore-list  # Add database exclude patterns
+#   - cdc manage-source-groups --add-to-schema-excludes  # Add schema exclude patterns
 # 
 # For detailed documentation, see:
 #   - CDC_CLI.md in the implementation repository
@@ -153,19 +153,19 @@ server_group:
 
 ### Check 1: File Header Present
 ```fish
-grep -c "AUTO-GENERATED FILE" server_group.yaml
+grep -c "AUTO-GENERATED FILE" source-groups.yaml
 # Should output: 1 (or more)
 ```
 
 ### Check 2: Commands Documentation Present
 ```fish
-grep -c "cdc manage-server-group" server_group.yaml
+grep -c "cdc manage-source-groups" source-groups.yaml
 # Should output: at least 4
 ```
 
 ### Check 3: Separators Present
 ```fish
-grep -c "============" server_group.yaml
+grep -c "============" source-groups.yaml
 # Should output: at least 4 (2 for file header, 2 for server group section)
 ```
 
@@ -174,7 +174,7 @@ grep -c "============" server_group.yaml
 If issues occur, restore from backup:
 ```fish
 cd /implementations/adopus
-cp server_group.yaml.backup server_group.yaml
+cp source-groups.yaml.backup source-groups.yaml
 ```
 
 ## Future Protection
@@ -185,7 +185,7 @@ The solution includes **three layers of protection**:
 2. **Validation**: `validate_output_has_metadata()` prevents writing without header
 3. **Centralization**: All write operations MUST use the metadata manager
 
-**Any new code that writes to server_group.yaml MUST:**
+**Any new code that writes to source-groups.yaml MUST:**
 - Import from `metadata_comments`
 - Call `ensure_file_header_exists()` on preserved comments
 - Call `validate_output_has_metadata()` before writing
