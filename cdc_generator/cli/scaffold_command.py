@@ -278,9 +278,9 @@ Connection Defaults:
     if args.update:
         from pathlib import Path
         from cdc_generator.validators.manage_server_group.scaffolding import update_scaffold
-        from cdc_generator.validators.manage_server_group.config import get_implementation_root
+        from cdc_generator.helpers.service_config import get_project_root
         
-        project_root = get_implementation_root()
+        project_root = get_project_root()
         return 0 if update_scaffold(project_root) else 1
     
     # For new scaffold, require all arguments

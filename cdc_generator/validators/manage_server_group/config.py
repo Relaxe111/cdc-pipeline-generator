@@ -5,28 +5,13 @@ try:
 except ImportError:
     yaml = None  # type: ignore[assignment]
 
-from pathlib import Path
 from typing import List, Optional, Dict, Any, cast, Callable
-import os
 
 from .types import ServerGroupConfig, ServerGroupFile
+from cdc_generator.helpers.service_config import get_project_root
 
 
-def get_implementation_root() -> Path:
-    """Locate implementation root by searching for known markers."""
-    current = Path(os.getcwd())
-    for parent in [current, *current.parents]:
-        server_group = parent / "server_group.yaml"
-        services_dir = parent / "services"
-        customers_dir = parent / "2-customers"
-        if server_group.exists() or services_dir.is_dir() or customers_dir.is_dir():
-            return parent
-    # As a final fallback, return current directory so new files are created
-    # where the command is executed, instead of defaulting to the generator root.
-    return current
-
-
-PROJECT_ROOT = get_implementation_root()
+PROJECT_ROOT = get_project_root()
 SERVER_GROUPS_FILE = PROJECT_ROOT / "server_group.yaml"
 
 

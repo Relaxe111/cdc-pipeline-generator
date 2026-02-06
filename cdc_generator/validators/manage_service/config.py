@@ -5,26 +5,10 @@ from typing import List, Dict, Optional
 
 from cdc_generator.helpers.yaml_loader import yaml
 from cdc_generator.helpers.helpers_logging import print_error
+from cdc_generator.helpers.service_config import get_project_root
 
 
-def get_implementation_root() -> Path:
-    """Get the implementation root directory.
-    
-    Looks for the implementation root by searching for services/ directory.
-    This allows the tool to work from any subdirectory within the implementation.
-    """
-    current = Path.cwd()
-    
-    # Search upwards from current directory for services/
-    for parent in [current] + list(current.parents):
-        if (parent / "services").exists():
-            return parent
-    
-    # Fallback to current directory
-    return current
-
-
-PROJECT_ROOT = get_implementation_root()
+PROJECT_ROOT = get_project_root()
 SERVICES_DIR = PROJECT_ROOT / "services"
 SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 

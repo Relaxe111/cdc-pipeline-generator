@@ -14,19 +14,26 @@ def get_project_root() -> Path:
     """Get the project root directory of the implementation.
     
     Searches upwards from the current working directory for a directory containing
-    either 'server_group.yaml' or a 'services/' directory. This allows the
-    tool to work correctly from any subdirectory within an implementation repo.
+    known markers: 'server_group.yaml', 'services/', or '2-customers/'.
+    This allows the tool to work correctly from any subdirectory within an implementation repo.
+    
+    Returns:
+        Path to implementation root directory
+        
+    Note:
+        As a fallback, returns current directory instead of raising error,
+        so new files are created where the command is executed.
     """
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        if (parent / 'server_group.yaml').exists() or (parent / 'services').is_dir():
+        server_group = parent / "server_group.yaml"
+        services_dir = parent / "services"
+        customers_dir = parent / "2-customers"
+        if server_group.exists() or services_dir.is_dir() or customers_dir.is_dir():
             return parent
     
-    # Fallback or error
-    raise FileNotFoundError(
-        "Could not determine project root. Make sure you are inside an implementation "
-        "directory (e.g., adopus-cdc-pipeline) that contains a 'server_group.yaml' file."
-    )
+    # Fallback to current directory (allows new implementation scaffolding)
+    return current
 
 
 def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:
