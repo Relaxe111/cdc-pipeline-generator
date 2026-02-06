@@ -69,6 +69,11 @@ def extract_identifiers(
     """
     Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
     
+    Priority order for db-shared pattern:
+    1. extraction_patterns (per-server, ordered list) - NEW
+    2. extraction_pattern (per-server, single pattern) - backward compat
+    3. Fallback logic (parse db_name heuristically)
+    
     Args:
         db_name: Database name to parse
         server_group_config: Server group configuration with extraction patterns
@@ -77,46 +82,60 @@ def extract_identifiers(
     Returns:
         ExtractedIdentifiers with customer, service, env, suffix
     """
-    pattern_type = server_group_config.get('pattern')
+    from cdc_generator.helpers.helpers_pattern_matcher import (
+        match_extraction_patterns,
+        match_single_pattern,
+    )
     
-    # Try to get per-server extraction pattern first, fallback to global (deprecated)
+    pattern_type = server_group_config.get('pattern')
     servers = server_group_config.get('servers', {})
     server_config = servers.get(server_name, {})
-    extraction_pattern = server_config.get('extraction_pattern', '')
     
-    # Fallback to global extraction_pattern (deprecated)
-    if not extraction_pattern:
-        extraction_pattern = server_group_config.get('extraction_pattern', '')
+    # For db-shared: try ordered extraction patterns first (NEW)
+    if pattern_type == 'db-shared':
+        extraction_patterns = server_config.get('extraction_patterns', [])
+        if extraction_patterns:
+            result = match_extraction_patterns(db_name, extraction_patterns, server_name)
+            if result:
+                service, env = result
+                return {
+                    'customer': '',
+                    'service': service,
+                    'env': env,
+                    'suffix': ''
+                }
+        
+        # Fallback to single extraction_pattern (backward compat)
+        extraction_pattern = server_config.get('extraction_pattern', '')
+        if not extraction_pattern:
+            extraction_pattern = server_group_config.get('extraction_pattern', '')
+        
+        if extraction_pattern:
+            result = match_single_pattern(db_name, extraction_pattern)
+            if result:
+                service, env = result
+                return {
+                    'customer': '',
+                    'service': service,
+                    'env': env,
+                    'suffix': ''
+                }
     
-    # If extraction pattern is provided and not empty, use it
-    if extraction_pattern:
-        match = re.match(extraction_pattern, db_name)
-        if match:
-            groups = match.groupdict()
-            
-            # For db-per-tenant: extract customer
-            if pattern_type == 'db-per-tenant':
+    # For db-per-tenant: use extraction_pattern for customer extraction
+    elif pattern_type == 'db-per-tenant':
+        extraction_pattern = server_config.get('extraction_pattern', '')
+        if not extraction_pattern:
+            extraction_pattern = server_group_config.get('extraction_pattern', '')
+        
+        if extraction_pattern:
+            match = re.match(extraction_pattern, db_name)
+            if match:
+                groups = match.groupdict()
                 return {
                     'customer': groups.get('customer', db_name),
                     'service': server_group_config.get('name', ''),
                     'env': '',
                     'suffix': ''
-                }
-            
-            # For db-shared: extract service, env, suffix
-            elif pattern_type == 'db-shared':
-                service_name = groups.get('service', '')
-                suffix = groups.get('suffix', '')
-                
-                # Apply suffix transformation if present
-                if suffix:
-                    service_name = f"{suffix}_{service_name}"
-                
-                return {
-                    'customer': '',
-                    'service': service_name,
-                    'env': groups.get('env', ''),
-                    'suffix': suffix
                 }
     
     # Fallback logic when no pattern or pattern doesn't match
@@ -125,25 +144,12 @@ def extract_identifiers(
         return {'customer': db_name, 'service': server_group_config.get('name', ''), 'env': '', 'suffix': ''}
     
     elif pattern_type == 'db-shared':
-        # Extract environment from last segment of database name
-        # Example: activities_db_dev -> env = "dev", chat_staging -> env = "staging"
-        parts = db_name.lower().split('_')
-        raw_env = parts[-1] if parts else ''
-        
-        # Apply env_mappings if configured (e.g., {"staging": "stage", "production": "prod"})
-        env_mappings = server_group_config.get('env_mappings', {})
-        env = env_mappings.get(raw_env, raw_env) if env_mappings else raw_env
-        
-        # Remove environment suffix and "db" word, use what's left as service
-        service = db_name.lower()
-        if raw_env:
-            service = re.sub(rf'_{raw_env}$', '', service)
-        service = re.sub(r'_db_|_db$|^db_', '_', service).strip('_')
-        
+        # Fallback: no pattern matched
+        # Use database name as service and server name as env
         return {
             'customer': '',
-            'service': service or db_name,
-            'env': env,
+            'service': db_name,
+            'env': server_name,
             'suffix': ''
         }
     

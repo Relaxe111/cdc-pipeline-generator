@@ -84,6 +84,57 @@ adopus:
 from typing import Dict, List, Union, Literal, TypedDict, TypeAlias
 
 
+class ExtractionPattern(TypedDict, total=False):
+    r"""Single extraction pattern for database name decomposition.
+    
+    Patterns are tried in order. First match wins.
+    
+    Fields:
+        pattern: Regex with named groups (?P<service>...) and optionally (?P<env>...)
+        env: Fixed environment name (overrides captured (?P<env>) group if present)
+        strip_patterns: List of regex patterns to remove from service name (e.g., ['_db', '_database$'])
+        env_mapping: Optional dict to transform extracted env (e.g., {'prod_adcuris': 'prod-adcuris'})
+        description: Human-readable description of what this pattern matches
+    
+    Examples:
+        # Match {service}_db_prod_adcuris -> service={service}, env=prod-adcuris (transformed)
+        {
+            'pattern': r'^(?P<service>\w+)_db_prod_adcuris$',
+            'env': 'prod_adcuris',
+            'strip_patterns': ['_db$'],  # Strip _db from end only
+            'env_mapping': {'prod_adcuris': 'prod-adcuris'},  # Transform env
+            'description': 'Service with _db suffix and prod_adcuris environment'
+        }
+        
+        # Match adopus_db_{service}_prod_adcuris -> service=adopus_{service}, env=prod-adcuris
+        {
+            'pattern': r'^(?P<service>adopus_db_\w+)_prod_adcuris$',
+            'env': 'prod_adcuris',
+            'strip_patterns': ['_db'],  # Strip _db from anywhere
+            'env_mapping': {'prod_adcuris': 'prod-adcuris'},
+            'description': 'AdOpus service with _db infix and prod_adcuris environment'
+        }
+        
+        # Match {service}_{env} -> service={service}, env={env}
+        {
+            'pattern': r'^(?P<service>\w+)_(?P<env>\w+)$',
+            'description': 'Standard service_env pattern'
+        }
+        
+        # Match {service} (single word) -> service={service}, env=prod (implicit)
+        {
+            'pattern': r'^(?P<service>\w+)$',
+            'env': 'prod',
+            'description': 'Single word service name (implicit prod environment)'
+        }
+    """
+    pattern: str
+    env: str
+    strip_patterns: List[str]
+    env_mapping: Dict[str, str]
+    description: str
+
+
 class ServerConfig(TypedDict, total=False):
     """Database server connection configuration.
     
@@ -96,8 +147,12 @@ class ServerConfig(TypedDict, total=False):
     - shared: All servers use same value (e.g., ${KAFKA_BOOTSTRAP_SERVERS})
     - per-server: Each server has postfixed value (e.g., ${KAFKA_BOOTSTRAP_SERVERS_EUROPE})
     
-    extraction_pattern: Regex to extract identifiers from database names.
+    extraction_pattern: DEPRECATED - Single regex pattern. Use extraction_patterns instead.
     Different servers may have different naming conventions.
+    
+    extraction_patterns: List of extraction patterns tried in order. First match wins.
+    Allows handling multiple database naming conventions per server.
+    Each pattern can have its own regex, fixed env, and strip_suffixes.
     """
     host: str
     port: Union[str, int]
@@ -105,6 +160,8 @@ class ServerConfig(TypedDict, total=False):
     password: str
     kafka_bootstrap_servers: str
     extraction_pattern: str
+    extraction_patterns: List[ExtractionPattern]
+    environments: List[str]
 
 
 class DatabaseEntry(TypedDict, total=False):

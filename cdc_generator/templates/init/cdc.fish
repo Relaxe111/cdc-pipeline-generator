@@ -164,6 +164,26 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l set-kafk
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "shared" -d "Same Kafka cluster for all servers"
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --set-kafka-topology" -f -a "per-server" -d "Separate Kafka cluster per server"
 
+# Extraction pattern management (multi-pattern approach)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l add-extraction-pattern -d "Add extraction pattern: SERVER PATTERN (with optional --env, --strip-suffixes, --description)" -r
+# Dynamic server name completion for --add-extraction-pattern (hardcoded common values + parsing from YAML)
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --add-extraction-pattern" -f -a "default" -d "Default server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --add-extraction-pattern" -f -a "prod" -d "Production server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --add-extraction-pattern" -f -a "analytics" -d "Analytics server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --add-extraction-pattern" -f -a "reporting" -d "Reporting server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l env -d "Fixed environment for --add-extraction-pattern (overrides captured group)" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l strip-suffixes -d "Comma-separated suffixes to strip from service name (e.g., '_db,_database')" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l description -d "Human-readable description for --add-extraction-pattern" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l list-extraction-patterns -d "List extraction patterns for all servers or specific server (optional)" -r
+# Dynamic server name completion for --list-extraction-patterns
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --list-extraction-patterns" -f -a "default" -d "Default server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --list-extraction-patterns" -f -a "prod" -d "Production server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l remove-extraction-pattern -d "Remove extraction pattern: SERVER INDEX" -r
+# Dynamic server name completion for --remove-extraction-pattern
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --remove-extraction-pattern" -f -a "default" -d "Default server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --remove-extraction-pattern" -f -a "prod" -d "Production server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l set-extraction-pattern -d "Set single extraction pattern: SERVER PATTERN (legacy, prefer --add-extraction-pattern)" -r
+
 # Creation flags (used with --create)
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group" -l pattern -d "Server group pattern (db-per-tenant|db-shared)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-server-group; and __cdc_last_token_is --pattern" -f -a "db-per-tenant db-shared"

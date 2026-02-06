@@ -494,8 +494,11 @@ def update_server_group_yaml(server_group_name: str, databases: List[Dict[str, A
         # Add the server group entry (flat structure - name is root key)
         output_lines.append(f"{server_group_name}:")
         
+        # Don't include 'name' in YAML output - root key is the name
+        sg_to_save = {k: v for k, v in sg.items() if k != 'name'}
+        
         # Dump the server group data and indent it properly
-        sg_yaml = yaml.dump(sg, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        sg_yaml = yaml.dump(sg_to_save, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
         sg_lines = sg_yaml.strip().split('\n')
         for line in sg_lines:
             # Add 2 spaces of indentation (flat structure)

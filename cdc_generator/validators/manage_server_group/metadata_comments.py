@@ -256,7 +256,7 @@ def generate_per_server_stats(
     num_services: int,
     env_stats_line: str
 ) -> List[str]:
-    """Generate per-server statistics breakdown for header comments.
+    """Generate unified statistics for all servers.
     
     Args:
         databases: List of database info dicts with 'server', 'environment', 'table_count' fields
@@ -268,7 +268,7 @@ def generate_per_server_stats(
         env_stats_line: Per-environment statistics line
         
     Returns:
-        List of formatted comment lines showing stats grouped by server with global stats
+        List of formatted comment lines showing unified stats across all servers
         
     Example:
         >>> dbs = [
@@ -285,7 +285,14 @@ def generate_per_server_stats(
     def _create_default_stats() -> ServerStats:
         return ServerStats(databases=0, tables=0, environments=set())
     
-    # Group by server
+    # Collect all unique environments across all servers
+    all_environments: Set[str] = set()
+    for db in databases:
+        env = db.get('environment', '')
+        if env and isinstance(env, str):
+            all_environments.add(env)
+    
+    # Group by server (still needed for per-server summary)
     server_stats: Dict[str, ServerStats] = defaultdict(_create_default_stats)
     
     for db in databases:
@@ -303,25 +310,27 @@ def generate_per_server_stats(
     # Build comment lines
     comment_lines: List[str] = []
     
+    # Single unified header with all stats
+    comment_lines.append("# ============================================================================")
+    comment_lines.append("# Server Group Summary")
+    comment_lines.append("# ============================================================================")
+    comment_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
+    comment_lines.append(f"# Services ({num_services}): {service_list}")
+    
+    if all_environments:
+        env_list = ", ".join(sorted(all_environments))
+        comment_lines.append(f"# Environments: {env_list}")
+    
+    if env_stats_line:
+        comment_lines.append(f"# Per Environment: {env_stats_line}")
+    
+    # Add per-server breakdown (compact)
+    comment_lines.append("#")
+    comment_lines.append("# Per Server:")
     for server_name in sorted(server_stats.keys()):
         stats = server_stats[server_name]
-        envs = sorted(stats['environments'])
-        
-        comment_lines.append("# ============================================================================")
-        comment_lines.append(f"# Server: {server_name}")
-        comment_lines.append("# ============================================================================")
-        comment_lines.append(f"# Databases: {stats['databases']} | Tables: {stats['tables']}")
-        
-        if envs:
-            env_list = ", ".join(envs)
-            comment_lines.append(f"# Environments: {env_list}")
-        
-        # Add global stats under each server section
-        comment_lines.append(f"# Total: {total_dbs} databases | {total_tables} tables | Avg: {avg_tables} tables/db")
-        comment_lines.append(f"# ? Services ({num_services}): {service_list}")
-        if env_stats_line:
-            comment_lines.append(f"# Per Environment: {env_stats_line}")
-        
-        comment_lines.append("#")
+        comment_lines.append(f"#   {server_name}: {stats['databases']} dbs, {stats['tables']} tables")
+    
+    comment_lines.append("#")
     
     return comment_lines

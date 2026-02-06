@@ -52,10 +52,8 @@ from cdc_generator.helpers.yaml_loader import ConfigDict
 from cdc_generator.validators.manage_server_group import (
     load_schema_exclude_patterns,
     load_database_exclude_patterns,
-    load_env_mappings,
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
-    handle_add_env_mapping,
     handle_update,
     handle_info,
     handle_add_server,
@@ -63,6 +61,9 @@ from cdc_generator.validators.manage_server_group import (
     handle_remove_server,
     handle_set_kafka_topology,
     handle_set_extraction_pattern,
+    handle_add_extraction_pattern,
+    handle_list_extraction_patterns,
+    handle_remove_extraction_pattern,
 )
 
 # Import flag validator
@@ -105,12 +106,6 @@ def main() -> int:
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
     
-    # Environment mappings management
-    parser.add_argument("--add-env-mapping", 
-                       help="Add environment mapping(s) in format 'from:to,from:to' (e.g., 'staging:stage,production:prod').")
-    parser.add_argument("--list-env-mappings", action="store_true",
-                       help="List current environment mappings.")
-    
     # Multi-server management
     parser.add_argument("--add-server", metavar="NAME",
                        help="Add a new server configuration (e.g., 'analytics', 'reporting'). "
@@ -126,6 +121,30 @@ def main() -> int:
                        help="Set extraction pattern for a specific server. "
                             "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). "
                             "Example: --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
+    
+    # Extraction pattern management (ordered multi-pattern approach)
+    parser.add_argument("--add-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
+                       help="Add an extraction pattern to a server. Patterns are tried in order (first match wins). "
+                            "Pattern must include named group (?P<service>...) and optionally (?P<env>...). "
+                            "Use --env to fix environment (overrides captured group). "
+                            "Use --strip-patterns for regex-based removal (e.g., '_db' anywhere, '_db$' suffix only). "
+                            "Example: --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' "
+                            "--env prod_adcuris --strip-patterns '_db$'")
+    parser.add_argument("--env", type=str,
+                       help="Fixed environment name for --add-extraction-pattern (overrides captured (?P<env>) group).")
+    parser.add_argument("--strip-patterns", type=str,
+                       help="Comma-separated regex patterns to remove from service name (e.g., '_db' for anywhere, '_db$' for suffix only).")
+    parser.add_argument("--env-mapping", type=str,
+                       help="Environment mapping in format 'from:to' (e.g., 'prod_adcuris:prod-adcuris'). Can be specified multiple times.",
+                       action='append')
+    parser.add_argument("--description", type=str,
+                       help="Human-readable description for --add-extraction-pattern.")
+    parser.add_argument("--list-extraction-patterns", nargs='?', const='', metavar="SERVER",
+                       help="List extraction patterns for all servers or a specific server.")
+    parser.add_argument("--remove-extraction-pattern", nargs=2, metavar=("SERVER", "INDEX"),
+                       help="Remove an extraction pattern by index. "
+                            "Use --list-extraction-patterns to see indices. "
+                            "Example: --remove-extraction-pattern prod 0")
     
     args = parser.parse_args()
 
@@ -179,25 +198,6 @@ def main() -> int:
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
     
-    # Handle list env mappings
-    if args.list_env_mappings:
-        mappings = load_env_mappings()
-        print_header("Environment Mappings")
-        if mappings:
-            print_info("Database environment suffixes will be mapped as follows:")
-            for from_env, to_env in sorted(mappings.items()):
-                print_info(f"  • {from_env} → {to_env}")
-            print_info("\nThese mappings are applied when extracting environment from database names.")
-        else:
-            print_warning("No environment mappings defined.")
-            print_info("Add mappings to normalize environment suffixes:")
-            print_info("  cdc manage-server-group --add-env-mapping 'staging:stage,production:prod'")
-        return 0
-    
-    # Handle add env mapping
-    if args.add_env_mapping:
-        return handle_add_env_mapping(args)
-    
     # Handle multi-server management
     if args.add_server:
         return handle_add_server(args)
@@ -213,6 +213,15 @@ def main() -> int:
     
     if args.set_extraction_pattern:
         return handle_set_extraction_pattern(args)
+    
+    if args.add_extraction_pattern:
+        return handle_add_extraction_pattern(args)
+    
+    if args.list_extraction_patterns is not None:
+        return handle_list_extraction_patterns(args)
+    
+    if args.remove_extraction_pattern:
+        return handle_remove_extraction_pattern(args)
     
     # Handle info
     if args.info:

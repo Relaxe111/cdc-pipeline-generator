@@ -33,6 +33,9 @@ from .handlers_server import (
     handle_remove_server,
     handle_set_kafka_topology,
     handle_set_extraction_pattern,
+    handle_add_extraction_pattern,
+    handle_list_extraction_patterns,
+    handle_remove_extraction_pattern,
 )
 
 __all__ = [
@@ -52,4 +55,7 @@ __all__ = [
     "handle_remove_server",
     "handle_set_kafka_topology",
     "handle_set_extraction_pattern",
+    "handle_add_extraction_pattern",
+    "handle_list_extraction_patterns",
+    "handle_remove_extraction_pattern",
 ]
