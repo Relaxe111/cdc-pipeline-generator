@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-CDC Pipeline CLI - Main Entry Point
+"""CDC Pipeline CLI - Main Entry Point.
 
 This CLI runs inside a Docker dev container with all dependencies pre-installed.
 
@@ -9,7 +8,7 @@ Usage:
 
 Commands:
     scaffold              Scaffold a new CDC pipeline project with server group configuration
-    validate              Validate all customer configurations  
+    validate              Validate all customer configurations
     manage-service        Manage service definitions
     manage-server-group   Manage server groups
     generate [customer]   Generate pipelines
@@ -30,15 +29,43 @@ Commands:
 Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
 """
 
+from __future__ import annotations
+
 import subprocess
 import sys
 from pathlib import Path
 
+# Minimum number of CLI args (program name + command)
+_MIN_ARGS = 2
 
-def detect_environment():
-    """
-    Detect the current working environment.
-    
+# Type alias for script paths dictionary
+ScriptPaths = dict[str, Path | None]
+
+
+def _detect_dev_container(cwd: Path) -> tuple[Path, str | None, bool] | None:
+    """Check if running inside the dev container and return env tuple, or None."""
+    if cwd.parts[:2] == ("/", "workspace"):
+        return Path("/workspace"), None, True
+    if cwd.parts[:3] == ("/", "implementations", "adopus"):
+        return Path("/implementations/adopus"), "adopus", True
+    if cwd.parts[:3] == ("/", "implementations", "asma"):
+        return Path("/implementations/asma"), "asma", True
+    return None
+
+
+def _impl_name_from_path(path: Path) -> str | None:
+    """Extract implementation name from a filesystem path."""
+    path_str = str(path)
+    if "adopus-cdc-pipeline" in path_str:
+        return "adopus"
+    if "asma-cdc-pipeline" in path_str:
+        return "asma"
+    return None
+
+
+def detect_environment() -> tuple[Path, str | None, bool]:
+    """Detect the current working environment.
+
     Returns:
         tuple: (workspace_root, implementation_name, is_dev_container)
             - workspace_root: Path to workspace root (generator or implementation)
@@ -47,188 +74,163 @@ def detect_environment():
     """
     cwd = Path.cwd()
 
-    # Check if we're in the dev container
-    if cwd.parts[:2] == ('/', 'workspace'):
-        # In dev container at /workspace (generator root)
-        return Path('/workspace'), None, True
-    if cwd.parts[:3] == ('/', 'implementations', 'adopus'):
-        # In dev container at /implementations/adopus
-        return Path('/implementations/adopus'), 'adopus', True
-    if cwd.parts[:3] == ('/', 'implementations', 'asma'):
-        # In dev container at /implementations/asma
-        return Path('/implementations/asma'), 'asma', True
+    # Check dev container first
+    dev_result = _detect_dev_container(cwd)
+    if dev_result is not None:
+        return dev_result
 
     # Check if we're in an implementation directory on host
-    # Look for server_group.yaml as indicator
-    if (cwd / 'server_group.yaml').exists():
-        # We're in an implementation root
-        # Try to detect which one from path
-        if 'adopus-cdc-pipeline' in str(cwd):
-            return cwd, 'adopus', False
-        if 'asma-cdc-pipeline' in str(cwd):
-            return cwd, 'asma', False
-        # Unknown implementation, use current dir
-        return cwd, None, False
+    if (cwd / "server_group.yaml").exists():
+        return cwd, _impl_name_from_path(cwd), False
 
     # Try to find implementation root by walking up
     current = cwd
     while current != current.parent:
-        if (current / 'server_group.yaml').exists():
-            impl_name = None
-            if 'adopus-cdc-pipeline' in str(current):
-                impl_name = 'adopus'
-            elif 'asma-cdc-pipeline' in str(current):
-                impl_name = 'asma'
-            return current, impl_name, False
+        if (current / "server_group.yaml").exists():
+            return current, _impl_name_from_path(current), False
         current = current.parent
 
     # Fallback: assume we're in current directory
     return cwd, None, False
 
 
-def get_script_paths(workspace_root, is_dev_container):
-    """
-    Get paths to scripts based on environment.
-    
+def get_script_paths(workspace_root: Path, is_dev_container: bool) -> ScriptPaths:
+    """Get paths to scripts based on environment.
+
     Args:
         workspace_root: Path to workspace root
         is_dev_container: Whether running in dev container
-    
+
     Returns:
-        dict: Mapping of script types to paths
+        Mapping of script types to paths
     """
     if is_dev_container:
-        # In dev container - check if generator files exist locally
-        generator_root = Path('/workspace')
-        generator_candidate = generator_root / 'cdc_generator'
-
-        if generator_candidate.exists() and (generator_candidate / 'cli').exists():
-            # Generator development mode - use local files
+        generator_candidate = Path("/workspace") / "cdc_generator"
+        if generator_candidate.exists() and (generator_candidate / "cli").exists():
             return {
-                'generator': generator_candidate,
-                'scripts': workspace_root / 'scripts',
-                'root': workspace_root,
+                "generator": generator_candidate,
+                "scripts": workspace_root / "scripts",
+                "root": workspace_root,
             }
-        # User project with installed package - use python -m
         return {
-            'generator': None,  # Use installed package
-            'scripts': workspace_root / 'scripts',
-            'root': workspace_root,
+            "generator": None,
+            "scripts": workspace_root / "scripts",
+            "root": workspace_root,
         }
-    # On host - try to find generator
-    # Look for generator as sibling directory
-    parent = workspace_root.parent
-    generator_candidate = parent / 'cdc-pipeline-generator'
 
+    # On host - look for generator as sibling directory
+    generator_candidate = workspace_root.parent / "cdc-pipeline-generator"
     if generator_candidate.exists():
         return {
-            'generator': generator_candidate / 'cdc_generator',
-            'scripts': workspace_root / 'scripts',
-            'root': workspace_root,
+            "generator": generator_candidate / "cdc_generator",
+            "scripts": workspace_root / "scripts",
+            "root": workspace_root,
         }
-    # Fallback: assume generator is installed as package
-    # Scripts will be run via python -m
+
     return {
-        'generator': None,  # Use installed package
-        'scripts': workspace_root / 'scripts',
-        'root': workspace_root,
+        "generator": None,
+        "scripts": workspace_root / "scripts",
+        "root": workspace_root,
     }
 
 
 # Commands that use generator library
-GENERATOR_COMMANDS = {
+GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
     "scaffold": {
         "module": "cdc_generator.cli.scaffold_command",
         "script": "cli/scaffold_command.py",
-        "description": "Scaffold a new CDC pipeline project with server group configuration"
+        "description": "Scaffold a new CDC pipeline project with server group configuration",
     },
     "generate": {
         "module": "cdc_generator.core.pipeline_generator",
         "script": "core/pipeline_generator.py",
-        "description": "Generate Redpanda Connect pipelines"
+        "description": "Generate Redpanda Connect pipelines",
     },
     "manage-service": {
         "module": "cdc_generator.cli.service",
         "script": "cli/service.py",
-        "description": "Manage CDC service definitions"
+        "description": "Manage CDC service definitions",
     },
     "manage-server-group": {
         "module": "cdc_generator.cli.server_group",
         "script": "cli/server_group.py",
-        "description": "Manage server groups"
+        "description": "Manage server groups",
     },
     "setup-local": {
         "script": "cli/setup_local.py",
-        "description": "Set up local development environment with on-demand services"
+        "description": "Set up local development environment with on-demand services",
     },
 }
 
 # Commands that use local scripts (implementation-specific)
-LOCAL_COMMANDS = {
+LOCAL_COMMANDS: dict[str, dict[str, str]] = {
     "validate": {
         "script": "scripts/1-validate-customers.py",
-        "description": "Validate all customer YAML configurations"
+        "description": "Validate all customer YAML configurations",
     },
     "enable": {
         "script": "scripts/5-enable-cdc-mssql.py",
         "description": "Enable CDC on MSSQL tables",
-        "usage": "cdc enable <customer> <env>"
+        "usage": "cdc enable <customer> <env>",
     },
     "migrate-replica": {
         "script": "scripts/10-migrate-replica.py",
         "description": "Apply PostgreSQL migrations to replica databases",
-        "usage": "cdc migrate-replica <customer> --env <env>"
+        "usage": "cdc migrate-replica <customer> --env <env>",
     },
     "verify": {
         "script": "scripts/6-verify-pipeline.py",
         "description": "Verify pipeline connections",
-        "usage": "cdc verify <customer> <env>"
+        "usage": "cdc verify <customer> <env>",
     },
     "reset-local": {
         "script": "scripts/7-reset-local.py",
-        "description": "Reset local development environment"
+        "description": "Reset local development environment",
     },
     "nuke-local": {
         "script": "scripts/8-nuke-local.py",
-        "description": "Complete cleanup of local environment"
+        "description": "Complete cleanup of local environment",
     },
     "clean": {
         "script": "scripts/9-clean-cdc-tables.py",
         "description": "Clean CDC change tracking tables",
-        "usage": "cdc clean --env <env> [--table <table>] [--all]"
+        "usage": "cdc clean --env <env> [--table <table>] [--all]",
     },
     "verify-sync": {
         "script": "scripts/13-verify-cdc-sync.py",
         "description": "Verify CDC synchronization and detect gaps",
-        "usage": "cdc verify-sync [--customer <name>] [--env <env>] [--table <table>] [--fix]"
+        "usage": "cdc verify-sync [--customer <name>] [--env <env>] [--table <table>] [--fix]",
     },
     "stress-test": {
         "script": "scripts/7-stress-test.py",
         "description": "CDC stress test with real-time monitoring",
-        "usage": "cdc stress-test --env <env> [customer...] [--tables <table...>] [--records N]"
+        "usage": "cdc stress-test --env <env> [customer...] [--tables <table...>] [--records N]",
     },
     "schema-docs": {
         "script": "generate_schema_docs.py",
-        "description": "Generate database schema documentation YAML files"
+        "description": "Generate database schema documentation YAML files",
     },
     "reload-pipelines": {
         "script": "scripts/9-reload-pipelines.py",
         "description": "Regenerate and reload Redpanda Connect pipelines",
-        "usage": "cdc reload-pipelines [customer...]"
+        "usage": "cdc reload-pipelines [customer...]",
     },
     "reload-cdc-autocompletions": {
         "script": "scripts/reload-cdc-autocompletions.sh",
         "description": "Reload Fish shell completions after modifying cdc.fish",
-        "usage": "cdc reload-cdc-autocompletions"
+        "usage": "cdc reload-cdc-autocompletions",
     },
 }
 
 
-def print_help(workspace_root, implementation_name, is_dev_container):
+def print_help(
+    workspace_root: Path,
+    implementation_name: str | None,
+    is_dev_container: bool,
+) -> None:
     """Print help message with all available commands."""
     print(__doc__)
 
-    # Show environment info
     if is_dev_container:
         if implementation_name:
             print(f"📍 Environment: Dev container - /implementations/{implementation_name}")
@@ -245,133 +247,167 @@ def print_help(workspace_root, implementation_name, is_dev_container):
 
     print("\n🔧 Commands using local scripts:")
     for cmd, info in LOCAL_COMMANDS.items():
-        desc = info['description']
-        if 'usage' in info:
+        desc = info["description"]
+        if "usage" in info:
             desc += f"\n  {' ' * 20}   Usage: {info['usage']}"
         print(f"  {cmd:20} - {desc}")
 
     print("\n💡 Tip: Run commands from implementation directory or dev container")
 
 
-def run_generator_command(command, paths, extra_args, workspace_root):
-    """
-    Run a command from the generator library.
-    
+def _run_subprocess(
+    cmd: list[str],
+    cwd: Path | None = None,
+) -> int:
+    """Run a subprocess and return exit code, handling errors."""
+    result = subprocess.run(cmd, cwd=cwd, check=False)
+    return result.returncode
+
+
+def run_generator_command(
+    command: str,
+    paths: ScriptPaths,
+    extra_args: list[str],
+    workspace_root: Path,
+) -> int:
+    """Run a command from the generator library.
+
     Args:
         command: Command name
         paths: Dictionary of script paths
         extra_args: Additional command-line arguments
         workspace_root: Current workspace root
-    
+
     Returns:
-        int: Exit code
+        Exit code
     """
     cmd_info = GENERATOR_COMMANDS[command]
 
-    if paths['generator'] is None:
-        # Use installed package
-        cmd = ["python3", "-m", cmd_info['module']] + extra_args
+    if paths["generator"] is None:
+        cmd = ["python3", "-m", cmd_info["module"], *extra_args]
     else:
-        # Use local generator files
-        script_path = paths['generator'] / cmd_info['script']
+        script_path = Path(str(paths["generator"])) / cmd_info["script"]
         if not script_path.exists():
             print(f"❌ Error: Generator script not found: {script_path}")
             print("   Make sure cdc-pipeline-generator is properly set up.")
             return 1
-        cmd = ["python3", str(script_path)] + extra_args
+        cmd = ["python3", str(script_path), *extra_args]
 
-    # Execute from implementation workspace root
     try:
-        result = subprocess.run(cmd, cwd=workspace_root)
-        return result.returncode
+        return _run_subprocess(cmd, cwd=workspace_root)
     except Exception as e:
         print(f"❌ Error running {command}: {e}")
         return 1
 
 
-def run_local_command(command, paths, extra_args, workspace_root):
-    """
-    Run a command from local scripts directory.
-    
+def run_local_command(
+    command: str,
+    _paths: ScriptPaths,
+    extra_args: list[str],
+    workspace_root: Path,
+) -> int:
+    """Run a command from local scripts directory.
+
     Args:
         command: Command name
-        paths: Dictionary of script paths
+        _paths: Dictionary of script paths (unused, kept for API consistency)
         extra_args: Additional command-line arguments
         workspace_root: Current workspace root
-    
+
     Returns:
-        int: Exit code
+        Exit code
     """
     cmd_info = LOCAL_COMMANDS[command]
-    script_path = workspace_root / cmd_info['script']
+    script_path = workspace_root / cmd_info["script"]
 
     if not script_path.exists():
         print(f"❌ Error: Script not found: {script_path}")
         print("   This command requires an implementation workspace.")
         return 1
 
-    cmd = ["python3", str(script_path)] + extra_args
+    cmd = ["python3", str(script_path), *extra_args]
 
     try:
-        result = subprocess.run(cmd, cwd=workspace_root)
-        return result.returncode
+        return _run_subprocess(cmd, cwd=workspace_root)
     except Exception as e:
         print(f"❌ Error running {command}: {e}")
         return 1
 
 
-def main():
+def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
+    """Handle commands that don't need environment detection.
+
+    Returns:
+        Exit code if handled, None if not a special command.
+    """
+    if command == "init":
+        from cdc_generator.cli.init_project import init_project
+
+        return init_project(extra_args)
+
+    if command == "scaffold":
+        from cdc_generator.cli.scaffold_command import main as scaffold_main
+
+        sys.argv = [sys.argv[0], *extra_args]
+        return scaffold_main()
+
+    if command == "check":
+        from cdc_generator.cli.check_command import run_check
+
+        return run_check(extra_args)
+
+    return None
+
+
+def _handle_reload_completions(is_dev_container: bool) -> int:
+    """Handle the reload-cdc-autocompletions command."""
+    if not is_dev_container:
+        print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
+        print("   Enter the container with: docker compose exec dev fish")
+        return 1
+
+    try:
+        fish_src = "/workspace/cdc_generator/templates/init/cdc.fish"
+        fish_dst = "/usr/share/fish/vendor_completions.d/cdc.fish"
+        fish_cmd = (
+            f"cp {fish_src} {fish_dst}"
+            f" && . {fish_dst}"
+            " && echo '✓ Fish completions reloaded successfully'"
+        )
+        return _run_subprocess(["fish", "-c", fish_cmd])
+    except Exception as e:
+        print(f"❌ Error reloading completions: {e}")
+        return 1
+
+
+def main() -> int:
     """Main CLI entry point."""
-    # Show help if requested or no command given
-    if len(sys.argv) < 2 or sys.argv[1] in ["help", "--help", "-h"]:
+    if len(sys.argv) < _MIN_ARGS or sys.argv[1] in ["help", "--help", "-h"]:
         workspace_root, implementation_name, is_dev_container = detect_environment()
         print_help(workspace_root, implementation_name, is_dev_container)
         return 0
 
     command = sys.argv[1]
-    extra_args = sys.argv[2:] if len(sys.argv) > 2 else []
+    extra_args: list[str] = sys.argv[_MIN_ARGS:]
 
-    # Special handling for 'init' and 'scaffold' - run anywhere without environment detection
-    if command == "init":
-        from cdc_generator.cli.init_project import init_project
-        return init_project(extra_args)
-
-    if command == "scaffold":
-        from cdc_generator.cli.scaffold_command import main as scaffold_main
-        # Override sys.argv to make argparse work correctly
-        sys.argv = [sys.argv[0]] + extra_args
-        return scaffold_main()
+    # Commands that run without environment detection
+    special_result = _handle_special_commands(command, extra_args)
+    if special_result is not None:
+        return special_result
 
     # For other commands, detect environment
-    workspace_root, implementation_name, is_dev_container = detect_environment()
-
-    # Get script paths
+    workspace_root, _implementation_name, is_dev_container = detect_environment()
     paths = get_script_paths(workspace_root, is_dev_container)
 
-    # Special handling for reload-cdc-autocompletions (shell command, not Python)
     if command == "reload-cdc-autocompletions":
-        import subprocess
-        try:
-            # Check if we're in dev container
-            if is_dev_container:
-                cmd = [
-                    "fish", "-c",
-                    "cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish && . /usr/share/fish/vendor_completions.d/cdc.fish && echo '✓ Fish completions reloaded successfully'"
-                ]
-                result = subprocess.run(cmd)
-                return result.returncode
-            print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
-            print("   Enter the container with: docker compose exec dev fish")
-            return 1
-        except Exception as e:
-            print(f"❌ Error reloading completions: {e}")
-            return 1
+        return _handle_reload_completions(is_dev_container)
 
-    # Execute command
     if command in GENERATOR_COMMANDS:
         return run_generator_command(command, paths, extra_args, workspace_root)
+
     if command in LOCAL_COMMANDS:
         return run_local_command(command, paths, extra_args, workspace_root)
+
     print(f"❌ Unknown command: {command}")
     print("\nRun 'cdc help' to see available commands.")
     return 1

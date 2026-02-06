@@ -26,6 +26,11 @@ complete -c cdc -n "__fish_use_subcommand" -a "validate" -d "Validate all custom
 complete -c cdc -n "__fish_use_subcommand" -a "manage-service" -d "Manage service definitions"
 complete -c cdc -n "__fish_use_subcommand" -a "manage-server-group" -d "Manage server groups"
 complete -c cdc -n "__fish_use_subcommand" -a "generate" -d "Generate pipelines"
+complete -c cdc -n "__fish_use_subcommand" -a "check" -d "Run code quality checks (pyright + ruff + black)"
+
+# check subcommand options
+complete -c cdc -n "__fish_seen_subcommand_from check" -l force -d "Apply unsafe ruff auto-fixes"
+complete -c cdc -n "__fish_seen_subcommand_from check" -l no-fix -d "Run checks without auto-fixing"
 
 # Local commands (implementation-specific)
 complete -c cdc -n "__fish_use_subcommand" -a "setup-local" -d "Set up local development environment"

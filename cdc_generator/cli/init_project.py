@@ -149,10 +149,9 @@ def build_container(target_dir: Path):
         return False
 
 
-def init_project(args):
-    """
-    Initialize a new CDC Pipeline project.
-    
+def init_project(args: list[str]) -> int:
+    """Initialize a new CDC Pipeline project.
+
     Args:
         args: Command-line arguments (currently unused)
     """

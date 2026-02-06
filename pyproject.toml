@@ -93,6 +93,10 @@ select = [
     "RUF",    # ruff-specific rules
 ]
 
+ignore = [
+    "PLC0415",  # allow imports inside functions (lazy loading)
+]
+
 [tool.ruff.lint.per-file-ignores]
 # Allow Any in type stub files and tests if needed
 "*.pyi" = ["ANN401"]
