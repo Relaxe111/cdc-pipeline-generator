@@ -15,6 +15,13 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.helpers_env import (
+    append_env_vars_to_dotenv,
+    print_env_removal_summary,
+    print_env_update_summary,
+    remove_env_vars_from_dotenv,
+    source_server_env_vars,
+)
 
 from .config import (
     SERVER_GROUPS_FILE,
@@ -26,47 +33,22 @@ from .metadata_comments import get_file_header_comments
 
 def default_connection_placeholders(source_type: str, server_name: str, kafka_topology: str) -> dict[str, str]:
     """Return default environment variable placeholders for a server.
-    
+
+    Delegates to shared source_server_env_vars helper.
+
     Args:
         source_type: 'postgres' or 'mssql'
         server_name: Server name (e.g., 'default', 'analytics')
         kafka_topology: 'shared' or 'per-server'
-    
+
     Returns:
         Dict with host, port, user, password, kafka_bootstrap_servers placeholders
-        
+
     Example:
         >>> default_connection_placeholders('postgres', 'analytics', 'per-server')
         {'host': '${POSTGRES_SOURCE_HOST_ANALYTICS}', ...}
     """
-    prefix = 'POSTGRES_SOURCE' if source_type == 'postgres' else 'MSSQL_SOURCE'
-
-    # Non-default servers get postfix
-    if server_name != 'default':
-        postfix = f"_{server_name.upper()}"
-        placeholders = {
-            'host': f"${{{prefix}_HOST{postfix}}}",
-            'port': f"${{{prefix}_PORT{postfix}}}",
-            'user': f"${{{prefix}_USER{postfix}}}",
-            'password': f"${{{prefix}_PASSWORD{postfix}}}",
-        }
-    else:
-        placeholders = {
-            'host': f"${{{prefix}_HOST}}",
-            'port': f"${{{prefix}_PORT}}",
-            'user': f"${{{prefix}_USER}}",
-            'password': f"${{{prefix}_PASSWORD}}",
-        }
-
-    # Kafka bootstrap servers: depends on topology
-    if kafka_topology == 'per-server':
-        postfix = f"_{server_name.upper()}"
-        placeholders['kafka_bootstrap_servers'] = f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
-    else:
-        # shared topology: same for all servers
-        placeholders['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
-
-    return placeholders
+    return source_server_env_vars(source_type, server_name, kafka_topology)
 
 
 def handle_add_server(args: Namespace) -> int:
@@ -203,7 +185,12 @@ def handle_add_server(args: Namespace) -> int:
         print_info(f"  Type: {source_type}")
         print_info(f"  Host: {new_server['host']}")
         print_info(f"  Kafka: {new_server['kafka_bootstrap_servers']}")
-
+        # Append env variables to .env
+        env_count = append_env_vars_to_dotenv(
+            placeholders,
+            f"Source Server: {server_name} ({final_source_type})",
+        )
+        print_env_update_summary(env_count, placeholders)
         return 0
     except Exception as e:
         print_error(f"Failed to save configuration: {e}")
@@ -391,6 +378,14 @@ def handle_remove_server(args: Namespace) -> int:
             f.write('\n')
 
         print_success(f"✓ Removed server '{server_name}' from server group '{server_group_name}'")
+        # Remove env variables from .env
+        group_type = str(server_group.get('type', 'postgres'))
+        kafka_topology = cast(str, server_group.get('kafka_topology', 'shared'))
+        placeholders = source_server_env_vars(
+            group_type, server_name, kafka_topology,
+        )
+        env_count = remove_env_vars_from_dotenv(placeholders)
+        print_env_removal_summary(env_count, placeholders)
         return 0
     except Exception as e:
         print_error(f"Failed to save configuration: {e}")

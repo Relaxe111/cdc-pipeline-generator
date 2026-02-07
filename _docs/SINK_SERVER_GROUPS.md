@@ -18,32 +18,32 @@ Sink groups define **where** CDC data is written to. They exist alongside source
 **Purpose:** Write back to the same infrastructure as the source (or same database server, different database)
 
 **When to use:**
+
 - `db-shared` pattern only (doesn't make sense for `db-per-tenant`)
 - Writing to a replica database on the same server
 - Writing to a different schema on the same server
 - Writing to a staging/test database on same infrastructure
 
 **Characteristics:**
+
 - Automatically inherits all servers from source group via `source_ref`
 - Same connection config as source (host, port, credentials)
-- Services auto-inherited (listed in `_inherited_services`)
+- Available sources declared in `inherited_sources` (must match source group sources)
 - Targets configured per-service in `services/*.yaml`
 
 **Example:**
+
 ```yaml
 sink_foo:
-  source_group: foo                 # inherits from source-groups.yaml → foo
-  pattern: db-shared                # inherited
-  type: postgres                    # inherited
+  inherits: true                    # inherits from source group deduced from name
   servers:
     default:
-      source_ref: foo/default       # inherits connection config
+      source_ref: default            # inherits connection config from foo/default
     prod:
-      source_ref: foo/prod
-  _inherited_services:
+      source_ref: prod
+  inherited_sources:                 # must match sources in source group 'foo'
     - directory
     - calendar
-  sources: {}                       # configured in services/*.yaml
 ```
 
 ### 2. Standalone Sink Groups (`sink_analytics`)
@@ -51,18 +51,21 @@ sink_foo:
 **Purpose:** Write to external systems (analytics warehouse, HTTP endpoints, etc.)
 
 **When to use:**
+
 - Analytics/data warehouse (separate infrastructure)
 - HTTP webhooks or APIs
 - External monitoring systems
 - Any destination NOT on source infrastructure
 
 **Characteristics:**
+
 - Own connection config (no `source_ref`)
 - Links to source group via `source_group` (for Kafka topics)
 - No inherited services
 - Targets explicitly configured
 
 **Example:**
+
 ```yaml
 sink_analytics:
   source_group: foo                 # consumes from foo's Kafka topics
@@ -83,15 +86,15 @@ sink_analytics:
 ### Top-Level Fields
 
 | Field | Required | Description |
-|-------|----------|-------------|
+| ----- | -------- | ----------- |
 | `source_group` | ✅ Yes | Which source group feeds this sink (for Kafka topics) |
 | `pattern` | ✅ Yes | `db-shared` or `db-per-tenant` (usually matches source) |
 | `type` | ✅ Yes | `postgres`, `mssql`, `http_client`, `http_server` |
 | `kafka_topology` | No | Inherited from source group if not specified |
 | `description` | No | Human-readable description |
 | `servers` | ✅ Yes | Server connection configurations |
-| `sources` | ✅ Yes | Service sink source mappings (usually empty, configured in services/*.yaml) |
-| `_inherited_services` | No | List of services inherited from source (documentation only) |
+| `sources` | Standalone | Service sink source mappings (configured in services/*.yaml) |
+| `inherited_sources` | Inherited | List of sources from source group available for sinking |
 
 ### Server Configuration
 
@@ -107,6 +110,7 @@ servers:
 ```
 
 **Resolution:**
+
 - Copies all fields from `source-groups.yaml → foo → servers → default`
 - Excludes `extraction_patterns` (not relevant for sinks)
 - Any fields specified alongside `source_ref` override inherited values
@@ -130,6 +134,7 @@ Sources are typically configured in `services/*.yaml`, not in `sink-groups.yaml`
 The sink group file acts as a **scaffold** — it declares available sink destinations, but individual services choose which to use.
 
 **Example in `services/directory.yaml`:**
+
 ```yaml
 # ...source configuration...
 
@@ -206,6 +211,7 @@ cdc manage-sink-groups --validate
 `source_ref` uses the format: `<source_group>/<server_name>`
 
 **Examples:**
+
 - `foo/default` → `source-groups.yaml → foo → servers → default`
 - `foo/prod` → `source-groups.yaml → foo → servers → prod`
 - `adopus/default` → `source-groups.yaml → adopus → servers → default`
@@ -218,6 +224,7 @@ cdc manage-sink-groups --validate
 | `db-per-tenant` | ❌ No | Customer-based structure doesn't map to sink structure |
 
 **For `db-per-tenant`:**
+
 - Only create standalone sink groups
 - Service-level sink configuration handles per-customer routing
 
@@ -260,6 +267,7 @@ sink_foo:
 ```
 
 **In `services/directory.yaml`:**
+
 ```yaml
 sinks:
   - sink_group: sink_foo
@@ -285,6 +293,7 @@ sink_analytics:
 ```
 
 **In `services/directory.yaml`:**
+
 ```yaml
 sinks:
   - sink_group: sink_analytics

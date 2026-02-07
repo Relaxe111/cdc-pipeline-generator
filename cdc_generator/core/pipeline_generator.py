@@ -17,10 +17,11 @@ from pathlib import Path
 
 import yaml
 
-# Import validation functions
-from cdc_generator.cli.service import validate_service_config
 from cdc_generator.helpers.helpers_batch import build_staging_case
 from cdc_generator.helpers.service_config import get_all_customers, load_customer_config
+
+# Import validation functions
+from cdc_generator.validators.manage_service.validation import validate_service_config
 
 
 def get_services_for_customers(customers: list) -> set:

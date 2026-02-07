@@ -7,6 +7,7 @@
 **NEVER use `# type: ignore` (except `import-untyped` for external packages)**
 
 Instead:
+
 1. **Cast** based on YAML inspection: `cast(Optional[List[str]], data.get('key'))`
 2. **Check** before use: `if x is not None and isinstance(x, list):`
 3. **Document** expected structure in docstring
@@ -17,7 +18,7 @@ Instead:
 ## 🎯 Critical Rules
 
 | Rule | Limit | Why |
-|------|-------|-----|
+| ------ | ------- | ----- |
 | **File Size** | Max 600 lines (ideal 200-400) | AI reads entire file in one operation |
 | **Function Size** | Max 100 lines (ideal 10-50) | Single responsibility, easy reasoning |
 | **Type Hints** | Required all parameters/returns | AI understands data flow instantly |
@@ -26,10 +27,12 @@ Instead:
 | **PostgreSQL Quotes** | Always `"schema"."table"` | Preserves MSSQL PascalCase |
 | **Pattern-Agnostic** | Never hardcode asma/adopus | Use `server_group_type` field |
 | **YAML Preservation** | Use `ruamel.yaml` | Preserve comments/structure |
+| **YAML Loader** | Use `helpers/yaml_loader.py` | Use stubbed loader, no direct `yaml` import |
+| **No Implicit Concat** | Use `+` or single f-string | ISC001: implicit string concat breaks linting |
 
 ## 📁 Structure
 
-```
+```text
 cdc_generator/
 ├── cli/              # Entry points (routing)
 ├── core/             # Pipeline logic
@@ -65,7 +68,31 @@ def extract_service(db_name: str, pattern: str) -> Optional[str]:
 
 ## 🔍 Project Patterns
 
+### 0. No Implicit String Concatenation (ALWAYS!)
+
+```python
+# ❌ WRONG - implicit string concatenation (ISC001)
+print_error(
+    "Server not found in"
+    " sink group"
+)
+msg = ("hello " "world")
+
+# ✅ CORRECT - explicit + operator
+print_error(
+    "Server not found in"
+    + " sink group"
+)
+
+# ✅ CORRECT - single f-string (preferred when possible)
+print_error(f"Server not found in sink group '{name}'")
+
+# ✅ CORRECT - join for lists
+msg = " ".join(["Server not found in", "sink group"])
+```
+
 ### 1. Pattern-Agnostic
+
 ```python
 # ✅ Use server_group_type
 if server_group_type == 'db-shared':
@@ -75,6 +102,7 @@ elif server_group_type == 'db-per-tenant':
 ```
 
 ### 2. PostgreSQL Quoting (ALWAYS!)
+
 ```python
 # ✅ Quoted
 query = f'SELECT "col" FROM "{schema}"."{table}"'
@@ -83,6 +111,7 @@ query = f'SELECT col FROM {schema}.{table}'
 ```
 
 ### 3. YAML Preservation
+
 ```python
 from ruamel.yaml import YAML
 yaml = YAML()
@@ -90,7 +119,18 @@ yaml.preserve_quotes = True
 yaml.default_flow_style = False
 ```
 
+### 3.1 YAML Loader (REQUIRED)
+
+Use the project's stubbed loader instead of importing `yaml` directly.
+
+```python
+from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+data = load_yaml_file(path)
+```
+
 ### 4. Fish Shell (No Bash!)
+
 ```fish
 # ❌ Heredoc doesn't work
 cat << EOF > file.txt
@@ -99,6 +139,7 @@ printf '%s\n' 'line1' > file.txt
 ```
 
 ### 5. Environment Variables
+
 ```python
 # YAML: '${POSTGRES_HOST}'
 # Runtime: os.getenv('POSTGRES_HOST')
@@ -143,6 +184,7 @@ except ImportError:
 ```
 
 **Checklist for YAML/JSON data:**
+
 - [ ] Inspected source YAML to know structure
 - [ ] Documented expected structure in docstring
 - [ ] Used `cast()` with explicit type
@@ -151,6 +193,7 @@ except ImportError:
 - [ ] NO `type: ignore` (except import-untyped)
 
 ### 7. Avoid `Any` - Use Explicit Types
+
 ```python
 # ❌ Avoid Any - hides data structure
 def process(config: Dict[str, Any]) -> Any:
@@ -183,6 +226,7 @@ def load_config(path: Path) -> ServerConfig:
 ```
 
 **When to validate at runtime:**
+
 - Loading from YAML/JSON files
 - Reading from environment variables
 - Receiving API responses
@@ -205,6 +249,7 @@ def load_config(path: Path) -> ServerConfig:
 ## 📖 Full Docs
 
 See **[_docs/development/CODING_STANDARDS.md](../_docs/development/CODING_STANDARDS.md)** for:
+
 - Detailed examples
 - Error handling patterns  
 - Security best practices

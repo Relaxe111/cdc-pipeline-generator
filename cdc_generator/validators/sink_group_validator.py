@@ -9,12 +9,10 @@ from typing import Any
 
 from cdc_generator.core.sink_types import SinkGroupConfig
 from cdc_generator.helpers.helpers_sink_groups import (
+    deduce_source_group,
     resolve_sink_group,
     validate_sink_group_structure,
 )
-
-# Source reference format: "<group>/<server>"
-SOURCE_REF_PARTS_COUNT = 2
 
 
 class SinkGroupValidationError(Exception):
@@ -23,28 +21,27 @@ class SinkGroupValidationError(Exception):
     pass
 
 
-def validate_source_ref_format(source_ref: str) -> tuple[str, str]:
-    """Validate source_ref format and return (group_name, server_name).
+def validate_source_ref_format(source_ref: str) -> str:
+    """Validate source_ref format (server name only).
 
     Args:
-        source_ref: Reference in format '<group>/<server>'
+        source_ref: Server name within the source group
 
     Returns:
-        Tuple of (group_name, server_name)
+        The validated server name
 
     Raises:
         SinkGroupValidationError: If format is invalid
     """
-    parts = source_ref.split("/")
-    if len(parts) != SOURCE_REF_PARTS_COUNT:
+    if not source_ref or "/" in source_ref:
         msg = (
             f"Invalid source_ref '{source_ref}'. "
-            f"Expected format: '<group>/<server>'"
+            f"Expected format: '<server_name>' (e.g., 'default', 'prod'). "
+            f"Source group is deduced from sink name."
         )
         raise SinkGroupValidationError(msg)
 
-    group_name, server_name = parts
-    return group_name, server_name
+    return source_ref
 
 
 def validate_sink_group_references(
@@ -64,8 +61,11 @@ def validate_sink_group_references(
     """
     errors: list[str] = []
 
-    # Validate source_group reference
+    # Determine source group: explicit or deduced from name
     source_group_name = sink_group.get("source_group")
+    if not source_group_name:
+        source_group_name = deduce_source_group(sink_group_name)
+
     if source_group_name and source_group_name not in source_groups:
         msg = (f"Sink group '{sink_group_name}' references unknown "
                f"source group '{source_group_name}'. "
@@ -77,15 +77,26 @@ def validate_sink_group_references(
         if "source_ref" in server_config:
             source_ref = server_config["source_ref"]
             try:
-                group_name, srv_name = validate_source_ref_format(source_ref)
+                srv_name = validate_source_ref_format(source_ref)
 
-                if group_name not in source_groups:
-                    msg = (f"Server '{server_name}' source_ref '{source_ref}' "
-                           f"references unknown source group '{group_name}'")
-                    errors.append(msg)
-                elif srv_name not in source_groups[group_name].get("servers", {}):
-                    msg = (f"Server '{server_name}' source_ref '{source_ref}' "
-                           f"references unknown server '{srv_name}' in group '{group_name}'")
+                if source_group_name and source_group_name in source_groups:
+                    available = source_groups[source_group_name].get(
+                        "servers", {},
+                    )
+                    if srv_name not in available:
+                        msg = (
+                            f"Server '{server_name}' source_ref "
+                            f"'{source_ref}' references unknown server "
+                            f"'{srv_name}' in source group "
+                            f"'{source_group_name}'"
+                        )
+                        errors.append(msg)
+                elif not source_group_name:
+                    msg = (
+                        f"Server '{server_name}' has source_ref but no "
+                        f"source group could be determined for "
+                        f"'{sink_group_name}'"
+                    )
                     errors.append(msg)
             except SinkGroupValidationError as e:
                 errors.append(f"Server '{server_name}': {e}")
@@ -126,11 +137,11 @@ def validate_sink_group_compatibility(
                f"This may cause pipeline generation issues.")
         warnings.append(msg)
 
-    # Check if inherited services makes sense
-    if sink_group.get("_inherited_services") and source_pattern != "db-shared":
-        msg = (f"Sink group '{sink_group_name}' inherits services from "
+    # Check if inherited sources makes sense
+    if sink_group.get("inherited_sources") and source_pattern != "db-shared":
+        msg = (f"Sink group '{sink_group_name}' inherits sources from "
                f"source group with pattern '{source_pattern}'. "
-               f"Service inheritance only makes sense for 'db-shared' pattern.")
+               f"Source inheritance only makes sense for 'db-shared' pattern.")
         warnings.append(msg)
 
     return warnings

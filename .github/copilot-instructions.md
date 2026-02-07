@@ -67,6 +67,8 @@ config = yaml.safe_load(...)  # No validation, no types
 - ✅ Follow Pylance strict rules when working in Python
 - ✅ Follow Ruff strict rules when working in Python
 - ✅ Fix **all** Pylance and Ruff warnings in touched files
+- ❌ **NEVER use implicit string concatenation** (ISC001)
+- ✅ Use `+` operator or single f-strings to join multi-line strings
 
 ---
 

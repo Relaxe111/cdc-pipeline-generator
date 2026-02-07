@@ -12,13 +12,13 @@ Usage:
     # 🔗 Create inherited sink group from specific source group
     cdc manage-sink-groups --create --source-group foo
 
-    # ➕ Add new standalone sink group (auto-prefixes with 'sink_')
+    # + Add new standalone sink group (auto-prefixes with 'sink_')
     cdc manage-sink-groups --add-new-sink-group analytics --type postgres
 
     # 📋 List all sink groups
     cdc manage-sink-groups --list
 
-    # ℹ️  Show information about a sink group
+    # (i) Show information about a sink group
     cdc manage-sink-groups --info sink_analytics
 
     # 🖥️  Add a server to a sink group
@@ -52,13 +52,24 @@ Examples:
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 if __package__ in (None, ""):
     project_root = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(project_root))
 
-from cdc_generator.core.sink_types import SinkServerConfig
+from cdc_generator.core.sink_types import (
+    ResolvedSinkGroup,
+    SinkGroupConfig,
+    SinkServerConfig,
+)
+from cdc_generator.helpers.helpers_env import (
+    append_env_vars_to_dotenv,
+    print_env_removal_summary,
+    print_env_update_summary,
+    remove_env_vars_from_dotenv,
+    sink_server_env_vars,
+)
 from cdc_generator.helpers.helpers_logging import (
     Colors,
     print_error,
@@ -68,8 +79,12 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.helpers.helpers_sink_groups import (
+    StandaloneSinkGroupOptions,
     create_inherited_sink_group,
     create_standalone_sink_group,
+    deduce_source_group,
+    get_sink_group_warnings,
+    is_sink_group_ready,
     load_sink_groups,
     resolve_sink_group,
     save_sink_groups,
@@ -78,6 +93,67 @@ from cdc_generator.helpers.helpers_sink_groups import (
 )
 from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.yaml_loader import ConfigDict, load_yaml_file
+
+# Mapping from flag name to (description, example)
+_FLAG_HINTS: dict[str, tuple[str, str]] = {
+    "--add-server": (
+        "Server name to add",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --add-server nonprod"
+        ),
+    ),
+    "--remove-server": (
+        "Server name to remove",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --remove-server nonprod"
+        ),
+    ),
+    "--sink-group": (
+        "Sink group to operate on",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --add-server nonprod"
+        ),
+    ),
+    "--add-new-sink-group": (
+        "Name for the new sink group (auto-prefixed with 'sink_')",
+        (
+            "cdc manage-sink-groups --add-new-sink-group analytics"
+            " --pattern db-shared"
+        ),
+    ),
+    "--source-group": (
+        "Source group name to inherit from",
+        "cdc manage-sink-groups --create --source-group asma",
+    ),
+    "--info": (
+        "Sink group name to show info for",
+        "cdc manage-sink-groups --info sink_asma",
+    ),
+    "--remove": (
+        "Sink group name to remove",
+        "cdc manage-sink-groups --remove sink_test",
+    ),
+}
+
+
+class SinkGroupArgumentParser(argparse.ArgumentParser):
+    """Custom parser with user-friendly error messages."""
+
+    def error(self, message: str) -> NoReturn:
+        """Override to show friendly errors with examples."""
+        # Match "argument --flag: expected one argument"
+        for flag, (desc, example) in _FLAG_HINTS.items():
+            if flag in message and "expected" in message:
+                print_error(f"{flag} requires a value: {desc}")
+                print_info(f"Example: {example}")
+                raise SystemExit(1)
+
+        # Fall back to a clean error (no usage dump)
+        print_error(message)
+        raise SystemExit(1)
 
 
 def get_sink_file_path() -> Path:
@@ -197,7 +273,7 @@ def _create_inherited_sink_group_from_source(
     print_info(f"Source group: {source_group_name}")
     print_info(f"Pattern: {source_group.get('pattern')}")
     print_info(f"Inherited servers: {list(servers.keys())}")
-    print_info(f"Inherited services: {new_sink_group.get('_inherited_services', [])}")
+    print_info(f"Inherited sources: {new_sink_group.get('inherited_sources', [])}")
     print_info("\nNext steps:")
     print_info("1. Edit services/*.yaml to add sink configurations referencing this sink group")
     print_info("2. Run 'cdc generate' to create sink pipelines")
@@ -223,12 +299,6 @@ def _create_standalone_sink(
     environment_aware = args.environment_aware
     source_group_name = args.for_source_group
 
-    # Validation: environment_aware is required for db-shared pattern
-    if pattern == "db-shared" and not environment_aware:
-        print_error("--environment-aware flag is required when --pattern is db-shared")
-        print_info("Use: cdc manage-sink-groups --add-new-sink-group <name> --pattern db-shared --environment-aware")
-        return 1
-
     if not source_group_name:
         if not source_groups:
             print_error("No source groups found in source-groups.yaml")
@@ -248,11 +318,17 @@ def _create_standalone_sink(
     new_sink_group = create_standalone_sink_group(
         sink_group_name,
         source_group_name,
-        sink_type,
-        pattern,
-        environment_aware,
-        getattr(args, 'database_exclude_patterns', None),
-        getattr(args, 'schema_exclude_patterns', None),
+        StandaloneSinkGroupOptions(
+            sink_type=sink_type,
+            pattern=pattern,
+            environment_aware=environment_aware,
+            database_exclude_patterns=getattr(
+                args, 'database_exclude_patterns', None
+            ),
+            schema_exclude_patterns=getattr(
+                args, 'schema_exclude_patterns', None
+            ),
+        ),
     )
 
     sink_groups[sink_group_name] = new_sink_group
@@ -353,8 +429,8 @@ def handle_list(_args: argparse.Namespace) -> int:
         print(f"  Servers:       {server_count}")
         print(f"  Sources:       {source_count}")
 
-        if sink_group.get("_inherited_services"):
-            inherited = sink_group.get("_inherited_services", [])
+        if sink_group.get("inherited_sources"):
+            inherited = sink_group.get("inherited_sources", [])
             if isinstance(inherited, list):
                 inherited_str = cast(list[str], inherited)
                 print(f"  Inherited:     {', '.join(inherited_str)}")
@@ -362,26 +438,33 @@ def handle_list(_args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_inspect_command(args: argparse.Namespace) -> int:
-    """Inspect databases on a standalone sink server."""
-    from cdc_generator.validators.manage_server_group.db_inspector import (
-        list_mssql_databases,
-        list_postgres_databases,
-    )
+def _validate_inspect_args(
+    args: argparse.Namespace,
+) -> tuple[dict[str, SinkGroupConfig], SinkGroupConfig, str] | int:
+    """Validate inspect command arguments and load required data.
 
+    Returns:
+        Tuple of (sink_groups, sink_group, sink_group_name) on success,
+        or an int exit code on validation failure.
+    """
     sink_file = get_sink_file_path()
-    source_file = get_source_group_file_path()
 
-    # Require --sink-group argument
     if not args.sink_group:
         print_error("Error: --inspect requires --sink-group <name>")
-        print_info("Usage: cdc manage-sink-groups --inspect --sink-group <name>")
+        print_info(
+            "Usage: cdc manage-sink-groups --inspect --sink-group <name>"
+        )
         return 1
 
     try:
         sink_groups = load_sink_groups(sink_file)
     except FileNotFoundError:
         print_error(f"Sink groups file not found: {sink_file}")
+        return 1
+
+    if not sink_groups:
+        print_warning("sink-groups.yaml is empty — no sink groups defined")
+        print_info("Create one with: cdc manage-sink-groups --create")
         return 1
 
     sink_group_name = args.sink_group
@@ -392,79 +475,67 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
 
     sink_group = sink_groups[sink_group_name]
 
-    # Validate: inspection only for standalone sink groups
-    # Inherited sink groups have source_ref in servers (created via --create)
-    # Standalone sink groups have their own server configs (created via --add-new-sink-group)
+    # Inherited sink groups have source_ref — cannot be inspected
     servers = sink_group.get("servers", {})
     if servers:
         first_server = next(iter(servers.values()))
         if "source_ref" in first_server:
-            print_error(f"Error: Cannot inspect inherited sink group '{sink_group_name}'")
-            print_info("Inspection is only available for standalone sink groups (created with --add-new-sink-group)")
-            print_info("Inherited sink groups (created with --create) use source_ref and inherit from source groups.")
+            print_error(
+                "Error: Cannot inspect inherited sink group" +
+                f" '{sink_group_name}'"
+            )
+            print_info(
+                "Inspection is only available for standalone" +
+                " sink groups (created with --add-new-sink-group)"
+            )
+            print_info(
+                "Inherited sink groups (created with --create)"
+                " use source_ref and inherit from source groups."
+            )
             return 1
 
-    # Load source groups for resolution
-    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+    return sink_groups, sink_group, sink_group_name
 
-    # Resolve sink group
-    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
 
-    # Get server to inspect
+def _run_inspection(
+    resolved: ResolvedSinkGroup,
+    sink_group_name: str,
+    args: argparse.Namespace,
+) -> int:
+    """Run database inspection on a resolved sink group server.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
     server_name = args.server or "default"
     servers = resolved.get("servers", {})
     if server_name not in servers:
-        print_error(f"Server '{server_name}' not found in sink group '{sink_group_name}'")
+        print_error(
+            f"Server '{server_name}' not found" +
+            f" in sink group '{sink_group_name}'"
+        )
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
     server_config = servers[server_name]
     sink_type = resolved.get("type", "postgres")
 
-    # Get exclude patterns
-    database_exclude_patterns = resolved.get("database_exclude_patterns")
-    schema_exclude_patterns = resolved.get("schema_exclude_patterns")
-
     print_header(f"Inspecting Sink Server: {server_name} ({sink_type})")
 
     try:
-        if sink_type == "mssql":
-            databases = list_mssql_databases(
-                server_config=server_config,  # type: ignore[arg-type]
-                server_group_config=resolved,  # type: ignore[arg-type]
-                include_pattern=args.include_pattern,
-                database_exclude_patterns=database_exclude_patterns,
-                schema_exclude_patterns=schema_exclude_patterns,
-                server_name=server_name,
-            )
-        elif sink_type == "postgres":
-            databases = list_postgres_databases(
-                server_config=server_config,  # type: ignore[arg-type]
-                server_group_config=resolved,  # type: ignore[arg-type]
-                include_pattern=args.include_pattern,
-                database_exclude_patterns=database_exclude_patterns,
-                schema_exclude_patterns=schema_exclude_patterns,
-                server_name=server_name,
-            )
-        else:
-            print_error(f"Inspection not supported for sink type: {sink_type}")
-            print_info("Only 'postgres' and 'mssql' sink types support inspection.")
-            return 1
-
-        # Display results
-        print_success(f"\nFound {len(databases)} database(s):\n")
-        for db in databases:
-            schemas_str = ", ".join(db["schemas"])
-            print(f"  {db['name']}")
-            print(f"    Service:     {db['service']}")
-            print(f"    Environment: {db['environment'] or 'N/A'}")
-            print(f"    Schemas:     {schemas_str}")
-            print(f"    Tables:      {db['table_count']}")
-            print()
-
-        print_info("Note: Use this information to manually configure sink destinations.")
-        print_info("Future enhancement: Add databases to sink group configuration automatically.")
-
+        databases = _fetch_databases(
+            sink_type,
+            server_config,
+            resolved,
+            args,
+            server_name,
+        )
+    except ValueError as e:
+        print_error(str(e))
+        print_info(
+            "Only 'postgres' and 'mssql' sink types support inspection."
+        )
+        return 1
     except ImportError as e:
         print_error(f"Database driver not installed: {e}")
         return 1
@@ -472,7 +543,94 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
         print_error(f"Failed to inspect databases: {e}")
         return 1
 
+    # Display results
+    print_success(f"\nFound {len(databases)} database(s):\n")
+    for db in databases:
+        schemas_str = ", ".join(db["schemas"])
+        print(f"  {db['name']}")
+        print(f"    Service:     {db['service']}")
+        print(f"    Environment: {db['environment'] or 'N/A'}")
+        print(f"    Schemas:     {schemas_str}")
+        print(f"    Tables:      {db['table_count']}")
+        print()
+
+    print_info(
+        "Note: Use this information to manually configure"
+        " sink destinations."
+    )
+    print_info(
+        "Future enhancement: Add databases to sink group"
+        " configuration automatically."
+    )
     return 0
+
+
+def _fetch_databases(
+    sink_type: object,
+    server_config: object,
+    resolved: ResolvedSinkGroup,
+    args: argparse.Namespace,
+    server_name: str,
+) -> list[dict[str, Any]]:
+    """Fetch databases from a sink server based on sink type.
+
+    Raises:
+        ValueError: If sink type is not supported for inspection.
+    """
+    from cdc_generator.validators.manage_server_group.db_inspector import (
+        list_mssql_databases,
+        list_postgres_databases,
+    )
+
+    if sink_type == "mssql":
+        return list_mssql_databases(
+            server_config=server_config,  # type: ignore[arg-type]
+            server_group_config=resolved,  # type: ignore[arg-type]
+            include_pattern=args.include_pattern,
+            database_exclude_patterns=resolved.get(
+                "database_exclude_patterns"
+            ),
+            schema_exclude_patterns=resolved.get(
+                "schema_exclude_patterns"
+            ),
+            server_name=server_name,
+        )
+    if sink_type == "postgres":
+        return list_postgres_databases(
+            server_config=server_config,  # type: ignore[arg-type]
+            server_group_config=resolved,  # type: ignore[arg-type]
+            include_pattern=args.include_pattern,
+            database_exclude_patterns=resolved.get(
+                "database_exclude_patterns"
+            ),
+            schema_exclude_patterns=resolved.get(
+                "schema_exclude_patterns"
+            ),
+            server_name=server_name,
+        )
+    raise ValueError(
+        f"Inspection not supported for sink type: {sink_type}"
+    )
+
+
+def handle_inspect_command(args: argparse.Namespace) -> int:
+    """Inspect databases on a standalone sink server."""
+    source_file = get_source_group_file_path()
+
+    # Validate args and load sink group
+    result = _validate_inspect_args(args)
+    if isinstance(result, int):
+        return result
+
+    _sink_groups, sink_group, sink_group_name = result
+
+    # Load source groups for resolution
+    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+
+    # Resolve sink group
+    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
+
+    return _run_inspection(resolved, sink_group_name, args)
 
 
 def handle_info_command(args: argparse.Namespace) -> int:
@@ -484,6 +642,11 @@ def handle_info_command(args: argparse.Namespace) -> int:
         sink_groups = load_sink_groups(sink_file)
     except FileNotFoundError:
         print_error(f"Sink groups file not found: {sink_file}")
+        return 1
+
+    if not sink_groups:
+        print_warning("sink-groups.yaml is empty — no sink groups defined")
+        print_info("Create one with: cdc manage-sink-groups --create")
         return 1
 
     sink_group_name = args.info
@@ -507,7 +670,7 @@ def handle_info_command(args: argparse.Namespace) -> int:
     print(f"Kafka Topology:    {resolved.get('kafka_topology', 'N/A')}")
     print(f"Environment Aware: {resolved.get('environment_aware', False)}")
     print(f"Description:       {resolved.get('description', 'N/A')}")
-    
+
     # Show exclude patterns if present
     if resolved.get('database_exclude_patterns'):
         db_patterns = resolved.get('database_exclude_patterns', [])
@@ -528,28 +691,137 @@ def handle_info_command(args: argparse.Namespace) -> int:
         print(f"    Host:        {server_config.get('host', 'N/A')}")
         print(f"    Port:        {server_config.get('port', 'N/A')}")
 
-    print("\nSources:")
-    sources = resolved.get("sources", {})
-    if not sources:
-        print("  (none configured)")
-    else:
-        for service_name, source in sources.items():
-            print(f"\n  {service_name}:")
-            source_dict = cast(dict[str, Any], source)
-            for env_name, env_config in source_dict.items():
-                if env_name == "schemas":
-                    print(f"    Schemas: {env_config}")
-                elif isinstance(env_config, dict):
-                    env_dict = cast(dict[str, Any], env_config)
-                    server = env_dict.get("server", "N/A")
-                    database = env_dict.get("database", "N/A")
-                    schema = env_dict.get("schema", "N/A")
-                    print(f"    {env_name}:")
-                    print(f"      Server:   {server}")
-                    print(f"      Database: {database}")
-                    print(f"      Schema:   {schema}")
+    _print_sources_info(resolved)
 
     return 0
+
+
+def _print_sources_info(resolved: ResolvedSinkGroup) -> None:
+    """Print inherited_sources or sources section of a resolved sink group."""
+    # Show inherited_sources for inherited sinks
+    inherited_sources = resolved.get("inherited_sources")
+    if inherited_sources and isinstance(inherited_sources, list):
+        inherited_list = cast(list[str], inherited_sources)
+        print(f"\nInherited Sources ({len(inherited_list)}):")
+        for src in inherited_list:
+            print(f"  - {src}")
+
+    # Show sources for standalone sinks
+    sources = resolved.get("sources", {})
+    if sources:
+        print("\nSources:")
+        for service_name, source in sources.items():
+            _print_source_detail(service_name, source)
+    elif not inherited_sources:
+        print("\nSources:")
+        print("  (none configured)")
+
+
+def _print_source_detail(
+    service_name: str,
+    source: object,
+) -> None:
+    """Print a single source entry in --info output."""
+    print(f"\n  {service_name}:")
+    source_dict = cast(dict[str, Any], source)
+    for env_name, env_config in source_dict.items():
+        if env_name == "schemas":
+            print(f"    Schemas: {env_config}")
+        elif isinstance(env_config, dict):
+            env_dict = cast(dict[str, Any], env_config)
+            server = env_dict.get("server", "N/A")
+            database = env_dict.get("database", "N/A")
+            schema = env_dict.get("schema", "N/A")
+            print(f"    {env_name}:")
+            print(f"      Server:   {server}")
+            print(f"      Database: {database}")
+            print(f"      Schema:   {schema}")
+
+
+def _validate_single_sink_group(
+    sink_group_name: str,
+    sink_group: SinkGroupConfig,
+    sink_groups: dict[str, SinkGroupConfig],
+    source_groups: dict[str, ConfigDict],
+) -> tuple[bool, bool]:
+    """Validate a single sink group and print results.
+
+    Returns:
+        Tuple of (is_valid, has_warnings)
+    """
+    is_valid = _check_structure_and_resolution(
+        sink_group_name, sink_group, sink_groups, source_groups,
+    )
+
+    # Skip readiness/warnings when structure is invalid — they'd be misleading
+    if not is_valid:
+        return is_valid, False
+
+    has_warnings = _check_readiness_and_warnings(
+        sink_group_name, sink_group, sink_groups, source_groups,
+    )
+    return is_valid, has_warnings
+
+
+def _check_structure_and_resolution(
+    sink_group_name: str,
+    sink_group: SinkGroupConfig,
+    sink_groups: dict[str, SinkGroupConfig],
+    source_groups: dict[str, ConfigDict],
+) -> bool:
+    """Check structure and resolution validity, printing results."""
+    is_valid = True
+
+    errors = validate_sink_group_structure(
+        sink_group_name,
+        sink_group,
+        all_sink_groups=sink_groups,
+        source_groups=source_groups,
+    )
+    if errors:
+        is_valid = False
+        for error in errors:
+            print_error(f"  ✗ {error}")
+    else:
+        print_success("  ✓ Structure valid")
+
+    # Resolution validation (only if no structural errors)
+    if not errors:
+        try:
+            resolve_sink_group(sink_group_name, sink_group, source_groups)
+            print_success("  ✓ All references resolve successfully")
+        except ValueError as e:
+            is_valid = False
+            print_error(f"  ✗ Resolution failed: {e}")
+
+    return is_valid
+
+
+def _check_readiness_and_warnings(
+    sink_group_name: str,
+    sink_group: SinkGroupConfig,
+    sink_groups: dict[str, SinkGroupConfig],
+    source_groups: dict[str, ConfigDict],
+) -> bool:
+    """Check readiness and warnings, printing results. Returns True if warnings exist."""
+    ready = is_sink_group_ready(
+        sink_group_name, sink_group, sink_groups, source_groups,
+    )
+    if ready:
+        print_success("  ✓ Ready for use as sink target")
+    else:
+        print_warning("  ⚠ Not ready for use as sink target")
+
+    warnings = get_sink_group_warnings(sink_group_name, sink_group)
+    for warning in warnings:
+        print_warning(f"  ⚠ {warning}")
+
+    inherits = sink_group.get("inherits", False)
+    if inherits:
+        source_group = deduce_source_group(sink_group_name)
+        print_info(f"  → Inherits from source group: {source_group}")
+
+    return bool(warnings)
 
 
 def handle_validate_command(_args: argparse.Namespace) -> int:
@@ -561,6 +833,12 @@ def handle_validate_command(_args: argparse.Namespace) -> int:
         sink_groups = load_sink_groups(sink_file)
     except FileNotFoundError:
         print_info(f"No sink groups file found: {sink_file}")
+        print_info("Create one with: cdc manage-sink-groups --create")
+        return 0
+
+    if not sink_groups:
+        print_warning("sink-groups.yaml is empty — no sink groups to validate")
+        print_info("Create one with: cdc manage-sink-groups --create")
         return 0
 
     # Load source groups
@@ -569,28 +847,40 @@ def handle_validate_command(_args: argparse.Namespace) -> int:
     print_header("Validating Sink Groups")
 
     all_valid = True
-    for sink_group_name, sink_group in sink_groups.items():
+    has_warnings = False
+
+    for sink_group_name in sink_groups:
         print(f"\nValidating '{sink_group_name}'...")
 
-        # Structure validation
-        errors = validate_sink_group_structure(sink_group_name, sink_group)
-        if errors:
+        sink_group_val: SinkGroupConfig | None = cast(
+            SinkGroupConfig | None, sink_groups[sink_group_name],
+        )
+        if sink_group_val is None:
+            print_error(
+                f"  ✗ '{sink_group_name}' has no configuration"
+                + " (empty entry in sink-groups.yaml)"
+            )
+            print_info(
+                f"  Either define it or remove the '{sink_group_name}:'"
+                + " line from sink-groups.yaml"
+            )
             all_valid = False
-            for error in errors:
-                print_error(f"  ✗ {error}")
-        else:
-            print_success("  ✓ Structure valid")
+            continue
 
-        # Resolution validation
-        try:
-            resolve_sink_group(sink_group_name, sink_group, source_groups)
-            print_success("  ✓ All references resolve successfully")
-        except ValueError as e:
+        valid, warned = _validate_single_sink_group(
+            sink_group_name, sink_group_val, sink_groups, source_groups,
+        )
+        if not valid:
             all_valid = False
-            print_error(f"  ✗ Resolution failed: {e}")
+        if warned:
+            has_warnings = True
 
-    if all_valid:
+    if all_valid and not has_warnings:
         print_success("\n✓ All sink groups are valid")
+        return 0
+
+    if all_valid and has_warnings:
+        print_warning("\n⚠ All sink groups are structurally valid but have warnings")
         return 0
 
     print_error("\n✗ Validation failed")
@@ -604,38 +894,31 @@ def _build_server_config(args: argparse.Namespace, sink_group: dict[str, Any]) -
     using pattern: ${<DB_TYPE>_SINK_<FIELD>_<SERVERGROUP>_<SERVER>}
 
     Example: sink_asma + nonprod + postgres → ${POSTGRES_SINK_HOST_ASMA_NONPROD}
-    
+
     Note: Type is inherited from sink group level, not duplicated at server level.
     """
+
     server_config: dict[str, object] = {}
 
     # Determine server type for env var generation (but don't add to config)
     server_type = sink_group.get("type", "postgres")
 
-    # Get sink group name and server name for env var generation
-    # Strip 'sink_' prefix if present
-    sink_group_name = args.sink_group
-    if sink_group_name.startswith("sink_"):
-        sink_group_name = sink_group_name[5:]
-    sink_group_name = sink_group_name.upper().replace("-", "_")
-    server_name = args.add_server.upper().replace("-", "_")
+    # Strip 'sink_' prefix for group name
+    group_name = args.sink_group
+    if group_name.startswith("sink_"):
+        group_name = group_name[5:]
 
-    # Determine DB type prefix (POSTGRES or MSSQL)
-    db_type = "POSTGRES" if server_type == "postgres" else server_type.upper()
+    # Generate env variable placeholders via shared helper
+    placeholders = sink_server_env_vars(
+        str(server_type), group_name, args.add_server,
+    )
 
-    # Generate env variable pattern: ${<DB_TYPE>_SINK_<FIELD>_<SERVERGROUP>_<SERVER>}
-    env_base = f"${{{db_type}_SINK"
-
-    # Use provided values or generate env variable placeholders
-    host_env = f"{env_base}_HOST_{sink_group_name}_{server_name}}}"
-    port_env = f"{env_base}_PORT_{sink_group_name}_{server_name}}}"
-    user_env = f"{env_base}_USER_{sink_group_name}_{server_name}}}"
-    password_env = f"{env_base}_PASSWORD_{sink_group_name}_{server_name}}}"
-
-    server_config["host"] = args.host if args.host else host_env
-    server_config["port"] = args.port if args.port else port_env
-    server_config["user"] = args.user if args.user else user_env
-    server_config["password"] = args.password if args.password else password_env
+    server_config["host"] = args.host if args.host else placeholders["host"]
+    server_config["port"] = args.port if args.port else placeholders["port"]
+    server_config["user"] = args.user if args.user else placeholders["user"]
+    server_config["password"] = (
+        args.password if args.password else placeholders["password"]
+    )
 
     # Add extraction patterns if provided
     if getattr(args, 'extraction_patterns', None):
@@ -647,7 +930,7 @@ def _build_server_config(args: argparse.Namespace, sink_group: dict[str, Any]) -
 
 
 def _validate_server_config(
-    server_config: dict[str, object],
+    _server_config: dict[str, object],
 ) -> str | None:
     """Validate server config, return error message or None if valid.
 
@@ -659,13 +942,21 @@ def _validate_server_config(
     return None
 
 
-def handle_add_server_command(args: argparse.Namespace) -> int:
-    """Add a server to a sink group."""
-    sink_file = get_sink_file_path()
+def _load_sink_group_for_server_op(
+    args: argparse.Namespace,
+    _operation: str,
+) -> tuple[dict[str, SinkGroupConfig], SinkGroupConfig, str, Path] | int:
+    """Load and validate sink group for add/remove server operations.
 
-    if not args.sink_group or not args.add_server:
-        print_error("--add-server requires --sink-group and server name")
-        return 1
+    Args:
+        args: Parsed CLI arguments (must have sink_group attribute).
+        operation: Operation name for error messages (e.g. '--add-server').
+
+    Returns:
+        Tuple of (sink_groups, sink_group, sink_group_name, sink_file)
+        on success, or an int exit code on validation failure.
+    """
+    sink_file = get_sink_file_path()
 
     try:
         sink_groups = load_sink_groups(sink_file)
@@ -673,23 +964,64 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
         print_error(f"Sink groups file not found: {sink_file}")
         return 1
 
-    sink_group_name = args.sink_group
-    server_name = args.add_server
-
-    if sink_group_name not in sink_groups:
-        print_error(f"Sink group '{sink_group_name}' not found")
-        print_info(f"Available sink groups: {list(sink_groups.keys())}")
+    if not sink_groups:
+        print_warning("sink-groups.yaml is empty — no sink groups defined")
+        print_info("Create one with: cdc manage-sink-groups --create")
         return 1
 
-    sink_group = sink_groups[sink_group_name]
+    sink_group_name = args.sink_group
+    if sink_group_name not in sink_groups:
+        print_error(f"Sink group '{sink_group_name}' not found")
+        available = list(sink_groups.keys())
+        print_info(f"Available sink groups: {available}")
+        return 1
+
+    return sink_groups, sink_groups[sink_group_name], sink_group_name, sink_file
+
+
+def handle_add_server_command(args: argparse.Namespace) -> int:
+    """Add a server to a sink group."""
+    if not args.sink_group or not args.add_server:
+        print_error("--add-server requires --sink-group and server name")
+        return 1
+
+    result = _load_sink_group_for_server_op(args, "--add-server")
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group, sink_group_name, sink_file = result
+    server_name = args.add_server
+
+    # Inherited sink groups get servers from source group — cannot add manually
+    if sink_group.get("inherits", False):
+        source_name = sink_group_name.removeprefix("sink_")
+        print_error(
+            f"Cannot add server '{server_name}' to"
+            + f" '{sink_group_name}' — it inherits from"
+            + f" source group '{source_name}'"
+        )
+        print_info(
+            "Servers are managed via source group. To add a server, use:"
+        )
+        print_info(
+            "  cdc manage-source-groups --add-server"
+            + f" {server_name} --server-group {source_name}"
+        )
+        return 1
+
     servers = sink_group.get("servers", {})
 
     if server_name in servers:
-        print_warning(f"Server '{server_name}' already exists in sink group '{sink_group_name}'")
+        print_warning(
+            f"Server '{server_name}' already exists"
+            f" in sink group '{sink_group_name}'"
+        )
         return 1
 
     # Build and validate server config
-    server_config = _build_server_config(args, cast(dict[str, Any], sink_group))
+    server_config = _build_server_config(
+        args, cast(dict[str, Any], sink_group)
+    )
     error = _validate_server_config(server_config)
     if error:
         print_error(error)
@@ -703,7 +1035,7 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
     server_type = sink_group.get("type", "postgres")
     print_success(f"Added server '{server_name}' to sink group '{sink_group_name}'")
     print_info(f"Server type: {server_type} (inherited from sink group)")
-    
+
     # Show what was configured
     host = server_config.get("host", "N/A")
     port = server_config.get("port", "N/A")
@@ -714,6 +1046,20 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
         print_info(f"Port: {port} (env variable)")
         print_info(f"User: {server_config.get('user', 'N/A')} (env variable)")
         print_warning("Remember to set environment variables at runtime")
+
+    # Append env variables to .env
+    group_name = sink_group_name
+    if group_name.startswith("sink_"):
+        group_name = group_name[5:]
+    placeholders = sink_server_env_vars(
+        str(sink_group.get("type", "postgres")), group_name, server_name,
+    )
+    env_count = append_env_vars_to_dotenv(
+        placeholders,
+        f"Sink Server: {sink_group_name} / {server_name}"
+        + f" ({sink_group.get('type', 'postgres')})",
+    )
+    print_env_update_summary(env_count, placeholders)
 
     return 0
 
@@ -738,35 +1084,48 @@ def _check_server_references(
 
 def handle_remove_server_command(args: argparse.Namespace) -> int:
     """Remove a server from a sink group."""
-    sink_file = get_sink_file_path()
-
     if not args.sink_group or not args.remove_server:
         print_error("--remove-server requires --sink-group and server name")
         return 1
 
-    try:
-        sink_groups = load_sink_groups(sink_file)
-    except FileNotFoundError:
-        print_error(f"Sink groups file not found: {sink_file}")
-        return 1
+    result = _load_sink_group_for_server_op(args, "--remove-server")
+    if isinstance(result, int):
+        return result
 
-    sink_group_name = args.sink_group
+    sink_groups, sink_group, sink_group_name, sink_file = result
     server_name = args.remove_server
-
-    if sink_group_name not in sink_groups:
-        print_error(f"Sink group '{sink_group_name}' not found")
-        return 1
-
-    sink_group = sink_groups[sink_group_name]
     servers = sink_group.get("servers", {})
 
+    # Check if server exists first — regardless of inherited status
     if server_name not in servers:
-        print_error(f"Server '{server_name}' not found in sink group '{sink_group_name}'")
+        print_error(
+            f"Server '{server_name}' not found in"
+            + f" sink group '{sink_group_name}'"
+        )
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
+    # Inherited sink groups get servers from source group — cannot remove manually
+    if sink_group.get("inherits", False):
+        source_name = sink_group_name.removeprefix("sink_")
+        print_error(
+            f"Cannot remove server '{server_name}' from"
+            + f" '{sink_group_name}' — it inherits from"
+            + f" source group '{source_name}'"
+        )
+        print_info(
+            "Servers are managed via source group. To remove a server, use:"
+        )
+        print_info(
+            "  cdc manage-source-groups --remove-server"
+            + f" {server_name} --server-group {source_name}"
+        )
+        return 1
+
     # Check if server is referenced in sources
-    references = _check_server_references(server_name, cast(dict[str, Any], sink_group))
+    references = _check_server_references(
+        server_name, cast(dict[str, Any], sink_group)
+    )
 
     if references:
         print_error(f"Cannot remove server '{server_name}' — referenced in sources:")
@@ -778,6 +1137,16 @@ def handle_remove_server_command(args: argparse.Namespace) -> int:
     save_sink_groups(sink_groups, sink_file)
 
     print_success(f"Removed server '{server_name}' from sink group '{sink_group_name}'")
+
+    # Remove env variables from .env
+    group_name = sink_group_name
+    if group_name.startswith("sink_"):
+        group_name = group_name[5:]
+    placeholders = sink_server_env_vars(
+        str(sink_group.get("type", "postgres")), group_name, server_name,
+    )
+    env_count = remove_env_vars_from_dotenv(placeholders)
+    print_env_removal_summary(env_count, placeholders)
 
     return 0
 
@@ -796,11 +1165,29 @@ def handle_remove_sink_group_command(args: argparse.Namespace) -> int:
         print_error(f"Sink groups file not found: {sink_file}")
         return 1
 
+    if not sink_groups:
+        print_warning("sink-groups.yaml is empty — no sink groups to remove")
+        return 1
+
     sink_group_name = args.remove
 
     if sink_group_name not in sink_groups:
         print_error(f"Sink group '{sink_group_name}' not found")
         print_info(f"Available sink groups: {list(sink_groups.keys())}")
+        return 1
+
+    # Inherited sink groups are auto-generated — cannot be removed directly
+    sink_group = sink_groups[sink_group_name]
+    if sink_group.get("inherits", False):
+        source_name = sink_group_name.removeprefix("sink_")
+        print_error(
+            f"Cannot remove '{sink_group_name}' — it inherits from"
+            + f" source group '{source_name}'"
+        )
+        print_info(
+            "Inherited sink groups are auto-generated by --create."
+            + " Remove the source group instead, or recreate without it."
+        )
         return 1
 
     # Confirm removal
@@ -816,45 +1203,49 @@ def handle_remove_sink_group_command(args: argparse.Namespace) -> int:
 
 def main() -> int:
     """CLI entry point for manage-sink-groups command."""
-    
     # Build colorized description
-    description = f"""{Colors.CYAN}{Colors.BOLD}🎯 Manage sink server group configuration (sink-groups.yaml){Colors.RESET}
+    header = (
+        f"{Colors.CYAN}{Colors.BOLD}"
+        "Manage sink server group configuration (sink-groups.yaml)"
+        f"{Colors.RESET}"
+    )
+    description = f"""{header}
 
 {Colors.DIM}This command helps manage sink destinations for CDC pipelines.
 Sink groups can either inherit from source groups (db-shared pattern)
 or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
 
 {Colors.YELLOW}Usage Examples:{Colors.RESET}
-    {Colors.GREEN}🏗️  Auto-scaffold all sink groups{Colors.RESET}
+    {Colors.GREEN}Auto-scaffold all sink groups{Colors.RESET}
     $ cdc manage-sink-groups --create
 
-    {Colors.BLUE}🔗 Create inherited sink group{Colors.RESET}
+    {Colors.BLUE}Create inherited sink group{Colors.RESET}
     $ cdc manage-sink-groups --create --source-group foo
 
-    {Colors.GREEN}➕ Add new standalone sink group{Colors.RESET}
+    {Colors.GREEN}Add new standalone sink group{Colors.RESET}
     $ cdc manage-sink-groups --add-new-sink-group analytics --type postgres
 
-    {Colors.CYAN}📋 List all sink groups{Colors.RESET}
+    {Colors.CYAN}List all sink groups{Colors.RESET}
     $ cdc manage-sink-groups --list
 
-    {Colors.BLUE}ℹ️  Show sink group information{Colors.RESET}
+    {Colors.BLUE}Show sink group information{Colors.RESET}
     $ cdc manage-sink-groups --info sink_analytics
 
-    {Colors.GREEN}🖥️  Add a server{Colors.RESET}
+    {Colors.GREEN}Add a server{Colors.RESET}
     $ cdc manage-sink-groups --sink-group sink_analytics --add-server default \\
         --host localhost --port 5432 --user postgres --password secret
 
-    {Colors.RED}🗑️  Remove a server{Colors.RESET}
+    {Colors.RED}Remove a server{Colors.RESET}
     $ cdc manage-sink-groups --sink-group sink_analytics --remove-server default
 
-    {Colors.RED}❌ Remove a sink group{Colors.RESET}
+    {Colors.RED}Remove a sink group{Colors.RESET}
     $ cdc manage-sink-groups --remove sink_analytics
 
-    {Colors.GREEN}✅ Validate configuration{Colors.RESET}
+    {Colors.GREEN}Validate configuration{Colors.RESET}
     $ cdc manage-sink-groups --validate
 """
-    
-    parser = argparse.ArgumentParser(
+
+    parser = SinkGroupArgumentParser(
         description=description,
         prog="cdc manage-sink-groups",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -869,12 +1260,18 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--source-group",
         metavar="NAME",
-        help=f"{Colors.BLUE}🔗 Source group to inherit from (for inherited sink groups){Colors.RESET}",
+        help=(
+            f"{Colors.BLUE}Source group to inherit from"
+            f" (for inherited sink groups){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--add-new-sink-group",
         metavar="NAME",
-        help=f"{Colors.GREEN}➕ Add new standalone sink group (auto-prefixes with 'sink_'){Colors.RESET}",
+        help=(
+            f"{Colors.GREEN}+ Add new standalone sink group"
+            f" (auto-prefixes with 'sink_'){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--type",
@@ -890,20 +1287,27 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     )
     parser.add_argument(
         "--environment-aware",
-        action="store_true",
-        help=f"{Colors.GREEN}🌍 Enable environment-aware grouping (required for db-shared){Colors.RESET}",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Environment-aware grouping (default: enabled, use --no-environment-aware to disable)",
     )
     parser.add_argument(
         "--database-exclude-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=f"{Colors.YELLOW}🚫 Regex patterns for excluding databases (space-separated){Colors.RESET}",
+        help=(
+            f"{Colors.YELLOW}Regex patterns for excluding"
+            f" databases (space-separated){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--schema-exclude-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=f"{Colors.YELLOW}🚫 Regex patterns for excluding schemas (space-separated){Colors.RESET}",
+        help=(
+            f"{Colors.YELLOW}Regex patterns for excluding"
+            f" schemas (space-separated){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--for-source-group",
@@ -920,14 +1324,20 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--info",
         metavar="NAME",
-        help=f"{Colors.BLUE}ℹ️  Show detailed information about a sink group{Colors.RESET}",
+        help=(
+            f"{Colors.BLUE}(i) Show detailed information"
+            f" about a sink group{Colors.RESET}"
+        ),
     )
 
     # Inspection actions (standalone sink groups only)
     parser.add_argument(
         "--inspect",
         action="store_true",
-        help=f"{Colors.CYAN}🔍 Inspect databases on sink server (standalone sink groups only){Colors.RESET}",
+        help=(
+            f"{Colors.CYAN}Inspect databases on sink server"
+            f" (standalone sink groups only){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--server",
@@ -951,7 +1361,10 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--sink-group",
         metavar="NAME",
-        help=f"{Colors.CYAN}🎯 Sink group to operate on (for --add-server, --remove-server){Colors.RESET}",
+        help=(
+            f"{Colors.CYAN}Sink group to operate on"
+            f" (for --add-server, --remove-server){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--add-server",
@@ -961,7 +1374,10 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--remove-server",
         metavar="NAME",
-        help=f"{Colors.RED}🗑️  Remove a server from a sink group (requires --sink-group){Colors.RESET}",
+        help=(
+            f"{Colors.RED}Remove a server from a sink group"
+            f" (requires --sink-group){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--host",
@@ -987,7 +1403,10 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "--extraction-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=f"{Colors.CYAN}🔍 Regex extraction patterns for server (space-separated, use quotes){Colors.RESET}",
+        help=(
+            f"{Colors.CYAN}Regex extraction patterns for server"
+            f" (space-separated, use quotes){Colors.RESET}"
+        ),
     )
 
     # Sink group management

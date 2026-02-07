@@ -120,6 +120,21 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-ta
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect -d "Inspect database schema and list tables"
 
+# --inspect-sink: Dynamic completion from service's existing sinks
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect-sink -d "Inspect sink database schema" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"\$service_name\" 2>/dev/null
+    end
+)"
+
 # Dynamic schema completion - lists schemas from source-groups.yaml for the current service
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r -f -a "(
     # Extract --service value from command line
@@ -200,6 +215,161 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns
 
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l server -d "Server name for multi-server setups (default: 'default')" -r
 
+# ============================================================================
+# Sink management completions for manage-service
+# ============================================================================
+
+# --add-sink: Dynamic completion from sink-groups.yaml (inherited_sources or sources keys)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-sink -d "Add sink destination (sink_group.target_service)" -r -f -a "(
+    python3 -m cdc_generator.helpers.autocompletions --list-available-sink-keys 2>/dev/null
+)"
+
+# --remove-sink: Dynamic completion from service's existing sinks
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-sink -d "Remove sink destination" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"\$service_name\" 2>/dev/null
+    end
+)"
+
+# --sink: Select existing sink for table operations
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l sink -d "Target sink for table operations (sink_group.target_service)" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"\$service_name\" 2>/dev/null
+    end
+)"
+
+# --add-sink-table: Dynamic completion from sink's target service tables (service-schemas)
+# Reads --sink from command line; if not specified, auto-defaults when service has only one sink
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-sink-table -d "Add table to sink (schema.table)" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l sink_key ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+        end
+    end
+    # Auto-default --sink when service has only one sink
+    if test -n \"\$service_name\" -a -z \"\$sink_key\"
+        set sink_key (python3 -m cdc_generator.helpers.autocompletions --get-default-sink \"\$service_name\" 2>/dev/null)
+    end
+    if test -n \"\$sink_key\"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-target-tables \"\$sink_key\" 2>/dev/null
+    end
+)"
+
+# --remove-sink-table: Same as add (shows source tables to select from)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-sink-table -d "Remove table from sink" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"\$service_name\" 2>/dev/null
+    end
+)"
+
+# --target: Dynamic completion from service-schemas/{target_service}/
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target -d "Target table for mapping (schema.table)" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l sink_key ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+        end
+    end
+    if test -n \"\$service_name\" -a -n \"\$sink_key\"
+        python3 -m cdc_generator.helpers.autocompletions --list-target-tables \"\$service_name\" \"\$sink_key\" 2>/dev/null
+    end
+)"
+
+# --target-schema: Dynamic completion from service-schemas/{target_service}/ schemas
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target-schema -d "Override target schema for cloned sink table" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l sink_key ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$sink_key\"
+        # Extract target_service from sink_key (after first dot)
+        set -l target_service (string split -m 1 -- '.' \"\$sink_key\")[2]
+        if test -n \"\$target_service\"
+            python3 -m cdc_generator.helpers.autocompletions --list-schemas \"\$target_service\" 2>/dev/null
+        end
+    end
+)"
+
+# --map-column: Dynamic completion from service-schemas target columns
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l map-column -d "Map source column to target column (src tgt)" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l sink_key ''
+    set -l target_table ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--target'
+            set target_table \$cmd[(math \$i + 1)]
+        end
+    end
+    if test -n \"\$sink_key\" -a -n \"\$target_table\"
+        python3 -m cdc_generator.helpers.autocompletions --list-target-columns \"\$sink_key\" \"\$target_table\" 2>/dev/null
+    end
+)"
+
+# --include-sink-columns: Dynamic completion from source table columns
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l include-sink-columns -d "Only sync these columns to sink" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l table_spec ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--add-sink-table'
+            set table_spec \$cmd[(math \$i + 1)]
+        end
+    end
+    if test -n \"\$service_name\" -a -n \"\$table_spec\"
+        set -l parts (string split -- '.' \"\$table_spec\")
+        if test (count \$parts) -eq 2
+            set -l schema \$parts[1]
+            set -l table \$parts[2]
+            python3 -m cdc_generator.helpers.autocompletions --list-columns \"\$service_name\" \"\$schema\" \"\$table\" 2>/dev/null
+        end
+    end
+)"
+
+# --list-sinks and --validate-sinks (no value needed)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l list-sinks -d "List all sink configurations for service"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-sinks -d "Validate sink configuration"
+
 # manage-source-groups subcommand options
 # Note: All flags are shown regardless of context. Python validation handles invalid combinations.
 
@@ -276,17 +446,14 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l source-gr
     python3 -m cdc_generator.helpers.autocompletions --list-server-group-names 2>/dev/null
 )"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l add-new-sink-group -d "Add new standalone sink group (auto-prefixes with 'sink_')" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l type -d "Type of sink (postgres|mssql|http_client|http_server)" -x
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "postgres mssql http_client http_server"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "postgres" -d "PostgreSQL database"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "mssql" -d "Microsoft SQL Server"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "http_client" -d "HTTP client sink"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --type" -f -a "http_server" -d "HTTP server sink"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l pattern -d "Pattern for sink group (db-shared|db-per-tenant)" -x
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-shared db-per-tenant"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-shared" -d "Shared database for all tenants"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups; and __cdc_last_token_is --pattern" -f -a "db-per-tenant" -d "One database per tenant"
-complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l environment-aware -d "Enable environment-aware grouping (required for db-shared)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l type -d "Type of sink" -r -f -a "postgres\t'PostgreSQL database'
+mssql\t'Microsoft SQL Server'
+http_client\t'HTTP client sink'
+http_server\t'HTTP server sink'"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l pattern -d "Pattern for sink group" -r -f -a "db-shared\t'Shared database for all tenants'
+db-per-tenant\t'One database per tenant'"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l environment-aware -d "Enable environment-aware grouping (default)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l no-environment-aware -d "Disable environment-aware (single-environment server)"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l for-source-group -d "Source group this standalone sink consumes from" -r -f -a "(
     python3 -m cdc_generator.helpers.autocompletions --list-server-group-names 2>/dev/null
 )"
@@ -310,23 +477,37 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l include-p
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l validate -d "Validate sink group configuration"
 
 # Server management
+# --sink-group: show only non-inherited sink groups when adding/removing servers
+# (inherited sink groups get servers from their source group)
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l sink-group -d "Sink group to operate on" -r -f -a "(
-    python3 -m cdc_generator.helpers.autocompletions --list-sink-group-names 2>/dev/null
+    if contains -- --add-server (commandline -opc); or contains -- --remove-server (commandline -opc)
+        python3 -m cdc_generator.helpers.autocompletions --list-non-inherited-sink-group-names 2>/dev/null
+    else
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-group-names 2>/dev/null
+    end
 )"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l add-server -d "Add a server to a sink group (requires --sink-group)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l remove-server -d "Remove a server from a sink group (requires --sink-group)" -r -f -a "(
-    # TODO: dynamic server completion per sink group
-    echo 'default'
-    echo 'prod'
+    # Read --sink-group value from command line
+    set -l cmd (commandline -opc)
+    set -l sink_group ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--sink-group'
+            set sink_group \$cmd[(math \$i + 1)]
+        end
+    end
+    if test -n \"\$sink_group\"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-group-servers \"\$sink_group\" 2>/dev/null
+    end
 )"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l host -d "Server host" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l port -d "Server port" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l user -d "Server user" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l password -d "Server password" -r
 
-# Sink group removal
+# Sink group removal (only non-inherited — inherited are auto-generated)
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l remove -d "Remove a sink group" -r -f -a "(
-    python3 -m cdc_generator.helpers.autocompletions --list-sink-group-names 2>/dev/null
+    python3 -m cdc_generator.helpers.autocompletions --list-non-inherited-sink-group-names 2>/dev/null
 )"
 
 # generate subcommand - complete with customer names dynamically

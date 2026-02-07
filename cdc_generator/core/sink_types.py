@@ -13,11 +13,16 @@ from typing import TypedDict
 class SinkServerSourceRef(TypedDict, total=False):
     """Server that inherits connection from source server group.
 
+    When used in an inherited sink group (inherits: true),
+    source_ref is just the server name (e.g., 'default').
+    The source group is deduced from the sink group name:
+    sink_asma → source group 'asma' → servers → 'default'
+
     Example:
-        source_ref: foo/default  # references source-groups.yaml → foo → servers → default
+        source_ref: default  # references source-groups.yaml → {source_group} → servers → default
     """
 
-    source_ref: str  # format: '<source_group>/<server_name>'
+    source_ref: str  # server name within the source group
     # Optional overrides (override inherited values)
     host: str
     port: str
@@ -85,16 +90,18 @@ class SinkGroupInherited(TypedDict, total=False):
     Used for db-shared patterns where sink structure mirrors source.
     All servers use source_ref to inherit connection config.
 
-    Note: source_group, pattern, type, kafka_topology, environment_aware are auto-deduced:
-    - source_group: from sink group name (strip 'sink_' prefix)
-    - pattern: 'inherited' if any server has source_ref
-    - type: from first server's connection string
-    - kafka_topology: inherited from source group's server_group_type
-    - environment_aware: inherited from source group
+    Rules:
+    - inherits: true marks this as an inherited sink group
+    - Name MUST be sink_{source_group_name} (e.g., sink_asma for source group asma)
+    - source_group is auto-deduced from the name (strip 'sink_' prefix)
+    - Servers use source_ref with just the server name (not group/server path)
+    - One inherited sink per source group (1:1 relationship)
     """
 
-    # Optional (auto-deduced if not specified):
-    source_group: str  # references source-groups.yaml top-level key
+    # Inheritance: true = inherits from source group deduced from sink name
+    inherits: bool  # True = inherited from source group
+    # Auto-deduced (do not set manually):
+    source_group: str  # deduced from sink name: sink_X → source group X
     pattern: str  # db-shared, db-per-tenant
     type: str  # postgres, mssql, http_client, http_server
     kafka_topology: str  # shared, per-server, per-service
@@ -102,9 +109,9 @@ class SinkGroupInherited(TypedDict, total=False):
     description: str
     # Required:
     servers: dict[str, SinkServerConfig]
+    # Sources available for sinking (from source group)
+    inherited_sources: list[str]  # source names from source group
     sources: dict[str, SinkSource]  # service_name → sink source config
-    # Internal (for tracking)
-    _inherited_services: list[str]  # services inherited from source group
 
 
 class SinkGroupStandalone(TypedDict, total=False):
@@ -112,13 +119,7 @@ class SinkGroupStandalone(TypedDict, total=False):
 
     Used for external sinks (analytics warehouse, webhooks, etc.)
     that don't mirror source infrastructure.
-
-    Note: source_group, pattern, type, kafka_topology, environment_aware are auto-deduced:
-    - source_group: required (must specify which source feeds this)
-    - pattern: 'standalone' if no servers have source_ref
-    - type: from first server's type field or connection string
-    - kafka_topology: inherited from source group if not specified
-    - environment_aware: inherited from source group
+    Standalone sinks do NOT have 'inherits: true'.
     """
 
     # Required for standalone:
@@ -171,7 +172,7 @@ class ResolvedSinkServer(TypedDict, total=False):
     headers: dict[str, str]
     # Metadata
     _source_ref: str  # original reference (for debugging)
-    _resolved_from: str  # source group/server path
+    _resolved_from: str  # fully-qualified source path (source_group/server)
 
 
 class ResolvedSinkGroup(TypedDict, total=False):

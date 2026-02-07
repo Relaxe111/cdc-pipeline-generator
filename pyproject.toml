@@ -85,6 +85,7 @@ select = [
     "B",      # flake8-bugbear
     "A",      # flake8-builtins
     "C4",     # flake8-comprehensions
+    "ISC",    # flake8-implicit-str-concat
     "RET",    # flake8-return
     "SIM",    # flake8-simplify
     "ARG",    # flake8-unused-arguments
@@ -94,6 +95,7 @@ select = [
 ]
 
 ignore = [
+    "ISC003",  # allow explicit + concatenation (we prefer it over implicit)
     "PLC0415",  # allow imports inside functions (lazy loading)
 ]
 
