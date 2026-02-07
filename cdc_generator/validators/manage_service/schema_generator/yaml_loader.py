@@ -6,8 +6,7 @@ from typing import Any
 import yaml  # type: ignore
 
 from cdc_generator.helpers.helpers_logging import print_error
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+from cdc_generator.helpers.service_config import get_project_root
 
 
 def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> dict[str, Any]:
@@ -21,7 +20,8 @@ def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> di
         Dict[schema_name, Dict[table_name, table_metadata]]
         where table_metadata = {'columns': [...], 'primary_key': ...}
     """
-    service_schemas_dir = PROJECT_ROOT / 'service-schemas' / service
+    project_root = get_project_root()
+    service_schemas_dir = project_root / 'service-schemas' / service
 
     if not service_schemas_dir.exists():
         return {}
@@ -74,7 +74,8 @@ def load_server_groups_config() -> dict[str, Any]:
     Returns:
         Dict with server group configurations
     """
-    server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
+    project_root = get_project_root()
+    server_groups_file = project_root / 'source-groups.yaml'
     if not server_groups_file.exists():
         return {}
 

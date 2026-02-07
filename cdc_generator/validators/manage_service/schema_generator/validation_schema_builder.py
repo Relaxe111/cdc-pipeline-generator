@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from cdc_generator.helpers.helpers_logging import print_error, print_success
+from cdc_generator.helpers.service_config import get_project_root
 
 from .schema_properties import (
     add_table_definitions,
@@ -12,9 +13,6 @@ from .schema_properties import (
     build_environments_schema,
     build_single_environment_schema,
 )
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-SERVICES_DIR = PROJECT_ROOT / 'services'
 
 
 def build_json_schema_structure(
@@ -41,11 +39,12 @@ def build_json_schema_structure(
         "title": f"{service.title()} Service Validation Schema",
         "description": f"Comprehensive validation schema for {service} service: structure + table content validation (from service-schemas/{service})",
         "type": "object",
-        "required": ["service"],
+        "required": [],
         "definitions": {},
         "properties": {
             "service": {
-                "$ref": "keys/service.schema.json"
+                "$ref": "keys/service.schema.json",
+                "description": "⚠️ DEPRECATED: Service name is now the root key in YAML (e.g., adopus:, directory:). This field is kept for backward compatibility."
             },
             "server_group": {
                 "$ref": "keys/server_group.schema.json"
@@ -124,7 +123,8 @@ def update_service_yaml_header(service: str, database: str, schemas_data: dict[s
         True if update succeeded
     """
     try:
-        service_yaml_path = SERVICES_DIR / f'{service}.yaml'
+        services_dir = get_project_root() / 'services'
+        service_yaml_path = services_dir / f'{service}.yaml'
         schema_comment = f"# yaml-language-server: $schema=../.vscode/schemas/{database}.service-validation.schema.json"
 
         # Detect case-variant column names

@@ -7,8 +7,7 @@ from typing import Any
 import yaml  # type: ignore
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info, print_success
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+from cdc_generator.helpers.service_config import get_project_root
 
 
 def generate_service_enum_schema() -> bool:
@@ -24,7 +23,8 @@ def generate_service_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
+        project_root = get_project_root()
+        server_groups_file = project_root / 'source-groups.yaml'
         if not server_groups_file.exists():
             print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
@@ -58,7 +58,7 @@ def generate_service_enum_schema() -> bool:
         }
 
         # Save to keys directory
-        keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys'
+        keys_dir = project_root / '.vscode' / 'schemas' / 'keys'
         keys_dir.mkdir(parents=True, exist_ok=True)
 
         output_file = keys_dir / 'service.schema.json'
@@ -88,7 +88,8 @@ def generate_server_group_enum_schema() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
+        project_root = get_project_root()
+        server_groups_file = project_root / 'source-groups.yaml'
         if not server_groups_file.exists():
             print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
@@ -109,7 +110,7 @@ def generate_server_group_enum_schema() -> bool:
         }
 
         # Save to keys directory
-        keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys'
+        keys_dir = project_root / '.vscode' / 'schemas' / 'keys'
         keys_dir.mkdir(parents=True, exist_ok=True)
 
         output_file = keys_dir / 'server_group.schema.json'
@@ -139,7 +140,8 @@ def generate_database_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
+        project_root = get_project_root()
+        server_groups_file = project_root / 'source-groups.yaml'
         if not server_groups_file.exists():
             print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
@@ -147,7 +149,7 @@ def generate_database_name_schemas() -> bool:
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
 
-        keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'database_name'
+        keys_dir = project_root / '.vscode' / 'schemas' / 'keys' / 'database_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
 
         generated_count = 0
@@ -211,7 +213,8 @@ def generate_schema_name_schemas() -> bool:
         True if schema generation succeeded, False otherwise
     """
     try:
-        server_groups_file = PROJECT_ROOT / 'source-groups.yaml'
+        project_root = get_project_root()
+        server_groups_file = project_root / 'source-groups.yaml'
         if not server_groups_file.exists():
             print_error(f"source-groups.yaml not found at {server_groups_file}")
             return False
@@ -219,7 +222,7 @@ def generate_schema_name_schemas() -> bool:
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
 
-        keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'schema_name'
+        keys_dir = project_root / '.vscode' / 'schemas' / 'keys' / 'schema_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
 
         # Group databases by their schema list (sorted tuple for consistent matching)
@@ -365,7 +368,8 @@ def generate_table_names_enum_schema(service: str, schemas_data: dict[str, Any])
         }
 
         # Save to keys/table_name directory
-        keys_dir = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'table_name'
+        project_root = get_project_root()
+        keys_dir = project_root / '.vscode' / 'schemas' / 'keys' / 'table_name'
         keys_dir.mkdir(parents=True, exist_ok=True)
 
         output_file = keys_dir / f'{service}.schema.json'

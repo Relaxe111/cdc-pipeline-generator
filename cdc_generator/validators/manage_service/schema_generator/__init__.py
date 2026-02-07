@@ -26,7 +26,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
     print_success,
 )
-from cdc_generator.helpers.service_config import load_service_config
+from cdc_generator.helpers.service_config import load_service_config, get_project_root
 
 from .legacy_db_inspector import save_detailed_schema
 from .mini_schema_generators import (
@@ -42,8 +42,6 @@ from .yaml_loader import (
     load_schemas_from_yaml,
     load_server_groups_config,
 )
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 def generate_service_validation_schema(
@@ -110,7 +108,8 @@ def generate_service_validation_schema(
         else:
             shared_name = '_'.join(schema_names)
 
-        shared_schema_file = PROJECT_ROOT / '.vscode' / 'schemas' / 'keys' / 'schema_name' / 'shared' / f'{shared_name}.schema.json'
+        project_root = get_project_root()
+        shared_schema_file = project_root / '.vscode' / 'schemas' / 'keys' / 'schema_name' / 'shared' / f'{shared_name}.schema.json'
 
         if shared_schema_file.exists():
             schema_ref = f"keys/schema_name/shared/{shared_name}.schema.json"
@@ -127,7 +126,7 @@ def generate_service_validation_schema(
         )
 
         # Save JSON Schema
-        output_dir = PROJECT_ROOT / '.vscode' / 'schemas'
+        output_dir = project_root / '.vscode' / 'schemas'
         output_dir.mkdir(parents=True, exist_ok=True)
         output_file = output_dir / f'{database}.service-validation.schema.json'
 
