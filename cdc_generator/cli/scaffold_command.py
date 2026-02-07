@@ -113,31 +113,31 @@ class ScaffoldArgumentParser(argparse.ArgumentParser):
 
             if not has_name:
                 missing_items.append(
-                    f"  {self.CYAN}📝 name{self.RESET} (positional argument)\n"
-                    f"      {self.BOLD}Project/server group name{self.RESET} (e.g., {self.GREEN}'adopus'{self.RESET}, {self.GREEN}'asma'{self.RESET}, {self.GREEN}'myproject'{self.RESET})\n"
+                    f"  {self.CYAN}📝 name{self.RESET} (positional argument)\n" +
+                    f"      {self.BOLD}Project/server group name{self.RESET} (e.g., {self.GREEN}'adopus'{self.RESET}, {self.GREEN}'asma'{self.RESET}, {self.GREEN}'myproject'{self.RESET})\n" +
                     f"      {self.YELLOW}⚠️  This must come FIRST, before any --flags{self.RESET}"
                 )
 
             # Check required flags
             if '--pattern' not in provided_args:
                 missing_items.append(
-                    f"  {self.CYAN}🎯 --pattern{self.RESET} {{db-per-tenant,db-shared}}\n"
-                    f"      {self.YELLOW}db-per-tenant:{self.RESET} One database per customer (e.g., adopus_customer1, adopus_customer2)\n"
+                    f"  {self.CYAN}🎯 --pattern{self.RESET} {{db-per-tenant,db-shared}}\n" +
+                    f"      {self.YELLOW}db-per-tenant:{self.RESET} One database per customer (e.g., adopus_customer1, adopus_customer2)\n" +
                     f"      {self.YELLOW}db-shared:{self.RESET} Multiple services in shared databases (e.g., asma_service_env)"
                 )
 
             if '--source-type' not in provided_args:
                 missing_items.append(
-                    f"  {self.CYAN}🗄️  --source-type{self.RESET} {{postgres,mssql}}\n"
+                    f"  {self.CYAN}🗄️  --source-type{self.RESET} {{postgres,mssql}}\n" +
                     f"      Type of {self.BOLD}source database{self.RESET} to extract data from"
                 )
 
             if '--extraction-pattern' not in provided_args:
                 missing_items.append(
-                    f"  {self.CYAN}🔍 --extraction-pattern{self.RESET} {self.MAGENTA}\"REGEX_PATTERN\"{self.RESET}\n"
-                    f"      Regex pattern to extract identifiers from database names\n"
-                    f"      {self.BLUE}db-per-tenant example:{self.RESET} {self.GREEN}\"^adopus_(?P<customer>[^_]+)$\"{self.RESET}\n"
-                    f"      {self.BLUE}db-shared example:{self.RESET} {self.GREEN}\"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"{self.RESET}\n"
+                    f"  {self.CYAN}🔍 --extraction-pattern{self.RESET} {self.MAGENTA}\"REGEX_PATTERN\"{self.RESET}\n" +
+                    f"      Regex pattern to extract identifiers from database names\n" +
+                    f"      {self.BLUE}db-per-tenant example:{self.RESET} {self.GREEN}\"^adopus_(?P<customer>[^_]+)$\"{self.RESET}\n" +
+                    f"      {self.BLUE}db-shared example:{self.RESET} {self.GREEN}\"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"{self.RESET}\n" +
                     f"      Use empty string {self.GREEN}\"\"{self.RESET} for simple fallback matching (no regex)"
                 )
 
@@ -208,8 +208,8 @@ Connection Defaults:
     parser.add_argument(
         "--update",
         action="store_true",
-        help="Update existing project scaffold with latest structure and configurations. "
-             "Adds new directories, merges .vscode/settings.json, updates .gitignore. "
+        help="Update existing project scaffold with latest structure and configurations. " +
+             "Adds new directories, merges .vscode/settings.json, updates .gitignore. " +
              "Does not modify source-groups.yaml content or services.",
     )
 
@@ -231,8 +231,8 @@ Connection Defaults:
     parser.add_argument(
         "--extraction-pattern",
         required=False,  # Not required when using --update
-        help="Regex pattern with named groups to extract identifiers from database names. "
-             "For db-per-tenant: use 'customer' group. For db-shared: use 'service', 'env', 'suffix' groups. "
+        help="Regex pattern with named groups to extract identifiers from database names. " +
+             "For db-per-tenant: use 'customer' group. For db-shared: use 'service', 'env', 'suffix' groups. " +
              "Use empty string '' to disable regex and use simple fallback matching.",
     )
 

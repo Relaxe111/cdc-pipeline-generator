@@ -45,7 +45,7 @@ def get_project_root() -> Path:
             return current
         current = current.parent
     raise FileNotFoundError(
-        "Could not find docker-compose.yml. "
+        "Could not find docker-compose.yml. " +
         "Run this command from within a CDC pipeline project directory."
     )
 

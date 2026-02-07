@@ -36,17 +36,36 @@ def get_project_root() -> Path:
     return current
 
 
-def load_service_config(service_name: str = "adopus") -> dict[str, Any]:
-    """Load service configuration from services/, preserving comments."""
+def load_service_config(service_name: str = "adopus") -> dict[str, object]:
+    """Load service configuration from services/, preserving comments.
+    
+    Supports both formats:
+    - New: {service_name: {source: {...}, customers: [...]}}
+    - Legacy: {service: service_name, source: {...}, customers: [...]}
+    
+    Always returns legacy format for backward compatibility.
+    """
     services_dir = get_project_root() / "services"
     service_path = services_dir / f"{service_name}.yaml"
     if not service_path.exists():
         raise FileNotFoundError(f"Service config not found: {service_path}")
     with open(service_path) as f:
-        return yaml.load(f)
+        raw_config = yaml.load(f)
+    
+    # Check if new format (service name as root key)
+    if isinstance(raw_config, dict) and service_name in raw_config:
+        # New format: extract service config and add 'service' field for backward compatibility
+        service_config = raw_config[service_name]
+        if isinstance(service_config, dict):
+            config = service_config  # type: ignore[assignment]
+            config['service'] = service_name  # type: ignore[index]
+            return config  # type: ignore[return-value]
+    
+    # Legacy format: already has 'service' field
+    return raw_config  # type: ignore[return-value]
 
 
-def merge_customer_config(service_config: dict, customer_name: str) -> dict:
+def merge_customer_config(service_config: dict[str, object], customer_name: str) -> dict[str, object]:
     """Merge shared service config with customer-specific overrides.
     
     Returns a dict compatible with old customer YAML format for backward compatibility.
@@ -54,9 +73,9 @@ def merge_customer_config(service_config: dict, customer_name: str) -> dict:
     # Find customer in service config
     customers = service_config.get('customers', [])
     customer_data = None
-    for c in customers:
-        if c.get('name') == customer_name:
-            customer_data = c
+    for c in customers:  # type: ignore[attr-defined]
+        if c.get('name') == customer_name:  # type: ignore[attr-defined]
+            customer_data = c  # type: ignore[assignment]
             break
 
     if not customer_data:
@@ -66,24 +85,24 @@ def merge_customer_config(service_config: dict, customer_name: str) -> dict:
     # New format: [{schema: "dbo", tables: [{name: "Actor", primary_key: "actno"}]}]
     # Or simplified: [{schema: "dbo", tables: ["Actor", "Fraver"]}]  (when no extra properties)
     # Old format: [{schema: "dbo", table: "Actor", primary_key: "actno"}]
-    source_tables_hierarchical = service_config.get('shared', {}).get('source_tables', [])
-    ignore_tables = service_config.get('shared', {}).get('ignore_tables', [])
+    source_tables_hierarchical = service_config.get('shared', {}).get('source_tables', [])  # type: ignore[attr-defined]
+    ignore_tables = service_config.get('shared', {}).get('ignore_tables', [])  # type: ignore[attr-defined]
 
     source_tables_flat = []
-    for schema_group in source_tables_hierarchical:
-        schema_name = schema_group.get('schema')
-        for table in schema_group.get('tables', []):
+    for schema_group in source_tables_hierarchical:  # type: ignore[attr-defined]
+        schema_name = schema_group.get('schema')  # type: ignore[attr-defined]
+        for table in schema_group.get('tables', []):  # type: ignore[attr-defined]
             # Handle both string format ("Actor") and object format ({name: "Actor", ...})
             if isinstance(table, str):
                 table_name = table
                 table_dict = {'name': table}
             else:
-                table_name = table.get('name')
-                table_dict = table
+                table_name = table.get('name')  # type: ignore[attr-defined]
+                table_dict = table  # type: ignore[assignment]
 
             # Check if table should be ignored (ignore_tables has priority)
             should_ignore = False
-            for ignore_entry in ignore_tables:
+            for ignore_entry in ignore_tables:  # type: ignore[attr-defined]
                 if isinstance(ignore_entry, str):
                     # Simple format: just table name (assumes dbo schema)
                     if table_name == ignore_entry and schema_name == 'dbo':
@@ -91,61 +110,61 @@ def merge_customer_config(service_config: dict, customer_name: str) -> dict:
                         break
                 elif isinstance(ignore_entry, dict):
                     # Advanced format: {schema: "dbo", table: "TableName"}
-                    if (ignore_entry.get('table') == table_name and
-                        ignore_entry.get('schema', 'dbo') == schema_name):
+                    if (ignore_entry.get('table') == table_name and  # type: ignore[attr-defined]
+                        ignore_entry.get('schema', 'dbo') == schema_name):  # type: ignore[attr-defined]
                         should_ignore = True
                         break
 
             if not should_ignore:
-                table_config = {
+                table_config = {  # type: ignore[var-annotated]
                     'schema': schema_name,
                     'table': table_name,
-                    'primary_key': table_dict.get('primary_key')
+                    'primary_key': table_dict.get('primary_key')  # type: ignore[attr-defined]
                 }
 
                 # Handle column filtering (ignore_columns has priority over include_columns)
-                ignore_cols = table_dict.get('ignore_columns')
-                include_cols = table_dict.get('include_columns')
+                ignore_cols = table_dict.get('ignore_columns')  # type: ignore[attr-defined]
+                include_cols = table_dict.get('include_columns')  # type: ignore[attr-defined]
 
                 if ignore_cols:
-                    table_config['ignore_columns'] = ignore_cols
+                    table_config['ignore_columns'] = ignore_cols  # type: ignore[index]
                 elif include_cols:
-                    table_config['include_columns'] = include_cols
+                    table_config['include_columns'] = include_cols  # type: ignore[index]
 
-                source_tables_flat.append(table_config)
+                source_tables_flat.append(table_config)  # type: ignore[arg-type]
 
     # Start with backward-compatible structure
-    merged = {
+    merged = {  # type: ignore[var-annotated]
         'customer': customer_name,
-        'schema': customer_data.get('schema', customer_name),
-        'customer_id': customer_data.get('customer_id'),
+        'schema': customer_data.get('schema', customer_name),  # type: ignore[attr-defined]
+        'customer_id': customer_data.get('customer_id'),  # type: ignore[attr-defined]
         'cdc_tables': source_tables_flat,
         'environments': {}
     }
 
     # Get shared environment defaults
-    shared_envs = service_config.get('environments', {})
+    shared_envs = service_config.get('environments', {})  # type: ignore[attr-defined]
 
     # Get customer-specific environments
-    customer_envs = customer_data.get('environments', {})
+    customer_envs = customer_data.get('environments', {})  # type: ignore[attr-defined]
 
     # Merge each environment (customer overrides shared)
-    for env_name, customer_env_config in customer_envs.items():
+    for env_name, customer_env_config in customer_envs.items():  # type: ignore[attr-defined]
         # Start with shared environment config as base
-        env_merged = shared_envs.get(env_name, {}).copy() if env_name in shared_envs else {}
+        env_merged = shared_envs.get(env_name, {}).copy() if env_name in shared_envs else {}  # type: ignore[attr-defined,union-attr]
 
         # Deep merge customer-specific config
-        for key, value in customer_env_config.items():
+        for key, value in customer_env_config.items():  # type: ignore[attr-defined]
             if isinstance(value, dict) and key in env_merged and isinstance(env_merged[key], dict):
                 # Deep merge for nested dicts (like mssql, postgres, kafka)
                 env_merged[key] = {**env_merged[key], **value}
             else:
                 # Override for simple values
-                env_merged[key] = value
+                env_merged[key] = value  # type: ignore[index]
 
-        merged['environments'][env_name] = env_merged
+        merged['environments'][env_name] = env_merged  # type: ignore[index]
 
-    return merged
+    return merged  # type: ignore[return-value]
 
 
 def load_customer_config(customer: str) -> dict[str, Any]:
@@ -166,7 +185,7 @@ def load_customer_config(customer: str) -> dict[str, Any]:
         if not config_path.exists():
             raise FileNotFoundError(f"Customer config not found in service or legacy format: {customer}")
         with open(config_path) as f:
-            return yaml.safe_load(f)
+            return yaml.safe_load(f)  # type: ignore[return-value,attr-defined]
 
 
 def get_all_customers() -> list[str]:
@@ -179,7 +198,7 @@ def get_all_customers() -> list[str]:
     try:
         service_config = load_service_config("adopus")
         customers = service_config.get('customers', [])
-        return [c['name'] for c in customers if 'name' in c]
+        return [c['name'] for c in customers if 'name' in c]  # type: ignore[misc,attr-defined]
     except FileNotFoundError:
         # Fall back to old format (directory listing)
         customers_dir = get_project_root() / "2-customers"

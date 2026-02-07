@@ -169,7 +169,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     """
     if not output_lines:
         raise ValueError(
-            "Cannot write empty source-groups.yaml file.\n"
+            "Cannot write empty source-groups.yaml file.\n" +
             "  💡 Ensure you have at least one server group configured."
         )
 
@@ -177,7 +177,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     has_header = any("AUTO-GENERATED FILE" in line for line in output_lines[:20])
     if not has_header:
         raise ValueError(
-            "Missing file header in source-groups.yaml output.\n"
+            "Missing file header in source-groups.yaml output.\n" +
             "  💡 Call ensure_file_header_exists() before building output."
         )
 
@@ -188,8 +188,8 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     )
     if not has_server_group_key:
         raise ValueError(
-            "Missing server group key in source-groups.yaml output.\n"
-            "  💡 Expected a top-level key like 'adopus:' or 'asma:' at the start of a line.\n"
+            "Missing server group key in source-groups.yaml output.\n" +
+            "  💡 Expected a top-level key like 'adopus:' or 'asma:' at the start of a line.\n" +
             "  💡 Check that the server group name is valid and the YAML structure is correct."
         )
 
@@ -197,7 +197,7 @@ def validate_output_has_metadata(output_lines: list[str]) -> None:
     has_separator = any("========" in line for line in output_lines)
     if not has_separator:
         raise ValueError(
-            "Missing separator lines in source-groups.yaml output.\n"
+            "Missing separator lines in source-groups.yaml output.\n" +
             "  💡 Each server group section should have a separator comment above it."
         )
 

@@ -139,7 +139,7 @@ def validate_server_group_structure(group_data: Any, name: str) -> None:
     # New structure requires 'sources' at root level
     if 'sources' not in group_data:
         raise ValueError(
-            f"Server group '{name}' missing required field 'sources'.\n"
+            f"Server group '{name}' missing required field 'sources'.\\n" +
             f"Expected structure: {name}.sources (not {name}.server_group.databases)"
         )
 

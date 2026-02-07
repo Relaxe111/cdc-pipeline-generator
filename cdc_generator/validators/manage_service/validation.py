@@ -292,7 +292,7 @@ def validate_hierarchy_no_duplicates(service: str) -> bool:
             # Check if it matches parent (redundant)
             if default_value is not None and env_value == default_value:
                 errors.append(
-                    f"environments.{env_name}.{prop} = {env_value} is redundant "
+                    f"environments.{env_name}.{prop} = {env_value} is redundant " +
                     f"(same as environments.{prop}). Remove to inherit."
                 )
 
@@ -325,8 +325,8 @@ def validate_hierarchy_no_duplicates(service: str) -> bool:
                 # Check if customer value matches inherited value
                 if inherited_value is not None and customer_value == inherited_value:
                     errors.append(
-                        f"customers[{customer_name}].environments.{env_name}.{prop} = {customer_value} "
-                        f"is redundant (inherited from environments.{env_name}.{prop} or environments.{prop}). "
+                        f"customers[{customer_name}].environments.{env_name}.{prop} = {customer_value} " +
+                        f"is redundant (inherited from environments.{env_name}.{prop} or environments.{prop}). " +
                         f"Remove to inherit."
                     )
 

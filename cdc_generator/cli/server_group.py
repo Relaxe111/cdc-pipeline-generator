@@ -113,27 +113,27 @@ def main() -> int:
 
     # Multi-server management
     parser.add_argument("--add-server", metavar="NAME",
-                       help="Add a new server configuration (e.g., 'analytics', 'reporting'). "
+                       help="Add a new server configuration (e.g., 'analytics', 'reporting'). " +
                             "Use with --source-type, --host, --port, --user, --password.")
     parser.add_argument("--list-servers", action="store_true",
                        help="List all configured servers in the server group.")
     parser.add_argument("--remove-server", metavar="NAME",
                        help="Remove a server configuration. Cannot remove 'default' or servers with services.")
     parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
-                       help="Change the Kafka topology. 'shared' = same Kafka for all servers, "
+                       help="Change the Kafka topology. 'shared' = same Kafka for all servers, " +
                             "'per-server' = isolated Kafka per server.")
     parser.add_argument("--set-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
-                       help="Set extraction pattern for a specific server. "
-                            "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). "
+                       help="Set extraction pattern for a specific server. " +
+                            "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). " +
                             "Example: --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
 
     # Extraction pattern management (ordered multi-pattern approach)
     parser.add_argument("--add-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
-                       help="Add an extraction pattern to a server. Patterns are tried in order (first match wins). "
-                            "Pattern must include named group (?P<service>...) and optionally (?P<env>...). "
-                            "Use --env to fix environment (overrides captured group). "
-                            "Use --strip-patterns for regex-based removal (e.g., '_db' anywhere, '_db$' suffix only). "
-                            "Example: --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' "
+                       help="Add an extraction pattern to a server. Patterns are tried in order (first match wins). " +
+                            "Pattern must include named group (?P<service>...) and optionally (?P<env>...). " +
+                            "Use --env to fix environment (overrides captured group). " +
+                            "Use --strip-patterns for regex-based removal (e.g., '_db' anywhere, '_db$' suffix only). " +
+                            "Example: --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' " +
                             "--env prod_adcuris --strip-patterns '_db$'")
     parser.add_argument("--env", type=str,
                        help="Fixed environment name for --add-extraction-pattern (overrides captured (?P<env>) group).")
@@ -147,8 +147,8 @@ def main() -> int:
     parser.add_argument("--list-extraction-patterns", nargs='?', const='', metavar="SERVER",
                        help="List extraction patterns for all servers or a specific server.")
     parser.add_argument("--remove-extraction-pattern", nargs=2, metavar=("SERVER", "INDEX"),
-                       help="Remove an extraction pattern by index. "
-                            "Use --list-extraction-patterns to see indices. "
+                       help="Remove an extraction pattern by index. " +
+                            "Use --list-extraction-patterns to see indices. " +
                             "Example: --remove-extraction-pattern prod 0")
 
     args = parser.parse_args()

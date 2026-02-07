@@ -32,7 +32,7 @@ def _ensure_pymssql() -> None:
     """Ensure pymssql is available, raise helpful error if not."""
     if not _has_pymssql:
         raise MSSQLNotAvailableError(
-            "pymssql is not installed. Install it with: pip install pymssql\n"
+            "pymssql is not installed. Install it with: pip install pymssql\\n" +
             "Note: pymssql requires FreeTDS. On macOS: brew install freetds"
         )
 

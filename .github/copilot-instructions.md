@@ -63,6 +63,11 @@ config = yaml.safe_load(...)  # No validation, no types
 - ✅ Use `cast()` only for external libraries
 - ❌ **NEVER use `# type: ignore`**
 
+### 5. Python Linting & Analysis (Strict)
+- ✅ Follow Pylance strict rules when working in Python
+- ✅ Follow Ruff strict rules when working in Python
+- ✅ Fix **all** Pylance and Ruff warnings in touched files
+
 ---
 
 ## 📖 Detailed Instructions

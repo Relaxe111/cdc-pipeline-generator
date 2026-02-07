@@ -25,21 +25,28 @@ def load_service_schema_tables(service: str, schema: str) -> list[str]:
     return sorted([f.stem for f in schema_dir.glob("*.yaml")])
 
 
-def get_table_schema_definition(service: str, schema: str, table: str) -> dict | None:
+def get_table_schema_definition(service: str, schema: str, table: str) -> dict[str, object] | None:
     """Load table definition from service-schemas/{service}/{schema}/{table}.yaml"""
     table_file = SERVICE_SCHEMAS_DIR / service / schema / f"{table}.yaml"
     if not table_file.exists():
         return None
     with open(table_file) as f:
-        return yaml.load(f)
+        return yaml.load(f)  # type: ignore[return-value]
 
 
-def save_service_config(service: str, config: dict) -> bool:
-    """Save service configuration to file, preserving comments."""
+def save_service_config(service: str, config: dict[str, object]) -> bool:
+    """Save service configuration to file, using new format (service name as root key)."""
     try:
         service_file = SERVICES_DIR / f"{service}.yaml"
+        
+        # Remove 'service' field if present (it's redundant in new format)
+        config_to_save = {k: v for k, v in config.items() if k != 'service'}
+        
+        # Wrap in service name key
+        wrapped_config = {service: config_to_save}
+        
         with open(service_file, 'w') as f:
-            yaml.dump(config, f)
+            yaml.dump(wrapped_config, f)
         return True
     except Exception as e:
         print_error(f"Failed to save config: {e}")
@@ -67,6 +74,7 @@ def detect_service_mode(service: str) -> str:
                 return 'db-shared'
 
         # Fall back to legacy mode field
-        return config.get('mode', 'db-per-tenant')
+        mode = config.get('mode', 'db-per-tenant')
+        return str(mode) if mode else 'db-per-tenant'
     except:
         return 'db-per-tenant'

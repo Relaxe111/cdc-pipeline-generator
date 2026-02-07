@@ -66,7 +66,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
             if not validation_database:
                 raise ValueError(
-                    f"Could not find validation database for server group '{server_group}'.\n"
+                    f"Could not find validation database for server group '{server_group}'.\n" +
                     f"Expected: sources.{database_ref}.<env>.database in source-groups.yaml"
                 )
 
@@ -96,7 +96,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
             if not validation_database:
                 raise ValueError(
-                    f"Could not find database for service '{service_name}' in server group '{server_group}'.\n"
+                    f"Could not find database for service '{service_name}' in server group '{server_group}'.\n" +
                     f"Expected: sources.{service_name}.<env>.database in source-groups.yaml"
                 )
 
@@ -117,7 +117,6 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
     if pattern == 'db-per-tenant':
         template: dict[str, Any] = {
-            'service': service_name,
             'source': {
                 'validation_database': validation_database,
                 'tables': {
@@ -149,7 +148,6 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
     else:  # db-shared
         template: dict[str, Any] = {
-            'service': service_name,
             'source': {
                 'validation_database': validation_database,
                 'tables': {
@@ -215,7 +213,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 #   - environments - Environment-specific settings (kafka, etc.)
 #
 # 🚫 DO NOT MANUALLY EDIT:
-#   - service (service name)
+#   - Service name is derived from filename ({service_name}.yaml)
 #   - source.validation_database (auto-populated from source-groups.yaml)
 #
 # ℹ️  NOTE:
@@ -229,7 +227,11 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
     with open(service_file, 'w') as f:
         f.write(header_comment)
-        yaml.dump(template, f, default_flow_style=False, sort_keys=False, indent=2)
+        # Remove 'service' field if present (redundant in new format)
+        template_to_save = {k: v for k, v in template.items() if k != 'service'}
+        # Wrap in service name key
+        wrapped_template = {service_name: template_to_save}
+        yaml.dump(wrapped_template, f, default_flow_style=False, sort_keys=False, indent=2)
 
     action = "Updated" if update_mode else "Created"
     print_success(f"✓ {action} service configuration: {service_file}")
