@@ -1,0 +1,68 @@
+# MSSQL → PostgreSQL type mapping
+# ============================================================================
+# Used when source is MSSQL and sink is PostgreSQL (e.g., adopus CDC pipelines).
+#
+# Structure:
+#   mappings:
+#     <mssql_type>: <pgsql_type>
+#
+# Bidirectional: The mapper can read this file in reverse (pgsql→mssql)
+# by swapping keys and values. The filename determines default direction.
+# ============================================================================
+
+source_engine: mssql
+sink_engine: pgsql
+
+mappings:
+  # ── Numeric ──────────────────────────────────────────────────────────────
+  tinyint: smallint
+  smallint: smallint
+  int: integer
+  bigint: bigint
+  decimal: numeric
+  numeric: numeric
+  float: "double precision"
+  real: real
+  money: numeric
+  smallmoney: numeric
+
+  # ── Text ─────────────────────────────────────────────────────────────────
+  char: char
+  varchar: varchar
+  nchar: char
+  nvarchar: varchar
+  text: text
+  ntext: text
+
+  # ── Boolean ──────────────────────────────────────────────────────────────
+  bit: boolean
+
+  # ── Date/Time ────────────────────────────────────────────────────────────
+  date: date
+  time: time
+  datetime: timestamp
+  datetime2: timestamp
+  datetimeoffset: timestamptz
+  smalldatetime: timestamp
+
+  # ── UUID ─────────────────────────────────────────────────────────────────
+  uniqueidentifier: uuid
+
+  # ── Binary ───────────────────────────────────────────────────────────────
+  binary: bytea
+  varbinary: bytea
+  image: bytea
+
+  # ── XML ──────────────────────────────────────────────────────────────────
+  xml: xml
+
+  # ── Special ──────────────────────────────────────────────────────────────
+  sql_variant: text
+  hierarchyid: text
+  geometry: text
+  geography: text
+  timestamp: bytea        # MSSQL timestamp/rowversion is binary, not a date
+  rowversion: bytea
+
+# Fallback: if a type is not found in mappings, use this
+fallback: text

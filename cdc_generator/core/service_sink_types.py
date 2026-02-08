@@ -77,6 +77,14 @@ class SinkTableConfig(TypedDict, total=False):
         include_columns: Only sync these columns (when target_exists=false).
         custom: True if the table was manually created (not from source schemas).
         managed: True if the table can be modified via CLI (only for custom tables).
+        replicate_structure: When true, auto-create the sink table with exact
+            structure from source schema, applying type mapping via adapters.
+            Reads source schema from service-schemas/{service}/{schema}/{table}.yaml
+            and converts column types using adapters/{source_engine}-to-{sink_engine}.
+        source_engine: Source database engine (e.g., 'pgsql', 'mssql').
+            Required when replicate_structure=true. Determines type mapping.
+        sink_engine: Target database engine (e.g., 'pgsql', 'mssql').
+            Required when replicate_structure=true. Determines type mapping.
 
     Examples:
         # Clone as-is (must specify target_exists: false)
@@ -92,6 +100,13 @@ class SinkTableConfig(TypedDict, total=False):
         public.customer_user:
             target_exists: false
             include_columns: [brukerBrukerNavn, created_at, pnr]
+
+        # Replicate structure with type mapping (source→sink type conversion)
+        public.customer_user:
+            target_exists: false
+            replicate_structure: true
+            source_engine: pgsql
+            sink_engine: pgsql
 
         # Map to existing table
         public.attachments:
@@ -123,6 +138,9 @@ class SinkTableConfig(TypedDict, total=False):
     include_columns: list[str]
     custom: bool
     managed: bool
+    replicate_structure: bool
+    source_engine: str
+    sink_engine: str
 
 
 class SinkDatabaseMapping(TypedDict, total=False):

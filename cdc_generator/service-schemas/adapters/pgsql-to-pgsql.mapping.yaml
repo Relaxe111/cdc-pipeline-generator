@@ -1,0 +1,90 @@
+# PostgreSQL → PostgreSQL type mapping (identity + normalization)
+# ============================================================================
+# Used when source and sink are both PostgreSQL (e.g., asma CDC pipelines).
+# Mostly identity mappings, but normalizes aliases to canonical forms.
+#
+# Structure:
+#   mappings:
+#     <source_type>: <target_type>
+#
+# Bidirectional: This file works both ways (pgsql→pgsql is symmetric).
+# The mapper reads direction from the filename: {source}-to-{sink}.
+# ============================================================================
+
+source_engine: pgsql
+sink_engine: pgsql
+
+mappings:
+  # ── Numeric ──────────────────────────────────────────────────────────────
+  smallint: smallint
+  integer: integer
+  bigint: bigint
+  serial: serial
+  bigserial: bigserial
+  numeric: numeric
+  real: real
+  "double precision": "double precision"
+  int2: smallint          # alias normalization
+  int4: integer
+  int8: bigint
+  float4: real
+  float8: "double precision"
+
+  # ── Text ─────────────────────────────────────────────────────────────────
+  text: text
+  varchar: varchar
+  "character varying": varchar
+  char: char
+  character: char
+  citext: citext
+  name: text              # system type → text
+
+  # ── Boolean ──────────────────────────────────────────────────────────────
+  boolean: boolean
+  bool: boolean           # alias
+
+  # ── Date/Time ────────────────────────────────────────────────────────────
+  date: date
+  time: time
+  "time without time zone": time
+  "time with time zone": timetz
+  timetz: timetz
+  timestamp: timestamp
+  "timestamp without time zone": timestamp
+  "timestamp with time zone": timestamptz
+  timestamptz: timestamptz
+  interval: interval
+
+  # ── UUID ─────────────────────────────────────────────────────────────────
+  uuid: uuid
+
+  # ── JSON ─────────────────────────────────────────────────────────────────
+  json: json
+  jsonb: jsonb
+
+  # ── Binary ───────────────────────────────────────────────────────────────
+  bytea: bytea
+
+  # ── Network ──────────────────────────────────────────────────────────────
+  inet: inet
+  cidr: cidr
+  macaddr: macaddr
+
+  # ── Array ────────────────────────────────────────────────────────────────
+  "text[]": "text[]"
+  "integer[]": "integer[]"
+  "uuid[]": "uuid[]"
+  "jsonb[]": "jsonb[]"
+  "boolean[]": "boolean[]"
+  "bigint[]": "bigint[]"
+  "varchar[]": "varchar[]"
+
+  # ── Special ──────────────────────────────────────────────────────────────
+  oid: oid
+  money: money
+  xml: xml
+  "USER-DEFINED": text    # fallback for custom/enum types
+  ARRAY: "text[]"         # generic array → text[]
+
+# Fallback: if a type is not found in mappings, use this
+fallback: text
