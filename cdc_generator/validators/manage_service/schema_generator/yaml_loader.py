@@ -11,11 +11,11 @@ from cdc_generator.helpers.service_config import get_project_root
 
 def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> dict[str, Any]:
     """Load table schemas from service-schemas/{service}/ YAML files.
-    
+
     Args:
         service: Service name (e.g., 'adopus', 'directory')
         schema_filter: Optional schema name to filter by
-    
+
     Returns:
         Dict[schema_name, Dict[table_name, table_metadata]]
         where table_metadata = {'columns': [...], 'primary_key': ...}
@@ -70,7 +70,7 @@ def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> di
 
 def load_server_groups_config() -> dict[str, Any]:
     """Load source-groups.yaml configuration.
-    
+
     Returns:
         Dict with server group configurations
     """
@@ -85,10 +85,10 @@ def load_server_groups_config() -> dict[str, Any]:
 
 def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[str, set[str]]:
     """Extract all database names grouped by server group.
-    
+
     Args:
         server_groups_data: Parsed source-groups.yaml data
-    
+
     Returns:
         Dict[group_name, Set[database_names]]
     """

@@ -15,27 +15,27 @@ def match_extraction_patterns(
     server_name: str = "default"
 ) -> tuple[str, str] | None:
     """Extract service and environment from database name using ordered patterns.
-    
+
     Patterns are tried in order. First match wins. Each pattern can:
     - Capture service and/or env using named groups: (?P<service>...), (?P<env>...)
     - Override captured env with fixed env field
     - Strip patterns from captured service name (e.g., '_db')
     - Fallback to server_name for env if no env captured/specified
-    
+
     Args:
         db_name: Database name to decompose
         patterns: Ordered list of extraction patterns (most specific first)
         server_name: Server name to use as env fallback (default: "default")
-    
+
     Returns:
         (service, env) tuple if any pattern matches, None otherwise
-    
+
     Rules:
     - If pattern has fixed 'env' field, it must appear in the regex pattern
     - If no env captured and no fixed env, fallback to server_name
     - Strip patterns applied to service name after extraction
     - Env mapping applied to final env value
-    
+
     Examples:
         >>> patterns = [
         ...     {
@@ -103,17 +103,17 @@ def match_extraction_patterns(
 
 def match_single_pattern(db_name: str, pattern: str) -> tuple[str, str] | None:
     """Extract service and environment from database name using single regex pattern.
-    
+
     Backward compatibility helper for extraction_pattern field.
     Expects pattern with named groups: (?P<service>...) and (?P<env>...)
-    
+
     Args:
         db_name: Database name to decompose
         pattern: Regex pattern with named groups
-    
+
     Returns:
         (service, env) tuple if pattern matches, None otherwise
-    
+
     Examples:
         >>> match_single_pattern('myservice_dev', r'^(?P<service>\\w+)_(?P<env>\\w+)$')
         ('myservice', 'dev')

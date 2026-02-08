@@ -3,7 +3,7 @@
 
 def get_source_pipeline_template() -> str:
     """Generate source-pipeline.yaml template.
-    
+
     Returns:
         Complete source pipeline template as string for MSSQL CDC to Redpanda.
         Uses placeholders for customer-specific values:
@@ -46,7 +46,7 @@ pipeline:
         let op_code = this.get("__$operation")
         # Drop before-update operations (3) - we only need after-update (4)
         root = if $op_code == 3 { deleted() } else { this }
-    
+
     - bloblang: |
         # Map MSSQL CDC operation codes to Debezium style
         let op_code = this.get("__$operation")
@@ -56,13 +56,13 @@ pipeline:
           4 => "u",
           _ => "c"
         }
-        
+
         # Get table name from metadata
         let table_name = meta("source_table")
-        
+
         # Remove CDC metadata columns (including __lsn_hex used for LSN tracking)
         let payload_data = this.without("__$start_lsn", "__$end_lsn", "__$seqval", "__$operation", "__$update_mask", "__lsn_hex")
-        
+
         # Build Debezium-style CDC envelope
         root.payload = {
           "op": $debezium_op,
@@ -79,14 +79,14 @@ pipeline:
           },
           "ts_ms": now().ts_unix_milli()
         }
-        
+
         # Route to correct Kafka topic and key based on table
         let data = if $op_code == 1 { root.payload.before } else { root.payload.after }
         let routing = match $table_name {
         {{TABLE_ROUTING}}
           _ => {"topic": "{{TOPIC_PREFIX}}.dbo.unknown", "key": ""}
         }
-        
+
         meta kafka_topic = $routing.topic
         meta kafka_key = $routing.key
 
@@ -134,7 +134,7 @@ http:
 
 def get_sink_pipeline_template() -> str:
     """Generate sink-pipeline.yaml template.
-    
+
     Returns:
         Complete sink pipeline template as string for Kafka to PostgreSQL.
         Uses placeholders for customer-specific values:
@@ -145,7 +145,7 @@ def get_sink_pipeline_template() -> str:
     return """# =============================================================================
 # Redpanda Connect Sink Pipeline - Consolidated Multi-Schema
 # =============================================================================
-# This pipeline consumes CDC events from Kafka and routes to multiple 
+# This pipeline consumes CDC events from Kafka and routes to multiple
 # PostgreSQL schemas in a single pipeline instance.
 #
 # Architecture:
@@ -177,25 +177,25 @@ pipeline:
     - bloblang: |
         # Parse the JSON content
         root = content().parse_json()
-        
+
         # Extract schema (customer) from topic: env.customer.db.schema.table
         # Example: nonprod.avansas.AdOpusTest.dbo.Actor -> schema=avansas
         let topic = metadata("kafka_topic")
         let parts = $topic.split(".")
         root.__routing_schema = $parts.index(1)  # customer name = PostgreSQL schema
         root.__routing_table = this.payload.source.table
-        
+
     # Extract CDC operation and enrich with metadata
     - bloblang: |
         # Map Debezium operation codes
-        let op = if this.payload.op == "d" { "DELETE" } 
-                 else if this.payload.op == "c" { "INSERT" } 
+        let op = if this.payload.op == "d" { "DELETE" }
+                 else if this.payload.op == "c" { "INSERT" }
                  else if this.payload.op == "u" { "UPDATE" }
                  else { "UNKNOWN" }
-        
+
         # For DELETE use before, for INSERT/UPDATE use after
         let base = if this.payload.op == "d" { this.payload.before } else { this.payload.after }
-        
+
         # Build the record with all metadata
         root = $base
         root.__routing_schema = this.__routing_schema
@@ -206,12 +206,12 @@ pipeline:
         root.__source_table = this.payload.source.table
         root.__source_ts_ms = this.payload.source.ts_ms
         root.__sync_timestamp = now().ts_format("2006-01-02T15:04:05Z")
-        
+
         # Capture Kafka metadata for offset tracking
         root.__kafka_offset = metadata("kafka_offset").number()
         root.__kafka_partition = metadata("kafka_partition").number()
         root.__kafka_timestamp = metadata("kafka_timestamp_unix").ts_format("2006-01-02T15:04:05Z")
-    
+
     # Log processing info
     - log:
         level: INFO

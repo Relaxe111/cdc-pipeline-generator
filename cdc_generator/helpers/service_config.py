@@ -12,14 +12,14 @@ from cdc_generator.helpers.yaml_loader import yaml
 
 def get_project_root() -> Path:
     """Get the project root directory of the implementation.
-    
+
     Searches upwards from the current working directory for a directory containing
     known markers: 'source-groups.yaml', 'services/', or '2-customers/'.
     This allows the tool to work correctly from any subdirectory within an implementation repo.
-    
+
     Returns:
         Path to implementation root directory
-        
+
     Note:
         As a fallback, returns current directory instead of raising error,
         so new files are created where the command is executed.
@@ -38,11 +38,11 @@ def get_project_root() -> Path:
 
 def load_service_config(service_name: str = "adopus") -> dict[str, object]:
     """Load service configuration from services/, preserving comments.
-    
+
     Supports both formats:
     - New: {service_name: {source: {...}, customers: [...]}}
     - Legacy: {service: service_name, source: {...}, customers: [...]}
-    
+
     Always returns legacy format for backward compatibility.
     """
     services_dir = get_project_root() / "services"
@@ -51,7 +51,7 @@ def load_service_config(service_name: str = "adopus") -> dict[str, object]:
         raise FileNotFoundError(f"Service config not found: {service_path}")
     with open(service_path) as f:
         raw_config = yaml.load(f)
-    
+
     # Check if new format (service name as root key)
     if isinstance(raw_config, dict) and service_name in raw_config:
         # New format: extract service config and add 'service' field for backward compatibility
@@ -60,14 +60,14 @@ def load_service_config(service_name: str = "adopus") -> dict[str, object]:
             config = service_config  # type: ignore[assignment]
             config['service'] = service_name  # type: ignore[index]
             return config  # type: ignore[return-value]
-    
+
     # Legacy format: already has 'service' field
     return raw_config  # type: ignore[return-value]
 
 
 def merge_customer_config(service_config: dict[str, object], customer_name: str) -> dict[str, object]:
     """Merge shared service config with customer-specific overrides.
-    
+
     Returns a dict compatible with old customer YAML format for backward compatibility.
     """
     # Find customer in service config
@@ -169,7 +169,7 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
 
 def load_customer_config(customer: str) -> dict[str, Any]:
     """Load customer configuration - supports both new and legacy format.
-    
+
     Priority:
     1. Try new service-based format (services/adopus.yaml)
     2. Fall back to legacy format (2-customers/{customer}.yaml)
@@ -190,7 +190,7 @@ def load_customer_config(customer: str) -> dict[str, Any]:
 
 def get_all_customers() -> list[str]:
     """Get list of all customers.
-    
+
     Priority:
     1. Read from service config (services/adopus.yaml)
     2. Fall back to directory listing (2-customers/)

@@ -10,7 +10,7 @@ that efficiently handle CDC operations (INSERT, UPDATE, DELETE) using:
 
 def bloblang_field(field_name: str) -> str:
     """Format a field name for use in Bloblang expressions.
-    
+
     Field names with non-ASCII characters need to be quoted.
     """
     # Check if field contains non-ASCII characters
@@ -53,10 +53,10 @@ def map_pg_type(pg_type: str) -> str:
 
 def normalize_table_name(name: str) -> str:
     """Normalize Norwegian special characters only (keep original casing and structure)
-    
+
     Replaces:
     - å/Å -> a/A
-    - ø/Ø -> o/O  
+    - ø/Ø -> o/O
     - æ/Æ -> ae/AE
     """
     replacements = {
@@ -76,9 +76,9 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
                       pk_fields: list[str], mssql_fields: list[str], postgres_fields: list[str]) -> str:
     """
     Generate optimized DELETE case using sql_raw processor.
-    
+
     Handles both single and composite primary keys efficiently.
-    
+
     Args:
         table_name: Source table name (e.g., "Actor")
         schema: Target PostgreSQL schema (e.g., "avansas")
@@ -86,7 +86,7 @@ def build_delete_case(table_name: str, schema: str, postgres_url: str,
         pk_fields: List of primary key field names in PostgreSQL (e.g., ["actno"] or ["soknad_id", "bruker_navn"])
         mssql_fields: List of all MSSQL field names for mapping
         postgres_fields: List of all PostgreSQL field names
-    
+
     Returns:
         YAML configuration string for DELETE case
     """
@@ -140,9 +140,9 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
                       postgres_fields: list[str], mssql_fields: list[str], pk_fields: list[str]) -> str:
     """
     Generate optimized INSERT/UPDATE case using sql_insert with ON CONFLICT.
-    
+
     Handles both single and composite primary keys with proper UPSERT semantics.
-    
+
     Args:
         table_name: Source table name (e.g., "Actor")
         schema: Target PostgreSQL schema (e.g., "avansas")
@@ -150,7 +150,7 @@ def build_upsert_case(table_name: str, schema: str, postgres_url: str,
         postgres_fields: List of PostgreSQL column names (e.g., ["actno", "name", "email"])
         mssql_fields: List of MSSQL field names (e.g., ["actno", "Name", "Email"])
         pk_fields: List of primary key field names in PostgreSQL
-    
+
     Returns:
         YAML configuration string for INSERT/UPDATE case
     """
@@ -261,17 +261,17 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
                        postgres_fields: list[str], mssql_fields: list[str]) -> str:
     """
     Generate staging table INSERT case using sql_insert with batching.
-    
+
     Writes all records (INSERT, UPDATE, DELETE) to staging table for later
     merge processing by stored procedure.
-    
+
     Args:
         table_name: Source table name (e.g., "Actor")
         schema: Target PostgreSQL schema (e.g., "avansas")
         postgres_url: PostgreSQL connection URL placeholder
         postgres_fields: List of PostgreSQL column names
         mssql_fields: List of MSSQL field names
-    
+
     Returns:
         YAML configuration string for staging table INSERT case
     """

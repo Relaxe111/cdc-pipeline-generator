@@ -31,7 +31,7 @@ def should_exclude_schema(schema_name: str, exclude_patterns: list[str] | None) 
 
 def infer_service_name(database_name: str) -> str:
     """Infer service name from database name following pattern: {service}_db_{environment}
-    
+
     Examples:
         activities_db_dev -> activities
         adopus_db_directory_dev -> directory

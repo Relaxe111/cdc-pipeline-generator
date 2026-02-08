@@ -17,13 +17,13 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 def validate_service_config(service: str) -> bool:
     """Validate service configuration for pipeline generation readiness.
-    
+
     Checks:
     1. All required fields present (with hierarchical inheritance)
     2. Database connectivity prerequisites
     3. CDC table definitions
     4. Hierarchical duplicate check
-    
+
     Returns:
         True if validation passes, False otherwise
     """
@@ -236,12 +236,12 @@ def validate_service_config(service: str) -> bool:
 
 def validate_hierarchy_no_duplicates(service: str) -> bool:
     """Validate that there are no duplicate values in the configuration hierarchy.
-    
-    Checks that values at lower levels (environment-specific, customer-specific) 
+
+    Checks that values at lower levels (environment-specific, customer-specific)
     are actual overrides and not redundant duplicates of inherited values.
-    
+
     Hierarchy: environments (root) → environments.<env> → customers[].environments.<env>
-    
+
     Returns:
         True if validation passes, False if duplicates found
     """

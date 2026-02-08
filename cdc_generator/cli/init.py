@@ -20,12 +20,12 @@ from cdc_generator.helpers.helpers_logging import (
 
 def create_project_structure(project_name: str, project_type: str, target_dir: Path) -> bool:
     """Create the basic project structure for a CDC pipeline implementation.
-    
+
     Args:
         project_name: Name of the project (e.g., "adopus-cdc-pipeline")
         project_type: Type of implementation ("adopus" = db-per-tenant, "asma" = db-shared)
         target_dir: Target directory to create the project in
-        
+
     Returns:
         True if successful, False otherwise
     """
@@ -64,7 +64,7 @@ def create_project_structure(project_name: str, project_type: str, target_dir: P
 server_group:
   {project_name}:
     pattern: {pattern}
-    
+
     # Source database (MSSQL)
     server:
       type: mssql
@@ -73,7 +73,7 @@ server_group:
       database: ${{SOURCE_DB_NAME}}
       user: ${{SOURCE_DB_USER}}
       password: ${{SOURCE_DB_PASSWORD}}
-    
+
     # Target database (PostgreSQL)
     replica:
       type: postgresql
@@ -82,7 +82,7 @@ server_group:
       database: ${{REPLICA_DB_NAME}}
       user: ${{REPLICA_DB_USER}}
       password: ${{REPLICA_DB_PASSWORD}}
-    
+
     # Allowed schemas for CDC
     allowed_schemas:
       - dbo

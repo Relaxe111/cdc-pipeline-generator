@@ -3,11 +3,11 @@
 
 def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
     """Generate docker-compose.yml template with server_group naming.
-    
+
     Args:
         server_group_name: Name of the server group (e.g., 'adopus', 'asma')
         pattern: 'db-per-tenant' or 'db-shared'
-        
+
     Returns:
         Complete docker-compose.yml content as string
     """
@@ -17,7 +17,7 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 # Docker Compose: Infrastructure for {server_group_name.title()} CDC Pipeline
 # =============================================================================
 # This setup provides infrastructure services for CDC replication.
-# 
+#
 # Services:
 # - Dev Container (Python development environment with Fish shell)
 # - PostgreSQL (target database for CDC)
@@ -254,14 +254,14 @@ def get_env_example_template(
     servers: "dict[str, dict[str, str]] | None" = None,
 ) -> str:
     """Generate .env.example template with multi-server support.
-    
+
     Args:
         server_group_name: Name of the server group
         pattern: 'db-per-tenant' or 'db-shared'
         source_type: 'mssql' or 'postgres'
         kafka_topology: 'shared' or 'per-server'
         servers: Dict of server configurations (optional, for multi-server support)
-        
+
     Returns:
         Complete .env.example content as string
     """
@@ -274,12 +274,12 @@ def get_env_example_template(
 # =============================================================================
 # This file contains all configuration for the CDC pipeline.
 # DO NOT commit .env file to version control in production!
-# 
+#
 # SETUP INSTRUCTIONS:
 # 1. Copy this file: cp .env.example .env
 # 2. Fill in actual values for your environment
 # 3. Start services: docker compose up -d
-# 
+#
 # MONITORING ACCESS:
 # - Redpanda Console: http://localhost:8080 (no login)
 # - Adminer: http://localhost:8090
@@ -372,11 +372,11 @@ CDC_MAX_IN_FLIGHT=64
 
 def get_readme_template(server_group_name: str, pattern: str) -> str:
     """Generate README.md template.
-    
+
     Args:
         server_group_name: Name of the server group
         pattern: 'db-per-tenant' or 'db-shared'
-        
+
     Returns:
         Complete README.md content as string
     """
@@ -459,7 +459,7 @@ See the `_docs/` directory for detailed documentation.
 
 def get_gitignore_template() -> str:
     """Generate .gitignore template.
-    
+
     Returns:
         Complete .gitignore content as string
     """

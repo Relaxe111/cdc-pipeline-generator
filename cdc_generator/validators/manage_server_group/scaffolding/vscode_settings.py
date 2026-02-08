@@ -8,7 +8,7 @@ FilesAssociations = dict[str, str]
 
 class VSCodeSettingsDict:
     """Type structure for VS Code settings.json.
-    
+
     Note: Using class-level annotations for documentation.
     Actual return is Dict since VS Code settings have dynamic keys.
     """
@@ -21,11 +21,11 @@ class VSCodeSettingsDict:
 
 def create_vscode_settings() -> dict[str, object]:
     """Create .vscode/settings.json with useful defaults.
-    
+
     Returns:
         Dictionary with VS Code settings ready for JSON serialization.
         Keys are VS Code setting identifiers, values are setting values.
-        
+
     Settings included:
         - files.associations: Map file patterns to language modes
         - yaml.schemas: JSON schema validation for YAML files
@@ -61,7 +61,7 @@ def create_vscode_settings() -> dict[str, object]:
 
 def get_gitignore_patterns() -> list[str]:
     """Get list of patterns for .gitignore.
-    
+
     Returns:
         List of gitignore patterns to include
     """
@@ -85,7 +85,7 @@ def get_gitignore_patterns() -> list[str]:
 
 def get_scaffold_directories() -> list[str]:
     """Get list of directories to create in scaffold.
-    
+
     Returns:
         List of directory paths relative to project root
     """
@@ -104,7 +104,7 @@ def get_scaffold_directories() -> list[str]:
 
 def get_generated_subdirs() -> list[str]:
     """Get list of generated subdirectories that need .gitkeep.
-    
+
     Returns:
         List of subdirectory names under generated/
     """

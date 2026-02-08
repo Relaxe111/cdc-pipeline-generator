@@ -26,17 +26,17 @@ except ImportError:
 
 def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[str, Any]]) -> bool:
     """Save detailed table schema information to YAML file.
-    
+
     ⚠️ LEGACY FUNCTION - Not used in main schema generation flow.
     This was used for database introspection but has been replaced by
     YAML-based schema loading from service-schemas/ directory.
-    
+
     Args:
         service: Service name
         env: Environment name
         schema: Database schema name
         tables: List of table dictionaries from MSSQL inspection
-    
+
     Returns:
         True if schema saved successfully, False otherwise
     """
@@ -98,7 +98,7 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[
 
             # Get detailed column info
             cursor.execute(f"""
-                SELECT 
+                SELECT
                     c.COLUMN_NAME,
                     c.DATA_TYPE,
                     c.CHARACTER_MAXIMUM_LENGTH,
@@ -114,7 +114,7 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[
                         AND tc.TABLE_SCHEMA = '{schema}'
                         AND tc.TABLE_NAME = '{table_name}'
                 ) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
-                WHERE c.TABLE_SCHEMA = '{schema}' 
+                WHERE c.TABLE_SCHEMA = '{schema}'
                     AND c.TABLE_NAME = '{table_name}'
                 ORDER BY c.ORDINAL_POSITION
             """)

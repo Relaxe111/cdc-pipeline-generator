@@ -102,7 +102,7 @@ def prompt_mappings(source_columns: list[str], sink_columns: list[str]) -> dict[
 
 def validate_table_compatibility(source_def: dict, sink_def: dict, mappings: dict[str, str]) -> bool:
     """Validate that source and sink tables are compatible.
-    
+
     TODO: Add actual validation logic:
     - Check data types compatibility
     - Check nullable constraints

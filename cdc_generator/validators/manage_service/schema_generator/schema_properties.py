@@ -219,11 +219,11 @@ def build_conditional_requirements() -> list[dict[str, Any]]:
 
 def add_table_definitions(json_schema: dict[str, Any], schemas_data: dict[str, Any]) -> None:
     """Add table definitions to JSON Schema.
-    
+
     Modifies json_schema in place to add:
     - Table definitions in #/definitions
     - anyOf references in source_tables.items.properties.tables.items.anyOf
-    
+
     Args:
         json_schema: The JSON Schema dict to modify
         schemas_data: Dict[schema_name, Dict[table_name, table_metadata]]

@@ -13,13 +13,13 @@ from .config import (
 
 def handle_info(args: Namespace) -> int:
     """Display detailed server group information with colors and formatting.
-    
+
     Args:
         args: Parsed command-line arguments (not used, but required for handler signature)
-        
+
     Returns:
         Exit code (0 for success, 1 for error)
-        
+
     Example:
         >>> args = Namespace()
         >>> handle_info(args)

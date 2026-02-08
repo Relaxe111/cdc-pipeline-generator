@@ -22,7 +22,7 @@ def find_server_group_file() -> Path | None:
 
 def list_databases_from_server_group() -> list[str]:
     """Extract database names from source-groups.yaml for completions.
-    
+
     Returns:
         List of database names found in the server group configuration
     """

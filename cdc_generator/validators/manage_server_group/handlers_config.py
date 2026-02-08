@@ -21,15 +21,15 @@ from .config import (
 
 def handle_add_ignore_pattern(args: Namespace) -> int:
     """Handle adding pattern(s) to the database exclude list.
-    
+
     Supports comma-separated patterns for bulk addition.
-    
+
     Args:
         args: Parsed arguments with add_to_ignore_list string
-        
+
     Returns:
         Exit code (0 for success, 1 for error)
-        
+
     Example:
         >>> args = Namespace(add_to_ignore_list='test_%,staging_%')
         >>> handle_add_ignore_pattern(args)
@@ -78,15 +78,15 @@ def handle_add_ignore_pattern(args: Namespace) -> int:
 
 def handle_add_schema_exclude(args: Namespace) -> int:
     """Handle adding pattern(s) to the schema exclude list.
-    
+
     Supports comma-separated patterns for bulk addition.
-    
+
     Args:
         args: Parsed arguments with add_to_schema_excludes string
-        
+
     Returns:
         Exit code (0 for success, 1 for error)
-        
+
     Example:
         >>> args = Namespace(add_to_schema_excludes='sys,information_schema')
         >>> handle_add_schema_exclude(args)
@@ -135,18 +135,18 @@ def handle_add_schema_exclude(args: Namespace) -> int:
 
 def parse_env_mapping(mapping_str: str) -> dict[str, str]:
     """Parse comma-separated environment mapping string into dict.
-    
+
     Format: "from:to,from:to,..."
-    
+
     Args:
         mapping_str: Comma-separated mappings in format "from:to"
-        
+
     Returns:
         Dict mapping source env suffix to target env name
-        
+
     Raises:
         ValueError: If no valid mappings found
-        
+
     Example:
         >>> parse_env_mapping("staging:stage,production:prod")
         {'staging': 'stage', 'production': 'prod'}
@@ -197,13 +197,13 @@ def parse_env_mapping(mapping_str: str) -> dict[str, str]:
 
 def handle_add_env_mapping(args: Namespace) -> int:
     """Handle adding environment mapping(s) to the server group.
-    
+
     Args:
         args: Parsed arguments with add_env_mapping string
-        
+
     Returns:
         Exit code (0 for success, 1 for error)
-        
+
     Example:
         >>> args = Namespace(add_env_mapping='staging:stage,production:prod')
         >>> handle_add_env_mapping(args)

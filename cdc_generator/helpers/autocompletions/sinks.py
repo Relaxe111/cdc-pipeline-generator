@@ -52,20 +52,51 @@ def list_sink_keys_for_service(service_name: str) -> list[str]:
         if not data or not data:
             return []
 
-        data_dict = cast(dict[str, Any], data)
+        data_dict = cast(dict[str, object], data)
 
         # Support new format (service name as root key)
         config = (
-            cast(dict[str, Any], data_dict[service_name])
+            cast(dict[str, object], data_dict[service_name])
             if service_name in data_dict and isinstance(data_dict[service_name], dict)
             else data_dict
         )
 
         sinks = config.get('sinks', {})
-        return sorted(cast(dict[str, Any], sinks).keys()) if isinstance(sinks, dict) else []
+        return sorted(cast(dict[str, object], sinks).keys()) if isinstance(sinks, dict) else []
 
     except Exception:
         return []
+
+
+def _process_sink_group(group_name: str, group_dict: dict[str, Any]) -> list[str]:
+    """Process a single sink group and return list of sink keys.
+
+    Args:
+        group_name: Name of the sink group.
+        group_dict: Configuration dictionary for the group.
+
+    Returns:
+        List of sink keys for this group.
+    """
+    suggestions: list[str] = []
+
+    if group_dict.get("inherits"):
+        # Inherited sink: suggest from inherited_sources
+        sources = group_dict.get("inherited_sources", [])
+        if isinstance(sources, list):
+            sources_list = cast(list[Any], sources)
+            for src in sources_list:
+                if isinstance(src, str):
+                    suggestions.append(f"{group_name}.{src}")
+    else:
+        # Standalone sink: suggest from sources keys
+        sources = group_dict.get("sources", {})
+        if isinstance(sources, dict):
+            sources_dict = cast(dict[str, Any], sources)
+            for src in sources_dict:
+                suggestions.append(f"{group_name}.{src}")
+
+    return suggestions
 
 
 def list_available_sink_keys() -> list[str]:
@@ -113,22 +144,7 @@ def list_available_sink_keys() -> list[str]:
             if not isinstance(group_data, dict):
                 continue
             group_dict = cast(dict[str, Any], group_data)
-
-            if group_dict.get("inherits"):
-                # Inherited sink: suggest from inherited_sources
-                sources = group_dict.get("inherited_sources", [])
-                if isinstance(sources, list):
-                    sources_list = cast(list[Any], sources)
-                    for src in sources_list:
-                        if isinstance(src, str):
-                            suggestions.append(f"{group_name}.{src}")
-            else:
-                # Standalone sink: suggest from sources keys
-                sources = group_dict.get("sources", {})
-                if isinstance(sources, dict):
-                    sources_dict = cast(dict[str, Any], sources)
-                    for src in sources_dict:
-                        suggestions.append(f"{group_name}.{src}")
+            suggestions.extend(_process_sink_group(group_name, group_dict))
 
         return sorted(suggestions)
 
@@ -137,7 +153,7 @@ def list_available_sink_keys() -> list[str]:
 
 
 def list_target_tables_for_sink(
-    service_name: str,
+    _service_name: str,
     sink_key: str,
 ) -> list[str]:
     """List available target tables from service-schemas for sink's target service.
@@ -146,7 +162,7 @@ def list_target_tables_for_sink(
     from service-schemas/{target_service}/.
 
     Args:
-        service_name: Source service name (unused, kept for API consistency).
+        _service_name: Source service name (unused, kept for API consistency).
         sink_key: Sink key in format 'sink_group.target_service'.
 
     Returns:
@@ -307,19 +323,19 @@ def _load_sink_tables_for_autocomplete(
     except Exception:
         return None
 
+    data_dict = cast(dict[str, Any], data)
     config = (
-        data[service_name]
-        if service_name in data and isinstance(data[service_name], dict)
-        else data
+        data_dict[service_name]
+        if service_name in data_dict and isinstance(data_dict[service_name], dict)
+        else data_dict
     )
-    config_dict = cast(dict[str, Any], config)
+    config_dict = cast(dict[str, object], config)
 
     sinks = config_dict.get('sinks', {})
-    sinks_dict = cast(dict[str, Any], sinks) if isinstance(sinks, dict) else {}
-    sink_cfg = cast(dict[str, Any], sinks_dict.get(sink_key, {}))
-    tables = cast(dict[str, Any], sink_cfg.get('tables', {}))
+    sinks_dict = cast(dict[str, object], sinks) if isinstance(sinks, dict) else {}
+    sink_cfg = cast(dict[str, object], sinks_dict.get(sink_key, {}))
 
-    return cast(dict[str, object], tables)
+    return cast(dict[str, object], sink_cfg.get('tables', {}))
 
 
 def list_custom_tables_for_service_sink(

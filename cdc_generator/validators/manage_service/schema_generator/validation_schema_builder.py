@@ -23,14 +23,14 @@ def build_json_schema_structure(
     schemas_data: dict[str, Any]
 ) -> dict[str, Any]:
     """Build the comprehensive JSON Schema structure for service validation.
-    
+
     Args:
         service: Service name
         database: Database name for validation
         server_group: Server group name
         schema_ref: Reference to schema_name mini schema
         schemas_data: Dict[schema_name, Dict[table_name, table_metadata]]
-    
+
     Returns:
         Complete JSON Schema dict
     """
@@ -113,12 +113,12 @@ def build_json_schema_structure(
 
 def update_service_yaml_header(service: str, database: str, schemas_data: dict[str, Any]) -> bool:
     """Update service YAML file with schema validation comment and informational header.
-    
+
     Args:
         service: Service name
         database: Database name
         schemas_data: Dict[schema_name, Dict[table_name, table_metadata]]
-    
+
     Returns:
         True if update succeeded
     """

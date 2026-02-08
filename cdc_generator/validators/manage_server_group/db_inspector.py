@@ -69,17 +69,17 @@ def extract_identifiers(
 ) -> ExtractedIdentifiers:
     """
     Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
-    
+
     Priority order for db-shared pattern:
     1. extraction_patterns (per-server, ordered list) - NEW
     2. extraction_pattern (per-server, single pattern) - backward compat
     3. Fallback logic (parse db_name heuristically)
-    
+
     Args:
         db_name: Database name to parse
         server_group_config: Server group configuration with extraction patterns
         server_name: Name of the server being scanned (default: "default")
-        
+
     Returns:
         ExtractedIdentifiers with customer, service, env, suffix
     """
@@ -231,7 +231,7 @@ def _build_empty_value_message(field_name: str) -> str:
 
 def _resolve_env_value(value: str | int | None, field_name: str) -> str:
     """Resolve environment variables and ensure the result is usable.
-    
+
     Args:
         value: YAML config value - can be str, int, or None
         field_name: Name of the field for error messages
@@ -254,7 +254,7 @@ def _resolve_env_value(value: str | int | None, field_name: str) -> str:
 
 def get_mssql_connection(server_config: ServerConfig) -> Any:  # noqa: ANN401 - pymssql has no stubs
     """Get MSSQL connection from server config.
-    
+
     Returns:
         pymssql connection object (typed as Any due to missing type stubs)
     """
@@ -280,7 +280,7 @@ def get_mssql_connection(server_config: ServerConfig) -> Any:  # noqa: ANN401 - 
 
 def get_postgres_connection(server_config: ServerConfig, database: str = 'postgres') -> Any:  # noqa: ANN401 - psycopg2 has no stubs
     """Get PostgreSQL connection from server config.
-    
+
     Returns:
         psycopg2 connection object (typed as Any due to missing type stubs)
     """
@@ -406,7 +406,7 @@ def list_mssql_databases(
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
     """List all databases on MSSQL server.
-    
+
     Args:
         server_config: Server connection configuration
         server_group_config: Full server group configuration for extraction patterns
@@ -453,8 +453,8 @@ def list_mssql_databases(
             # Get schemas for this database
             cursor.execute(f"""
                 USE [{db_name}];
-                SELECT DISTINCT TABLE_SCHEMA 
-                FROM INFORMATION_SCHEMA.TABLES 
+                SELECT DISTINCT TABLE_SCHEMA
+                FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_TYPE = 'BASE TABLE'
                 ORDER BY TABLE_SCHEMA
             """)
@@ -516,7 +516,7 @@ def list_postgres_databases(
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
     """List all databases on PostgreSQL server.
-    
+
     Args:
         server_config: Server connection configuration
         server_group_config: Full server group configuration for extraction patterns
@@ -534,9 +534,9 @@ def list_postgres_databases(
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT datname 
-        FROM pg_database 
-        WHERE datistemplate = false 
+        SELECT datname
+        FROM pg_database
+        WHERE datistemplate = false
         AND datname NOT IN ('postgres', 'template0', 'template1')
         ORDER BY datname
     """)
@@ -576,8 +576,8 @@ def list_postgres_databases(
 
             # Get schemas (exclude temp schemas)
             db_cursor.execute("""
-                SELECT schema_name 
-                FROM information_schema.schemata 
+                SELECT schema_name
+                FROM information_schema.schemata
                 WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
                 AND schema_name NOT LIKE 'pg_temp_%'
                 AND schema_name NOT LIKE 'pg_toast_temp_%'
@@ -593,8 +593,8 @@ def list_postgres_databases(
                 ignored_schema_count += ignored_schemas
                 databases_with_ignored_schemas += 1
             db_cursor.execute("""
-                SELECT COUNT(*) 
-                FROM information_schema.tables 
+                SELECT COUNT(*)
+                FROM information_schema.tables
                 WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
                 AND table_schema NOT LIKE 'pg_temp_%'
                 AND table_schema NOT LIKE 'pg_toast_temp_%'

@@ -9,10 +9,10 @@ from typing import TextIO
 
 class YAMLInterface:
     """Type stub for ruamel.yaml.YAML class interface.
-    
+
     This defines only the attributes and methods we actually use.
     Not meant to be instantiated - only for type checking.
-    
+
     Note: ruamel.yaml's load() is safe by default (unlike PyYAML).
     It does not execute arbitrary Python code from YAML content.
     """
@@ -25,7 +25,7 @@ class YAMLInterface:
 
     def load(self, stream: TextIO) -> object:
         """Load YAML from stream with comment preservation.
-        
+
         Safe by default - does not execute arbitrary Python code.
         """
         ...

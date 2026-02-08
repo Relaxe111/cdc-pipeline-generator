@@ -38,13 +38,13 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
     """Save service configuration to file, using new format (service name as root key)."""
     try:
         service_file = SERVICES_DIR / f"{service}.yaml"
-        
+
         # Remove 'service' field if present (it's redundant in new format)
         config_to_save = {k: v for k, v in config.items() if k != 'service'}
-        
+
         # Wrap in service name key
         wrapped_config = {service: config_to_save}
-        
+
         with open(service_file, 'w') as f:
             yaml.dump(wrapped_config, f)
         return True
@@ -55,7 +55,7 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
 
 def detect_service_mode(service: str) -> str:
     """Detect service mode (db-per-tenant or shared-db).
-    
+
     Supports both:
     - New: server_group field (adopus=db-per-tenant, asma=db-shared)
     - Legacy: mode field (direct value)

@@ -26,14 +26,14 @@ except ImportError:
 
 def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list[dict[str, Any]], conn_params: dict[str, Any]) -> dict[str, Any]:
     """Save detailed MSSQL table schema to YAML.
-    
+
     Args:
         service: Service name
         env: Environment name
         schema: Database schema name
         tables: List of table dictionaries
         conn_params: Connection parameters
-        
+
     Returns:
         Dictionary mapping table names to their schema data
     """
@@ -59,7 +59,7 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
 
         # Get detailed column info
         cursor.execute(f"""
-            SELECT 
+            SELECT
                 c.COLUMN_NAME,
                 c.DATA_TYPE,
                 c.CHARACTER_MAXIMUM_LENGTH,
@@ -75,7 +75,7 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
                     AND tc.TABLE_SCHEMA = '{table_schema}'
                     AND tc.TABLE_NAME = '{table_name}'
             ) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
-            WHERE c.TABLE_SCHEMA = '{table_schema}' 
+            WHERE c.TABLE_SCHEMA = '{table_schema}'
                 AND c.TABLE_NAME = '{table_name}'
             ORDER BY c.ORDINAL_POSITION
         """)
@@ -108,14 +108,14 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
 
 def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: list[dict[str, Any]], conn_params: dict[str, Any]) -> dict[str, Any]:
     """Save detailed PostgreSQL table schema to YAML.
-    
+
     Args:
         service: Service name
         env: Environment name
         schema: Database schema name
         tables: List of table dictionaries
         conn_params: Connection parameters
-        
+
     Returns:
         Dictionary mapping table names to their schema data
     """
@@ -141,7 +141,7 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: l
 
         # Get detailed column info with primary key detection
         cursor.execute("""
-            SELECT 
+            SELECT
                 c.column_name,
                 c.data_type,
                 c.character_maximum_length,
@@ -190,14 +190,14 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: l
 
 def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[str, Any]], db_type: str) -> bool:
     """Save detailed table schema information to YAML file.
-    
+
     Args:
         service: Service name
         env: Environment name
         schema: Database schema name (None for all schemas)
         tables: List of table dictionaries from inspection
         db_type: Database type ('mssql' or 'postgres')
-    
+
     Returns:
         True if schema saved successfully, False otherwise
     """

@@ -27,24 +27,24 @@ def save_server_group_preserving_comments(
     error_context: str = "update server group"
 ) -> None:
     """Save source-groups.yaml while preserving all header comments.
-    
+
     This is the ONLY function that should write to source-groups.yaml.
     All other save functions must use this to preserve metadata comments.
-    
+
     Args:
         updater: Function that receives the parsed config dict and modifies it in-place.
                  The updater should find the server group and update the desired field.
         error_context: Description of operation for error messages.
-    
+
     Raises:
         RuntimeError: If save fails or no server group found.
-    
+
     Example:
         def update_env_mappings(config: Dict[str, Any]) -> None:
             for group_data in config.values():
                 if isinstance(group_data, dict) and 'pattern' in group_data:
                     group_data['env_mappings'] = {'staging': 'stage'}
-        
+
         save_server_group_preserving_comments(update_env_mappings, "save env mappings")
     """
     try:
@@ -90,10 +90,10 @@ def save_server_group_preserving_comments(
 
 def load_server_groups() -> ServerGroupFile:
     """Load server groups configuration from YAML file.
-    
+
     Returns:
         ServerGroupFile: Dict mapping server group names to their configs
-        
+
     Raises:
         FileNotFoundError: If source-groups.yaml not found in current directory or parents
     """
@@ -115,14 +115,14 @@ def load_server_groups() -> ServerGroupFile:
 
 def validate_server_group_structure(group_data: Any, name: str) -> None:
     """Validate server group has expected structure.
-    
+
     Raises ValueError with helpful message if structure is invalid.
     This provides runtime validation beyond TypedDict static checking.
-    
+
     Args:
         group_data: Server group configuration dict
         name: Server group name (for error messages)
-    
+
     Raises:
         ValueError: If structure is invalid
     """
@@ -149,19 +149,19 @@ def validate_server_group_structure(group_data: Any, name: str) -> None:
 
 def get_single_server_group(config: ServerGroupFile) -> ServerGroupConfig | None:
     """Get the single server group from configuration.
-    
+
     Format: server_group_name as root key (e.g., asma1: {...})
-    
+
     Since each implementation has only one server group, this returns the first one found.
     Adds 'name' field to the returned dict for compatibility.
     Validates structure at runtime.
-    
+
     Args:
         config: Loaded server groups configuration (ServerGroupFile)
-        
+
     Returns:
         ServerGroupConfig with 'name' field injected, or None if no server group exists
-        
+
     Raises:
         ValueError: If server group structure is invalid
     """
@@ -182,11 +182,11 @@ def get_single_server_group(config: ServerGroupFile) -> ServerGroupConfig | None
 
 def get_server_group_for_service(service_name: str, config: ServerGroupFile | None = None) -> str | None:
     """Find which server group a service belongs to.
-    
+
     Args:
         service_name: Service/source name to look up
         config: Optional pre-loaded config (will load if not provided)
-        
+
     Returns:
         Server group name if found, None otherwise
     """
@@ -206,10 +206,10 @@ def get_server_group_for_service(service_name: str, config: ServerGroupFile | No
 
 def get_all_defined_services(config: ServerGroupFile | None = None) -> set[str]:
     """Get set of all services defined in source-groups.yaml.
-    
+
     Args:
         config: Optional pre-loaded config (will load if not provided)
-        
+
     Returns:
         Set of service names from all server groups
     """
@@ -229,7 +229,7 @@ def get_all_defined_services(config: ServerGroupFile | None = None) -> set[str]:
 
 def load_database_exclude_patterns() -> list[str]:
     """Load database exclude patterns from source-groups.yaml.
-    
+
     Format: server_group_name as root key with database_exclude_patterns field.
     """
     try:
@@ -250,7 +250,7 @@ def load_database_exclude_patterns() -> list[str]:
 
 def load_schema_exclude_patterns() -> list[str]:
     """Load schema exclude patterns from source-groups.yaml.
-    
+
     Format: server_group_name as root key with schema_exclude_patterns field.
     """
     try:
@@ -271,7 +271,7 @@ def load_schema_exclude_patterns() -> list[str]:
 
 def save_database_exclude_patterns(patterns: list[str]) -> None:
     """Save database exclude patterns to source-groups.yaml.
-    
+
     Uses centralized save function to preserve header comments.
     """
     def updater(config: dict[str, Any]) -> None:
@@ -286,7 +286,7 @@ def save_database_exclude_patterns(patterns: list[str]) -> None:
 
 def save_schema_exclude_patterns(patterns: list[str]) -> None:
     """Save schema exclude patterns to source-groups.yaml.
-    
+
     Uses centralized save function to preserve header comments.
     """
     def updater(config: dict[str, Any]) -> None:
@@ -301,7 +301,7 @@ def save_schema_exclude_patterns(patterns: list[str]) -> None:
 
 def load_env_mappings() -> dict[str, str]:
     """Load environment mappings from source-groups.yaml.
-    
+
     Format: server_group_name as root key with env_mappings field.
     env_mappings is a dict mapping source env suffix to target env name.
     Example: {"staging": "stage", "production": "prod"}
@@ -324,7 +324,7 @@ def load_env_mappings() -> dict[str, str]:
 
 def save_env_mappings(mappings: dict[str, str]) -> None:
     """Save environment mappings to source-groups.yaml.
-    
+
     Uses centralized save function to preserve header comments.
     """
     def updater(config: dict[str, Any]) -> None:

@@ -23,7 +23,7 @@ COMPLETIONS_SCRIPT = PROJECT_ROOT / "scripts" / "generate-completions.sh"
 
 def regenerate_all_validation_schemas(server_group_names: list[str] | None = None) -> None:
     """Regenerate validation schemas for services using the specified server groups.
-    
+
     Args:
         server_group_names: List of server group names to filter by. If None, regenerates all.
     """

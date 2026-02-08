@@ -50,18 +50,18 @@ def generate_service_validation_schema(
     schema_filter: str | None = None
 ) -> bool:
     """Generate JSON Schema for service YAML validation based on database schema.
-    
+
     This is the main entry point for schema generation. It:
     1. Loads schemas from service-schemas/{service}/ YAML files
     2. Generates mini schemas for keys (service, server_group, database_name, etc.)
     3. Builds comprehensive JSON Schema with table definitions
     4. Updates service YAML file with schema validation comment
-    
+
     Args:
         service: Service name (e.g., 'adopus', 'directory')
         env: Environment name (default: nonprod) - currently unused but kept for API compatibility
         schema_filter: Optional schema name to filter (None = all schemas)
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """

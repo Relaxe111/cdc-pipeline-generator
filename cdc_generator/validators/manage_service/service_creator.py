@@ -11,7 +11,7 @@ from cdc_generator.validators.manage_server_group.config import load_server_grou
 
 def create_service(service_name: str, server_group: str, server: str = "default") -> None:
     """Create a new service configuration file.
-    
+
     Args:
         service_name: Name of the service to create
         server_group: Server group name (e.g., 'adopus', 'asma')

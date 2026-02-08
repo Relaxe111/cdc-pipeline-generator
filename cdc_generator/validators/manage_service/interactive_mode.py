@@ -31,13 +31,13 @@ SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
 
 def run_interactive_mode(args: argparse.Namespace) -> int:
     """Run interactive table mapping workflow.
-    
+
     This is legacy functionality for creating table mappings between source and sink.
     Most users should use the command-line flags instead.
-    
+
     Args:
         args: Parsed command-line arguments
-        
+
     Returns:
         Exit code (0 for success, 1 for error)
     """

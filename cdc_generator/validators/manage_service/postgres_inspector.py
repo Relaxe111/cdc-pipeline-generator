@@ -16,11 +16,11 @@ except ImportError:
 
 def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
     """Inspect PostgreSQL schema to get list of available tables.
-    
+
     Args:
         service: Service name
         env: Environment name (default: nonprod)
-        
+
     Returns:
         List of table dictionaries with TABLE_SCHEMA, TABLE_NAME, COLUMN_COUNT
     """
@@ -54,13 +54,13 @@ def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str
 
         # Get all tables with their schemas and column counts
         query = """
-        SELECT 
+        SELECT
             t.table_schema AS "TABLE_SCHEMA",
             t.table_name AS "TABLE_NAME",
             COUNT(c.column_name)::INTEGER AS "COLUMN_COUNT"
         FROM information_schema.tables t
-        LEFT JOIN information_schema.columns c 
-            ON t.table_schema = c.table_schema 
+        LEFT JOIN information_schema.columns c
+            ON t.table_schema = c.table_schema
             AND t.table_name = c.table_name
         WHERE t.table_type = 'BASE TABLE'
             AND t.table_schema NOT IN ('pg_catalog', 'information_schema')

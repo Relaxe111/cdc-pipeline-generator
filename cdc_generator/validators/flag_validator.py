@@ -20,7 +20,7 @@ from dataclasses import dataclass
 @dataclass
 class ValidationResult:
     """Result of flag validation.
-    
+
     Attributes:
         valid: Whether the flag combination is valid
         level: Severity level ('error', 'warning', 'ok')
@@ -54,13 +54,13 @@ class ManageServerGroupFlagValidator:
 
     def validate(self, args: argparse.Namespace) -> ValidationResult:
         """Validate flag combinations.
-        
+
         Args:
             args: Parsed command line arguments
-            
+
         Returns:
             ValidationResult with validation status and messages
-            
+
         Example:
             >>> args = Namespace(update='default', all=True)
             >>> validator = ManageServerGroupFlagValidator()
@@ -97,10 +97,10 @@ class ManageServerGroupFlagValidator:
 
     def _get_active_actions(self, args: argparse.Namespace) -> list[str]:
         """Get list of active action flags.
-        
+
         Args:
             args: Parsed arguments
-            
+
         Returns:
             List of active action flag names
         """
@@ -114,10 +114,10 @@ class ManageServerGroupFlagValidator:
 
     def _validate_update(self, args: argparse.Namespace) -> ValidationResult:
         """Validate --update flag combination.
-        
+
         Args:
             args: Parsed arguments
-            
+
         Returns:
             ValidationResult for update action
         """
@@ -146,10 +146,10 @@ class ManageServerGroupFlagValidator:
 
     def _validate_add_server(self, args: argparse.Namespace) -> ValidationResult:
         """Validate --add-server flag combination.
-        
+
         Args:
             args: Parsed arguments
-            
+
         Returns:
             ValidationResult for add-server action
         """
@@ -180,10 +180,10 @@ class ManageServerGroupFlagValidator:
 
     def _validate_remove_server(self, args: argparse.Namespace) -> ValidationResult:
         """Validate --remove-server.
-        
+
         Args:
             args: Parsed arguments
-            
+
         Returns:
             ValidationResult for remove-server action
         """
@@ -199,10 +199,10 @@ class ManageServerGroupFlagValidator:
 
     def _validate_set_kafka_topology(self, args: argparse.Namespace) -> ValidationResult:
         """Validate --set-kafka-topology.
-        
+
         Args:
             args: Parsed arguments
-            
+
         Returns:
             ValidationResult for set-kafka-topology action
         """
@@ -232,11 +232,11 @@ class ManageServerGroupFlagValidator:
 
     def _validate_config_action(self, args: argparse.Namespace, action: str) -> ValidationResult:
         """Validate configuration actions (add-to-ignore-list, etc.).
-        
+
         Args:
             args: Parsed arguments
             action: Action name
-            
+
         Returns:
             ValidationResult for config actions
         """
@@ -253,10 +253,10 @@ class ManageServerGroupFlagValidator:
 
     def _error_multiple_actions(self, actions: list[str]) -> ValidationResult:
         """Return error for multiple actions.
-        
+
         Args:
             actions: List of active actions
-            
+
         Returns:
             ValidationResult with error for multiple actions
         """
@@ -271,13 +271,13 @@ class ManageServerGroupFlagValidator:
 
 def validate_manage_server_group_flags(args: argparse.Namespace) -> ValidationResult:
     """Convenience function to validate manage-source-groups flags.
-    
+
     Args:
         args: Parsed command line arguments
-        
+
     Returns:
         ValidationResult with validation status
-        
+
     Example:
         >>> from argparse import Namespace
         >>> args = Namespace(update='default', all=False)

@@ -57,13 +57,13 @@ def update_docker_compose(
 ) -> bool:
     """
     Update docker-compose.yml with database services.
-    
+
     Args:
         source_type: Database type ('mssql' or 'postgresql')
         project_root: Path to project root
         source_service_name: Optional custom name for source database service
         target_service_name: Optional custom name for target database service
-    
+
     Returns:
         bool: True if successful, False otherwise
     """

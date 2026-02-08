@@ -24,7 +24,7 @@ def scaffold_project_structure(
     servers: "dict[str, dict[str, str]] | None" = None,
 ) -> None:
     """Create complete directory structure and template files for new implementation.
-    
+
     Creates:
     - Directory structure (services, generated, pipeline-templates, etc.)
     - docker-compose.yml with full CDC infrastructure
@@ -33,7 +33,7 @@ def scaffold_project_structure(
     - .gitignore with appropriate patterns
     - .vscode/settings.json with editor configuration
     - Pipeline templates for source and sink
-    
+
     Args:
         server_group_name: Name of the server group (e.g., 'adopus', 'asma')
         pattern: 'db-per-tenant' or 'db-shared'
@@ -102,7 +102,7 @@ def scaffold_project_structure(
 
 def _create_docker_compose(project_root: Path, content: str) -> None:
     """Create docker-compose.yml, backing up existing if present.
-    
+
     Args:
         project_root: Root directory of the implementation
         content: Docker compose file content
@@ -121,7 +121,7 @@ def _create_docker_compose(project_root: Path, content: str) -> None:
 
 def _create_vscode_settings_file(project_root: Path) -> None:
     """Create .vscode/settings.json if not exists.
-    
+
     Args:
         project_root: Root directory of the implementation
     """
@@ -134,7 +134,7 @@ def _create_vscode_settings_file(project_root: Path) -> None:
 
 def _create_pipeline_templates(project_root: Path) -> None:
     """Create pipeline template files.
-    
+
     Args:
         project_root: Root directory of the implementation
     """
@@ -151,7 +151,7 @@ def _create_pipeline_templates(project_root: Path) -> None:
 
 def _print_next_steps(server_group_name: str) -> None:
     """Print next steps after scaffolding.
-    
+
     Args:
         server_group_name: Name of the server group
     """

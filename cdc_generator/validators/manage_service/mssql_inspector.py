@@ -16,11 +16,11 @@ except ImportError:
 
 def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
     """Inspect MSSQL schema to get list of available tables.
-    
+
     Args:
         service: Service name
         env: Environment name (default: nonprod)
-        
+
     Returns:
         List of table dictionaries with TABLE_SCHEMA, TABLE_NAME, COLUMN_COUNT
     """
@@ -54,12 +54,12 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, A
 
         # Get all tables with their schemas
         query = """
-        SELECT 
+        SELECT
             TABLE_SCHEMA,
             TABLE_NAME,
-            (SELECT COUNT(*) 
-             FROM INFORMATION_SCHEMA.COLUMNS c 
-             WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA 
+            (SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS c
+             WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
                AND c.TABLE_NAME = t.TABLE_NAME) as COLUMN_COUNT
         FROM INFORMATION_SCHEMA.TABLES t
         WHERE TABLE_TYPE = 'BASE TABLE'

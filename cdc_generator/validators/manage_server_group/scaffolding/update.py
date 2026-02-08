@@ -16,21 +16,21 @@ from .vscode_settings import (
 
 def update_scaffold(project_root: Path) -> bool:
     """Update existing project scaffold with latest structure and configurations.
-    
+
     This function updates:
     - Directory structure (adds new directories, never removes)
     - .vscode/settings.json (merges new settings, preserves existing)
     - .gitignore (appends new patterns, preserves existing)
     - docker-compose.yml (only if user confirms, creates backup)
-    
+
     It does NOT modify:
     - source-groups.yaml content (only ensures header exists)
     - services/*.yaml files
     - Any user data
-    
+
     Args:
         project_root: Root directory of the implementation
-        
+
     Returns:
         True if successful, False otherwise
     """
@@ -72,7 +72,7 @@ def update_scaffold(project_root: Path) -> bool:
 
 def _update_vscode_settings(project_root: Path) -> None:
     """Update .vscode/settings.json by merging new settings with existing.
-    
+
     Args:
         project_root: Root directory of the implementation
     """
@@ -114,7 +114,7 @@ def _update_vscode_settings(project_root: Path) -> None:
 
 def _update_gitignore(project_root: Path) -> None:
     """Update .gitignore by appending new patterns.
-    
+
     Args:
         project_root: Root directory of the implementation
     """

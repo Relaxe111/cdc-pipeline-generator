@@ -25,10 +25,10 @@ class ServerStats(TypedDict):
 
 def get_file_header_comments() -> list[str]:
     """Get the standard file header comments that MUST appear at the top of source-groups.yaml.
-    
+
     Returns:
         List of comment lines (including '#' prefix) that form the file header.
-    
+
     Usage:
         Always call this when creating a new source-groups.yaml or when no preserved
         comments exist. These comments provide context and guidance to users.
@@ -76,13 +76,13 @@ _HEADER_MARKERS = [
 
 def is_header_line(line: str) -> bool:
     """Check if a line is part of the file header (should not be preserved as metadata).
-    
+
     Args:
         line: A single line from the YAML file
-        
+
     Returns:
         True if this line is part of the file header and should be skipped
-        
+
     Example:
         >>> is_header_line("# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY")
         True
@@ -94,10 +94,10 @@ def is_header_line(line: str) -> bool:
 
 def get_update_timestamp_comment() -> str:
     """Get a formatted timestamp comment for when the file was last updated.
-    
+
     Returns:
         Comment line with current UTC timestamp.
-    
+
     Usage:
         Call this when updating database/schema information to track when the
         configuration was last synchronized with the source database.
@@ -107,20 +107,20 @@ def get_update_timestamp_comment() -> str:
 
 def ensure_file_header_exists(preserved_comments: list[str]) -> list[str]:
     """Ensure file header comments exist in the preserved comments list.
-    
+
     This is the CRITICAL function that prevents metadata comments from disappearing.
-    
+
     Args:
         preserved_comments: List of comments that were preserved from the file
-        
+
     Returns:
         List of comments with file header guaranteed to be present
-    
+
     Logic:
         1. If preserved_comments is empty → add full file header
         2. If preserved_comments exists but missing key markers → prepend file header
         3. If preserved_comments has header → return as-is
-    
+
     Key markers to check:
         - "AUTO-GENERATED FILE"
         - "Use 'cdc manage-source-groups' commands"
@@ -149,20 +149,20 @@ def ensure_file_header_exists(preserved_comments: list[str]) -> list[str]:
 
 def validate_output_has_metadata(output_lines: list[str]) -> None:
     """Validate that output has required metadata comments before writing to file.
-    
+
     This is a SAFETY CHECK to prevent accidentally writing files without metadata.
-    
+
     Args:
         output_lines: Lines that will be written to source-groups.yaml
-        
+
     Raises:
         ValueError: If required metadata comments are missing
-    
+
     Required elements:
         - File header with "AUTO-GENERATED FILE"
         - At least one separator line
         - A top-level server group key (e.g., "adopus:", "asma:")
-    
+
     Usage:
         Call this immediately before writing output_lines to source-groups.yaml
         in ANY function that modifies the file.
@@ -211,7 +211,7 @@ def add_metadata_stats_comments(
     service_names: list[str] | None = None
 ) -> list[str]:
     """Generate metadata statistics comments for server group.
-    
+
     Args:
         total_dbs: Total number of databases
         total_tables: Total number of tables across all databases
@@ -219,10 +219,10 @@ def add_metadata_stats_comments(
         env_stats_line: Optional per-environment statistics
         db_list_lines: Optional database list for display
         service_names: Optional list of service names
-        
+
     Returns:
         List of formatted comment lines with statistics
-    
+
     Usage:
         Call this when running --update to add current statistics to the file.
     """
@@ -257,7 +257,7 @@ def generate_per_server_stats(
     env_stats_line: str
 ) -> list[str]:
     """Generate unified statistics for all servers.
-    
+
     Args:
         databases: List of database info dicts with 'server', 'environment', 'table_count' fields
         total_dbs: Total databases across all servers
@@ -266,10 +266,10 @@ def generate_per_server_stats(
         service_list: Comma-separated list of service names
         num_services: Number of services
         env_stats_line: Per-environment statistics line
-        
+
     Returns:
         List of formatted comment lines showing unified stats across all servers
-        
+
     Example:
         >>> dbs = [
         ...     {'server': 'default', 'environment': 'auth', 'table_count': 10},

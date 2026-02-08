@@ -28,9 +28,9 @@ from .types import ServerGroupConfig
 
 def ensure_project_structure(server_group_name: str, server_group_config: ServerGroupConfig) -> None:
     """Ensure basic directory structure exists, creating missing directories quietly.
-    
+
     This runs on --update to make sure critical directories exist.
-    
+
     Example:
         >>> ensure_project_structure('mygroup', {'pattern': 'db-shared', 'type': 'postgres'})
         # Creates: services/, pipeline-templates/, generated/pipelines/, etc.
@@ -66,19 +66,19 @@ def ensure_project_structure(server_group_name: str, server_group_config: Server
 
 def validate_multi_server_config(server_group: dict[str, Any]) -> list[str]:
     """Validate multi-server configuration.
-    
+
     Checks:
     1. 'type' is at group level (not per-server)
     2. All sources reference valid server names in their environment entries
     3. kafka_bootstrap_servers is present on each server
     4. Each source.{env}.server references a valid server
-    
+
     Args:
         server_group: The server group configuration dict
-        
+
     Returns:
         List of validation error messages (empty if valid)
-        
+
     Example:
         >>> errors = validate_multi_server_config({'type': 'postgres', 'servers': {'default': {}}})
         >>> print(errors)  # List of any validation issues
@@ -139,7 +139,7 @@ def validate_multi_server_config(server_group: dict[str, Any]) -> list[str]:
 
 def list_server_groups() -> None:
     """List all server groups with their details.
-    
+
     Example:
         >>> list_server_groups()
         # Prints formatted list of all server groups
@@ -187,19 +187,19 @@ def list_server_groups() -> None:
 
 def handle_add_group(args: Namespace) -> int:
     """Handle adding a new server group with multi-server support.
-    
+
     Structure created:
     - type: At group level (enforced for all servers)
     - servers: Dict of server configs (without type)
     - sources: Dict of source configs (instead of services)
-    
+
     Args:
         args: Parsed command-line arguments with:
             - add_group: Server group name
             - source_type: 'postgres' or 'mssql'
             - mode: 'db-shared' or 'db-per-tenant'
             - host, port, user, password: Connection details
-    
+
     Returns:
         Exit code (0 for success, 1 for error)
     """

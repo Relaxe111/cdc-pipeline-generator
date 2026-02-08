@@ -46,17 +46,17 @@ def create_mssql_connection(
 ) -> Any:  # noqa: ANN401 - pymssql.Connection is untyped
     """
     Create a pymssql connection with proper typing.
-    
+
     Args:
         host: Server hostname
         port: Server port
         database: Database name
         user: Username
         password: Password
-        
+
     Returns:
         pymssql connection object
-        
+
     Raises:
         MSSQLNotAvailableError: If pymssql is not installed
     """
@@ -73,11 +73,11 @@ def create_mssql_connection(
 def get_mssql_connection(env: str = 'nonprod', database: str | None = None) -> tuple[Any, str]:
     """
     Create connection to MSSQL database.
-    
+
     Args:
         env: Environment name (local, nonprod, prod)
         database: Optional database name override
-        
+
     Returns:
         Tuple of (connection, database_name)
     """
@@ -224,7 +224,7 @@ def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert
     """
     Generate value sets for INSERT statements.
     Handles both adopus-db-schema format (columns) and generated format (fields).
-    
+
     Returns:
         all_value_sets: List of value tuples as strings
         first_pk_val: First PK value (for non-IDENTITY PKs)
@@ -291,11 +291,11 @@ def build_batch_insert_sql(table_name: str, insert_cols: list[str], value_sets: 
                           is_last_batch: bool = False, is_first_batch: bool = False) -> str:
     """
     Build INSERT SQL statement with optional PK return.
-    
+
     For IDENTITY PKs:
         - Last batch: Returns SCOPE_IDENTITY() as pk_val
         - Other batches: No return value
-    
+
     For non-IDENTITY PKs:
         - Last batch: Returns provided pk_value as pk_val
         - Other batches: No return value

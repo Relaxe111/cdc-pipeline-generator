@@ -12,10 +12,10 @@ Example:
         scaffold_project_structure,
         update_scaffold,
     )
-    
+
     # Create new project
     scaffold_project_structure("my_project", "db-per-tenant", "mssql", Path("."))
-    
+
     # Update existing project
     update_scaffold(Path("."))
 """

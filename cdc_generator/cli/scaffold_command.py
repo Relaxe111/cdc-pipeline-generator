@@ -47,7 +47,7 @@ from cdc_generator.helpers.helpers_logging import (
 
 def _default_connection_placeholders(source_type: str, server_name: str = "default") -> dict[str, str]:
     """Return default environment variable placeholders for the source database.
-    
+
     Args:
         source_type: 'postgres' or 'mssql'
         server_name: Server name for postfix (default has no postfix)
@@ -64,7 +64,7 @@ def _default_connection_placeholders(source_type: str, server_name: str = "defau
 
 def _kafka_bootstrap_placeholder(kafka_topology: str, server_name: str = "default") -> str:
     """Return Kafka bootstrap servers placeholder.
-    
+
     Args:
         kafka_topology: 'shared' or 'per-server'
         server_name: Server name for postfix (only used if per-server)
@@ -184,7 +184,7 @@ Examples:
 Pattern Groups:
   db-per-tenant:
     - customer: Customer identifier (required if using regex)
-  
+
   db-shared:
     - service: Service name (required if using regex)
     - env: Environment (test/stage/prod) (required if using regex)

@@ -12,13 +12,13 @@ from cdc_generator.helpers.service_config import get_project_root
 
 def generate_service_enum_schema() -> bool:
     """Generate mini schema for 'service' key from source-groups.yaml.
-    
+
     Extracts service names based on pattern:
     - db-per-tenant: uses group name as service name
     - db-shared: uses 'databases[].service' values
-    
+
     Saves to .vscode/schemas/keys/service.schema.json
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """
@@ -79,11 +79,11 @@ def generate_service_enum_schema() -> bool:
 
 def generate_server_group_enum_schema() -> bool:
     """Generate mini schema for 'server_group' key from source-groups.yaml.
-    
+
     Extracts all server group names.
-    
+
     Saves to .vscode/schemas/keys/server_group.schema.json
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """
@@ -131,11 +131,11 @@ def generate_server_group_enum_schema() -> bool:
 
 def generate_database_name_schemas() -> bool:
     """Generate mini schemas for 'validation_database' per server group.
-    
+
     Creates one mini schema per server group with database names from that group.
-    
+
     Saves to .vscode/schemas/keys/database_name/{server_group}.schema.json
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """
@@ -202,13 +202,13 @@ def generate_database_name_schemas() -> bool:
 
 def generate_schema_name_schemas() -> bool:
     """Generate mini schemas for 'schema' field per database.
-    
+
     For db-per-tenant: Only generates from database_ref (all customer DBs have same schema)
     For db-shared: Generates for all databases
     Optimization: Databases with identical schema lists share a schema file
-    
+
     Saves to .vscode/schemas/keys/schema_name/{database}.schema.json or shared variants
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """
@@ -335,13 +335,13 @@ def generate_schema_name_schemas() -> bool:
 
 def generate_table_names_enum_schema(service: str, schemas_data: dict[str, Any]) -> bool:
     """Generate mini schema for table names (schema.table format) for a service.
-    
+
     Args:
         service: Service name (e.g., 'adopus', 'proxy')
         schemas_data: Dict[schema_name, Dict[table_name, table_metadata]]
-    
+
     Saves to .vscode/schemas/keys/table_name/{service}.schema.json
-    
+
     Returns:
         True if schema generation succeeded, False otherwise
     """
