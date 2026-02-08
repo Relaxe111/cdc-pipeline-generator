@@ -18,7 +18,7 @@ from typing import Any, cast
 
 from cdc_generator.helpers.helpers_batch import build_staging_case
 from cdc_generator.helpers.service_config import get_all_customers, load_customer_config
-from cdc_generator.helpers.yaml_loader import load_yaml_file
+from cdc_generator.helpers.yaml_loader import ConfigValue, load_yaml_file
 
 # Import validation functions
 from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -38,17 +38,19 @@ def get_services_for_customers(customers: list[str]) -> set[str]:
     # Check each service file to see if it contains any of our customers
     for service_file in services_dir.glob("*.yaml"):
         try:
-            service_config = cast(dict[str, object], load_yaml_file(service_file))
+            service_config = load_yaml_file(service_file)
             service_customers = service_config.get('customers', [])
             if not isinstance(service_customers, list):
                 continue
 
             customer_names: set[str] = set()
+            c: ConfigValue
             for c in service_customers:
-                if isinstance(c, dict):
-                    name = cast(dict[str, object], c).get('name')
-                    if isinstance(name, str):
-                        customer_names.add(name)
+                if not isinstance(c, dict):
+                    continue
+                name = c.get('name')
+                if isinstance(name, str):
+                    customer_names.add(name)
 
             # If any of our target customers are in this service, include it
             if any(customer in customer_names for customer in customers):
@@ -117,7 +119,7 @@ def load_generated_table_definitions() -> dict[str, Any]:
     tables_by_name: dict[str, Any] = {}
     for yaml_file in sorted(generated_dir.glob('*.yaml')):
         table_def = load_yaml_file(yaml_file)
-        if table_def and isinstance(table_def, dict):
+        if table_def and table_def:
             table_def_dict = cast(dict[str, object], table_def)
             table_name = table_def_dict.get('name')
             if isinstance(table_name, str):
@@ -355,8 +357,8 @@ def generate_consolidated_sink(
     sink_template = load_template("sink-pipeline.yaml")
 
     # Aggregate all topics and table cases across customers
-    all_topics = []
-    all_table_cases = []
+    all_topics: list[str] = []
+    all_table_cases: list[str] = []
     postgres_url = None  # Will be set from first customer's config
 
     for customer in customers:
@@ -495,7 +497,7 @@ def build_table_include_list(config: dict[str, Any]) -> str:
 
 
 def build_sink_topics(
-    config: dict[str, object],
+    config: dict[str, Any],
     topic_prefix: str,
     generated_tables: dict[str, Any],
 ) -> str:
@@ -503,7 +505,7 @@ def build_sink_topics(
     source_tables = config.get('cdc_tables', [])
 
     # topics list for yaml
-    topics = []
+    topics: list[str] = []
 
     if not source_tables:
         # Default fallback topics
@@ -530,7 +532,7 @@ def build_sink_topics(
 
 
 def build_source_table_inputs(
-    config: dict[str, object],
+    config: dict[str, Any],
     variables: dict[str, Any],
     generated_tables: dict[str, Any],
 ) -> str:
@@ -539,7 +541,7 @@ def build_source_table_inputs(
     if not source_tables:
         return ""
 
-    inputs = []
+    inputs: list[str] = []
     # Build DSN using variables from customer config (preserves env var references)
     mssql_user = variables['MSSQL_USER']
     mssql_password = variables['MSSQL_PASSWORD']
@@ -653,7 +655,7 @@ def build_lsn_init_values(config: dict[str, Any]) -> str:
     if not source_tables:
         return ""
 
-    init_values = []
+    init_values: list[str] = []
     for table_config in source_tables:
         table_name = table_config['table']
         table_label = table_name.lower()
@@ -677,7 +679,7 @@ def build_table_routing_map(
         return ""
 
     topic_prefix = variables['TOPIC_PREFIX']
-    cases = []
+    cases: list[str] = []
 
     for table_config in source_tables:
         table_name = table_config['table']
@@ -701,7 +703,7 @@ def build_table_routing_map(
             # 1. User-specified in YAML
             # 2. Validation schema (auto-detected from database)
             # 3. Fallback to 'id'
-            primary_key = table_def.get('primary_key')
+            primary_key: str | list[str] | None = table_def.get('primary_key')
             pk_source = 'yaml' if primary_key else None
 
             if not primary_key:
@@ -714,7 +716,7 @@ def build_table_routing_map(
                     pk_source = 'schema'
                     print(
                         f"  ℹ️  {schema}.{table_name}: "
-                        f"Using primary_key from schema: {primary_key}"
+                        + f"Using primary_key from schema: {primary_key}"
                     )
 
             if not primary_key:
@@ -729,13 +731,14 @@ def build_table_routing_map(
                 if schema_pk and schema_pk != primary_key:
                     print(
                         f"  ⚠️  {schema}.{table_name}: primary_key mismatch! "
-                        f"YAML={primary_key}, Schema={schema_pk}"
+                        + f"YAML={primary_key}, Schema={schema_pk}"
                     )
 
             # Build kafka key expression (use payload.after or payload.before for the data)
             if isinstance(primary_key, list):
-                # Composite key
-                pk_parts = [f'$data.{pk}.string().or(\"\")' for pk in primary_key]
+                # Composite key - cast items to str for type safety
+                pk_list: list[str] = [str(pk) for pk in primary_key]
+                pk_parts = [f'$data.{pk}.string().or(\"\")' for pk in pk_list]
                 key_expr = ' + \"|\" + '.join(pk_parts)
             else:
                 # Single key
@@ -786,7 +789,7 @@ def build_sink_table_cases(
     if not source_tables:
         return ""
 
-    cases = []
+    cases: list[str] = []
 
     for table_config in source_tables:
         table_name = table_config['table']
@@ -801,8 +804,8 @@ def build_sink_table_cases(
         fields = table_def['fields']
 
         # Build field lists from generated table definition
-        mssql_fields = []
-        postgres_fields = []
+        mssql_fields: list[str] = []
+        postgres_fields: list[str] = []
 
         for field in fields:
             mssql_name = field['mssql']
@@ -906,7 +909,7 @@ Output Structure:
     if services_to_validate:
         print(
             f"\n📋 Validating {len(services_to_validate)} service(s): "
-            f"{', '.join(sorted(services_to_validate))}"
+            + f"{', '.join(sorted(services_to_validate))}"
         )
         validation_failed = False
 
@@ -919,7 +922,7 @@ Output Structure:
         if validation_failed:
             print(
                 "\n❌ Service validation failed. "
-                "Fix errors before generating pipelines."
+                + "Fix errors before generating pipelines."
             )
             print("   Run: cdc manage-service --service <name> --validate-config")
             sys.exit(1)
@@ -937,7 +940,7 @@ Output Structure:
 
     # Generate consolidated sinks per environment
     # Collect all unique environments from the customers being processed
-    env_set = set()
+    env_set: set[str] = set()
     for customer in customers:
         try:
             config = load_customer_config(customer)
