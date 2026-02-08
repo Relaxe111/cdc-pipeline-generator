@@ -53,11 +53,10 @@ def list_schemas_for_service(service_name: str) -> list[str]:
 
             service_dict = cast(dict[str, Any], service_config)
             schemas = service_dict.get('schemas', [])
-            return (
-                sorted(str(s) for s in schemas if isinstance(s, str))
-                if isinstance(schemas, list)
-                else []
-            )
+            if isinstance(schemas, list):
+                schemas_list = cast(list[Any], schemas)
+                return sorted(str(s) for s in schemas_list if isinstance(s, str))
+            return []
 
         return []
     except Exception:

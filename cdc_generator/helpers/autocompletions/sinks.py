@@ -49,7 +49,7 @@ def list_sink_keys_for_service(service_name: str) -> list[str]:
 
     try:
         data = load_yaml_file(service_file)
-        if not data or not isinstance(data, dict):
+        if not data or not data:
             return []
 
         data_dict = cast(dict[str, Any], data)
@@ -103,7 +103,7 @@ def list_available_sink_keys() -> list[str]:
 
     try:
         config = load_yaml_file(sink_file)
-        if not config or not isinstance(config, dict):
+        if not config or not config:
             return []
 
         suggestions: list[str] = []
@@ -118,7 +118,8 @@ def list_available_sink_keys() -> list[str]:
                 # Inherited sink: suggest from inherited_sources
                 sources = group_dict.get("inherited_sources", [])
                 if isinstance(sources, list):
-                    for src in sources:
+                    sources_list = cast(list[Any], sources)
+                    for src in sources_list:
                         if isinstance(src, str):
                             suggestions.append(f"{group_name}.{src}")
             else:
@@ -253,7 +254,7 @@ def list_target_columns_for_sink_table(
 
     try:
         table_schema = load_yaml_file(table_file)
-        if not table_schema or not isinstance(table_schema, dict):
+        if not table_schema or not table_schema:
             return []
 
         columns = table_schema.get('columns', [])
@@ -311,13 +312,12 @@ def _load_sink_tables_for_autocomplete(
         if service_name in data and isinstance(data[service_name], dict)
         else data
     )
+    config_dict = cast(dict[str, Any], config)
 
-    sinks = config.get('sinks', {})
-    sink_cfg = sinks.get(sink_key, {}) if isinstance(sinks, dict) else {}
-    tables = sink_cfg.get('tables', {}) if isinstance(sink_cfg, dict) else {}
-
-    if not isinstance(tables, dict):
-        return None
+    sinks = config_dict.get('sinks', {})
+    sinks_dict = cast(dict[str, Any], sinks) if isinstance(sinks, dict) else {}
+    sink_cfg = cast(dict[str, Any], sinks_dict.get(sink_key, {}))
+    tables = cast(dict[str, Any], sink_cfg.get('tables', {}))
 
     return cast(dict[str, object], tables)
 
@@ -347,7 +347,7 @@ def list_custom_tables_for_service_sink(
 
     return sorted(
         str(k) for k, v in tables.items()
-        if isinstance(v, dict) and v.get('custom')
+        if isinstance(v, dict) and cast(dict[str, Any], v).get('custom')
     )
 
 
@@ -377,11 +377,15 @@ def list_custom_table_columns_for_autocomplete(
         return []
 
     tbl_cfg = tables.get(table_key, {})
-    if not isinstance(tbl_cfg, dict) or not tbl_cfg.get('custom'):
+    if not isinstance(tbl_cfg, dict):
+        return []
+    tbl_cfg_dict = cast(dict[str, Any], tbl_cfg)
+    if not tbl_cfg_dict.get('custom'):
         return []
 
-    columns = tbl_cfg.get('columns', {})
+    columns = tbl_cfg_dict.get('columns', {})
     if not isinstance(columns, dict):
         return []
+    columns_dict = cast(dict[str, Any], columns)
 
-    return sorted(str(k) for k in columns)
+    return sorted(str(k) for k in columns_dict)
