@@ -60,10 +60,8 @@ from .utils import (
     update_completions,
     update_vscode_schema,
 )
-from .yaml_writer import (
-    parse_existing_comments,
-    update_server_group_yaml,
-)
+from .comment_processor import parse_existing_comments
+from .yaml_writer import update_server_group_yaml
 
 __all__ = [
     'PROJECT_ROOT',
