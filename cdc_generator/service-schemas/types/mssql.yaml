@@ -1,0 +1,87 @@
+# MSSQL column types for custom table definitions
+# Used for CLI autocompletion when defining custom sink tables
+#
+# Categories group related types. The 'types' list provides autocomplete values.
+
+categories:
+  numeric:
+    types:
+      - tinyint
+      - smallint
+      - int
+      - bigint
+      - decimal
+      - numeric
+      - float
+      - real
+      - money
+    constraints: [not_null, unique]
+    defaults: ["0"]
+
+  text:
+    types:
+      - char
+      - varchar
+      - nchar
+      - nvarchar
+      - text
+      - ntext
+    constraints: [not_null, unique]
+    defaults: ["''"]
+
+  boolean:
+    types:
+      - bit
+    constraints: [not_null]
+    defaults: ["0", "1"]
+
+  date_time:
+    types:
+      - date
+      - time
+      - datetime
+      - datetime2
+      - datetimeoffset
+      - smalldatetime
+    constraints: [not_null]
+    defaults: [getdate, getutcdate, sysdatetime]
+
+  uuid:
+    types:
+      - uniqueidentifier
+    constraints: [not_null, unique]
+    defaults: [newid, newsequentialid]
+
+  binary:
+    types:
+      - binary
+      - varbinary
+      - image
+    constraints: [not_null]
+    defaults: []
+
+  xml:
+    types:
+      - xml
+    constraints: [not_null]
+    defaults: []
+
+# Constraint definitions
+constraints:
+  not_null:
+    description: Column cannot contain NULL values
+    yaml_field: "nullable: false"
+  unique:
+    description: Column values must be unique
+    yaml_field: "unique: true"
+  pk:
+    description: Column is part of the primary key
+    yaml_field: "primary_key: true"
+
+# Default expressions
+common_defaults:
+  getdate: "GETDATE()"
+  getutcdate: "GETUTCDATE()"
+  sysdatetime: "SYSDATETIME()"
+  newid: "NEWID()"
+  newsequentialid: "NEWSEQUENTIALID()"

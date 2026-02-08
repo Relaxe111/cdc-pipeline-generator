@@ -3,6 +3,11 @@
 import argparse
 from typing import cast
 
+from cdc_generator.cli.service_handlers_sink_custom import (
+    add_column_to_custom_table,
+    add_custom_sink_table,
+    remove_column_from_custom_table,
+)
 from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
@@ -149,5 +154,76 @@ def handle_sink_map_column_error() -> int:
         + "--sink sink_asma.chat "
         + "--add-sink-table public.users "
         + "--map-column id user_id"
+    )
+    return 1
+
+
+def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
+    """Add a custom table to a sink with column definitions."""
+    sink_key = _resolve_sink_key(args)
+    if not sink_key:
+        return 1
+
+    if not args.column:
+        print_error(
+            "--add-custom-sink-table requires at least one --column"
+        )
+        print_info(
+            "Example: cdc manage-service --service directory "
+            + "--sink sink_asma.proxy "
+            + "--add-custom-sink-table public.audit_log "
+            + "--column id:uuid:pk "
+            + "--column event_type:text:not_null"
+        )
+        return 1
+
+    if add_custom_sink_table(
+        args.service,
+        sink_key,
+        args.add_custom_sink_table,
+        args.column,
+    ):
+        print_info("Run 'cdc generate' to update pipelines")
+        return 0
+    return 1
+
+
+def handle_modify_custom_table(args: argparse.Namespace) -> int:
+    """Modify a custom table (add/remove columns)."""
+    sink_key = _resolve_sink_key(args)
+    if not sink_key:
+        return 1
+
+    if args.add_column:
+        if add_column_to_custom_table(
+            args.service,
+            sink_key,
+            args.modify_custom_table,
+            args.add_column,
+        ):
+            print_info("Run 'cdc generate' to update pipelines")
+            return 0
+        return 1
+
+    if args.remove_column:
+        if remove_column_from_custom_table(
+            args.service,
+            sink_key,
+            args.modify_custom_table,
+            args.remove_column,
+        ):
+            print_info("Run 'cdc generate' to update pipelines")
+            return 0
+        return 1
+
+    print_error(
+        "--modify-custom-table requires "
+        + "--add-column or --remove-column"
+    )
+    print_info(
+        "Example: cdc manage-service --service directory "
+        + "--sink sink_asma.proxy "
+        + "--modify-custom-table public.audit_log "
+        + "--add-column updated_at:timestamptz:default_now"
     )
     return 1

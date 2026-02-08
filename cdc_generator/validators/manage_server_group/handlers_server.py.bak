@@ -1,5 +1,10 @@
 """CLI handlers for multi-server management."""
 
+try:
+    import yaml  # type: ignore[import-not-found]
+except ImportError:
+    yaml = None  # type: ignore[assignment]
+
 from argparse import Namespace
 from typing import Any, cast
 
@@ -18,20 +23,19 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 
-from .common import (
-    check_sources_using_server,
-    count_sources_per_server,
-    display_server_info,
-    display_sources_using_server,
-    load_config_and_get_server_group,
-    update_kafka_bootstrap_servers,
-    validate_server_in_group,
-)
 from .config import (
+    SERVER_GROUPS_FILE,
     get_single_server_group,
     load_server_groups,
 )
+from .common import (
+    check_sources_using_server,
+    display_sources_using_server,
+    get_server_group_name_from_config,
+)
+from .metadata_comments import get_file_header_comments
 from .validation import (
+    validate_server_exists,
     validate_server_name,
     validate_source_type_match,
 )
@@ -82,14 +86,39 @@ def handle_add_server(args: Namespace) -> int:
     if not validate_server_name(server_name, allow_default=False):
         return 1
 
-    # Load configuration
-    config, server_group, server_group_name = load_config_and_get_server_group()
-    if not config or not server_group or not server_group_name:
+    # Load existing configuration
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error(
+            "source-groups.yaml not found. Run 'cdc scaffold' first to create a server group."
+        )
         return 1
 
-    # Validate server doesn't exist
+    # Get the server group
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    # Get server group name (root key)
+    server_group_name: str | None = None
+    for name, data in config.items():
+        if 'pattern' in cast(dict[str, Any], data):
+            server_group_name = name
+            break
+
+    if not server_group_name:
+        print_error("Could not determine server group name")
+        return 1
+
+    # Check if server already exists
     servers: dict[str, Any] = server_group.get('servers', {})
-    if not validate_server_in_group(server_name, servers, should_exist=False):
+    if not servers:
+        print_error("Server group uses legacy single-server format. Please migrate first.")
+        return 1
+
+    if not validate_server_exists(server_name, servers, should_exist=False):
         return 1
 
     # Validate source type
@@ -184,15 +213,36 @@ def handle_list_servers(_args: Namespace) -> int:
     # Get type from group level (new structure)
     group_type = str(server_group.get('type', 'unknown'))
 
-    # Display all servers
     for name, server_config in servers.items():
-        display_server_info(name, cast(dict[str, Any], server_config), group_type)
+        srv = cast(dict[str, Any], server_config)
+        host = str(srv.get('host', 'N/A'))
+        port = str(srv.get('port', 'N/A'))
+        kafka_bs = str(srv.get('kafka_bootstrap_servers', 'N/A'))
 
-    # Count and display sources per server
+        marker = "⭐" if name == 'default' else "📡"
+        print_info(f"\n{marker} {name}")
+        print_info(f"    Type: {group_type}")  # Type from group level
+        print_info(f"    Host: {host}")
+        print_info(f"    Port: {port}")
+        print_info(f"    Kafka: {kafka_bs}")
+
+    # Count sources per server (use 'sources' with fallback to 'services')
     sources: dict[str, Any] = server_group.get('sources', server_group.get('services', {}))
     if sources:
         print_info("\n📦 Sources by server:")
-        server_source_count = count_sources_per_server(sources, servers)
+        server_source_count: dict[str, int] = dict.fromkeys(servers, 0)
+        for _src_name, src_config in sources.items():
+            src = cast(dict[str, Any], src_config)
+            # Check each environment entry for server reference
+            for key, value in src.items():
+                if key == 'schemas':
+                    continue
+                if isinstance(value, dict) and 'server' in value:
+                    val = cast(dict[str, Any], value)
+                    src_server = str(val.get('server', 'default'))
+                    if src_server in server_source_count:
+                        server_source_count[src_server] += 1
+
         for srv_name, count in server_source_count.items():
             print_info(f"    {srv_name}: {count} source(s)")
 
@@ -216,12 +266,29 @@ def handle_remove_server(args: Namespace) -> int:
         return 1
 
     # Load configuration
-    config, server_group, server_group_name = load_config_and_get_server_group()
-    if not config or not server_group or not server_group_name:
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("source-groups.yaml not found")
+        return 1
+
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found")
+        return 1
+
+    # Get server group name
+    server_group_name = get_server_group_name_from_config(config)
+    if not server_group_name:
+        print_error("Could not determine server group name")
         return 1
 
     servers: dict[str, Any] = server_group.get('servers', {})
-    if not validate_server_in_group(server_name, servers, should_exist=True):
+    if not servers:
+        print_error("Server group uses legacy format")
+        return 1
+
+    if not validate_server_exists(server_name, servers, should_exist=True):
         return 1
 
     # Check if any sources use this server
@@ -235,6 +302,20 @@ def handle_remove_server(args: Namespace) -> int:
     # Save the updated configuration
     try:
         write_server_group_yaml(server_group_name, server_group)
+            sg_to_save,
+            default_flow_style=False,
+            sort_keys=False,
+            indent=2,
+            allow_unicode=True,
+        )  # type: ignore[misc]
+        sg_lines = sg_yaml.strip().split('\n')
+        for line in sg_lines:
+            output_lines.append(f"  {line}")
+
+        from pathlib import Path
+        with Path(SERVER_GROUPS_FILE).open('w') as f:
+            f.write('\n'.join(output_lines))
+            f.write('\n')
 
         print_success(f"✓ Removed server '{server_name}' from server group '{server_group_name}'")
         # Remove env variables from .env
@@ -299,7 +380,20 @@ def handle_set_kafka_topology(args: Namespace) -> int:
 
     # Update all servers' kafka_bootstrap_servers
     servers: dict[str, Any] = server_group.get('servers', {})
-    update_kafka_bootstrap_servers(servers, new_topology)
+    for srv_name, srv_config in servers.items():
+        srv = cast(dict[str, Any], srv_config)
+        if new_topology == 'per-server':
+            # For per-server topology:
+            # - 'default' server uses ${KAFKA_BOOTSTRAP_SERVERS} (no postfix)
+            # - Other servers use ${KAFKA_BOOTSTRAP_SERVERS_<NAME>}
+            if srv_name == 'default':
+                srv['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
+            else:
+                postfix = f"_{srv_name.upper()}"
+                srv['kafka_bootstrap_servers'] = f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
+        else:
+            # For shared topology: all servers use the same Kafka cluster
+            srv['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
 
     # Save the updated configuration
     try:
@@ -335,13 +429,26 @@ def handle_set_extraction_pattern(args: Namespace) -> int:
     server_name, pattern = args.set_extraction_pattern
     server_name = server_name.lower()
 
-    # Load configuration
-    config, server_group, server_group_name = load_config_and_get_server_group()
-    if not config or not server_group or not server_group_name:
+    # Load existing configuration
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
+    # Get single server group
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    server_group_name = server_group.get('name', 'unknown')
     servers = server_group.get('servers', {})
-    if not validate_server_in_group(server_name, servers, should_exist=True):
+
+    # Validate server exists
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found in server group.")
+        print_info(f"Available servers: {', '.join(servers.keys())}")
         return 1
 
     # Validate regex pattern
@@ -419,19 +526,51 @@ def handle_add_extraction_pattern(args: Namespace) -> int:
     server_name, pattern = args.add_extraction_pattern
     server_name = server_name.lower()
 
-    # Load configuration
-    config, server_group, server_group_name = load_config_and_get_server_group()
-    if not config or not server_group or not server_group_name:
+    # Load existing configuration
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
         return 1
 
+    # Get single server group
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    server_group_name = server_group.get('name', 'unknown')
     servers = server_group.get('servers', {})
-    if not validate_server_in_group(server_name, servers, should_exist=True):
+
+    # Validate server exists
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found in server group.")
+        print_info(f"Available servers: {', '.join(servers.keys())}")
         return 1
 
     # Build pattern config
-    from .patterns import build_extraction_pattern_config, display_pattern_info
+    pattern_config: dict[str, Any] = {'pattern': pattern}
 
-    pattern_config = build_extraction_pattern_config(args, pattern)
+    if hasattr(args, 'env') and args.env:
+        pattern_config['env'] = args.env
+
+    if hasattr(args, 'strip_patterns') and args.strip_patterns:
+        patterns = [s.strip() for s in args.strip_patterns.split(',') if s.strip()]
+        if patterns:
+            pattern_config['strip_patterns'] = patterns
+
+    if hasattr(args, 'env_mapping') and args.env_mapping:
+        # Parse env_mapping list in format ['from:to', 'from2:to2']
+        env_map: dict[str, str] = {}
+        for mapping_str in args.env_mapping:
+            if ':' in mapping_str:
+                from_env, to_env = mapping_str.split(':', 1)
+                env_map[from_env.strip()] = to_env.strip()
+        if env_map:
+            pattern_config['env_mapping'] = env_map
+
+    if hasattr(args, 'description') and args.description:
+        pattern_config['description'] = args.description
 
     # Get server config and current patterns
     server_config = cast(dict[str, Any], servers[server_name])
@@ -443,9 +582,30 @@ def handle_add_extraction_pattern(args: Namespace) -> int:
 
     # Save configuration
     try:
+        output_lines: list[str] = []
+        header_comments = get_file_header_comments()
+        output_lines.extend(header_comments)
+        output_lines.append("")
+
+        pattern_type = server_group.get('pattern', 'db-per-tenant')
+        pattern_label = str(pattern_type)
+        separator = "# " + "=" * 76
+        output_lines.append(separator)
+        output_lines.append(
+            f"# {str(server_group_name).title()} Server Group ({pattern_label})"
+        )
+        output_lines.append(separator)
+        output_lines.append(f"{server_group_name}:")
+
         write_server_group_yaml(server_group_name, server_group)
         print_success(f"\u2713 Added extraction pattern to server '{server_name}'")
-        display_pattern_info(pattern_config, pattern)
+        print_info(f"  Pattern: {pattern}")
+        if pattern_config.get('env'):
+            print_info(f"  Fixed env: {pattern_config['env']}")
+        if pattern_config.get('strip_suffixes'):
+            print_info(f"  Strip suffixes: {', '.join(pattern_config['strip_suffixes'])}")
+        if pattern_config.get('description'):
+            print_info(f"  Description: {pattern_config['description']}")
 
         print_info(f"\n  Total patterns for '{server_name}': {len(current_patterns)}")
         print_info(
@@ -473,8 +633,6 @@ def handle_list_extraction_patterns(args: Namespace) -> int:
     Returns:
         Exit code (0 for success, 1 for error)
     """
-    from .patterns import display_pattern_help, display_server_patterns
-
     server_filter = args.list_extraction_patterns if args.list_extraction_patterns else None
 
     try:
@@ -502,16 +660,49 @@ def handle_list_extraction_patterns(args: Namespace) -> int:
 
     print_header("Extraction Patterns (ordered by priority)")
 
-    # Display patterns for each server
     has_any = False
     for server_name in sorted(servers.keys()):
         server_config = cast(dict[str, Any], servers[server_name])
-        if display_server_patterns(server_name, server_config):
-            has_any = True
+        patterns = server_config.get('extraction_patterns', [])
 
-    # Show help if no patterns configured
+        print()
+        print_info(f"📍 Server: {server_name}")
+
+        if patterns:
+            has_any = True
+            for idx, pattern_config in enumerate(patterns):
+                print_info(f"  [{idx}] Pattern: {pattern_config.get('pattern', '(missing)')}")
+                if pattern_config.get('env'):
+                    print_info(f"      Fixed env: {pattern_config['env']}")
+                if pattern_config.get('strip_patterns'):
+                    patterns_str = ', '.join(pattern_config['strip_patterns'])
+                    print_info(f"      Strip patterns: {patterns_str}")
+                if pattern_config.get('env_mapping'):
+                    mappings = ', '.join(
+                        [f"{k}→{v}" for k, v in pattern_config['env_mapping'].items()]
+                    )
+                    print_info(f"      Env mapping: {mappings}")
+                if pattern_config.get('description'):
+                    print_info(f"      Description: {pattern_config['description']}")
+        else:
+            print_warning("  (no extraction patterns configured)")
+            # Check for old single pattern
+            single_pattern = server_config.get('extraction_pattern')
+            if single_pattern:
+                print_info(f"  Legacy single pattern: {single_pattern}")
+
     if not has_any:
-        display_pattern_help()
+        print()
+        print_info("💡 Add extraction patterns for a server:")
+        print_info(
+            "   cdc manage-source-groups --add-extraction-pattern default "
+            + "'^(?P<service>\\w+)_(?P<env>\\w+)$'"
+        )
+        print_info(
+            "   cdc manage-source-groups --add-extraction-pattern prod "
+            + "'^(?P<service>\\w+)_db_prod_adcuris$' \\"
+        )
+        print_info("       --env prod_adcuris --strip-suffixes '_db'")
 
     return 0
 
@@ -530,27 +721,47 @@ def handle_remove_extraction_pattern(args: Namespace) -> int:
         cdc manage-source-groups --list-extraction-patterns prod
         cdc manage-source-groups --remove-extraction-pattern prod 2
     """
-    from .patterns import validate_pattern_index
-
     server_name, index_str = args.remove_extraction_pattern
     server_name = server_name.lower()
 
-    # Load configuration
-    config, server_group, server_group_name = load_config_and_get_server_group()
-    if not config or not server_group or not server_group_name:
+    try:
+        index = int(index_str)
+    except ValueError:
+        print_error(f"Invalid index '{index_str}'. Must be an integer.")
         return 1
 
+    # Load existing configuration
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
+        return 1
+
+    # Get single server group
+    server_group = get_single_server_group(config)
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    server_group_name = server_group.get('name', 'unknown')
     servers = server_group.get('servers', {})
-    if not validate_server_in_group(server_name, servers, should_exist=True):
+
+    # Validate server exists
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found in server group.")
+        print_info(f"Available servers: {', '.join(servers.keys())}")
         return 1
 
     # Get server config and current patterns
     server_config = cast(dict[str, Any], servers[server_name])
     patterns = server_config.get('extraction_patterns', [])
 
-    # Validate index
-    is_valid, index = validate_pattern_index(index_str, patterns)
-    if not is_valid:
+    if not patterns:
+        print_error(f"No extraction patterns configured for server '{server_name}'")
+        return 1
+
+    if index < 0 or index >= len(patterns):
+        print_error(f"Invalid index {index}. Must be between 0 and {len(patterns) - 1}")
         return 1
 
     # Remove pattern
@@ -559,7 +770,36 @@ def handle_remove_extraction_pattern(args: Namespace) -> int:
 
     # Save configuration
     try:
-        write_server_group_yaml(server_group_name, server_group)
+        output_lines: list[str] = []
+        header_comments = get_file_header_comments()
+        output_lines.extend(header_comments)
+        output_lines.append("")
+
+        pattern_type = server_group.get('pattern', 'db-per-tenant')
+        pattern_label = str(pattern_type)
+        separator = "# " + "=" * 76
+        output_lines.append(separator)
+        output_lines.append(
+            f"# {str(server_group_name).title()} Server Group ({pattern_label})"
+        )
+        output_lines.append(separator)
+        output_lines.append(f"{server_group_name}:")
+
+        sg_yaml = yaml.dump(
+            server_group,
+            default_flow_style=False,
+            sort_keys=False,
+            indent=2,
+            allow_unicode=True,
+        )  # type: ignore[misc]
+        sg_lines = sg_yaml.strip().split('\n')
+        for line in sg_lines:
+            output_lines.append(f"  {line}")
+
+        from pathlib import Path
+        with Path(SERVER_GROUPS_FILE).open('w') as f:
+            f.write('\n'.join(output_lines))
+            f.write('\n')
 
         print_success(f"✓ Removed extraction pattern [{index}] from server '{server_name}'")
         print_info(f"  Removed: {removed_pattern.get('pattern', '(missing)')}")

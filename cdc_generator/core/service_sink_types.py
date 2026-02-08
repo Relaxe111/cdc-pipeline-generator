@@ -35,6 +35,34 @@ class SinkColumnMapping(TypedDict, total=False):
     """
 
 
+class CustomColumnDefinition(TypedDict, total=False):
+    """Column definition for a custom sink table.
+
+    Used when custom: true — defines the column structure for auto-creation.
+
+    Attributes:
+        type: PostgreSQL column type (e.g., uuid, text, bigint, timestamptz).
+        nullable: Whether the column allows NULL (default: true).
+        primary_key: Whether this column is part of the primary key.
+        default: Default value expression (e.g., now(), gen_random_uuid()).
+
+    Example:
+        columns:
+          id:
+            type: uuid
+            primary_key: true
+            default: gen_random_uuid()
+          event_type:
+            type: text
+            nullable: false
+    """
+
+    type: str
+    nullable: bool
+    primary_key: bool
+    default: str
+
+
 class SinkTableConfig(TypedDict, total=False):
     """Configuration for a single table in a service sink.
 
@@ -44,8 +72,11 @@ class SinkTableConfig(TypedDict, total=False):
             - true: Map to existing table (requires target + columns).
         target: Target table reference (schema.table) when target_exists=true.
         target_schema: Override target schema (when target_exists=false).
-        columns: Column mapping {source_col: target_col} when target_exists=true.
+        columns: Column mapping {source_col: target_col} when target_exists=true,
+            OR column definitions {col_name: CustomColumnDefinition} when custom=true.
         include_columns: Only sync these columns (when target_exists=false).
+        custom: True if the table was manually created (not from source schemas).
+        managed: True if the table can be modified via CLI (only for custom tables).
 
     Examples:
         # Clone as-is (must specify target_exists: false)
@@ -69,13 +100,29 @@ class SinkTableConfig(TypedDict, total=False):
             columns:
                 id: attachment_id
                 name: file_name
+
+        # Custom table (auto-created in sink)
+        public.audit_log:
+            target_exists: false
+            custom: true
+            managed: true
+            columns:
+                id:
+                    type: uuid
+                    primary_key: true
+                    default: gen_random_uuid()
+                event_type:
+                    type: text
+                    nullable: false
     """
 
     target_exists: bool  # REQUIRED - use Required[bool] in Python 3.11+
     target: str
     target_schema: str
-    columns: dict[str, str]
+    columns: dict[str, str] | dict[str, CustomColumnDefinition]
     include_columns: list[str]
+    custom: bool
+    managed: bool
 
 
 class SinkDatabaseMapping(TypedDict, total=False):

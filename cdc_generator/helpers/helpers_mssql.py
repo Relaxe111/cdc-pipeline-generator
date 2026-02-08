@@ -12,11 +12,11 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-import yaml  # type: ignore[import-not-found]
+from cdc_generator.helpers.yaml_loader import yaml
 
 # pymssql is optional - only required for MSSQL operations
 try:
-    import pymssql  # type: ignore[import-not-found]
+    import pymssql
     _has_pymssql = True
 except ImportError:
     _has_pymssql = False

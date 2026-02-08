@@ -132,6 +132,13 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "Sink group name to show info for",
         "cdc manage-sink-groups --info sink_asma",
     ),
+    "--introspect-types": (
+        "Requires --sink-group to identify the database engine",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --introspect-types"
+        ),
+    ),
     "--remove": (
         "Sink group name to remove",
         "cdc manage-sink-groups --remove sink_test",
@@ -631,6 +638,64 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
 
     return _run_inspection(resolved, sink_group_name, args)
+
+
+def handle_introspect_types_command(args: argparse.Namespace) -> int:
+    """Introspect column types from a sink group's database server."""
+    from cdc_generator.validators.manage_server_group.type_introspector import (
+        introspect_types,
+    )
+
+    source_file = get_source_group_file_path()
+
+    # Validate args and load sink group
+    result = _validate_inspect_args(args)
+    if isinstance(result, int):
+        return result
+
+    _sink_groups, sink_group, sink_group_name = result
+
+    # Load source groups for resolution
+    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+
+    # Resolve sink group (handles inherited servers)
+    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
+
+    # Pick server: explicit --server or first available
+    servers = resolved.get("servers", {})
+    if not servers:
+        print_error(f"No servers in sink group '{sink_group_name}'")
+        return 1
+
+    server_name = args.server or next(iter(servers))
+    if server_name not in servers:
+        print_error(
+            f"Server '{server_name}' not found"
+            + f" in sink group '{sink_group_name}'"
+        )
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    engine = str(resolved.get("type", "postgres"))
+
+    print_header(
+        f"Introspecting {engine.upper()} types from"
+        + f" server '{server_name}'"
+    )
+
+    # Build connection params from server config
+    conn_params: dict[str, Any] = {
+        "host": server_config.get("host", ""),
+        "port": server_config.get("port", ""),
+        "user": server_config.get(
+            "username", server_config.get("user", "")
+        ),
+        "password": server_config.get("password", ""),
+    }
+
+    success = introspect_types(engine, conn_params)
+    return 0 if success else 1
 
 
 def handle_info_command(args: argparse.Namespace) -> int:
@@ -1243,6 +1308,9 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
 
     {Colors.GREEN}Validate configuration{Colors.RESET}
     $ cdc manage-sink-groups --validate
+
+    {Colors.CYAN}Introspect column types from database{Colors.RESET}
+    $ cdc manage-sink-groups --sink-group sink_analytics --introspect-types
 """
 
     parser = SinkGroupArgumentParser(
@@ -1350,6 +1418,16 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         help=f"{Colors.GREEN}✅ Only include databases matching regex pattern{Colors.RESET}",
     )
 
+    # Type introspection
+    parser.add_argument(
+        "--introspect-types",
+        action="store_true",
+        help=(
+            f"{Colors.CYAN}🔍 Introspect column types from"
+            f" database server (requires --sink-group){Colors.RESET}"
+        ),
+    )
+
     # Validation
     parser.add_argument(
         "--validate",
@@ -1425,6 +1503,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "list": (args.list, lambda: handle_list(args)),
         "info": (args.info, lambda: handle_info_command(args)),
         "inspect": (args.inspect, lambda: handle_inspect_command(args)),
+        "introspect_types": (args.introspect_types, lambda: handle_introspect_types_command(args)),
         "validate": (args.validate, lambda: handle_validate_command(args)),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "remove_server": (args.remove_server, lambda: handle_remove_server_command(args)),

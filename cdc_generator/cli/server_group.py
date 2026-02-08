@@ -37,7 +37,7 @@ Example:
 import argparse
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 # When executed directly (python cdc_generator/cli/server_group.py), ensure the
 # project root is on sys.path so package imports succeed.
@@ -73,6 +73,62 @@ from cdc_generator.validators.manage_server_group import (
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
 )
+
+
+def _handle_introspect_types(args: argparse.Namespace) -> int:
+    """Introspect column types from the source database server."""
+    from cdc_generator.validators.manage_server_group.config import (
+        get_single_server_group,
+        load_server_groups,
+    )
+    from cdc_generator.validators.manage_server_group.type_introspector import (
+        introspect_types,
+    )
+
+    try:
+        config = load_server_groups()
+        server_group = get_single_server_group(config)
+    except Exception as exc:
+        print_error(f"Failed to load server groups: {exc}")
+        return 1
+
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    servers = server_group.get("servers", {})
+    if not servers:
+        print_error("No servers configured in server group")
+        return 1
+
+    # Pick server: explicit --server or first available
+    server_name: str = getattr(args, "server", None) or next(iter(servers))
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found")
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    engine = str(server_group.get("type", "postgres"))
+
+    from cdc_generator.helpers.helpers_logging import print_header
+
+    print_header(
+        f"Introspecting {engine.upper()} types from"
+        + f" server '{server_name}'"
+    )
+
+    conn_params: dict[str, Any] = {
+        "host": server_config.get("host", ""),
+        "port": server_config.get("port", ""),
+        "user": server_config.get(
+            "username", server_config.get("user", "")
+        ),
+        "password": server_config.get("password", ""),
+    }
+
+    success = introspect_types(engine, conn_params)
+    return 0 if success else 1
 
 
 def main() -> int:
@@ -151,6 +207,16 @@ def main() -> int:
                             "Use --list-extraction-patterns to see indices. " +
                             "Example: --remove-extraction-pattern prod 0")
 
+    # Type introspection
+    parser.add_argument("--introspect-types", action="store_true",
+                       help="Introspect column types from the source database server " +
+                            "and generate/update type definition files. " +
+                            "Use --server to pick a specific server " +
+                            "(default: first available).")
+    parser.add_argument("--server", metavar="NAME",
+                       help="Server to use for --introspect-types " +
+                            "(default: first available).")
+
     args = parser.parse_args()
 
     # Validate flag combinations (Python-based validation)
@@ -227,6 +293,10 @@ def main() -> int:
 
     if args.remove_extraction_pattern:
         return handle_remove_extraction_pattern(args)
+
+    # Handle type introspection
+    if args.introspect_types:
+        return _handle_introspect_types(args)
 
     # Handle info
     if args.info:

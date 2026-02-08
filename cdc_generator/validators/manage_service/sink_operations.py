@@ -20,7 +20,7 @@ from cdc_generator.helpers.helpers_logging import (
 )
 from cdc_generator.helpers.service_config import get_project_root, load_service_config
 
-from .config import save_service_config
+from .config import SERVICE_SCHEMAS_DIR, save_service_config
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -68,6 +68,90 @@ def _validate_and_parse_sink_key(sink_key: str) -> tuple[str, str] | None:
             + "sink_group.target_service (e.g., sink_asma.chat)"
         )
     return parsed
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers — schema validation
+# ---------------------------------------------------------------------------
+
+
+def _get_target_service_from_sink_key(sink_key: str) -> str | None:
+    """Extract target_service from sink key 'sink_group.target_service'."""
+    parsed = _parse_sink_key(sink_key)
+    return parsed[1] if parsed else None
+
+
+def _list_tables_in_service_schemas(target_service: str) -> list[str]:
+    """List all tables in service-schemas/{target_service}/{schema}/*.yaml.
+
+    Returns:
+        List of 'schema.table' strings.
+    """
+    service_dir = SERVICE_SCHEMAS_DIR / target_service
+    if not service_dir.is_dir():
+        return []
+
+    tables: list[str] = []
+    for schema_dir in service_dir.iterdir():
+        if schema_dir.is_dir():
+            for table_file in schema_dir.glob("*.yaml"):
+                tables.append(f"{schema_dir.name}.{table_file.stem}")
+    return sorted(tables)
+
+
+def _validate_table_in_schemas(
+    sink_key: str,
+    table_key: str,
+) -> bool:
+    """Validate that table_key exists in service-schemas for the sink target.
+
+    Prints friendly errors if schemas are missing or table not found.
+
+    Returns:
+        True if valid, False if validation failed.
+    """
+    target_service = _get_target_service_from_sink_key(sink_key)
+    if not target_service:
+        return False
+
+    service_dir = SERVICE_SCHEMAS_DIR / target_service
+    if not service_dir.is_dir():
+        print_error(f"No schemas found for sink target '{target_service}'")
+        print_info(
+            "To fetch schemas, run:\n"
+            + "  cdc manage-service --service <SERVICE>"
+            + f" --inspect-sink {sink_key} --all --save"
+        )
+        print_info(
+            "Or create manually: "
+            + f"service-schemas/{target_service}/<schema>/<Table>.yaml"
+        )
+        return False
+
+    available = _list_tables_in_service_schemas(target_service)
+    if not available:
+        print_error(
+            f"Schema directory for '{target_service}' exists but is empty"
+        )
+        print_info(
+            "To populate schemas, run:\n"
+            + "  cdc manage-service --service <SERVICE>"
+            + f" --inspect-sink {sink_key} --all --save"
+        )
+        return False
+
+    if table_key not in available:
+        print_error(
+            f"Table '{table_key}' not found in "
+            + f"service-schemas/{target_service}/"
+        )
+        print_info(
+            "Available tables:\n  "
+            + "\n  ".join(available)
+        )
+        return False
+
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -260,9 +344,9 @@ def _validate_table_add(
             + "--target-exists false (autocreate clone)",
         )
 
-    # Warn (but allow) if table not in source.tables
-    if table_key not in _get_source_tables_dict(config):
-        print_warning(f"Table '{table_key}' not in source.tables")
+    # Validate table exists in service-schemas for the sink target
+    if not _validate_table_in_schemas(sink_key, table_key):
+        return None, None  # Error already printed
 
     return tables, None
 

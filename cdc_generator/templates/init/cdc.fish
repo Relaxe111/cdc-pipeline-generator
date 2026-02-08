@@ -308,6 +308,9 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target -d "Ta
     end
 )"
 
+# --target-exists: Required for --add-sink-table (true = map existing, false = autocreate)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target-exists -d "Table exists in target? (true=map, false=autocreate)" -r -f -a "true false"
+
 # --target-schema: Dynamic completion from service-schemas/{target_service}/ schemas
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target-schema -d "Override target schema for cloned sink table" -r -f -a "(
     set -l cmd (commandline -opc)
@@ -370,6 +373,63 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l include-sink-
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l list-sinks -d "List all sink configurations for service"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-sinks -d "Validate sink configuration"
 
+# ============================================================================
+# Custom sink table completions for manage-service
+# ============================================================================
+
+# --add-custom-sink-table: Free text (user defines schema.table name)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-custom-sink-table -d "Create custom table in sink (schema.table)" -r
+
+# --column: Column definition with type autocompletion
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l column -d "Column def: name:type[:pk][:not_null][:default_X]" -r
+
+# --modify-custom-table: Dynamic completion from custom tables in service
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l modify-custom-table -d "Modify custom table columns" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l sink_key ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+        end
+    end
+    # Auto-default --sink when service has only one sink
+    if test -n \"\$service_name\" -a -z \"\$sink_key\"
+        set sink_key (python3 -m cdc_generator.helpers.autocompletions --get-default-sink \"\$service_name\" 2>/dev/null)
+    end
+    if test -n \"\$service_name\" -a -n \"\$sink_key\"
+        python3 -m cdc_generator.helpers.autocompletions --list-custom-tables \"\$service_name\" \"\$sink_key\" 2>/dev/null
+    end
+)"
+
+# --add-column: Free text (column spec)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-column -d "Add column: name:type[:pk][:not_null][:default_X]" -r
+
+# --remove-column: Dynamic completion from custom table columns
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-column -d "Remove column from custom table" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    set -l sink_key ''
+    set -l table_key ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--sink'
+            set sink_key \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--modify-custom-table'
+            set table_key \$cmd[(math \$i + 1)]
+        end
+    end
+    if test -n \"\$service_name\" -a -z \"\$sink_key\"
+        set sink_key (python3 -m cdc_generator.helpers.autocompletions --get-default-sink \"\$service_name\" 2>/dev/null)
+    end
+    if test -n \"\$service_name\" -a -n \"\$sink_key\" -a -n \"\$table_key\"
+        python3 -m cdc_generator.helpers.autocompletions --list-custom-table-columns \"\$service_name\" \"\$sink_key\" \"\$table_key\" 2>/dev/null
+    end
+)"
+
 # manage-source-groups subcommand options
 # Note: All flags are shown regardless of context. Python validation handles invalid combinations.
 
@@ -422,6 +482,12 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups; and __cdc_
 complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups; and __cdc_last_token_is --remove-extraction-pattern" -f -a "prod" -d "Production server"
 complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups" -l set-extraction-pattern -d "Set single extraction pattern: SERVER PATTERN (legacy, prefer --add-extraction-pattern)" -r
 
+# Type introspection
+complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups" -l introspect-types -d "Introspect column types from database server"
+complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups" -l server -d "Server to use for --introspect-types (default: first available)" -r -f -a "(
+    python3 -m cdc_generator.helpers.autocompletions --list-server-names 2>/dev/null
+)"
+
 # Creation flags (used with --create)
 complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups" -l pattern -d "Server group pattern (db-per-tenant|db-shared)" -r
 complete -c cdc -n "__fish_seen_subcommand_from manage-source-groups; and __cdc_last_token_is --pattern" -f -a "db-per-tenant db-shared"
@@ -472,6 +538,9 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l server -d
     echo 'prod'
 )"
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l include-pattern -d "Only include databases matching regex pattern" -r
+
+# Type introspection
+complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l introspect-types -d "Introspect column types from database server (requires --sink-group)"
 
 # Validation
 complete -c cdc -n "__fish_seen_subcommand_from manage-sink-groups" -l validate -d "Validate sink group configuration"

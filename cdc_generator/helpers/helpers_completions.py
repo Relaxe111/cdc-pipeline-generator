@@ -1,7 +1,7 @@
 """Helper functions for shell completions (Fish, Bash, etc.)."""
 
 try:
-    import yaml  # type: ignore[import-not-found]
+    from cdc_generator.helpers.yaml_loader import yaml  # type: ignore[import-not-found]
 except ImportError:
     yaml = None  # type: ignore[assignment]
 

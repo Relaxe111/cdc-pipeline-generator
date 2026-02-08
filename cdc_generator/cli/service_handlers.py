@@ -21,7 +21,9 @@ from cdc_generator.cli.service_handlers_misc import (
     handle_no_service,
 )
 from cdc_generator.cli.service_handlers_sink import (
+    handle_modify_custom_table,
     handle_sink_add,
+    handle_sink_add_custom_table,
     handle_sink_add_table,
     handle_sink_list,
     handle_sink_map_column_error,
@@ -49,9 +51,11 @@ __all__ = [
     "handle_inspect_sink",
     "handle_interactive",
     "handle_list_source_tables",
+    "handle_modify_custom_table",
     "handle_no_service",
     "handle_remove_table",
     "handle_sink_add",
+    "handle_sink_add_custom_table",
     "handle_sink_add_table",
     "handle_sink_list",
     "handle_sink_map_column_error",

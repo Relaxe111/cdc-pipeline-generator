@@ -2,7 +2,7 @@
 
 from typing import Any, cast
 
-import yaml  # type: ignore
+import yaml
 
 from cdc_generator.helpers.helpers_logging import print_header, print_success
 from cdc_generator.helpers.service_config import get_project_root

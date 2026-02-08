@@ -15,10 +15,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
 from cdc_generator.helpers.helpers_batch import build_staging_case
 from cdc_generator.helpers.service_config import get_all_customers, load_customer_config
+from cdc_generator.helpers.yaml_loader import yaml
 
 # Import validation functions
 from cdc_generator.validators.manage_service.validation import validate_service_config

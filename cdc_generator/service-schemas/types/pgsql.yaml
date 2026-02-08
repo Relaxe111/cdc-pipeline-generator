@@ -1,0 +1,99 @@
+# PostgreSQL column types for custom table definitions
+# Used for CLI autocompletion when defining custom sink tables
+#
+# Categories group related types. The 'types' list provides autocomplete values.
+# Constraints and defaults are suggested per-type to prevent invalid combinations.
+
+categories:
+  numeric:
+    types:
+      - smallint
+      - integer
+      - bigint
+      - serial
+      - bigserial
+      - numeric
+      - real
+      - double precision
+    constraints: [not_null, unique]
+    defaults: ["0"]
+
+  text:
+    types:
+      - text
+      - varchar
+      - char
+      - citext
+    constraints: [not_null, unique]
+    defaults: ["''"]
+
+  boolean:
+    types:
+      - boolean
+    constraints: [not_null]
+    defaults: ["false", "true"]
+
+  date_time:
+    types:
+      - date
+      - time
+      - timestamp
+      - timestamptz
+      - interval
+    constraints: [not_null]
+    defaults: [now, current_timestamp, current_date]
+
+  uuid:
+    types:
+      - uuid
+    constraints: [not_null, unique]
+    defaults: [gen_random_uuid]
+
+  json:
+    types:
+      - json
+      - jsonb
+    constraints: [not_null]
+    defaults: ["'{}'::jsonb", "'[]'::jsonb"]
+
+  binary:
+    types:
+      - bytea
+    constraints: [not_null]
+    defaults: []
+
+  network:
+    types:
+      - inet
+      - cidr
+      - macaddr
+    constraints: [not_null]
+    defaults: []
+
+  array:
+    types:
+      - text[]
+      - integer[]
+      - uuid[]
+      - jsonb[]
+    constraints: [not_null]
+    defaults: ["'{}'"]
+
+# Constraint definitions (for autocompletion hints)
+constraints:
+  not_null:
+    description: Column cannot contain NULL values
+    yaml_field: "nullable: false"
+  unique:
+    description: Column values must be unique
+    yaml_field: "unique: true"
+  pk:
+    description: Column is part of the primary key
+    yaml_field: "primary_key: true"
+
+# Default expressions (common across types)
+common_defaults:
+  now: "now()"
+  current_timestamp: "CURRENT_TIMESTAMP"
+  current_date: "CURRENT_DATE"
+  gen_random_uuid: "gen_random_uuid()"

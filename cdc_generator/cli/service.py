@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import sys
+from typing import NoReturn
 
 from cdc_generator.cli.service_handlers import (
     handle_add_source_table,
@@ -21,9 +22,11 @@ from cdc_generator.cli.service_handlers import (
     handle_inspect_sink,
     handle_interactive,
     handle_list_source_tables,
+    handle_modify_custom_table,
     handle_no_service,
     handle_remove_table,
     handle_sink_add,
+    handle_sink_add_custom_table,
     handle_sink_add_table,
     handle_sink_list,
     handle_sink_map_column_error,
@@ -37,6 +40,140 @@ from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
 )
+
+# flag → (description, example)
+_FLAG_HINTS: dict[str, tuple[str, str]] = {
+    "--service": (
+        "Service name from services/*.yaml",
+        "cdc manage-service --service adopus --inspect --all",
+    ),
+    "--create-service": (
+        "Name for the new service to create",
+        "cdc manage-service --create-service myservice",
+    ),
+    "--add-source-table": (
+        "Table name to add (format: schema.table)",
+        "cdc manage-service --service adopus --add-source-table dbo.Actor",
+    ),
+    "--remove-table": (
+        "Table name to remove (format: schema.table)",
+        "cdc manage-service --service adopus --remove-table dbo.Actor",
+    ),
+    "--inspect-sink": (
+        "Sink key to inspect (format: sink_group.target_service)",
+        (
+            "cdc manage-service --service directory"
+            " --inspect-sink sink_asma.calendar --all"
+        ),
+    ),
+    "--schema": (
+        "Database schema to inspect or filter",
+        "cdc manage-service --service adopus --inspect --schema dbo",
+    ),
+    "--add-sink": (
+        "Sink key to add (format: sink_group.target_service)",
+        "cdc manage-service --service directory --add-sink sink_asma.chat",
+    ),
+    "--remove-sink": (
+        "Sink key to remove",
+        "cdc manage-service --service directory --remove-sink sink_asma.chat",
+    ),
+    "--sink": (
+        "Target sink for table operations",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --add-sink-table public.users"
+        ),
+    ),
+    "--add-sink-table": (
+        "Table name to add to sink (requires --sink)",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --add-sink-table public.users"
+        ),
+    ),
+    "--remove-sink-table": (
+        "Table name to remove from sink (requires --sink)",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --remove-sink-table public.users"
+        ),
+    ),
+    "--target": (
+        "Target table name for mapped sink table",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --add-sink-table public.attachments"
+            " --target public.chat_attachments"
+        ),
+    ),
+    "--target-schema": (
+        "Override target schema for cloned table",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --add-sink-table public.users"
+            " --target-schema custom_schema"
+        ),
+    ),
+    "--env": (
+        "Environment for inspection (default: nonprod)",
+        "cdc manage-service --service adopus --inspect --env prod",
+    ),
+    "--primary-key": (
+        "Primary key column name",
+        (
+            "cdc manage-service --service adopus"
+            " --add-source-table dbo.Actor --primary-key actno"
+        ),
+    ),
+    "--add-custom-sink-table": (
+        "Table name for custom table (format: schema.table)",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.proxy"
+            " --add-custom-sink-table public.audit_log"
+            " --column id:uuid:pk"
+            " --column name:text:not_null"
+        ),
+    ),
+    "--modify-custom-table": (
+        "Custom table to modify (format: schema.table)",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.proxy"
+            " --modify-custom-table public.audit_log"
+            " --add-column updated_at:timestamptz:default_now"
+        ),
+    ),
+    "--add-column": (
+        "Column spec to add (format: name:type[:pk][:not_null][:default_X])",
+        "--add-column updated_at:timestamptz:not_null:default_now",
+    ),
+    "--remove-column": (
+        "Column name to remove from custom table",
+        "--remove-column payload",
+    ),
+    "--column": (
+        "Column definition (format: name:type[:pk][:not_null][:default_X])",
+        "--column id:uuid:pk --column name:text:not_null",
+    ),
+}
+
+
+class ServiceArgumentParser(argparse.ArgumentParser):
+    """Custom parser with user-friendly error messages."""
+
+    def error(self, message: str) -> NoReturn:
+        """Override to show friendly errors with examples."""
+        for flag, (desc, example) in _FLAG_HINTS.items():
+            if flag in message and "expected" in message:
+                print_error(f"{flag} requires a value: {desc}")
+                print_info(f"Example: {example}")
+                raise SystemExit(1)
+
+        # Fall back to a clean error (no usage dump)
+        print_error(message)
+        raise SystemExit(1)
 
 _EPILOG = """\
 Examples:
@@ -77,12 +214,31 @@ Examples:
   cdc manage-service --service directory --validate-sinks
   cdc manage-service --service directory \\
       --remove-sink sink_asma.chat
+
+  # Custom sink tables (auto-created in sink database)
+  cdc manage-service --service directory \\
+      --sink sink_asma.proxy \\
+      --add-custom-sink-table public.audit_log \\
+      --column id:uuid:pk \\
+      --column event_type:text:not_null \\
+      --column payload:jsonb \\
+      --column created_at:timestamptz:not_null:default_now
+
+  # Modify custom table columns
+  cdc manage-service --service directory \\
+      --sink sink_asma.proxy \\
+      --modify-custom-table public.audit_log \\
+      --add-column updated_at:timestamptz:default_now
+  cdc manage-service --service directory \\
+      --sink sink_asma.proxy \\
+      --modify-custom-table public.audit_log \\
+      --remove-column payload
 """
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser() -> ServiceArgumentParser:
     """Build the argument parser for manage-service."""
-    parser = argparse.ArgumentParser(
+    parser = ServiceArgumentParser(
         description="Interactive CDC service management tool",
         epilog=_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -252,6 +408,34 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Validate sink configuration",
     )
 
+    # Custom sink table args
+    parser.add_argument(
+        "--add-custom-sink-table",
+        metavar="TABLE",
+        help="Create custom table in sink (schema.table)",
+    )
+    parser.add_argument(
+        "--column",
+        action="append",
+        metavar="SPEC",
+        help="Column def: name:type[:pk][:not_null][:default_X]",
+    )
+    parser.add_argument(
+        "--modify-custom-table",
+        metavar="TABLE",
+        help="Modify custom table (requires --add-column or --remove-column)",
+    )
+    parser.add_argument(
+        "--add-column",
+        metavar="SPEC",
+        help="Add column: name:type[:pk][:not_null][:default_X]",
+    )
+    parser.add_argument(
+        "--remove-column",
+        metavar="COL",
+        help="Remove column from custom table",
+    )
+
     # Legacy args (backward compatibility)
     parser.add_argument("--source", help=argparse.SUPPRESS)
     parser.add_argument(
@@ -354,10 +538,14 @@ def _dispatch_sink(args: argparse.Namespace) -> int | None:
         "add_sink": handle_sink_add,
         "remove_sink": handle_sink_remove,
         "add_sink_table": handle_sink_add_table,
+        "add_custom_sink_table": handle_sink_add_custom_table,
     }
     for attr, handler in simple_sink_cmds.items():
         if getattr(args, attr, False):
             return handler(args)
+
+    if args.modify_custom_table:
+        return handle_modify_custom_table(args)
 
     if args.remove_sink_table and args.sink:
         return handle_sink_remove_table(args)
