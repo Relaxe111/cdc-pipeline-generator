@@ -52,7 +52,7 @@ from cdc_generator.helpers.autocompletions.utils import (
 
 # Private helper function (kept for backward compatibility)
 from cdc_generator.helpers.autocompletions.sinks import (
-    _load_sink_tables_for_autocomplete,
+    load_sink_tables_for_autocomplete,
 )
 
 __all__ = [

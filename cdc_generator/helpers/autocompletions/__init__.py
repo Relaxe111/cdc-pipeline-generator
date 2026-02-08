@@ -8,7 +8,15 @@ This module serves as the main CLI dispatcher for autocompletion queries.
 """
 
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 
+from cdc_generator.helpers.autocompletions.extras import (
+    list_column_template_keys,
+    list_extra_columns_for_table,
+    list_transform_rule_keys,
+    list_transforms_for_table,
+)
 from cdc_generator.helpers.autocompletions.scaffold import (
     scaffold_flag_completions,
 )
@@ -33,6 +41,7 @@ from cdc_generator.helpers.autocompletions.sinks import (
     list_custom_table_columns_for_autocomplete,
     list_custom_tables_for_service_sink,
     list_sink_keys_for_service,
+    list_sink_tables_for_service,
     list_tables_for_sink_target,
     list_target_columns_for_sink_table,
     list_target_tables_for_sink,
@@ -44,6 +53,194 @@ from cdc_generator.helpers.autocompletions.tables import (
 )
 from cdc_generator.helpers.autocompletions.types import list_pg_column_types
 
+_MIN_ARGS_WITH_COMMAND = 2
+
+
+# ---------------------------------------------------------------------------
+# Command registration types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CompletionCommand:
+    """A single autocompletion command definition.
+
+    Attributes:
+        arg_count: Number of positional args required (after command).
+        arg_desc: Description of required args (for error messages).
+        handler: Function to call with positional args.
+    """
+
+    arg_count: int
+    arg_desc: str
+    handler: Callable[..., list[str] | str | None]
+
+
+# ---------------------------------------------------------------------------
+# No-arg commands (return list[str])
+# ---------------------------------------------------------------------------
+
+_NO_ARG_COMMANDS: dict[str, Callable[[], list[str]]] = {
+    "--list-existing-services": list_existing_services,
+    "--list-available-services": list_available_services_from_server_group,
+    "--list-databases": list_databases_from_server_group,
+    "--list-server-names": list_servers_from_server_group,
+    "--list-server-group-names": list_server_group_names,
+    "--list-sink-group-names": list_sink_group_names,
+    "--list-non-inherited-sink-group-names": list_non_inherited_sink_group_names,
+    "--list-available-sink-keys": list_available_sink_keys,
+    "--list-pg-types": list_pg_column_types,
+    "--list-column-templates": list_column_template_keys,
+    "--list-transform-rules": list_transform_rule_keys,
+}
+
+# ---------------------------------------------------------------------------
+# Commands with positional args
+# ---------------------------------------------------------------------------
+
+_ARG_COMMANDS: dict[str, CompletionCommand] = {
+    "--list-sink-group-servers": CompletionCommand(
+        arg_count=1,
+        arg_desc="sink_group_name",
+        handler=list_servers_for_sink_group,
+    ),
+    "--list-schemas": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=list_schemas_for_service,
+    ),
+    "--list-tables": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=list_tables_for_service,
+    ),
+    "--scaffold-flag-values": CompletionCommand(
+        arg_count=1,
+        arg_desc="flag_name",
+        handler=scaffold_flag_completions,
+    ),
+    "--list-sink-keys": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=list_sink_keys_for_service,
+    ),
+    "--list-source-tables": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=list_source_tables_for_service,
+    ),
+    "--list-sink-target-tables": CompletionCommand(
+        arg_count=1,
+        arg_desc="sink_key",
+        handler=list_tables_for_sink_target,
+    ),
+    "--get-default-sink": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=get_default_sink_for_service,
+    ),
+    "--list-target-tables": CompletionCommand(
+        arg_count=2,
+        arg_desc="service_name sink_key",
+        handler=list_target_tables_for_sink,
+    ),
+    "--list-target-columns": CompletionCommand(
+        arg_count=2,
+        arg_desc="sink_key target_table",
+        handler=list_target_columns_for_sink_table,
+    ),
+    "--list-custom-tables": CompletionCommand(
+        arg_count=2,
+        arg_desc="service_name sink_key",
+        handler=list_custom_tables_for_service_sink,
+    ),
+    "--list-sink-tables": CompletionCommand(
+        arg_count=2,
+        arg_desc="service_name sink_key",
+        handler=list_sink_tables_for_service,
+    ),
+    "--list-columns": CompletionCommand(
+        arg_count=3,
+        arg_desc="service_name schema table",
+        handler=list_columns_for_table,
+    ),
+    "--list-custom-table-columns": CompletionCommand(
+        arg_count=3,
+        arg_desc="service_name sink_key table_key",
+        handler=list_custom_table_columns_for_autocomplete,
+    ),
+    "--list-extra-columns": CompletionCommand(
+        arg_count=3,
+        arg_desc="service_name sink_key table_key",
+        handler=list_extra_columns_for_table,
+    ),
+    "--list-table-transforms": CompletionCommand(
+        arg_count=3,
+        arg_desc="service_name sink_key table_key",
+        handler=list_transforms_for_table,
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Dispatch helpers
+# ---------------------------------------------------------------------------
+
+
+def _dispatch_no_arg(command: str) -> int | None:
+    """Handle commands that take no positional args.
+
+    Returns:
+        0 on success, None if command not found.
+    """
+    handler = _NO_ARG_COMMANDS.get(command)
+    if handler is None:
+        return None
+
+    for item in handler():
+        print(item)
+    return 0
+
+
+def _dispatch_arg_command(command: str) -> int | None:
+    """Handle commands that require positional args.
+
+    Returns:
+        0 on success, 1 on missing args, None if command not found.
+    """
+    cmd = _ARG_COMMANDS.get(command)
+    if cmd is None:
+        return None
+
+    required_argc = _MIN_ARGS_WITH_COMMAND + cmd.arg_count
+    if len(sys.argv) < required_argc:
+        print(
+            f"Error: {command} requires {cmd.arg_desc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    positional = sys.argv[2 : 2 + cmd.arg_count]
+    result = cmd.handler(*positional)
+    _print_result(result)
+    return 0
+
+
+def _print_result(result: list[str] | str | None) -> None:
+    """Print handler result (list, single string, or None)."""
+    if result is None:
+        return
+    if isinstance(result, str):
+        print(result)
+        return
+    for item in result:
+        print(item)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 
 def main() -> int:
     """CLI entry point for autocompletion queries.
@@ -51,7 +248,7 @@ def main() -> int:
     Returns:
         Exit code (0 for success, 1 for error).
     """
-    if len(sys.argv) < 2:
+    if len(sys.argv) < _MIN_ARGS_WITH_COMMAND:
         print(
             "Usage: python -m cdc_generator.helpers.autocompletions <command>",
             file=sys.stderr,
@@ -60,222 +257,16 @@ def main() -> int:
 
     command = sys.argv[1]
 
-    if command == '--list-existing-services':
-        services = list_existing_services()
-        for service in services:
-            print(service)
+    result = _dispatch_no_arg(command)
+    if result is not None:
+        return result
 
-    elif command == '--list-available-services':
-        services = list_available_services_from_server_group()
-        for service in services:
-            print(service)
+    result = _dispatch_arg_command(command)
+    if result is not None:
+        return result
 
-    elif command == '--list-databases':
-        databases = list_databases_from_server_group()
-        for db in databases:
-            print(db)
-
-    elif command == '--list-server-names':
-        servers = list_servers_from_server_group()
-        for server in servers:
-            print(server)
-
-    elif command == '--list-server-group-names':
-        groups = list_server_group_names()
-        for group in groups:
-            print(group)
-
-    elif command == '--list-sink-group-names':
-        sink_groups = list_sink_group_names()
-        for group in sink_groups:
-            print(group)
-
-    elif command == '--list-non-inherited-sink-group-names':
-        sink_groups = list_non_inherited_sink_group_names()
-        for group in sink_groups:
-            print(group)
-
-    elif command == '--list-sink-group-servers':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-sink-group-servers requires sink group name",
-                file=sys.stderr,
-            )
-            return 1
-        sink_group_name = sys.argv[2]
-        servers = list_servers_for_sink_group(sink_group_name)
-        for server in servers:
-            print(server)
-
-    elif command == '--list-schemas':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-schemas requires service name",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        schemas = list_schemas_for_service(service_name)
-        for schema in schemas:
-            print(schema)
-
-    elif command == '--list-tables':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-tables requires service name",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        tables = list_tables_for_service(service_name)
-        for table in tables:
-            print(table)
-
-    elif command == '--list-columns':
-        if len(sys.argv) < 5:
-            print(
-                "Error: --list-columns requires service_name schema table",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        schema = sys.argv[3]
-        table = sys.argv[4]
-        columns = list_columns_for_table(service_name, schema, table)
-        for column in columns:
-            print(column)
-
-    elif command == '--scaffold-flag-values':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --scaffold-flag-values requires flag name",
-                file=sys.stderr,
-            )
-            return 1
-        flag = sys.argv[2]
-        completions = scaffold_flag_completions(flag)
-        for completion in completions:
-            print(completion)
-
-    elif command == '--list-sink-keys':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-sink-keys requires service name",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        keys = list_sink_keys_for_service(service_name)
-        for key in keys:
-            print(key)
-
-    elif command == '--list-available-sink-keys':
-        keys = list_available_sink_keys()
-        for key in keys:
-            print(key)
-
-    elif command == '--list-source-tables':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-source-tables requires service name",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        tables = list_source_tables_for_service(service_name)
-        for table in tables:
-            print(table)
-
-    elif command == '--list-target-tables':
-        if len(sys.argv) < 4:
-            print(
-                "Error: --list-target-tables requires service_name sink_key",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        sink_key = sys.argv[3]
-        tables = list_target_tables_for_sink(service_name, sink_key)
-        for table in tables:
-            print(table)
-
-    elif command == '--list-sink-target-tables':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --list-sink-target-tables requires sink_key",
-                file=sys.stderr,
-            )
-            return 1
-        sink_key = sys.argv[2]
-        tables = list_tables_for_sink_target(sink_key)
-        for table in tables:
-            print(table)
-
-    elif command == '--get-default-sink':
-        if len(sys.argv) < 3:
-            print(
-                "Error: --get-default-sink requires service_name",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        default_sink = get_default_sink_for_service(service_name)
-        if default_sink:
-            print(default_sink)
-
-    elif command == '--list-target-columns':
-        if len(sys.argv) < 4:
-            print(
-                "Error: --list-target-columns requires sink_key target_table",
-                file=sys.stderr,
-            )
-            return 1
-        sink_key = sys.argv[2]
-        target_table = sys.argv[3]
-        columns = list_target_columns_for_sink_table(sink_key, target_table)
-        for col in columns:
-            print(col)
-
-    elif command == '--list-custom-tables':
-        if len(sys.argv) < 4:
-            print(
-                "Error: --list-custom-tables requires service_name sink_key",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        sink_key = sys.argv[3]
-        tables = list_custom_tables_for_service_sink(service_name, sink_key)
-        for table in tables:
-            print(table)
-
-    elif command == '--list-custom-table-columns':
-        if len(sys.argv) < 5:
-            print(
-                "Error: --list-custom-table-columns requires "
-                + "service_name sink_key table_key",
-                file=sys.stderr,
-            )
-            return 1
-        service_name = sys.argv[2]
-        sink_key = sys.argv[3]
-        table_key = sys.argv[4]
-        columns = list_custom_table_columns_for_autocomplete(
-            service_name, sink_key, table_key,
-        )
-        for col in columns:
-            print(col)
-
-    elif command == '--list-pg-types':
-        types = list_pg_column_types()
-        for t in types:
-            print(t)
-
-    else:
-        print(f"Unknown command: {command}", file=sys.stderr)
-        return 1
-
-    return 0
+    print(f"Unknown command: {command}", file=sys.stderr)
+    return 1
 
 
 if __name__ == '__main__':

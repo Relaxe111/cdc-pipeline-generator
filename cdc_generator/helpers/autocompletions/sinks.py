@@ -288,7 +288,7 @@ def list_target_columns_for_sink_table(
         return []
 
 
-def _load_sink_tables_for_autocomplete(
+def load_sink_tables_for_autocomplete(
     service_name: str,
     sink_key: str,
 ) -> dict[str, object] | None:
@@ -357,7 +357,7 @@ def list_custom_tables_for_service_sink(
         >>> list_custom_tables_for_service_sink('chat', 'sink_asma.chat')
         ['custom.audit_log', 'custom.stats']
     """
-    tables = _load_sink_tables_for_autocomplete(service_name, sink_key)
+    tables = load_sink_tables_for_autocomplete(service_name, sink_key)
     if tables is None:
         return []
 
@@ -365,6 +365,29 @@ def list_custom_tables_for_service_sink(
         str(k) for k, v in tables.items()
         if isinstance(v, dict) and cast(dict[str, Any], v).get('custom')
     )
+
+
+def list_sink_tables_for_service(service_name: str, sink_key: str) -> list[str]:
+    """List all tables configured in a sink.
+
+    Used for --sink-table autocompletion in update operations.
+
+    Args:
+        service_name: Service name.
+        sink_key: Sink key.
+
+    Returns:
+        List of all table keys in the sink (schema.table format).
+
+    Example:
+        >>> list_sink_tables_for_service('directory', 'sink_asma.calendar')
+        ['public.customer_user', 'calendar.events']
+    """
+    tables = load_sink_tables_for_autocomplete(service_name, sink_key)
+    if tables is None:
+        return []
+
+    return sorted(str(k) for k in tables)
 
 
 def list_custom_table_columns_for_autocomplete(
@@ -388,7 +411,7 @@ def list_custom_table_columns_for_autocomplete(
         >>> list_custom_table_columns_for_autocomplete('chat', 'sink_asma.chat', 'custom.audit')
         ['id', 'timestamp', 'action']
     """
-    tables = _load_sink_tables_for_autocomplete(service_name, sink_key)
+    tables = load_sink_tables_for_autocomplete(service_name, sink_key)
     if tables is None:
         return []
 

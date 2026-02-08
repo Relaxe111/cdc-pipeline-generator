@@ -1,0 +1,119 @@
+# ============================================================================
+# Transform Rules Library
+# ============================================================================
+# Reusable row transformation rules referenced by name in service YAML.
+#
+# Usage in service YAML:
+#   transforms:
+#     - rule: user_class_splitter
+#     - rule: active_users_only
+#
+# Rule types:
+#   conditional_column  - First-match conditional (1 row → 1 row, adds column)
+#   row_multiplier      - All-match multiplication (1 row → N rows)
+#   filter              - Drop non-matching rows (1 row → 0 or 1 row)
+#
+# Condition fields:
+#   when:   Bloblang boolean expression (e.g., "this.Patient == true")
+#   value:  Bloblang expression for output value (conditional_column, row_multiplier)
+#
+# on_no_match behavior:
+#   "drop"     - Delete the row entirely (default for filter/row_multiplier)
+#   "keep"     - Keep the row unchanged
+#   "default"  - Use default_value (conditional_column only)
+# ============================================================================
+
+rules:
+  # ---------------------------------------------------------------------------
+  # Example: Conditional column (first match wins)
+  # ---------------------------------------------------------------------------
+  # Input:  { priority: 5, ... }
+  # Output: { priority: 5, priority_label: "high", ... }
+  #
+  # Bloblang generated:
+  #   root._priority_label = match {
+  #     this.priority > 3 => "high"
+  #     this.priority > 1 => "medium"
+  #     _ => "low"
+  #   }
+  priority_label:
+    type: conditional_column
+    description: Map numeric priority to human-readable label
+    output_column:
+      name: _priority_label
+      type: text
+      not_null: true
+    conditions:
+      - when: this.priority > 3
+        value: '"high"'
+      - when: this.priority > 1
+        value: '"medium"'
+    default_value: '"low"'
+    on_no_match: default
+
+  # ---------------------------------------------------------------------------
+  # Example: Row multiplier (1 row → N rows based on boolean flags)
+  # ---------------------------------------------------------------------------
+  # Input:  { id: 1, Patient: true, Ansatt: true }
+  # Output: [
+  #   { id: 1, Patient: true, Ansatt: true, _user_class: "Patient" },
+  #   { id: 1, Patient: true, Ansatt: true, _user_class: "Ansatt" }
+  # ]
+  #
+  # Bloblang generated:
+  #   let results = []
+  #   let base = this
+  #   let results = if this.Patient == true {
+  #     $results.append($base.merge({"_user_class": "Patient"}))
+  #   } else { $results }
+  #   let results = if this.Ansatt == true {
+  #     $results.append($base.merge({"_user_class": "Ansatt"}))
+  #   } else { $results }
+  #   root = if $results.length() > 0 { $results } else { deleted() }
+  user_class_splitter:
+    type: row_multiplier
+    description: Split row by boolean role flags into separate rows with user_class
+    output_column:
+      name: _user_class
+      type: text
+      not_null: true
+    conditions:
+      - when: this.Patient == true
+        value: '"Patient"'
+      - when: this.Ansatt == true
+        value: '"Ansatt"'
+      - when: this.Frilanser == true
+        value: '"Frilanser"'
+    on_no_match: drop
+
+  # ---------------------------------------------------------------------------
+  # Example: Filter (keep or discard rows)
+  # ---------------------------------------------------------------------------
+  # Input:  { id: 1, is_active: false }
+  # Output: deleted()
+  #
+  # Bloblang generated:
+  #   root = if this.is_active == true { this } else { deleted() }
+  active_users_only:
+    type: filter
+    description: Keep only rows where is_active is true
+    conditions:
+      - when: this.is_active == true
+    on_no_match: drop
+
+  # ---------------------------------------------------------------------------
+  # Example: Filter with multiple OR conditions
+  # ---------------------------------------------------------------------------
+  # Keeps rows that match ANY condition
+  #
+  # Bloblang generated:
+  #   root = if this.status == "active" || this.status == "pending" {
+  #     this
+  #   } else { deleted() }
+  valid_status_filter:
+    type: filter
+    description: Keep rows with active or pending status
+    conditions:
+      - when: this.status == "active"
+      - when: this.status == "pending"
+    on_no_match: drop

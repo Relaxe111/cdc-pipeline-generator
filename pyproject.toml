@@ -104,6 +104,12 @@ ignore = [
 "*.pyi" = ["ANN401"]
 "tests/*" = ["ANN401", "ARG"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "cli: End-to-end CLI tests (run with cdc test --cli)",
+]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

@@ -51,7 +51,7 @@ def _resolve_inspect_db_type(
             sg = server_groups_data[server_group]
             raw_type = sg.get("type")
             db_type = str(raw_type) if raw_type else None
-    except (SystemExit, FileNotFoundError, ValueError):
+    except (FileNotFoundError, ValueError):
         pass
 
     return db_type, server_group, server_groups_data

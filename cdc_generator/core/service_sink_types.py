@@ -63,6 +63,39 @@ class CustomColumnDefinition(TypedDict, total=False):
     default: str
 
 
+class ExtraColumnEntry(TypedDict, total=False):
+    """A single extra column reference in a sink table config.
+
+    Attributes:
+        template: Column template key from column-templates.yaml.
+        name: Optional column name override (default: template's name).
+
+    Example:
+        extra_columns:
+          - template: source_table
+          - template: environment
+            name: deploy_env
+    """
+
+    template: str
+    name: str
+
+
+class TransformEntry(TypedDict, total=False):
+    """A single transform rule reference in a sink table config.
+
+    Attributes:
+        rule: Transform rule key from transform-rules.yaml.
+
+    Example:
+        transforms:
+          - rule: user_class_splitter
+          - rule: active_users_only
+    """
+
+    rule: str
+
+
 class SinkTableConfig(TypedDict, total=False):
     """Configuration for a single table in a service sink.
 
@@ -70,6 +103,9 @@ class SinkTableConfig(TypedDict, total=False):
         target_exists: REQUIRED. Whether the target table already exists in the sink.
             - false: Clone table as-is (CREATE TABLE from source schema).
             - true: Map to existing table (requires target + columns).
+        from: Source table reference (schema.table) that this sink table reads from.
+            If omitted, defaults to the sink table key name. Required when sink table
+            name differs from source table name.
         target: Target table reference (schema.table) when target_exists=true.
         target_schema: Override target schema (when target_exists=false).
         columns: Column mapping {source_col: target_col} when target_exists=true,
@@ -99,8 +135,14 @@ class SinkTableConfig(TypedDict, total=False):
 
         # Replicate structure with auto-deduced type mapping
         public.customer_user:
+            from: public.customer_user  # explicit source reference
             target_exists: false
             replicate_structure: true
+
+        # Map to different sink table name
+        other_schema.manage_audits:
+            from: logs.audit_queue      # source table differs from sink table
+            target_exists: false
 
         # Map to existing table
         public.attachments:
@@ -133,6 +175,12 @@ class SinkTableConfig(TypedDict, total=False):
     custom: bool
     managed: bool
     replicate_structure: bool
+    extra_columns: list[ExtraColumnEntry]
+    transforms: list[TransformEntry]
+
+
+# Add 'from' field using __annotations__ to avoid Python keyword conflict
+SinkTableConfig.__annotations__["from"] = str
 
 
 class SinkDatabaseMapping(TypedDict, total=False):

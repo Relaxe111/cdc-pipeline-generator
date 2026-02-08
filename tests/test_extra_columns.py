@@ -1,0 +1,342 @@
+"""Tests for extra columns and transforms operations."""
+
+from pathlib import Path
+
+import pytest  # type: ignore[import-not-found]
+
+from cdc_generator.core.column_templates import (
+    clear_cache as clear_template_cache,
+    set_templates_path,
+)
+from cdc_generator.core.extra_columns import (
+    add_extra_column,
+    add_transform,
+    list_extra_columns,
+    list_transforms,
+    remove_extra_column,
+    remove_transform,
+    resolve_extra_columns,
+    resolve_transforms,
+)
+from cdc_generator.core.transform_rules import (
+    clear_cache as clear_rule_cache,
+    set_rules_path,
+)
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_caches() -> None:  # type: ignore[misc]
+    """Clear all caches before each test."""
+    clear_template_cache()
+    clear_rule_cache()
+
+
+@pytest.fixture()
+def setup_templates(tmp_path: Path) -> Path:
+    """Create a temporary column-templates.yaml."""
+    content = """\
+templates:
+  source_table:
+    name: _source_table
+    type: text
+    not_null: true
+    description: Source table name
+    value: meta("table")
+  environment:
+    name: _environment
+    type: text
+    not_null: true
+    description: Deployment environment
+    value: "${ENVIRONMENT}"
+"""
+    file_path = tmp_path / "column-templates.yaml"
+    file_path.write_text(content)
+    set_templates_path(file_path)
+    return file_path
+
+
+@pytest.fixture()
+def setup_rules(tmp_path: Path) -> Path:
+    """Create a temporary transform-rules.yaml."""
+    content = """\
+rules:
+  user_class_splitter:
+    type: row_multiplier
+    description: Split by boolean flags
+    output_column:
+      name: _user_class
+      type: text
+      not_null: true
+    conditions:
+      - when: this.Patient == true
+        value: '"Patient"'
+    on_no_match: drop
+  active_filter:
+    type: filter
+    description: Keep active rows
+    conditions:
+      - when: this.is_active == true
+    on_no_match: drop
+"""
+    file_path = tmp_path / "transform-rules.yaml"
+    file_path.write_text(content)
+    set_rules_path(file_path)
+    return file_path
+
+
+def _make_table_cfg() -> dict[str, object]:
+    """Create a minimal sink table config for testing."""
+    return {
+        "target_exists": False,
+        "from": "public.customer_user",
+        "replicate_structure": True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Extra column tests
+# ---------------------------------------------------------------------------
+
+
+class TestAddExtraColumn:
+    """Tests for add_extra_column."""
+
+    def test_add_valid_template(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_extra_column(table_cfg, "source_table")
+        assert result is True
+        assert "extra_columns" in table_cfg
+        cols = table_cfg["extra_columns"]
+        assert isinstance(cols, list)
+        assert len(cols) == 1
+        assert cols[0] == {"template": "source_table"}
+
+    def test_add_with_name_override(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_extra_column(table_cfg, "environment", "deploy_env")
+        assert result is True
+        cols = table_cfg["extra_columns"]
+        assert isinstance(cols, list)
+        assert cols[0] == {"template": "environment", "name": "deploy_env"}
+
+    def test_add_multiple(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        add_extra_column(table_cfg, "environment")
+        cols = table_cfg["extra_columns"]
+        assert isinstance(cols, list)
+        assert len(cols) == 2
+
+    def test_add_duplicate_fails(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        result = add_extra_column(table_cfg, "source_table")
+        assert result is False
+        cols = table_cfg["extra_columns"]
+        assert isinstance(cols, list)
+        assert len(cols) == 1  # No duplicate added
+
+    def test_add_unknown_template_fails(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_extra_column(table_cfg, "nonexistent")
+        assert result is False
+        assert "extra_columns" not in table_cfg
+
+
+class TestRemoveExtraColumn:
+    """Tests for remove_extra_column."""
+
+    def test_remove_existing(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        add_extra_column(table_cfg, "environment")
+
+        result = remove_extra_column(table_cfg, "source_table")
+        assert result is True
+        cols = table_cfg["extra_columns"]
+        assert isinstance(cols, list)
+        assert len(cols) == 1
+        assert cols[0]["template"] == "environment"
+
+    def test_remove_last_cleans_up(self, setup_templates: Path) -> None:
+        """Removing last extra column removes the key entirely."""
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        remove_extra_column(table_cfg, "source_table")
+        assert "extra_columns" not in table_cfg
+
+    def test_remove_nonexistent_fails(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = remove_extra_column(table_cfg, "nonexistent")
+        assert result is False
+
+
+class TestListExtraColumns:
+    """Tests for list_extra_columns."""
+
+    def test_list_empty(self) -> None:
+        table_cfg = _make_table_cfg()
+        result = list_extra_columns(table_cfg)
+        assert result == []
+
+    def test_list_populated(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        add_extra_column(table_cfg, "environment")
+        result = list_extra_columns(table_cfg)
+        assert result == ["source_table", "environment"]
+
+
+# ---------------------------------------------------------------------------
+# Transform tests
+# ---------------------------------------------------------------------------
+
+
+class TestAddTransform:
+    """Tests for add_transform."""
+
+    def test_add_valid_rule(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_transform(table_cfg, "user_class_splitter")
+        assert result is True
+        assert "transforms" in table_cfg
+        transforms = table_cfg["transforms"]
+        assert isinstance(transforms, list)
+        assert len(transforms) == 1
+        assert transforms[0] == {"rule": "user_class_splitter"}
+
+    def test_add_multiple(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "user_class_splitter")
+        add_transform(table_cfg, "active_filter")
+        transforms = table_cfg["transforms"]
+        assert isinstance(transforms, list)
+        assert len(transforms) == 2
+
+    def test_add_duplicate_fails(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "user_class_splitter")
+        result = add_transform(table_cfg, "user_class_splitter")
+        assert result is False
+
+    def test_add_unknown_rule_fails(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_transform(table_cfg, "nonexistent")
+        assert result is False
+        assert "transforms" not in table_cfg
+
+
+class TestRemoveTransform:
+    """Tests for remove_transform."""
+
+    def test_remove_existing(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "user_class_splitter")
+        add_transform(table_cfg, "active_filter")
+
+        result = remove_transform(table_cfg, "user_class_splitter")
+        assert result is True
+        transforms = table_cfg["transforms"]
+        assert isinstance(transforms, list)
+        assert len(transforms) == 1
+
+    def test_remove_last_cleans_up(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "active_filter")
+        remove_transform(table_cfg, "active_filter")
+        assert "transforms" not in table_cfg
+
+    def test_remove_nonexistent_fails(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = remove_transform(table_cfg, "nonexistent")
+        assert result is False
+
+
+class TestListTransforms:
+    """Tests for list_transforms."""
+
+    def test_list_empty(self) -> None:
+        table_cfg = _make_table_cfg()
+        result = list_transforms(table_cfg)
+        assert result == []
+
+    def test_list_populated(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "user_class_splitter")
+        add_transform(table_cfg, "active_filter")
+        result = list_transforms(table_cfg)
+        assert result == ["user_class_splitter", "active_filter"]
+
+
+# ---------------------------------------------------------------------------
+# Resolution tests
+# ---------------------------------------------------------------------------
+
+
+class TestResolveExtraColumns:
+    """Tests for resolve_extra_columns."""
+
+    def test_resolve_valid(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_extra_column(table_cfg, "source_table")
+        add_extra_column(table_cfg, "environment", "deploy_env")
+
+        resolved = resolve_extra_columns(table_cfg)
+        assert len(resolved) == 2
+        assert resolved[0].template_key == "source_table"
+        assert resolved[0].name == "_source_table"
+        assert resolved[0].template.column_type == "text"
+        assert resolved[1].template_key == "environment"
+        assert resolved[1].name == "deploy_env"  # name override
+
+    def test_resolve_empty(self) -> None:
+        table_cfg = _make_table_cfg()
+        resolved = resolve_extra_columns(table_cfg)
+        assert resolved == []
+
+    def test_resolve_skips_invalid(self, setup_templates: Path) -> None:
+        """Invalid template references are skipped."""
+        table_cfg = _make_table_cfg()
+        table_cfg["extra_columns"] = [
+            {"template": "source_table"},
+            {"template": "nonexistent_template"},
+        ]
+        resolved = resolve_extra_columns(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].template_key == "source_table"
+
+
+class TestResolveTransforms:
+    """Tests for resolve_transforms."""
+
+    def test_resolve_valid(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        add_transform(table_cfg, "user_class_splitter")
+        add_transform(table_cfg, "active_filter")
+
+        resolved = resolve_transforms(table_cfg)
+        assert len(resolved) == 2
+        assert resolved[0].rule_key == "user_class_splitter"
+        assert resolved[0].rule.rule_type == "row_multiplier"
+        assert resolved[1].rule_key == "active_filter"
+        assert resolved[1].rule.rule_type == "filter"
+
+    def test_resolve_empty(self) -> None:
+        table_cfg = _make_table_cfg()
+        resolved = resolve_transforms(table_cfg)
+        assert resolved == []
+
+    def test_resolve_skips_invalid(self, setup_rules: Path) -> None:
+        table_cfg = _make_table_cfg()
+        table_cfg["transforms"] = [
+            {"rule": "active_filter"},
+            {"rule": "nonexistent_rule"},
+        ]
+        resolved = resolve_transforms(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].rule_key == "active_filter"

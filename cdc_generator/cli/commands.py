@@ -26,6 +26,7 @@ Commands:
     reload-pipelines     Regenerate and reload Redpanda Connect pipelines
     reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
     help                 Show this help message
+    test                 Run project tests (unit and CLI e2e)
 
 Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
 """
@@ -251,6 +252,10 @@ def print_help(
     for cmd, info in GENERATOR_COMMANDS.items():
         print(f"  {cmd:20} - {info['description']}")
 
+    print("\n🧪 Testing:")
+    print("  test                 - Run tests (--cli for e2e, --all for everything)")
+    print("  test-coverage        - Show test coverage report by cdc command (-v for details)")
+
     print("\n🔧 Commands using local scripts:")
     for cmd, info in LOCAL_COMMANDS.items():
         desc = info["description"]
@@ -356,6 +361,18 @@ def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
 
         sys.argv = [sys.argv[0], *extra_args]
         return scaffold_main()
+
+    if command == "test":
+        from cdc_generator.cli.test_runner import main as test_main
+
+        sys.argv = [sys.argv[0], *extra_args]
+        return test_main()
+
+    if command == "test-coverage":
+        from tests.cli.coverage_report import main as coverage_main
+
+        sys.argv = [sys.argv[0], *extra_args]
+        return coverage_main()
 
     return None
 

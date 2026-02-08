@@ -24,7 +24,12 @@ def create_service(service_name: str, server_group: str, server: str = "default"
     service_file = services_dir / f'{service_name}.yaml'
 
     # Load source-groups.yaml using typed loader
-    server_groups_data = load_server_groups()
+    try:
+        server_groups_data = load_server_groups()
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"source-groups.yaml not found. Run 'cdc scaffold' first: {exc}"
+        ) from exc
 
     # Find the server group and get its type
     validation_database = None

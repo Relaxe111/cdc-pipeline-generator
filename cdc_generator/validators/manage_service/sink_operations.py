@@ -8,6 +8,8 @@ Sink key format: {sink_group}.{target_service}
     - target_service: target service/database in that sink group
 """
 
+import shutil
+from dataclasses import dataclass
 from typing import cast
 
 from cdc_generator.helpers.helpers_logging import (
@@ -27,6 +29,25 @@ from .config import SERVICE_SCHEMAS_DIR, save_service_config
 # ---------------------------------------------------------------------------
 _SINK_KEY_SEPARATOR = "."
 _SINK_KEY_PARTS = 2
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class TableConfigOptions:
+    """Options for building a sink table configuration."""
+
+    target_exists: bool
+    target: str | None = None
+    target_schema: str | None = None
+    include_columns: list[str] | None = None
+    columns: dict[str, str] | None = None
+    from_table: str | None = None
+    replicate_structure: bool = False
+    sink_schema: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -286,30 +307,31 @@ def remove_sink_from_service(service: str, sink_key: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _build_table_config(
-    *,
-    target_exists: bool,
-    target: str | None,
-    target_schema: str | None,
-    include_columns: list[str] | None,
-    columns: dict[str, str] | None = None,
-) -> dict[str, object]:
+def _build_table_config(opts: TableConfigOptions) -> dict[str, object]:
     """Build the per-table config dict from the given options.
 
     target_exists is ALWAYS included in the output.
     """
-    cfg: dict[str, object] = {"target_exists": target_exists}
+    cfg: dict[str, object] = {"target_exists": opts.target_exists}
 
-    if target_exists:
-        if target:
-            cfg["target"] = target
-        if columns:
-            cfg["columns"] = columns
+    # Add 'from' field if provided
+    if opts.from_table is not None:
+        cfg["from"] = opts.from_table
+
+    # Add 'replicate_structure' if True
+    if opts.replicate_structure:
+        cfg["replicate_structure"] = True
+
+    if opts.target_exists:
+        if opts.target:
+            cfg["target"] = opts.target
+        if opts.columns:
+            cfg["columns"] = opts.columns
     else:
-        if target_schema:
-            cfg["target_schema"] = target_schema
-        if include_columns:
-            cfg["include_columns"] = include_columns
+        if opts.target_schema:
+            cfg["target_schema"] = opts.target_schema
+        if opts.include_columns:
+            cfg["include_columns"] = opts.include_columns
     return cfg
 
 
@@ -318,8 +340,17 @@ def _validate_table_add(
     sink_key: str,
     table_key: str,
     table_opts: dict[str, object],
+    skip_schema_validation: bool = False,
 ) -> tuple[dict[str, object] | None, str | None]:
     """Validate parameters for adding table to sink.
+
+    Args:
+        config: Service config dict.
+        sink_key: Sink key.
+        table_key: Table key to add.
+        table_opts: Table options dict.
+        skip_schema_validation: If True, skip checking if table exists in service-schemas
+            (used for custom tables with --sink-schema).
 
     Returns:
         (sink_tables_dict, error_msg) — tables dict on success, or None + error.
@@ -344,11 +375,86 @@ def _validate_table_add(
             + "--target-exists false (autocreate clone)",
         )
 
+    # Validate 'from' field references a valid source table
+    from_table = table_opts.get("from")
+    if from_table is not None:
+        source_tables = _get_source_table_keys(config)
+        if str(from_table) not in source_tables:
+            available = "\n  ".join(source_tables) if source_tables else "(none)"
+            return (
+                None,
+                f"Source table '{from_table}' not found in service.\n"
+                + f"Available source tables:\n  {available}",
+            )
+
     # Validate table exists in service-schemas for the sink target
-    if not _validate_table_in_schemas(sink_key, table_key):
+    # Skip for custom tables (when sink_schema is provided)
+    if not skip_schema_validation and not _validate_table_in_schemas(sink_key, table_key):
         return None, None  # Error already printed
 
     return tables, None
+
+
+def _save_custom_table_structure(
+    sink_key: str,
+    table_key: str,
+    from_table: str,
+    source_service: str,
+) -> None:
+    """Save custom table structure to service-schemas/{target}/custom-tables/.
+
+    Copies the source table schema from service-schemas/{source_service}/{schema}/{table}.yaml
+    to service-schemas/{target_service}/custom-tables/{schema}.{table}.yaml
+
+    Args:
+        sink_key: Sink key (e.g., 'sink_asma.notification').
+        table_key: Target table key (e.g., 'notification.customer_user').
+        from_table: Source table key (e.g., 'public.customer_user').
+        source_service: Source service name to find original schema.
+    """
+    target_service = _get_target_service_from_sink_key(sink_key)
+    if not target_service:
+        print_warning("Could not determine target service from sink key")
+        return
+
+    # Parse source table
+    if "." not in from_table:
+        print_warning(f"Invalid source table format: {from_table}")
+        return
+
+    source_schema, source_table = from_table.split(".", 1)
+
+    # Source file path
+    source_file = (
+        SERVICE_SCHEMAS_DIR
+        / source_service
+        / source_schema
+        / f"{source_table}.yaml"
+    )
+
+    if not source_file.exists():
+        print_warning(
+            f"Source table schema not found: {source_file}\n"
+            + "Custom table structure will not be saved. "
+            + "Run inspect on source service first."
+        )
+        return
+
+    # Target directory and file
+    target_dir = SERVICE_SCHEMAS_DIR / target_service / "custom-tables"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Target file named as schema.table.yaml
+    target_file = target_dir / f"{table_key.replace('/', '_')}.yaml"
+
+    # Copy the schema file
+    try:
+        shutil.copy2(source_file, target_file)
+        print_success(
+            f"Saved custom table structure: {target_file.relative_to(SERVICE_SCHEMAS_DIR.parent)}"
+        )
+    except Exception as exc:
+        print_warning(f"Failed to save custom table structure: {exc}")
 
 
 def add_sink_table(
@@ -365,7 +471,7 @@ def add_sink_table(
         table_key: Source table in format 'schema.table'.
         table_opts: Optional table config dict. REQUIRED key:
             target_exists (bool). Other keys: target, target_schema,
-            include_columns, columns.
+            include_columns, columns, from, replicate_structure, sink_schema.
 
     Returns:
         True on success, False otherwise.
@@ -377,7 +483,29 @@ def add_sink_table(
         return False
 
     opts = table_opts if table_opts is not None else {}
-    tables, error = _validate_table_add(config, sink_key, table_key, opts)
+    
+    # Handle sink_schema override - change table_key schema
+    sink_schema = opts.get("sink_schema")
+    final_table_key = table_key
+    
+    if sink_schema is not None:
+        # Override schema in table_key
+        if "." in table_key:
+            _schema, table_name = table_key.split(".", 1)
+            final_table_key = f"{sink_schema}.{table_name}"
+            print_info(
+                f"Using sink schema '{sink_schema}' "
+                + f"(table: {final_table_key})"
+            )
+        else:
+            print_error(
+                f"Invalid table key '{table_key}': expected 'schema.table' format"
+            )
+            return False
+    
+    tables, error = _validate_table_add(
+        config, sink_key, final_table_key, opts, skip_schema_validation=sink_schema is not None
+    )
 
     if error:
         print_error(error)
@@ -387,7 +515,10 @@ def add_sink_table(
 
     target_exists = bool(opts.get("target_exists", False))
     target = opts.get("target")
-    tables[table_key] = _build_table_config(
+    from_table = opts.get("from")
+    replicate_structure = bool(opts.get("replicate_structure", False))
+
+    config_opts = TableConfigOptions(
         target_exists=target_exists,
         target=str(target) if target else None,
         target_schema=(
@@ -403,13 +534,24 @@ def add_sink_table(
             if "columns" in opts
             else None
         ),
+        from_table=str(from_table) if from_table is not None else None,
+        replicate_structure=replicate_structure,
+        sink_schema=str(sink_schema) if sink_schema is not None else None,
     )
+
+    tables[final_table_key] = _build_table_config(config_opts)
 
     if not save_service_config(service, config):
         return False
 
+    # Save custom table structure if sink_schema provided
+    if sink_schema is not None and replicate_structure and from_table:
+        _save_custom_table_structure(
+            sink_key, final_table_key, str(from_table), service
+        )
+
     label = f"→ '{target}'" if target_exists and target else "(clone)"
-    print_success(f"Added table '{table_key}' {label} to sink '{sink_key}'")
+    print_success(f"Added table '{final_table_key}' {label} to sink '{sink_key}'")
     return True
 
 
@@ -444,6 +586,88 @@ def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:
         return False
 
     print_success(f"Removed table '{table_key}' from sink '{sink_key}'")
+    return True
+
+
+def update_sink_table_schema(
+    service: str,
+    sink_key: str,
+    table_key: str,
+    new_schema: str,
+) -> bool:
+    """Update the schema portion of a sink table's name.
+
+    Args:
+        service: Service name.
+        sink_key: Sink key (e.g., 'sink_asma.chat').
+        table_key: Current table key (e.g., 'public.customer_user').
+        new_schema: New schema name (e.g., 'calendar').
+
+    Returns:
+        True on success, False otherwise.
+    
+    Example:
+        update_sink_table_schema(
+            'directory', 'sink_asma.calendar', 
+            'public.customer_user', 'calendar'
+        )
+        # Changes 'public.customer_user' to 'calendar.customer_user'
+    """
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError as exc:
+        print_error(f"Service not found: {exc}")
+        return False
+
+    sinks = _get_sinks_dict(config)
+    if sink_key not in sinks:
+        print_error(f"Sink '{sink_key}' not found in service '{service}'")
+        return False
+
+    sink_cfg = _resolve_sink_config(sinks, sink_key)
+    if sink_cfg is None:
+        return False
+
+    tables = _get_sink_tables(sink_cfg)
+    if table_key not in tables:
+        print_error(f"Table '{table_key}' not found in sink '{sink_key}'")
+        print_info(
+            f"Available tables in '{sink_key}':\n  "
+            + "\n  ".join(str(k) for k in tables)
+        )
+        return False
+
+    # Parse current table key to get table name
+    if "." not in table_key:
+        print_error(
+            f"Invalid table key '{table_key}': expected 'schema.table' format"
+        )
+        return False
+
+    parts = table_key.split(".", 1)
+    old_schema = parts[0]
+    table_name = parts[1]
+    new_table_key = f"{new_schema}.{table_name}"
+
+    # Check if new table key already exists
+    if new_table_key in tables:
+        print_error(
+            f"Table '{new_table_key}' already exists in sink '{sink_key}'"
+        )
+        return False
+
+    # Move the table config to new key
+    table_config = tables[table_key]
+    tables[new_table_key] = table_config
+    del tables[table_key]
+
+    if not save_service_config(service, config):
+        return False
+
+    print_success(
+        f"Updated table schema: '{old_schema}.{table_name}' → "
+        + f"'{new_schema}.{table_name}' in sink '{sink_key}'"
+    )
     return True
 
 

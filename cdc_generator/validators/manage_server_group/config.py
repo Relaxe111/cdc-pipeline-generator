@@ -98,16 +98,9 @@ def load_server_groups() -> ServerGroupFile:
         FileNotFoundError: If source-groups.yaml not found in current directory or parents
     """
     if not SERVER_GROUPS_FILE.exists():
-        from cdc_generator.helpers.helpers_logging import Colors, print_error
-        print_error("Configuration file not found: source-groups.yaml")
-        print(f"\n{Colors.YELLOW}Expected location:{Colors.ENDC}")
-        print(f"  {SERVER_GROUPS_FILE}")
-        print(f"\n{Colors.CYAN}To fix this:{Colors.ENDC}")
-        print("  1. Navigate to your CDC implementation directory (e.g., /implementations/adopus/)")
-        print(f"  2. Or initialize a new implementation with: {Colors.BOLD}cdc scaffold{Colors.ENDC}")
-        print("  3. Or create source-groups.yaml manually in your project root")
-        print()
-        raise SystemExit(1)
+        raise FileNotFoundError(
+            f"Configuration file not found: {SERVER_GROUPS_FILE}"
+        )
 
     with open(SERVER_GROUPS_FILE) as f:
         return cast(ServerGroupFile, yaml.safe_load(f) or {})  # type: ignore[misc]
@@ -193,7 +186,7 @@ def get_server_group_for_service(service_name: str, config: ServerGroupFile | No
     if config is None:
         try:
             config = load_server_groups()
-        except SystemExit:
+        except FileNotFoundError:
             return None
 
     for sg_name, sg_data in config.items():
@@ -216,7 +209,7 @@ def get_all_defined_services(config: ServerGroupFile | None = None) -> set[str]:
     if config is None:
         try:
             config = load_server_groups()
-        except SystemExit:
+        except FileNotFoundError:
             return set()
 
     services: set[str] = set()

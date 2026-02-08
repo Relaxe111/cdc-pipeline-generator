@@ -27,7 +27,11 @@ def handle_info(args: Namespace) -> int:
     """
     from cdc_generator.helpers.helpers_logging import Colors
 
-    config = load_server_groups()
+    try:
+        config = load_server_groups()
+    except FileNotFoundError:
+        print_error("source-groups.yaml not found. Run 'cdc scaffold' first.")
+        return 1
 
     # Use get_single_server_group for flat format
     sg_config = get_single_server_group(config)

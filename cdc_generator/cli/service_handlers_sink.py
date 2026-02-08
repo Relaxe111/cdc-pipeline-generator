@@ -76,16 +76,30 @@ def handle_sink_validate(args: argparse.Namespace) -> int:
 
 
 def handle_sink_add(args: argparse.Namespace) -> int:
-    """Add a sink destination to a service."""
-    if add_sink_to_service(args.service, args.add_sink):
+    """Add sink destination(s) to a service."""
+    sink_keys = args.add_sink if isinstance(args.add_sink, list) else [args.add_sink]
+    success_count = 0
+    
+    for sink_key in sink_keys:
+        if add_sink_to_service(args.service, sink_key):
+            success_count += 1
+    
+    if success_count > 0:
         print_info("Run 'cdc generate' to update pipelines")
         return 0
     return 1
 
 
 def handle_sink_remove(args: argparse.Namespace) -> int:
-    """Remove a sink destination from a service."""
-    if remove_sink_from_service(args.service, args.remove_sink):
+    """Remove sink destination(s) from a service."""
+    sink_keys = args.remove_sink if isinstance(args.remove_sink, list) else [args.remove_sink]
+    success_count = 0
+    
+    for sink_key in sink_keys:
+        if remove_sink_from_service(args.service, sink_key):
+            success_count += 1
+    
+    if success_count > 0:
         print_info("Run 'cdc generate' to update pipelines")
         return 0
     return 1
@@ -97,21 +111,77 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
     if not sink_key:
         return 1
 
-    if not hasattr(args, "target_exists") or args.target_exists is None:
+    # Check if replicate_structure is set
+    replicate_structure = hasattr(args, "replicate_structure") and args.replicate_structure
+
+    # Validate sink_schema is provided when replicate_structure is set
+    if replicate_structure and (not hasattr(args, "sink_schema") or args.sink_schema is None):
         print_error(
-            "--add-sink-table requires --target-exists "
-            + "(true or false)"
+            "--replicate-structure requires --sink-schema "
+            + "(specify target schema for custom table)"
         )
         print_info(
-            "Example (autocreate): --target-exists false\n"
-            + "Example (map existing): --target-exists true "
-            + "--target public.users"
+            "Example: --replicate-structure --sink-schema notification"
         )
         return 1
 
+    # Auto-set target_exists to false if replicate_structure is set
+    if replicate_structure:
+        if not hasattr(args, "target_exists") or args.target_exists is None:
+            target_exists_value = "false"
+            print_info(
+                "Auto-setting --target-exists false "
+                + "(table will be created with replicate_structure)"
+            )
+        else:
+            target_exists_value = args.target_exists
+    else:
+        if not hasattr(args, "target_exists") or args.target_exists is None:
+            print_error(
+                "--add-sink-table requires --target-exists "
+                + "(true or false)"
+            )
+            print_info(
+                "Example (autocreate): --target-exists false\n"
+                + "Example (map existing): --target-exists true "
+                + "--target public.users"
+            )
+            return 1
+        target_exists_value = args.target_exists
+
+    # Auto-name from --from if table name not provided
+    table_name = args.add_sink_table
+    if table_name is None:
+        if hasattr(args, "from_table") and args.from_table is not None:
+            table_name = args.from_table
+            print_info(
+                f"Using source table name '{table_name}' for sink table"
+            )
+        else:
+            print_error(
+                "--add-sink-table requires a table name or --from flag"
+            )
+            print_info(
+                "Example: --add-sink-table public.users\n"
+                + "Or: --from public.customer_user (uses same name)"
+            )
+            return 1
+
     table_opts: dict[str, object] = {
-        "target_exists": args.target_exists == "true",
+        "target_exists": target_exists_value == "true",
     }
+
+    # Handle 'from' field for source table reference
+    if hasattr(args, "from_table") and args.from_table is not None:
+        table_opts["from"] = args.from_table
+
+    # Handle replicate_structure flag
+    if replicate_structure:
+        table_opts["replicate_structure"] = True
+
+    # Handle sink_schema override
+    if hasattr(args, "sink_schema") and args.sink_schema is not None:
+        table_opts["sink_schema"] = args.sink_schema
 
     if args.target is not None:
         table_opts["target"] = args.target
@@ -125,7 +195,7 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
     if add_sink_table(
         args.service,
         sink_key,
-        args.add_sink_table,
+        table_name,
         table_opts=table_opts if table_opts else None,
     ):
         print_info("Run 'cdc generate' to update pipelines")
@@ -137,6 +207,37 @@ def handle_sink_remove_table(args: argparse.Namespace) -> int:
     """Remove table from sink (requires --sink)."""
     if remove_sink_table(
         args.service, args.sink, args.remove_sink_table,
+    ):
+        print_info("Run 'cdc generate' to update pipelines")
+        return 0
+    return 1
+
+
+def handle_sink_update_schema(args: argparse.Namespace) -> int:
+    """Update schema of a sink table (requires --sink, --sink-table, --update-schema)."""
+    from cdc_generator.validators.manage_service.sink_operations import (
+        update_sink_table_schema,
+    )
+
+    sink_key = _resolve_sink_key(args)
+    if not sink_key:
+        return 1
+
+    if not hasattr(args, "sink_table") or args.sink_table is None:
+        print_error("--update-schema requires --sink-table")
+        print_info(
+            "Example: cdc manage-service --service directory "
+            + "--sink sink_asma.calendar "
+            + "--sink-table public.customer_user "
+            + "--update-schema calendar"
+        )
+        return 1
+
+    if update_sink_table_schema(
+        args.service,
+        sink_key,
+        args.sink_table,
+        args.update_schema,
     ):
         print_info("Run 'cdc generate' to update pipelines")
         return 0

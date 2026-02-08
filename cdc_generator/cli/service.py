@@ -11,20 +11,29 @@ Usage:
 
 import argparse
 import sys
+from collections.abc import Callable
 from typing import NoReturn
 
 from cdc_generator.cli.service_handlers import (
+    handle_add_extra_column,
     handle_add_source_table,
     handle_add_source_tables,
+    handle_add_transform,
     handle_create_service,
     handle_generate_validation,
     handle_inspect,
     handle_inspect_sink,
     handle_interactive,
+    handle_list_column_templates,
+    handle_list_extra_columns,
     handle_list_source_tables,
+    handle_list_transform_rules,
+    handle_list_transforms,
     handle_modify_custom_table,
     handle_no_service,
+    handle_remove_extra_column,
     handle_remove_table,
+    handle_remove_transform,
     handle_sink_add,
     handle_sink_add_custom_table,
     handle_sink_add_table,
@@ -32,6 +41,7 @@ from cdc_generator.cli.service_handlers import (
     handle_sink_map_column_error,
     handle_sink_remove,
     handle_sink_remove_table,
+    handle_sink_update_schema,
     handle_sink_validate,
     handle_validate_config,
     handle_validate_hierarchy,
@@ -90,6 +100,22 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         (
             "cdc manage-service --service directory"
             " --sink sink_asma.chat --add-sink-table public.users"
+        ),
+    ),
+    "--from": (
+        "Source table reference for sink (defaults to sink table name)",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.proxy --add-sink-table other.manage_audits"
+            " --from logs.audit_queue --replicate-structure"
+        ),
+    ),
+    "--replicate-structure": (
+        "Auto-generate sink table DDL from source schema",
+        (
+            "cdc manage-service --service directory"
+            " --sink sink_asma.chat --add-sink-table public.customer_user"
+            " --replicate-structure --target-exists false"
         ),
     ),
     "--remove-sink-table": (
@@ -236,6 +262,70 @@ Examples:
 """
 
 
+def _add_extra_column_args(parser: ServiceArgumentParser) -> None:
+    """Add extra columns & transforms arguments to the parser."""
+    parser.add_argument(
+        "--add-extra-column",
+        metavar="TEMPLATE",
+        help=(
+            "Add extra column template to sink table "
+            + "(requires --sink-table)"
+        ),
+    )
+    parser.add_argument(
+        "--remove-extra-column",
+        metavar="TEMPLATE",
+        help=(
+            "Remove extra column template from sink table "
+            + "(requires --sink-table)"
+        ),
+    )
+    parser.add_argument(
+        "--list-extra-columns",
+        action="store_true",
+        help="List extra columns on a sink table (requires --sink-table)",
+    )
+    parser.add_argument(
+        "--column-name",
+        metavar="NAME",
+        help=(
+            "Override column name when adding extra column "
+            + "(default: template's name)"
+        ),
+    )
+    parser.add_argument(
+        "--add-transform",
+        metavar="RULE",
+        help=(
+            "Add transform rule to sink table "
+            + "(requires --sink-table)"
+        ),
+    )
+    parser.add_argument(
+        "--remove-transform",
+        metavar="RULE",
+        help=(
+            "Remove transform rule from sink table "
+            + "(requires --sink-table)"
+        ),
+    )
+    parser.add_argument(
+        "--list-transforms",
+        action="store_true",
+        help="List transforms on a sink table (requires --sink-table)",
+    )
+    parser.add_argument(
+        "--list-column-templates",
+        action="store_true",
+        help="List all available column templates",
+    )
+    parser.add_argument(
+        "--list-transform-rules",
+        action="store_true",
+        help="List all available transform rules",
+    )
+
+
 def _build_parser() -> ServiceArgumentParser:
     """Build the argument parser for manage-service."""
     parser = ServiceArgumentParser(
@@ -344,12 +434,14 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--add-sink",
         metavar="SINK_KEY",
-        help="Add sink (sink_group.target_service)",
+        action="append",
+        help="Add sink (sink_group.target_service). Can be used multiple times.",
     )
     parser.add_argument(
         "--remove-sink",
         metavar="SINK_KEY",
-        help="Remove sink destination",
+        action="append",
+        help="Remove sink destination. Can be used multiple times.",
     )
     parser.add_argument(
         "--sink",
@@ -359,12 +451,43 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--add-sink-table",
         metavar="TABLE",
-        help="Add table to sink (requires --sink)",
+        nargs="?",
+        help="Add table to sink (requires --sink). If omitted, uses --from value as table name.",
     )
     parser.add_argument(
         "--remove-sink-table",
         metavar="TABLE",
         help="Remove table from sink (requires --sink)",
+    )
+    parser.add_argument(
+        "--update-schema",
+        metavar="NEW_SCHEMA",
+        help="Update schema of a sink table (requires --sink and --sink-table)",
+    )
+    parser.add_argument(
+        "--from",
+        dest="from_table",
+        metavar="SOURCE_TABLE",
+        help=(
+            "Source table reference for sink table "
+            + "(format: schema.table). Defaults to same name as sink table."
+        ),
+    )
+    parser.add_argument(
+        "--replicate-structure",
+        action="store_true",
+        help=(
+            "Auto-generate sink table DDL from source schema "
+            + "(requires --from if sink table name differs from source)"
+        ),
+    )
+    parser.add_argument(
+        "--sink-schema",
+        metavar="SCHEMA",
+        help=(
+            "Override sink table schema (default: use source schema). "
+            + "Structure saved to service-schemas/{target}/custom-tables/{schema}.{table}.yaml"
+        ),
     )
     parser.add_argument(
         "--target-exists",
@@ -408,6 +531,9 @@ def _build_parser() -> ServiceArgumentParser:
         help="Validate sink configuration",
     )
 
+    # Extra columns & transforms args
+    _add_extra_column_args(parser)
+
     # Custom sink table args
     parser.add_argument(
         "--add-custom-sink-table",
@@ -442,13 +568,12 @@ def _build_parser() -> ServiceArgumentParser:
         "--source-schema", help=argparse.SUPPRESS,
     )
     parser.add_argument(
-        "--sink-schema", help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--source-table", help=argparse.SUPPRESS,
     )
     parser.add_argument(
-        "--sink-table", help=argparse.SUPPRESS,
+        "--sink-table",
+        metavar="TABLE",
+        help="Target sink table for update operations (schema.table)",
     )
 
     return parser
@@ -527,28 +652,70 @@ def _dispatch_inspect(args: argparse.Namespace) -> int | None:
     return None
 
 
+def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
+    """Handle extra column and transform commands. None = not handled."""
+    # Global listing commands (no --service required)
+    if args.list_column_templates:
+        return handle_list_column_templates(args)
+    if args.list_transform_rules:
+        return handle_list_transform_rules(args)
+
+    if not args.service:
+        return None
+
+    extra_handlers: dict[str, Callable[[argparse.Namespace], int]] = {
+        "add_extra_column": handle_add_extra_column,
+        "remove_extra_column": handle_remove_extra_column,
+        "list_extra_columns": handle_list_extra_columns,
+        "add_transform": handle_add_transform,
+        "remove_transform": handle_remove_transform,
+        "list_transforms": handle_list_transforms,
+    }
+    for attr, handler in extra_handlers.items():
+        if getattr(args, attr, False):
+            return handler(args)
+
+    return None
+
+
 def _dispatch_sink(args: argparse.Namespace) -> int | None:
     """Handle sink-related commands. None = not handled."""
     if not args.service:
         return None
 
-    simple_sink_cmds = {
+    sink_cmds: dict[str, Callable[[argparse.Namespace], int]] = {
         "list_sinks": handle_sink_list,
         "validate_sinks": handle_sink_validate,
         "add_sink": handle_sink_add,
         "remove_sink": handle_sink_remove,
         "add_sink_table": handle_sink_add_table,
         "add_custom_sink_table": handle_sink_add_custom_table,
+        "modify_custom_table": handle_modify_custom_table,
     }
-    for attr, handler in simple_sink_cmds.items():
+    for attr, handler in sink_cmds.items():
         if getattr(args, attr, False):
             return handler(args)
 
-    if args.modify_custom_table:
-        return handle_modify_custom_table(args)
+    result = _dispatch_sink_conditional(args)
+    if result is not None:
+        return result
 
+    return None
+
+
+def _dispatch_sink_conditional(args: argparse.Namespace) -> int | None:
+    """Handle sink commands that need conditional checks."""
     if args.remove_sink_table and args.sink:
         return handle_sink_remove_table(args)
+
+    if args.update_schema and args.sink:
+        return handle_sink_update_schema(args)
+
+    # --add-sink-table can be optional if --from is provided
+    has_from = hasattr(args, "from_table") and args.from_table
+    has_add_table = args.add_sink_table is not None or has_from
+    if has_add_table and args.sink:
+        return handle_sink_add_table(args)
 
     if args.map_column and args.sink and not args.add_sink_table:
         return handle_sink_map_column_error()
@@ -576,6 +743,10 @@ def _dispatch_source(args: argparse.Namespace) -> int | None:
 def _dispatch(args: argparse.Namespace) -> int:
     """Route parsed args to the appropriate handler."""
     result = _dispatch_validation(args)
+    if result is not None:
+        return result
+
+    result = _dispatch_extra_columns(args)
     if result is not None:
         return result
 

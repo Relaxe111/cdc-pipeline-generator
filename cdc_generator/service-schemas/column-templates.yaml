@@ -1,0 +1,128 @@
+# ============================================================================
+# Column Templates Library
+# ============================================================================
+# Reusable column definitions referenced by name in service YAML extra_columns.
+#
+# Usage in service YAML:
+#   extra_columns:
+#     - template: source_table
+#     - template: environment
+#       name: deploy_env           # override column name
+#
+# Template fields:
+#   name:        Column name (used as default, overridable in service YAML)
+#   type:        PostgreSQL column type
+#   not_null:    Whether column is NOT NULL (default: false)
+#   description: Human-readable description
+#   value:       Bloblang expression for pipeline runtime
+#                - Bloblang expressions: root().source_table, this.field, meta("key")
+#                - Environment variables: ${VARIABLE_NAME}
+#   default:     SQL default for DDL (e.g., now(), gen_random_uuid())
+# ============================================================================
+
+templates:
+  # ---------------------------------------------------------------------------
+  # Pipeline metadata columns
+  # ---------------------------------------------------------------------------
+  source_table:
+    name: _source_table
+    type: text
+    not_null: true
+    description: Source table name injected at pipeline runtime
+    value: meta("table")
+
+  source_schema:
+    name: _source_schema
+    type: text
+    not_null: true
+    description: Source schema name
+    value: meta("schema")
+
+  kafka_topic:
+    name: _kafka_topic
+    type: text
+    not_null: true
+    description: Kafka topic the message was consumed from
+    value: meta("kafka_topic")
+
+  kafka_offset:
+    name: _kafka_offset
+    type: bigint
+    not_null: false
+    description: Kafka message offset
+    value: meta("kafka_offset")
+
+  kafka_partition:
+    name: _kafka_partition
+    type: integer
+    not_null: false
+    description: Kafka partition number
+    value: meta("kafka_partition")
+
+  # ---------------------------------------------------------------------------
+  # Sync / audit columns
+  # ---------------------------------------------------------------------------
+  sync_timestamp:
+    name: _synced_at
+    type: timestamptz
+    not_null: true
+    description: Timestamp when the row was synced to sink
+    default: now()
+    value: now()
+
+  sync_id:
+    name: _sync_id
+    type: uuid
+    not_null: true
+    description: Unique sync operation identifier
+    default: gen_random_uuid()
+    value: uuid_v4()
+
+  cdc_operation:
+    name: _cdc_operation
+    type: text
+    not_null: true
+    description: CDC operation type (c=create, u=update, d=delete)
+    value: meta("operation")
+
+  cdc_lsn:
+    name: _cdc_lsn
+    type: text
+    not_null: false
+    description: Log sequence number from source database
+    value: meta("lsn")
+
+  # ---------------------------------------------------------------------------
+  # Environment / deployment columns
+  # ---------------------------------------------------------------------------
+  environment:
+    name: _environment
+    type: text
+    not_null: true
+    description: Deployment environment name
+    value: "${ENVIRONMENT}"
+
+  tenant_id:
+    name: _tenant_id
+    type: text
+    not_null: true
+    description: Tenant identifier for multi-tenant deployments
+    value: "${TENANT_ID}"
+
+  # ---------------------------------------------------------------------------
+  # Row identity columns
+  # ---------------------------------------------------------------------------
+  row_hash:
+    name: _row_hash
+    type: text
+    not_null: false
+    description: Hash of the row content for change detection
+    value: this.hash("sha256").encode("hex")
+
+  ingestion_id:
+    name: _ingestion_id
+    type: uuid
+    not_null: true
+    description: Unique identifier for each ingested row
+    default: gen_random_uuid()
+    value: uuid_v4()
