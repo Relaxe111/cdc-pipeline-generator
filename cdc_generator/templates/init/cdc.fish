@@ -427,16 +427,16 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l list-sinks -d
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l validate-sinks -d "Validate sink configuration"
 
 # ============================================================================
-# Extra columns & transforms completions for manage-service
+# Column templates & transforms completions for manage-service
 # ============================================================================
 
-# --add-extra-column: Dynamic completion from column-templates.yaml
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-extra-column -d "Add extra column template to sink table" -r -f -a "(
+# --add-column-template: Dynamic completion from column-templates.yaml
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-column-template -d "Add column template to sink table" -r -f -a "(
     python3 -m cdc_generator.helpers.autocompletions --list-column-templates 2>/dev/null
 )"
 
-# --remove-extra-column: Dynamic completion from table's existing extra columns
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-extra-column -d "Remove extra column from sink table" -r -f -a "(
+# --remove-column-template: Dynamic completion from table's existing column templates
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-column-template -d "Remove column template from sink table" -r -f -a "(
     set -l cmd (commandline -opc)
     set -l service_name ''
     set -l sink_key ''
@@ -445,7 +445,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-extra-
         if test \"\$cmd[\$i]\" = '--service'
             set service_name \$cmd[(math \$i + 1)]
         else if test \"\$cmd[\$i]\" = '--sink'
-            set sink_key \$cmd[(math \$i + 1)]
+            sink_key \$cmd[(math \$i + 1)]
         else if test \"\$cmd[\$i]\" = '--sink-table'
             set sink_table \$cmd[(math \$i + 1)]
         end
@@ -454,15 +454,15 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-extra-
         set sink_key (python3 -m cdc_generator.helpers.autocompletions --get-default-sink \"\$service_name\" 2>/dev/null)
     end
     if test -n \"\$service_name\" -a -n \"\$sink_key\" -a -n \"\$sink_table\"
-        python3 -m cdc_generator.helpers.autocompletions --list-extra-columns \"\$service_name\" \"\$sink_key\" \"\$sink_table\" 2>/dev/null
+        python3 -m cdc_generator.helpers.autocompletions --list-column-templates-on-table \"\$service_name\" \"\$sink_key\" \"\$sink_table\" 2>/dev/null
     end
 )"
 
-# --list-extra-columns (no value needed)
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l list-extra-columns -d "List extra columns on sink table"
+# --list-column-templates (no value needed)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l list-column-templates -d "List column templates on sink table"
 
-# --column-name: Override column name for extra column (free text)
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l column-name -d "Override column name for extra column" -r
+# --column-name: Override column name for column template (free text)
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l column-name -d "Override column name for column template" -r
 
 # --add-transform: Dynamic completion from transform-rules.yaml
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-transform -d "Add transform rule to sink table" -r -f -a "(

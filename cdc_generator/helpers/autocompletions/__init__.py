@@ -169,7 +169,7 @@ _ARG_COMMANDS: dict[str, CompletionCommand] = {
         arg_desc="service_name sink_key table_key",
         handler=list_custom_table_columns_for_autocomplete,
     ),
-    "--list-extra-columns": CompletionCommand(
+    "--list-column-templates-on-table": CompletionCommand(
         arg_count=3,
         arg_desc="service_name sink_key table_key",
         handler=list_extra_columns_for_table,
