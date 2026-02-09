@@ -42,6 +42,31 @@ from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 
 @dataclass
+class CustomTableReference:
+    """Parsed custom table reference from custom-tables/*.yaml.
+
+    Attributes:
+        source_service: Service name of source table.
+        source_schema: Schema name of source table.
+        source_table: Table name of source table.
+        sink_schema: Target schema in sink.
+        sink_table: Target table name in sink.
+        extra_columns: Additional columns not in source (if any).
+        transforms: Transform rules to apply (if any).
+        column_templates: Column templates to apply (if any).
+    """
+
+    source_service: str
+    source_schema: str
+    source_table: str
+    sink_schema: str
+    sink_table: str
+    extra_columns: list[dict[str, Any]] | None = None
+    transforms: list[dict[str, Any]] | None = None
+    column_templates: list[dict[str, Any]] | None = None
+
+
+@dataclass
 class ReplicationConfig:
     """Configuration for replicating a source table to a sink.
 
@@ -117,6 +142,97 @@ def load_source_schema(
 
     raw = load_yaml_file(schema_file)
     return cast(dict[str, Any], raw) if raw else None
+
+
+def load_custom_table_reference(
+    target_service: str,
+    table_key: str,
+    schemas_dir: Path | None = None,
+) -> CustomTableReference | None:
+    """Load a custom table reference from service-schemas/{target}/custom-tables/.
+
+    Args:
+        target_service: Target service name (e.g., 'chat', 'activities').
+        table_key: Table key in format 'schema.table' (e.g., 'activities.customer_user').
+        schemas_dir: Override path to service-schemas/ directory.
+
+    Returns:
+        Parsed CustomTableReference with source info and extra columns/transforms.
+        None if reference file not found.
+
+    Example:
+        >>> ref = load_custom_table_reference("chat", "activities.customer_user")
+        >>> ref.source_service
+        'directory'
+        >>> ref.source_table
+        'customer_user'
+    """
+    if schemas_dir is None:
+        schemas_dir = _find_schema_dir()
+
+    if schemas_dir is None:
+        return None
+
+    ref_file = (
+        schemas_dir / target_service / "custom-tables" / f"{table_key.replace('/', '_')}.yaml"
+    )
+    if not ref_file.exists():
+        return None
+
+    raw = load_yaml_file(ref_file)
+    if not raw:
+        return None
+
+    # Parse source_reference (required)
+    source_ref = raw.get("source_reference")
+    if not isinstance(source_ref, dict):
+        return None
+
+    source_service = source_ref.get("service")
+    source_schema = source_ref.get("schema")
+    source_table = source_ref.get("table")
+
+    if not all([source_service, source_schema, source_table]):
+        return None
+
+    # Parse sink_target (required)
+    sink_target = raw.get("sink_target")
+    if not isinstance(sink_target, dict):
+        return None
+
+    sink_schema = sink_target.get("schema")
+    sink_table = sink_target.get("table")
+
+    if not all([sink_schema, sink_table]):
+        return None
+
+    # Parse optional fields
+    extra_columns = raw.get("extra_columns")
+    transforms = raw.get("transforms")
+    column_templates = raw.get("column_templates")
+
+    return CustomTableReference(
+        source_service=str(source_service),
+        source_schema=str(source_schema),
+        source_table=str(source_table),
+        sink_schema=str(sink_schema),
+        sink_table=str(sink_table),
+        extra_columns=(
+            cast(list[dict[str, Any]], extra_columns)
+            if isinstance(extra_columns, list)
+            else None
+        ),
+        transforms=(
+            cast(list[dict[str, Any]], transforms)
+            if isinstance(transforms, list)
+            else None
+        ),
+        column_templates=(
+            cast(list[dict[str, Any]], column_templates)
+            if isinstance(column_templates, list)
+            else None
+        ),
+    )
 
 
 def replicate_table_structure(config: ReplicationConfig) -> str | None:
@@ -317,3 +433,83 @@ def get_replication_summary(config: ReplicationConfig) -> dict[str, Any] | None:
         "type_changes": type_changes,
         "adapter": f"{config.source_engine}-to-{config.sink_engine}",
     }
+
+
+def replicate_from_custom_reference(
+    target_service: str,
+    table_key: str,
+    source_engine: str,
+    sink_engine: str,
+    schemas_dir: Path | None = None,
+) -> str | None:
+    """Generate CREATE TABLE DDL from a custom table reference.
+
+    Loads the minimal reference file from custom-tables/, deduces base structure
+    from the source table, applies type mapping, and adds any extra_columns.
+
+    Args:
+        target_service: Target service name (e.g., 'chat').
+        table_key: Table key in 'schema.table' format (e.g., 'activities.customer_user').
+        source_engine: Source database engine (e.g., 'pgsql').
+        sink_engine: Target database engine (e.g., 'pgsql').
+        schemas_dir: Override path to service-schemas/ directory.
+
+    Returns:
+        CREATE TABLE DDL string, or None if reference/source not found.
+
+    Example:
+        >>> ddl = replicate_from_custom_reference(
+        ...     target_service="chat",
+        ...     table_key="activities.customer_user",
+        ...     source_engine="pgsql",
+        ...     sink_engine="pgsql",
+        ... )
+        >>> print(ddl)
+        CREATE TABLE IF NOT EXISTS "activities"."customer_user" (
+            -- base columns from source directory.public.customer_user
+            "customer_id" uuid NOT NULL,
+            "user_id" uuid NOT NULL,
+            -- extra columns from custom-tables reference
+            "user_class" text NOT NULL,
+            PRIMARY KEY ("customer_id", "user_id")
+        );
+    """
+    # Load custom table reference
+    ref = load_custom_table_reference(target_service, table_key, schemas_dir)
+    if ref is None:
+        return None
+
+    # Load source schema using the reference
+    schema_data = load_source_schema(
+        ref.source_service,
+        ref.source_schema,
+        ref.source_table,
+        schemas_dir,
+    )
+    if schema_data is None:
+        return None
+
+    # Get base columns from source
+    raw_columns = schema_data.get("columns", [])
+    if not isinstance(raw_columns, list):
+        return None
+
+    columns = _to_column_dicts(cast(list[object], raw_columns))
+
+    # Apply type mapping
+    mapper = TypeMapper(source_engine, sink_engine)
+    mapped_columns = mapper.map_columns(columns)
+
+    # Add extra_columns if defined in reference
+    if ref.extra_columns:
+        for extra_col in ref.extra_columns:
+            # Extra columns already in target type, no mapping needed
+            mapped_columns.append(cast(dict[str, str | bool], extra_col))
+
+    # Build DDL
+    return _build_create_table_ddl(
+        ref.sink_schema,
+        ref.sink_table,
+        mapped_columns,
+        schema_data,
+    )

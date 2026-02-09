@@ -15,6 +15,41 @@ from .templates import (
 from .vscode_settings import create_vscode_settings
 
 
+def _copy_template_library_files(project_root: Path) -> None:
+    """Copy template library files from generator to implementation.
+
+    Copies column-templates.yaml and transform-rules.yaml from the generator's
+    service-schemas/ directory to the implementation's service-schemas/.
+
+    Args:
+        project_root: Root directory of the implementation
+    """
+    # Find generator root (cdc-pipeline-generator package location)
+    import cdc_generator
+
+    generator_root = Path(cdc_generator.__file__).parent
+    template_source_dir = generator_root / "service-schemas"
+
+    # Files to copy with examples and inline comments
+    template_files = [
+        "column-templates.yaml",
+        "transform-rules.yaml",
+    ]
+
+    for filename in template_files:
+        source_file = template_source_dir / filename
+        target_file = project_root / "service-schemas" / filename
+
+        if source_file.exists():
+            if target_file.exists():
+                print(f"⊘ Skipped (exists): service-schemas/{filename}")
+            else:
+                shutil.copy2(source_file, target_file)
+                print(f"✓ Copied template library: service-schemas/{filename}")
+        else:
+            print(f"⚠ Warning: Template not found in generator: {filename}")
+
+
 def scaffold_project_structure(
     server_group_name: str,
     pattern: str,
@@ -52,6 +87,7 @@ def scaffold_project_structure(
         "_docs",
         ".vscode",
         "service-schemas",
+        "service-schemas/adapters",
     ]
 
     for directory in directories:
@@ -63,6 +99,9 @@ def scaffold_project_structure(
     for gen_dir in ["pipelines", "schemas", "pg-migrations"]:
         gitkeep = project_root / "generated" / gen_dir / ".gitkeep"
         gitkeep.touch()
+
+    # Copy template library files from generator to implementation
+    _copy_template_library_files(project_root)
 
     # Create template files
     files_to_create = {

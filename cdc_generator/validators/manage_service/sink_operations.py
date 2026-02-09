@@ -8,7 +8,6 @@ Sink key format: {sink_group}.{target_service}
     - target_service: target service/database in that sink group
 """
 
-import shutil
 from dataclasses import dataclass
 from typing import cast
 
@@ -401,10 +400,11 @@ def _save_custom_table_structure(
     from_table: str,
     source_service: str,
 ) -> None:
-    """Save custom table structure to service-schemas/{target}/custom-tables/.
+    """Save minimal reference file to service-schemas/{target}/custom-tables/.
 
-    Copies the source table schema from service-schemas/{source_service}/{schema}/{table}.yaml
-    to service-schemas/{target_service}/custom-tables/{schema}.{table}.yaml
+    Creates a lightweight YAML reference that points to the source table schema.
+    Base structure (columns, PKs, types) is deduced from source at generation time.
+    Only non-deducible content (extra_columns, transforms, templates) is stored here.
 
     Args:
         sink_key: Sink key (e.g., 'sink_asma.notification').
@@ -412,19 +412,22 @@ def _save_custom_table_structure(
         from_table: Source table key (e.g., 'public.customer_user').
         source_service: Source service name to find original schema.
     """
+    from cdc_generator.helpers.yaml_loader import save_yaml_file
+
     target_service = _get_target_service_from_sink_key(sink_key)
     if not target_service:
         print_warning("Could not determine target service from sink key")
         return
 
-    # Parse source table
-    if "." not in from_table:
-        print_warning(f"Invalid source table format: {from_table}")
+    # Parse source and target table keys
+    if "." not in from_table or "." not in table_key:
+        print_warning(f"Invalid table format: {from_table} or {table_key}")
         return
 
     source_schema, source_table = from_table.split(".", 1)
+    target_schema, target_table = table_key.split(".", 1)
 
-    # Source file path
+    # Verify source schema exists
     source_file = (
         SERVICE_SCHEMAS_DIR
         / source_service
@@ -435,26 +438,68 @@ def _save_custom_table_structure(
     if not source_file.exists():
         print_warning(
             f"Source table schema not found: {source_file}\n"
-            + "Custom table structure will not be saved. "
+            + "Custom table reference will not be saved. "
             + "Run inspect on source service first."
         )
         return
+
+    # Create minimal reference file
+    reference_data: dict[str, object] = {
+        "source_reference": {
+            "service": source_service,
+            "schema": source_schema,
+            "table": source_table,
+        },
+        "sink_target": {
+            "schema": target_schema,
+            "table": target_table,
+        },
+    }
 
     # Target directory and file
     target_dir = SERVICE_SCHEMAS_DIR / target_service / "custom-tables"
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Target file named as schema.table.yaml
     target_file = target_dir / f"{table_key.replace('/', '_')}.yaml"
 
-    # Copy the schema file
+    # Save minimal reference with comments as header
     try:
-        shutil.copy2(source_file, target_file)
+        target_file.write_text(
+            "# Minimal reference file - base structure deduced from source at generation time\n"
+            + "\n"
+            + "# source_reference: Points to the source table schema\n"
+            + "# sink_target: Defines the target schema/table in sink database\n"
+            + "#\n"
+            + "# Base structure (columns, types, PKs) is deduced from source at generation time.\n"
+            + "# Only store non-deducible content here:\n"
+            + "#\n"
+            + "# extra_columns:\n"
+            + "#   - name: user_class\n"
+            + "#     type: text\n"
+            + "#     not_null: true\n"
+            + "#     description: User classification derived at pipeline runtime\n"
+            + "#\n"
+            + "# transforms:\n"
+            + "#   - rule: user_class_splitter\n"
+            + "#\n"
+            + "# column_templates:\n"
+            + "#   - template: source_table\n"
+            + "\n",
+            encoding="utf-8",
+        )
+        # Append the YAML data
+        from cdc_generator.helpers.yaml_loader import save_yaml_file
+
+        with target_file.open("a", encoding="utf-8") as f:
+            import yaml
+
+            yaml.dump(reference_data, f, default_flow_style=False, sort_keys=False)
+
         print_success(
-            f"Saved custom table structure: {target_file.relative_to(SERVICE_SCHEMAS_DIR.parent)}"
+            f"Saved custom table reference: {target_file.relative_to(SERVICE_SCHEMAS_DIR.parent)}"
         )
     except Exception as exc:
-        print_warning(f"Failed to save custom table structure: {exc}")
+        print_warning(f"Failed to save custom table reference: {exc}")
 
 
 def add_sink_table(
@@ -544,10 +589,12 @@ def add_sink_table(
     if not save_service_config(service, config):
         return False
 
-    # Save custom table structure if sink_schema provided
-    if sink_schema is not None and replicate_structure and from_table:
+    # Save custom table reference if replicate_structure is enabled
+    # Use from_table if provided, otherwise source table is final_table_key
+    if sink_schema is not None and replicate_structure:
+        source_table = str(from_table) if from_table else table_key
         _save_custom_table_structure(
-            sink_key, final_table_key, str(from_table), service
+            sink_key, final_table_key, source_table, service
         )
 
     label = f"→ '{target}'" if target_exists and target else "(clone)"
