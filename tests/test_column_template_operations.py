@@ -1,4 +1,4 @@
-"""Tests for column template and transform operations."""
+"""Tests for column_template_operations module - column templates and transforms."""
 
 from pathlib import Path
 
