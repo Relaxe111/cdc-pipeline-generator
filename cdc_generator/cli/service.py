@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import NoReturn
 
 from cdc_generator.cli.service_handlers import (
-    handle_add_extra_column,
+    handle_add_column_template,
     handle_add_source_table,
     handle_add_source_tables,
     handle_add_transform,
@@ -25,13 +25,12 @@ from cdc_generator.cli.service_handlers import (
     handle_inspect_sink,
     handle_interactive,
     handle_list_column_templates,
-    handle_list_extra_columns,
     handle_list_source_tables,
     handle_list_transform_rules,
     handle_list_transforms,
     handle_modify_custom_table,
     handle_no_service,
-    handle_remove_extra_column,
+    handle_remove_column_template,
     handle_remove_table,
     handle_remove_transform,
     handle_sink_add,
@@ -664,9 +663,9 @@ def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
         return None
 
     extra_handlers: dict[str, Callable[[argparse.Namespace], int]] = {
-        "add_column_template": handle_add_extra_column,
-        "remove_column_template": handle_remove_extra_column,
-        "list_column_templates": handle_list_extra_columns,
+        "add_column_template": handle_add_column_template,
+        "remove_column_template": handle_remove_column_template,
+        "list_column_templates": handle_list_column_templates,
         "add_transform": handle_add_transform,
         "remove_transform": handle_remove_transform,
         "list_transforms": handle_list_transforms,

@@ -1,9 +1,9 @@
-"""Sink table column templates and transforms operations.
+"""Column template and transform operations for sink tables.
 
-Handles adding/removing column_templates and transforms on sink tables
-in service YAML files. These reference templates/rules by name only.
+Manages column_templates and transforms in sink table configurations.
+All operations reference templates/rules by name only.
 
-All template/rule definitions live in:
+Template/rule definitions:
   - service-schemas/column-templates.yaml
   - service-schemas/transform-rules.yaml
 """
@@ -97,14 +97,14 @@ def _show_available_tables(tables: dict[str, object]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def add_extra_column_to_table(
+def add_column_template_to_table(
     service: str,
     sink_key: str,
     table_key: str,
     template_key: str,
     name_override: str | None = None,
 ) -> bool:
-    """Add an extra column template reference to a sink table.
+    """Add a column template reference to a sink table.
 
     Args:
         service: Service name.
@@ -133,13 +133,13 @@ def add_extra_column_to_table(
     return True
 
 
-def remove_extra_column_from_table(
+def remove_column_template_from_table(
     service: str,
     sink_key: str,
     table_key: str,
     template_key: str,
 ) -> bool:
-    """Remove an extra column template reference from a sink table.
+    """Remove a column template reference from a sink table.
 
     Args:
         service: Service name.
@@ -165,7 +165,7 @@ def remove_extra_column_from_table(
     return True
 
 
-def list_extra_columns_on_table(
+def list_column_templates_on_table(
     service: str,
     sink_key: str,
     table_key: str,

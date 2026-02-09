@@ -1,4 +1,4 @@
-"""CLI handlers for extra columns and transforms on sink tables."""
+"""CLI handlers for column templates and transforms on sink tables."""
 
 import argparse
 
@@ -8,12 +8,12 @@ from cdc_generator.helpers.helpers_logging import (
     print_header,
     print_info,
 )
-from cdc_generator.validators.manage_service.sink_extra_ops import (
-    add_extra_column_to_table,
+from cdc_generator.validators.manage_service.sink_template_ops import (
+    add_column_template_to_table,
     add_transform_to_table,
-    list_extra_columns_on_table,
+    list_column_templates_on_table,
     list_transforms_on_table,
-    remove_extra_column_from_table,
+    remove_column_template_from_table,
     remove_transform_from_table,
 )
 
@@ -94,7 +94,7 @@ def _get_sink_key(args: argparse.Namespace) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def handle_add_extra_column(args: argparse.Namespace) -> int:
+def handle_add_column_template(args: argparse.Namespace) -> int:
     """Handle --add-column-template flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
@@ -105,14 +105,14 @@ def handle_add_extra_column(args: argparse.Namespace) -> int:
 
     name_override = getattr(args, "column_name", None)
 
-    if add_extra_column_to_table(
+    if add_column_template_to_table(
         service, sink_key, sink_table, template_key, name_override,
     ):
         return 0
     return 1
 
 
-def handle_remove_extra_column(args: argparse.Namespace) -> int:
+def handle_remove_column_template(args: argparse.Namespace) -> int:
     """Handle --remove-column-template flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
@@ -121,21 +121,21 @@ def handle_remove_extra_column(args: argparse.Namespace) -> int:
     service, sink_key, sink_table = resolved
     template_key = args.remove_column_template
 
-    if remove_extra_column_from_table(
+    if remove_column_template_from_table(
         service, sink_key, sink_table, template_key,
     ):
         return 0
     return 1
 
 
-def handle_list_extra_columns(args: argparse.Namespace) -> int:
+def handle_list_column_templates(args: argparse.Namespace) -> int:
     """Handle --list-column-templates flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
         return 1
 
     service, sink_key, sink_table = resolved
-    list_extra_columns_on_table(service, sink_key, sink_table)
+    list_column_templates_on_table(service, sink_key, sink_table)
     return 0
 
 
