@@ -11,7 +11,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from cdc_generator.helpers.autocompletions.templates import (
+from cdc_generator.helpers.autocompletions.column_template_completions import (
     list_column_template_keys,
     list_column_templates_for_table,
     list_transform_rule_keys,
