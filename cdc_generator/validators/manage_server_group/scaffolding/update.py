@@ -1,6 +1,7 @@
 """Update existing project scaffolds."""
 
 import json
+import shutil
 from pathlib import Path
 from typing import cast
 
@@ -12,6 +13,41 @@ from .vscode_settings import (
     get_gitignore_patterns,
     get_scaffold_directories,
 )
+
+
+def _copy_template_library_files(project_root: Path) -> None:
+    """Copy template library files from generator to implementation.
+
+    Copies column-templates.yaml and transform-rules.yaml from the generator's
+    service-schemas/ directory to the implementation's service-schemas/.
+
+    Args:
+        project_root: Root directory of the implementation
+    """
+    # Find generator root (cdc-pipeline-generator package location)
+    import cdc_generator
+
+    generator_root = Path(cdc_generator.__file__).parent
+    template_source_dir = generator_root / "service-schemas"
+
+    # Files to copy with examples and inline comments
+    template_files = [
+        "column-templates.yaml",
+        "transform-rules.yaml",
+    ]
+
+    for filename in template_files:
+        source_file = template_source_dir / filename
+        target_file = project_root / "service-schemas" / filename
+
+        if source_file.exists():
+            if target_file.exists():
+                print_info(f"⊘ Skipped (exists): service-schemas/{filename}")
+            else:
+                shutil.copy2(source_file, target_file)
+                print_success(f"✓ Copied template library: service-schemas/{filename}")
+        else:
+            print_warning(f"⚠️  Template not found in generator: {filename}")
 
 
 def update_scaffold(project_root: Path) -> bool:
@@ -58,7 +94,10 @@ def update_scaffold(project_root: Path) -> bool:
     # 4. Update .gitignore (append new patterns if missing)
     _update_gitignore(project_root)
 
-    # 5. Check if source-groups.yaml exists
+    # 5. Copy template library files if missing
+    _copy_template_library_files(project_root)
+
+    # 6. Check if source-groups.yaml exists
     server_group_path = project_root / "source-groups.yaml"
 
     if server_group_path.exists():
