@@ -43,6 +43,9 @@ class ColumnTemplate:
         description: Human-readable description.
         value: Bloblang expression for pipeline runtime.
         default: SQL default expression for DDL (e.g., now()).
+        applies_to: Optional list of table patterns this template can be applied to.
+            Supports glob patterns (e.g., "*.user", "public.*").
+            If None or empty, template can be applied to any table.
     """
 
     key: str
@@ -52,6 +55,7 @@ class ColumnTemplate:
     description: str
     value: str
     default: str | None = None
+    applies_to: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +141,15 @@ def _parse_single_template(
     default_raw = data.get("default")
     default = str(default_raw) if default_raw is not None else None
 
+    # Parse optional applies_to field
+    applies_to_raw = data.get("applies_to")
+    applies_to: list[str] | None = None
+    if applies_to_raw is not None:
+        if isinstance(applies_to_raw, list):
+            applies_to = [str(p) for p in applies_to_raw if p is not None]
+        elif isinstance(applies_to_raw, str):
+            applies_to = [applies_to_raw]  # Convert single string to list
+
     return ColumnTemplate(
         key=key,
         name=name,
@@ -145,6 +158,7 @@ def _parse_single_template(
         description=description,
         value=value,
         default=default,
+        applies_to=applies_to,
     )
 
 
@@ -258,3 +272,53 @@ def validate_template_reference(key: str) -> str | None:
         f"Column template '{key}' not found. "
         + f"Available templates: {available_str}"
     )
+
+
+def validate_template_for_table(
+    template_key: str,
+    table_key: str,
+) -> str | None:
+    """Validate that a template can be applied to a specific table.
+
+    Checks both template existence and applies_to pattern matching.
+
+    Args:
+        template_key: Template key to validate.
+        table_key: Table identifier (schema.table format).
+
+    Returns:
+        Error message if invalid, None if valid.
+
+    Example:
+        >>> validate_template_for_table("source_table", "public.users")
+        None
+        >>> validate_template_for_table("user_specific", "logs.audit_log")
+        "Template 'user_specific' cannot be applied to 'logs.audit_log'..."
+    """
+    # First check if template exists
+    error = validate_template_reference(template_key)
+    if error is not None:
+        return error
+
+    template = get_template(template_key)
+    if template is None:
+        return f"Template '{template_key}' not found"
+
+    # If no applies_to restriction, template can be used anywhere
+    if not template.applies_to:
+        return None
+
+    # Check if table matches any pattern
+    from fnmatch import fnmatch
+
+    for pattern in template.applies_to:
+        if fnmatch(table_key, pattern):
+            return None
+
+    # No match found
+    patterns_str = ", ".join(f"'{p}'" for p in template.applies_to)
+    return (
+        f"Template '{template_key}' cannot be applied to '{table_key}'. "
+        + f"Allowed patterns: {patterns_str}"
+    )
+

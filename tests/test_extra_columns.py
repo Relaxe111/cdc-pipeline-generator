@@ -1,4 +1,4 @@
-"""Tests for extra columns and transforms operations."""
+"""Tests for column template and transform operations."""
 
 from pathlib import Path
 
@@ -8,14 +8,14 @@ from cdc_generator.core.column_templates import (
     clear_cache as clear_template_cache,
     set_templates_path,
 )
-from cdc_generator.core.extra_columns import (
-    add_extra_column,
+from cdc_generator.core.column_template_operations import (
+    add_column_template,
     add_transform,
-    list_extra_columns,
+    list_column_templates,
     list_transforms,
-    remove_extra_column,
+    remove_column_template,
     remove_transform,
-    resolve_extra_columns,
+    resolve_column_templates,
     resolve_transforms,
 )
 from cdc_generator.core.transform_rules import (
@@ -104,61 +104,61 @@ def _make_table_cfg() -> dict[str, object]:
 
 
 class TestAddExtraColumn:
-    """Tests for add_extra_column."""
+    """Tests for add_column_template."""
 
     def test_add_valid_template(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = add_extra_column(table_cfg, "source_table")
+        result = add_column_template(table_cfg, "source_table")
         assert result is True
-        assert "extra_columns" in table_cfg
-        cols = table_cfg["extra_columns"]
+        assert "column_templates" in table_cfg
+        cols = table_cfg["column_templates"]
         assert isinstance(cols, list)
         assert len(cols) == 1
         assert cols[0] == {"template": "source_table"}
 
     def test_add_with_name_override(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = add_extra_column(table_cfg, "environment", "deploy_env")
+        result = add_column_template(table_cfg, "environment", "deploy_env")
         assert result is True
-        cols = table_cfg["extra_columns"]
+        cols = table_cfg["column_templates"]
         assert isinstance(cols, list)
         assert cols[0] == {"template": "environment", "name": "deploy_env"}
 
     def test_add_multiple(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        add_extra_column(table_cfg, "environment")
-        cols = table_cfg["extra_columns"]
+        add_column_template(table_cfg, "source_table")
+        add_column_template(table_cfg, "environment")
+        cols = table_cfg["column_templates"]
         assert isinstance(cols, list)
         assert len(cols) == 2
 
     def test_add_duplicate_fails(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        result = add_extra_column(table_cfg, "source_table")
+        add_column_template(table_cfg, "source_table")
+        result = add_column_template(table_cfg, "source_table")
         assert result is False
-        cols = table_cfg["extra_columns"]
+        cols = table_cfg["column_templates"]
         assert isinstance(cols, list)
         assert len(cols) == 1  # No duplicate added
 
     def test_add_unknown_template_fails(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = add_extra_column(table_cfg, "nonexistent")
+        result = add_column_template(table_cfg, "nonexistent")
         assert result is False
-        assert "extra_columns" not in table_cfg
+        assert "column_templates" not in table_cfg
 
 
 class TestRemoveExtraColumn:
-    """Tests for remove_extra_column."""
+    """Tests for remove_column_template."""
 
     def test_remove_existing(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        add_extra_column(table_cfg, "environment")
+        add_column_template(table_cfg, "source_table")
+        add_column_template(table_cfg, "environment")
 
-        result = remove_extra_column(table_cfg, "source_table")
+        result = remove_column_template(table_cfg, "source_table")
         assert result is True
-        cols = table_cfg["extra_columns"]
+        cols = table_cfg["column_templates"]
         assert isinstance(cols, list)
         assert len(cols) == 1
         assert cols[0]["template"] == "environment"
@@ -166,29 +166,29 @@ class TestRemoveExtraColumn:
     def test_remove_last_cleans_up(self, setup_templates: Path) -> None:
         """Removing last extra column removes the key entirely."""
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        remove_extra_column(table_cfg, "source_table")
-        assert "extra_columns" not in table_cfg
+        add_column_template(table_cfg, "source_table")
+        remove_column_template(table_cfg, "source_table")
+        assert "column_templates" not in table_cfg
 
     def test_remove_nonexistent_fails(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = remove_extra_column(table_cfg, "nonexistent")
+        result = remove_column_template(table_cfg, "nonexistent")
         assert result is False
 
 
 class TestListExtraColumns:
-    """Tests for list_extra_columns."""
+    """Tests for list_column_templates."""
 
     def test_list_empty(self) -> None:
         table_cfg = _make_table_cfg()
-        result = list_extra_columns(table_cfg)
+        result = list_column_templates(table_cfg)
         assert result == []
 
     def test_list_populated(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        add_extra_column(table_cfg, "environment")
-        result = list_extra_columns(table_cfg)
+        add_column_template(table_cfg, "source_table")
+        add_column_template(table_cfg, "environment")
+        result = list_column_templates(table_cfg)
         assert result == ["source_table", "environment"]
 
 
@@ -279,14 +279,14 @@ class TestListTransforms:
 
 
 class TestResolveExtraColumns:
-    """Tests for resolve_extra_columns."""
+    """Tests for resolve_column_templates."""
 
     def test_resolve_valid(self, setup_templates: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_extra_column(table_cfg, "source_table")
-        add_extra_column(table_cfg, "environment", "deploy_env")
+        add_column_template(table_cfg, "source_table")
+        add_column_template(table_cfg, "environment", "deploy_env")
 
-        resolved = resolve_extra_columns(table_cfg)
+        resolved = resolve_column_templates(table_cfg)
         assert len(resolved) == 2
         assert resolved[0].template_key == "source_table"
         assert resolved[0].name == "_source_table"
@@ -296,17 +296,17 @@ class TestResolveExtraColumns:
 
     def test_resolve_empty(self) -> None:
         table_cfg = _make_table_cfg()
-        resolved = resolve_extra_columns(table_cfg)
+        resolved = resolve_column_templates(table_cfg)
         assert resolved == []
 
     def test_resolve_skips_invalid(self, setup_templates: Path) -> None:
         """Invalid template references are skipped."""
         table_cfg = _make_table_cfg()
-        table_cfg["extra_columns"] = [
+        table_cfg["column_templates"] = [
             {"template": "source_table"},
             {"template": "nonexistent_template"},
         ]
-        resolved = resolve_extra_columns(table_cfg)
+        resolved = resolve_column_templates(table_cfg)
         assert len(resolved) == 1
         assert resolved[0].template_key == "source_table"
 

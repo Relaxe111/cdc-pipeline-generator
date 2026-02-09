@@ -1,11 +1,14 @@
 """Autocompletion helpers for column templates and transform rules.
 
-Provides dynamic completion data for --add-extra-column, --remove-extra-column,
+Provides dynamic completion data for --add-column-template, --remove-column-template,
 --add-transform, and --remove-transform CLI flags.
 """
 
 from cdc_generator.core.column_templates import list_template_keys
-from cdc_generator.core.extra_columns import list_extra_columns, list_transforms
+from cdc_generator.core.column_template_operations import (
+    list_column_templates,
+    list_transforms,
+)
 from cdc_generator.core.transform_rules import list_rule_keys
 
 from .sinks import load_sink_tables_for_autocomplete
@@ -42,9 +45,9 @@ def list_extra_columns_for_table(
     sink_key: str,
     table_key: str,
 ) -> list[str]:
-    """List extra column template keys on a specific sink table.
+    """List column template keys on a specific sink table.
 
-    Used for --remove-extra-column autocompletion.
+    Used for --remove-column-template autocompletion.
 
     Args:
         service_name: Service name.
@@ -64,7 +67,7 @@ def list_extra_columns_for_table(
     table_cfg = _load_table_config(service_name, sink_key, table_key)
     if table_cfg is None:
         return []
-    return sorted(list_extra_columns(table_cfg))
+    return sorted(list_column_templates(table_cfg))
 
 
 def list_transforms_for_table(

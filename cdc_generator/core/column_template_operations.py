@@ -1,7 +1,7 @@
-"""Extra columns and transforms manager for sink tables.
+"""Column template and transform operations for sink tables.
 
-Handles adding/removing extra_columns and transforms to sink table configs.
-Extra columns reference column-templates.yaml by name.
+Manages adding/removing/listing column_templates and transforms in sink table configs.
+Column templates reference column-templates.yaml by name.
 Transforms reference transform-rules.yaml by name.
 
 Service YAML structure:
@@ -11,7 +11,7 @@ Service YAML structure:
           notification.customer_user:
             target_exists: false
             from: public.customer_user
-            extra_columns:
+            column_templates:
               - template: source_table
               - template: environment
                 name: deploy_env
@@ -46,8 +46,8 @@ from cdc_generator.helpers.helpers_logging import (
 
 
 @dataclass(frozen=True)
-class ResolvedExtraColumn:
-    """An extra column resolved from a template reference.
+class ResolvedColumnTemplate:
+    """A column template resolved from a template reference.
 
     Attributes:
         template_key: Reference to column-templates.yaml key.
@@ -74,42 +74,42 @@ class ResolvedTransform:
 
 
 # ---------------------------------------------------------------------------
-# Extra column operations
+# Column template operations
 # ---------------------------------------------------------------------------
 
 
-def _get_extra_columns_list(
+def _get_column_templates_list(
     table_cfg: dict[str, object],
 ) -> list[object]:
-    """Get or create the extra_columns list from table config.
+    """Get or create the column_templates list from table config.
 
     Args:
         table_cfg: Sink table configuration dict.
 
     Returns:
-        Mutable list reference for extra_columns.
+        Mutable list reference for column_templates.
     """
-    raw = table_cfg.get("extra_columns")
+    raw = table_cfg.get("column_templates")
     if not isinstance(raw, list):
-        table_cfg["extra_columns"] = []
-        return cast(list[object], table_cfg["extra_columns"])
+        table_cfg["column_templates"] = []
+        return cast(list[object], table_cfg["column_templates"])
     return cast(list[object], raw)
 
 
-def _find_extra_column_index(
-    extra_columns: list[object],
+def _find_column_template_index(
+    column_templates: list[object],
     template_key: str,
 ) -> int | None:
-    """Find the index of an extra column by template key.
+    """Find the index of a column template by template key.
 
     Args:
-        extra_columns: List of extra column dicts.
+        column_templates: List of column template dicts.
         template_key: Template key to find.
 
     Returns:
         Index if found, None otherwise.
     """
-    for idx, item in enumerate(extra_columns):
+    for idx, item in enumerate(column_templates):
         if isinstance(item, dict):
             item_dict = cast(dict[str, object], item)
             if item_dict.get("template") == template_key:
@@ -117,33 +117,43 @@ def _find_extra_column_index(
     return None
 
 
-def add_extra_column(
+def add_column_template(
     table_cfg: dict[str, object],
     template_key: str,
     name_override: str | None = None,
+    table_key: str | None = None,
 ) -> bool:
-    """Add an extra column (template reference) to a sink table config.
+    """Add a column template reference to a sink table config.
 
     Args:
         table_cfg: Sink table configuration dict (mutated in place).
         template_key: Template key from column-templates.yaml.
         name_override: Optional column name override.
+        table_key: Optional table identifier for applies_to validation (schema.table).
 
     Returns:
         True on success, False on error.
     """
-    # Validate template exists
-    error = validate_template_reference(template_key)
+    # Validate template exists and can be applied to this table
+    if table_key is not None:
+        from cdc_generator.core.column_templates import validate_template_for_table
+
+        error = validate_template_for_table(template_key, table_key)
+    else:
+        from cdc_generator.core.column_templates import validate_template_reference
+
+        error = validate_template_reference(template_key)
+
     if error is not None:
         print_error(error)
         return False
 
-    extra_columns = _get_extra_columns_list(table_cfg)
+    column_templates = _get_column_templates_list(table_cfg)
 
     # Check for duplicate
-    existing_idx = _find_extra_column_index(extra_columns, template_key)
+    existing_idx = _find_column_template_index(column_templates, template_key)
     if existing_idx is not None:
-        print_warning(f"Extra column template '{template_key}' already exists on this table")
+        print_warning(f"Column template '{template_key}' already exists on this table")
         return False
 
     # Build entry
@@ -151,20 +161,20 @@ def add_extra_column(
     if name_override is not None:
         entry["name"] = name_override
 
-    extra_columns.append(entry)
+    column_templates.append(entry)
 
     template = get_template(template_key)
     default_name = template.name if template else template_key
     final_name = name_override if name_override is not None else default_name
-    print_success(f"Added extra column '{final_name}' (template: {template_key})")
+    print_success(f"Added column template '{final_name}' (key: {template_key})")
     return True
 
 
-def remove_extra_column(
+def remove_column_template(
     table_cfg: dict[str, object],
     template_key: str,
 ) -> bool:
-    """Remove an extra column (template reference) from a sink table config.
+    """Remove a column template reference from a sink table config.
 
     Args:
         table_cfg: Sink table configuration dict (mutated in place).
@@ -173,41 +183,41 @@ def remove_extra_column(
     Returns:
         True on success, False if not found.
     """
-    extra_columns = _get_extra_columns_list(table_cfg)
+    column_templates = _get_column_templates_list(table_cfg)
 
-    idx = _find_extra_column_index(extra_columns, template_key)
+    idx = _find_column_template_index(column_templates, template_key)
     if idx is None:
-        print_warning(f"Extra column template '{template_key}' not found on this table")
-        _list_existing_extra_columns(extra_columns)
+        print_warning(f"Column template '{template_key}' not found on this table")
+        _list_existing_column_templates(column_templates)
         return False
 
-    extra_columns.pop(idx)
+    column_templates.pop(idx)
 
     # Remove empty list from config
-    if not extra_columns:
-        table_cfg.pop("extra_columns", None)
+    if not column_templates:
+        table_cfg.pop("column_templates", None)
 
-    print_success(f"Removed extra column template '{template_key}'")
+    print_success(f"Removed column template '{template_key}'")
     return True
 
 
-def _list_existing_extra_columns(extra_columns: list[object]) -> None:
-    """Print existing extra columns for help messages.
+def _list_existing_column_templates(column_templates: list[object]) -> None:
+    """Print existing column templates for help messages.
 
     Args:
-        extra_columns: List of extra column dicts.
+        column_templates: List of column template dicts.
     """
     templates = [
         str(cast(dict[str, object], item).get("template", "?"))
-        for item in extra_columns
+        for item in column_templates
         if isinstance(item, dict)
     ]
     if templates:
-        print_info(f"Existing extra columns: {', '.join(templates)}")
+        print_info(f"Existing column templates: {', '.join(templates)}")
 
 
-def list_extra_columns(table_cfg: dict[str, object]) -> list[str]:
-    """List all extra column template keys on a sink table.
+def list_column_templates(table_cfg: dict[str, object]) -> list[str]:
+    """List all column template keys on a sink table.
 
     Args:
         table_cfg: Sink table configuration dict.
@@ -215,7 +225,7 @@ def list_extra_columns(table_cfg: dict[str, object]) -> list[str]:
     Returns:
         List of template keys.
     """
-    raw = table_cfg.get("extra_columns")
+    raw = table_cfg.get("column_templates")
     if not isinstance(raw, list):
         return []
 
@@ -380,27 +390,27 @@ def list_transforms(table_cfg: dict[str, object]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def resolve_extra_columns(
+def resolve_column_templates(
     table_cfg: dict[str, object],
-) -> list[ResolvedExtraColumn]:
-    """Resolve all extra column template references to ColumnTemplate objects.
+) -> list[ResolvedColumnTemplate]:
+    """Resolve all column template references to ColumnTemplate objects.
 
     Args:
         table_cfg: Sink table configuration dict.
 
     Returns:
-        List of resolved extra columns (skips invalid references).
+        List of resolved column templates (skips invalid references).
 
     Example:
-        >>> resolved = resolve_extra_columns(table_cfg)
+        >>> resolved = resolve_column_templates(table_cfg)
         >>> resolved[0].template.column_type
         'text'
     """
-    raw = table_cfg.get("extra_columns")
+    raw = table_cfg.get("column_templates")
     if not isinstance(raw, list):
         return []
 
-    result: list[ResolvedExtraColumn] = []
+    result: list[ResolvedColumnTemplate] = []
     for item in cast(list[object], raw):
         if not isinstance(item, dict):
             continue
@@ -412,13 +422,13 @@ def resolve_extra_columns(
 
         template = get_template(template_key)
         if template is None:
-            print_warning(f"Extra column references unknown template: '{template_key}'")
+            print_warning(f"Column template references unknown template: '{template_key}'")
             continue
 
         name_override = entry.get("name")
         final_name = str(name_override) if isinstance(name_override, str) else template.name
 
-        result.append(ResolvedExtraColumn(
+        result.append(ResolvedColumnTemplate(
             template_key=template_key,
             name=final_name,
             template=template,

@@ -206,10 +206,13 @@ def load_custom_table_reference(
     if not all([sink_schema, sink_table]):
         return None
 
-    # Parse optional fields
-    extra_columns = raw.get("extra_columns")
-    transforms = raw.get("transforms")
+    # Parse optional fields - prefer column_templates over deprecated extra_columns
     column_templates = raw.get("column_templates")
+    extra_columns = raw.get("extra_columns")  # Backwards compatibility
+    transforms = raw.get("transforms")
+
+    # Use column_templates if present, otherwise fall back to extra_columns
+    final_column_templates = column_templates if column_templates is not None else extra_columns
 
     return CustomTableReference(
         source_service=str(source_service),
@@ -218,8 +221,8 @@ def load_custom_table_reference(
         sink_schema=str(sink_schema),
         sink_table=str(sink_table),
         extra_columns=(
-            cast(list[dict[str, Any]], extra_columns)
-            if isinstance(extra_columns, list)
+            cast(list[dict[str, Any]], final_column_templates)
+            if isinstance(final_column_templates, list)
             else None
         ),
         transforms=(
@@ -228,8 +231,8 @@ def load_custom_table_reference(
             else None
         ),
         column_templates=(
-            cast(list[dict[str, Any]], column_templates)
-            if isinstance(column_templates, list)
+            cast(list[dict[str, Any]], final_column_templates)
+            if isinstance(final_column_templates, list)
             else None
         ),
     )

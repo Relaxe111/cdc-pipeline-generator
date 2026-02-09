@@ -64,14 +64,14 @@ class CustomColumnDefinition(TypedDict, total=False):
 
 
 class ExtraColumnEntry(TypedDict, total=False):
-    """A single extra column reference in a sink table config.
+    """A single column template reference in a sink table config.
 
     Attributes:
         template: Column template key from column-templates.yaml.
         name: Optional column name override (default: template's name).
 
     Example:
-        extra_columns:
+        column_templates:
           - template: source_table
           - template: environment
             name: deploy_env
@@ -175,7 +175,7 @@ class SinkTableConfig(TypedDict, total=False):
     custom: bool
     managed: bool
     replicate_structure: bool
-    extra_columns: list[ExtraColumnEntry]
+    column_templates: list[ExtraColumnEntry]
     transforms: list[TransformEntry]
 
 

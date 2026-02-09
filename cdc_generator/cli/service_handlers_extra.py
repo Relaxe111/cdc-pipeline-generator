@@ -95,13 +95,13 @@ def _get_sink_key(args: argparse.Namespace) -> str | None:
 
 
 def handle_add_extra_column(args: argparse.Namespace) -> int:
-    """Handle --add-extra-column flag."""
+    """Handle --add-column-template flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
         return 1
 
     service, sink_key, sink_table = resolved
-    template_key = args.add_extra_column
+    template_key = args.add_column_template
 
     name_override = getattr(args, "column_name", None)
 
@@ -113,13 +113,13 @@ def handle_add_extra_column(args: argparse.Namespace) -> int:
 
 
 def handle_remove_extra_column(args: argparse.Namespace) -> int:
-    """Handle --remove-extra-column flag."""
+    """Handle --remove-column-template flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
         return 1
 
     service, sink_key, sink_table = resolved
-    template_key = args.remove_extra_column
+    template_key = args.remove_column_template
 
     if remove_extra_column_from_table(
         service, sink_key, sink_table, template_key,
@@ -129,7 +129,7 @@ def handle_remove_extra_column(args: argparse.Namespace) -> int:
 
 
 def handle_list_extra_columns(args: argparse.Namespace) -> int:
-    """Handle --list-extra-columns flag."""
+    """Handle --list-column-templates flag."""
     resolved = _resolve_sink_and_table(args)
     if resolved is None:
         return 1

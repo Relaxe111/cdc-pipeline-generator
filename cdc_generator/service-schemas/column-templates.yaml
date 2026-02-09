@@ -1,10 +1,10 @@
 # ============================================================================
 # Column Templates Library
 # ============================================================================
-# Reusable column definitions referenced by name in service YAML extra_columns.
+# Reusable column definitions referenced by name in service YAML column_templates.
 #
 # Usage in service YAML:
-#   extra_columns:
+#   column_templates:
 #     - template: source_table
 #     - template: environment
 #       name: deploy_env           # override column name
@@ -18,6 +18,9 @@
 #                - Bloblang expressions: root().source_table, this.field, meta("key")
 #                - Environment variables: ${VARIABLE_NAME}
 #   default:     SQL default for DDL (e.g., now(), gen_random_uuid())
+#   applies_to:  Optional list of table patterns (glob) where template can be used.
+#                Examples: ["*.users"], ["public.*"], ["logs.audit_*"]
+#                If omitted, template can be applied to any table.
 # ============================================================================
 
 templates:

@@ -1,6 +1,6 @@
-"""Sink table extra columns and transforms operations.
+"""Sink table column templates and transforms operations.
 
-Handles adding/removing extra_columns and transforms on sink tables
+Handles adding/removing column_templates and transforms on sink tables
 in service YAML files. These reference templates/rules by name only.
 
 All template/rule definitions live in:
@@ -10,12 +10,12 @@ All template/rule definitions live in:
 
 from typing import cast
 
-from cdc_generator.core.extra_columns import (
-    add_extra_column,
+from cdc_generator.core.column_template_operations import (
+    add_column_template,
     add_transform,
-    list_extra_columns,
+    list_column_templates,
     list_transforms,
-    remove_extra_column,
+    remove_column_template,
     remove_transform,
 )
 from cdc_generator.helpers.helpers_logging import (
@@ -121,7 +121,9 @@ def add_extra_column_to_table(
         return False
 
     config, table_cfg = resolved
-    if not add_extra_column(table_cfg, template_key, name_override):
+    if not add_column_template(
+        table_cfg, template_key, name_override, table_key=table_key,
+    ):
         return False
 
     if not save_service_config(service, config):
@@ -153,7 +155,7 @@ def remove_extra_column_from_table(
         return False
 
     config, table_cfg = resolved
-    if not remove_extra_column(table_cfg, template_key):
+    if not remove_column_template(table_cfg, template_key):
         return False
 
     if not save_service_config(service, config):
@@ -168,7 +170,7 @@ def list_extra_columns_on_table(
     sink_key: str,
     table_key: str,
 ) -> bool:
-    """List all extra columns on a sink table.
+    """List all column templates on a sink table.
 
     Args:
         service: Service name.
@@ -177,17 +179,18 @@ def list_extra_columns_on_table(
 
     Returns:
         True if any columns found, False otherwise.
-    """
+    \"\"\
+"
     resolved = _resolve_table_config(service, sink_key, table_key)
     if resolved is None:
         return False
 
     _config, table_cfg = resolved
-    columns = list_extra_columns(table_cfg)
+    columns = list_column_templates(table_cfg)
 
-    print_header(f"Extra columns on '{table_key}' in sink '{sink_key}'")
+    print_header(f"Column templates on '{table_key}' in sink '{sink_key}'")
     if not columns:
-        print_info("No extra columns configured")
+        print_info("No column templates configured")
         return False
 
     for tpl_key in columns:
@@ -198,6 +201,7 @@ def list_extra_columns_on_table(
             print(
                 f"  {Colors.CYAN}{tpl_key}{Colors.RESET}"
                 + f" → {Colors.OKGREEN}{template.name}{Colors.RESET}"
+
                 + f" ({template.column_type})"
                 + f"  {Colors.DIM}{template.description}{Colors.RESET}"
             )

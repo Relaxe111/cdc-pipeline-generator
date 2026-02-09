@@ -262,34 +262,34 @@ Examples:
 """
 
 
-def _add_extra_column_args(parser: ServiceArgumentParser) -> None:
-    """Add extra columns & transforms arguments to the parser."""
+def _add_column_template_args(parser: ServiceArgumentParser) -> None:
+    """Add column templates & transforms arguments to the parser."""
     parser.add_argument(
-        "--add-extra-column",
+        "--add-column-template",
         metavar="TEMPLATE",
         help=(
-            "Add extra column template to sink table "
+            "Add column template to sink table "
             + "(requires --sink-table)"
         ),
     )
     parser.add_argument(
-        "--remove-extra-column",
+        "--remove-column-template",
         metavar="TEMPLATE",
         help=(
-            "Remove extra column template from sink table "
+            "Remove column template from sink table "
             + "(requires --sink-table)"
         ),
     )
     parser.add_argument(
-        "--list-extra-columns",
+        "--list-column-templates",
         action="store_true",
-        help="List extra columns on a sink table (requires --sink-table)",
+        help="List column templates on a sink table (requires --sink-table)",
     )
     parser.add_argument(
         "--column-name",
         metavar="NAME",
         help=(
-            "Override column name when adding extra column "
+            "Override column name when adding column template "
             + "(default: template's name)"
         ),
     )
@@ -531,8 +531,8 @@ def _build_parser() -> ServiceArgumentParser:
         help="Validate sink configuration",
     )
 
-    # Extra columns & transforms args
-    _add_extra_column_args(parser)
+    # Column templates & transforms args
+    _add_column_template_args(parser)
 
     # Custom sink table args
     parser.add_argument(
@@ -664,9 +664,9 @@ def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
         return None
 
     extra_handlers: dict[str, Callable[[argparse.Namespace], int]] = {
-        "add_extra_column": handle_add_extra_column,
-        "remove_extra_column": handle_remove_extra_column,
-        "list_extra_columns": handle_list_extra_columns,
+        "add_column_template": handle_add_extra_column,
+        "remove_column_template": handle_remove_extra_column,
+        "list_column_templates": handle_list_extra_columns,
         "add_transform": handle_add_transform,
         "remove_transform": handle_remove_transform,
         "list_transforms": handle_list_transforms,
