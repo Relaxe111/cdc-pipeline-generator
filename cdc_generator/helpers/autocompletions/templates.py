@@ -40,7 +40,7 @@ def list_transform_rule_keys() -> list[str]:
     return list_rule_keys()
 
 
-def list_extra_columns_for_table(
+def list_column_templates_for_table(
     service_name: str,
     sink_key: str,
     table_key: str,
@@ -58,7 +58,7 @@ def list_extra_columns_for_table(
         List of template keys configured on the table.
 
     Example:
-        >>> list_extra_columns_for_table(
+        >>> list_column_templates_for_table(
         ...     'directory', 'sink_asma.notification',
         ...     'notification.customer_user',
         ... )

@@ -11,9 +11,9 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from cdc_generator.helpers.autocompletions.extras import (
+from cdc_generator.helpers.autocompletions.templates import (
     list_column_template_keys,
-    list_extra_columns_for_table,
+    list_column_templates_for_table,
     list_transform_rule_keys,
     list_transforms_for_table,
 )
@@ -172,7 +172,7 @@ _ARG_COMMANDS: dict[str, CompletionCommand] = {
     "--list-column-templates-on-table": CompletionCommand(
         arg_count=3,
         arg_desc="service_name sink_key table_key",
-        handler=list_extra_columns_for_table,
+        handler=list_column_templates_for_table,
     ),
     "--list-table-transforms": CompletionCommand(
         arg_count=3,
