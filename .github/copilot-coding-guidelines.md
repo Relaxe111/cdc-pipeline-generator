@@ -172,9 +172,10 @@ def get_patterns(group_data: Dict[str, Any]) -> List[str]:
     # 3. Validate items
     return [p for p in patterns if isinstance(p, str)]
 
-# ❌ NEVER use type: ignore (except import-untyped for external packages)
+# ❌❌❌ ABSOLUTELY FORBIDDEN: NEVER EVER USE type: ignore ❌❌❌
+# (ONLY exception: import-untyped for external packages without stubs)
 def bad_example(data: Dict[str, Any]) -> List[str]:
-    return data.get('patterns')  # type: ignore  # ❌ NO!
+    return data.get('patterns')  # type: ignore  # ❌❌❌ ABSOLUTELY NO!
 
 # ✅ ONLY exception: External packages without stubs
 try:
@@ -182,6 +183,8 @@ try:
 except ImportError:
     pass
 ```
+
+**CRITICAL RULE: DO NOT USE `# type: ignore` - FIX THE ROOT CAUSE INSTEAD**
 
 **Checklist for YAML/JSON data:**
 

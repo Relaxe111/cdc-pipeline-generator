@@ -3,7 +3,33 @@
 FROM python:3.13-slim
 
 # Install system dependencies, MSSQL tools, PostgreSQL client, and Fish shell
-RUN apt-get update && apt-get install -y     curl     gnupg2     apt-transport-https     ca-certificates     postgresql-client     fish     git     vim     docker.io     libatomic1     && curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg     && curl https://packages.microsoft.com/config/debian/12/prod.list | tee /etc/apt/sources.list.d/mssql-release.list     && apt-get update     && ACCEPT_EULA=Y apt-get install -y         mssql-tools18         unixodbc-dev     && apt-get clean     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg2 \
+    apt-transport-https \
+    ca-certificates \
+    postgresql-client \
+    fish \
+    git \
+    vim \
+    docker.io \
+    libatomic1 \
+    unzip \
+    && curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl https://packages.microsoft.com/config/debian/12/prod.list | tee /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y \
+        mssql-tools18 \
+        unixodbc-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Redpanda Connect CLI (rpk) for Bloblang validation
+RUN curl -LO https://github.com/redpanda-data/redpanda/releases/latest/download/rpk-linux-amd64.zip \
+    && unzip rpk-linux-amd64.zip \
+    && chmod +x rpk \
+    && mv rpk /usr/local/bin/ \
+    && rm rpk-linux-amd64.zip
 
 # Add sqlcmd and workspace bin to PATH
 ENV PATH="/opt/mssql-tools18/bin:/workspace:${PATH}"

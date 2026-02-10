@@ -8,6 +8,12 @@ inspect source databases.
 from typing import Any
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.mssql_loader import has_pymssql
+from cdc_generator.helpers.psycopg2_loader import (
+    ensure_psycopg2,
+    has_psycopg2,
+)
 
 from .db_inspector_common import get_connection_params, get_sink_db_config
 
@@ -68,10 +74,7 @@ def _inspect_postgres_sink(
     Returns:
         List of table dicts or None on error
     """
-    try:
-        import psycopg2
-        import psycopg2.extras
-    except ImportError:
+    if not has_psycopg2:
         print_error(
             "psycopg2 not installed — "
             + "use: pip install psycopg2-binary"
@@ -85,15 +88,17 @@ def _inspect_postgres_sink(
             + f"/{conn_params['database']}"
         )
 
-        conn = psycopg2.connect(
+        pg = ensure_psycopg2()
+
+        conn = pg.connect(
             host=conn_params["host"],
             port=conn_params["port"],
-            database=conn_params["database"],
+            dbname=conn_params["database"],
             user=conn_params["user"],
             password=conn_params["password"],
         )
         cursor = conn.cursor(
-            cursor_factory=psycopg2.extras.RealDictCursor,
+            cursor_factory=pg.extras.RealDictCursor,
         )
 
         query = """
@@ -137,11 +142,7 @@ def _inspect_mssql_sink(
     Returns:
         List of table dicts or None on error
     """
-    try:
-        from cdc_generator.helpers.helpers_mssql import (
-            create_mssql_connection,
-        )
-    except ImportError:
+    if not has_pymssql:
         print_error(
             "pymssql not installed — use: pip install pymssql"
         )

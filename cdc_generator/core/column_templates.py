@@ -99,6 +99,45 @@ def clear_cache() -> None:
 _REQUIRED_FIELDS = ("name", "type", "value")
 
 
+def _resolve_file_reference(value: str) -> tuple[str, str | None]:
+    """Resolve file:// reference to actual Bloblang content.
+
+    Args:
+        value: Either inline Bloblang or file:// reference.
+
+    Returns:
+        tuple: (resolved_bloblang, file_path_or_none)
+            - resolved_bloblang: The actual Bloblang expression
+            - file_path_or_none: Path to file if it was a reference, None otherwise
+
+    Example:
+        "meta('table')" → ("meta('table')", None)
+        "file://service-schemas/bloblang/mapper.blobl" → ("<file content>", "service-schemas/bloblang/mapper.blobl")
+    """
+    if not value.startswith("file://"):
+        return value, None
+
+    # Extract file path (remove file:// prefix)
+    file_path = value[7:]  # len("file://") == 7
+
+    # Resolve relative to project root
+    from cdc_generator.helpers.service_config import get_project_root
+
+    full_path = get_project_root() / file_path
+
+    if not full_path.exists():
+        print_error(f"Bloblang file not found: {file_path}")
+        print_error(f"  Full path: {full_path}")
+        return value, file_path  # Return original, let validation catch it
+
+    try:
+        content = full_path.read_text(encoding="utf-8").strip()
+        return content, file_path
+    except Exception as e:
+        print_error(f"Failed to read Bloblang file {file_path}: {e}")
+        return value, file_path
+
+
 def _parse_single_template(
     key: str,
     raw: object,
@@ -132,6 +171,9 @@ def _parse_single_template(
         print_warning(f"Column template '{key}': name, type, and value must be strings")
         return None
 
+    # Resolve file:// references to actual Bloblang content
+    resolved_value, _file_ref = _resolve_file_reference(value)
+
     not_null_raw = data.get("not_null", False)
     not_null = bool(not_null_raw) if isinstance(not_null_raw, bool) else False
 
@@ -156,7 +198,7 @@ def _parse_single_template(
         column_type=col_type,
         not_null=not_null,
         description=description,
-        value=value,
+        value=resolved_value,  # Use resolved content, not original reference
         default=default,
         applies_to=applies_to,
     )

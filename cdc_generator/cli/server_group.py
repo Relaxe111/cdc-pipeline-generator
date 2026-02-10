@@ -156,14 +156,34 @@ def main() -> int:
         action="store_true",
         help="Update all servers (use with --update).",
     )
-    parser.add_argument("--info", action="store_true", help="Show detailed information for the server group.")
-    parser.add_argument("--view-services", action="store_true", help="View environment-grouped services (db-shared mode).")
+    parser.add_argument(
+        "--info",
+        action="store_true",
+        help="Show detailed information for the server group.",
+    )
+    parser.add_argument(
+        "--view-services",
+        action="store_true",
+        help="View environment-grouped services (db-shared mode).",
+    )
 
     # Exclude patterns management
-    parser.add_argument("--add-to-ignore-list", help="Add a pattern to the database exclude list (persisted in source-groups.yaml).")
+    parser.add_argument(
+        "--add-to-ignore-list",
+        help=(
+            "Add a pattern to the database exclude list "
+            "(persisted in source-groups.yaml)."
+        ),
+    )
     parser.add_argument("--list-ignore-patterns", action="store_true",
                        help="List current database exclude patterns.")
-    parser.add_argument("--add-to-schema-excludes", help="Add a pattern to the schema exclude list (persisted in source-groups.yaml).")
+    parser.add_argument(
+        "--add-to-schema-excludes",
+        help=(
+            "Add a pattern to the schema exclude list "
+            "(persisted in source-groups.yaml)."
+        ),
+    )
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
 
@@ -173,31 +193,78 @@ def main() -> int:
                             "Use with --source-type, --host, --port, --user, --password.")
     parser.add_argument("--list-servers", action="store_true",
                        help="List all configured servers in the server group.")
-    parser.add_argument("--remove-server", metavar="NAME",
-                       help="Remove a server configuration. Cannot remove 'default' or servers with services.")
+    parser.add_argument(
+        "--remove-server",
+        metavar="NAME",
+        help=(
+            "Remove a server configuration. "
+            "Cannot remove 'default' or servers with services."
+        ),
+    )
     parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
                        help="Change the Kafka topology. 'shared' = same Kafka for all servers, " +
                             "'per-server' = isolated Kafka per server.")
-    parser.add_argument("--set-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
-                       help="Set extraction pattern for a specific server. " +
-                            "Pattern is a regex with named groups: (?P<service>...), (?P<env>...), (?P<customer>...). " +
-                            "Example: --set-extraction-pattern default '^(?P<service>\\w+)_(?P<env>\\w+)$'")
+    parser.add_argument(
+        "--set-extraction-pattern",
+        nargs=2,
+        metavar=("SERVER", "PATTERN"),
+        help=(
+            "Set extraction pattern for a specific server. "
+            "Pattern is a regex with named groups: "
+            "(?P<service>...), (?P<env>...), "
+            "(?P<customer>...). "
+            "Example: --set-extraction-pattern default "
+            "'^(?P<service>\\w+)_(?P<env>\\w+)$'"
+        ),
+    )
 
     # Extraction pattern management (ordered multi-pattern approach)
-    parser.add_argument("--add-extraction-pattern", nargs=2, metavar=("SERVER", "PATTERN"),
-                       help="Add an extraction pattern to a server. Patterns are tried in order (first match wins). " +
-                            "Pattern must include named group (?P<service>...) and optionally (?P<env>...). " +
-                            "Use --env to fix environment (overrides captured group). " +
-                            "Use --strip-patterns for regex-based removal (e.g., '_db' anywhere, '_db$' suffix only). " +
-                            "Example: --add-extraction-pattern prod '^(?P<service>\\w+)_db_prod_adcuris$' " +
-                            "--env prod_adcuris --strip-patterns '_db$'")
-    parser.add_argument("--env", type=str,
-                       help="Fixed environment name for --add-extraction-pattern (overrides captured (?P<env>) group).")
-    parser.add_argument("--strip-patterns", type=str,
-                       help="Comma-separated regex patterns to remove from service name (e.g., '_db' for anywhere, '_db$' for suffix only).")
-    parser.add_argument("--env-mapping", type=str,
-                       help="Environment mapping in format 'from:to' (e.g., 'prod_adcuris:prod-adcuris'). Can be specified multiple times.",
-                       action='append')
+    parser.add_argument(
+        "--add-extraction-pattern",
+        nargs=2,
+        metavar=("SERVER", "PATTERN"),
+        help=(
+            "Add an extraction pattern to a server. "
+            "Patterns are tried in order (first match wins). "
+            "Pattern must include named group "
+            "(?P<service>...) and optionally (?P<env>...). "
+            "Use --env to fix environment "
+            "(overrides captured group). "
+            "Use --strip-patterns for regex-based removal "
+            "(e.g., '_db' anywhere, '_db$' suffix only). "
+            "Example: --add-extraction-pattern prod "
+            "'^(?P<service>\\w+)_db_prod_adcuris$' "
+            "--env prod_adcuris --strip-patterns '_db$'"
+        ),
+    )
+    parser.add_argument(
+        "--env",
+        type=str,
+        help=(
+            "Fixed environment name for "
+            "--add-extraction-pattern "
+            "(overrides captured (?P<env>) group)."
+        ),
+    )
+    parser.add_argument(
+        "--strip-patterns",
+        type=str,
+        help=(
+            "Comma-separated regex patterns to remove "
+            "from service name (e.g., '_db' for anywhere, "
+            "'_db$' for suffix only)."
+        ),
+    )
+    parser.add_argument(
+        "--env-mapping",
+        type=str,
+        help=(
+            "Environment mapping in format 'from:to' "
+            "(e.g., 'prod_adcuris:prod-adcuris'). "
+            "Can be specified multiple times."
+        ),
+        action='append',
+    )
     parser.add_argument("--description", type=str,
                        help="Human-readable description for --add-extraction-pattern.")
     parser.add_argument("--list-extraction-patterns", nargs='?', const='', metavar="SERVER",
@@ -252,7 +319,10 @@ def main() -> int:
         patterns = load_database_exclude_patterns()
         print_header("Database Exclude Patterns")
         if patterns:
-            print_info("Databases with names containing these patterns will be excluded during '--update':")
+            print_info(
+                "Databases with names containing these patterns "
+                + "will be excluded during '--update':"
+            )
             for pattern in patterns:
                 print_info(f"  • {pattern}")
         else:
@@ -326,10 +396,11 @@ def main() -> int:
                     src = cast(ConfigDict, source_data)
                     schemas_raw = src.get('schemas', [])
                     # Runtime validation: schemas must be a list of strings
-                    if isinstance(schemas_raw, list):
-                        schemas = [str(s) for s in schemas_raw]
-                    else:
-                        schemas = []
+                    schemas = (
+                        [str(s) for s in schemas_raw]
+                        if isinstance(schemas_raw, list)
+                        else []
+                    )
                     print_info(f"\n📦 Source: {source_name}")
                     print_info(f"   Schemas (shared): {', '.join(schemas)}")
 
@@ -346,7 +417,11 @@ def main() -> int:
                             table_count_raw = env_data.get('table_count', 0)
                             server = str(server_raw)
                             database = str(database_raw)
-                            table_count = int(table_count_raw) if isinstance(table_count_raw, (int, str)) else 0
+                            table_count = (
+                                int(table_count_raw)
+                                if isinstance(table_count_raw, (int, str))
+                                else 0
+                            )
                             print_info(f"   🌍 {env}:")
                             print_info(f"       Server: {server}")
                             print_info(f"       Database: {database}")

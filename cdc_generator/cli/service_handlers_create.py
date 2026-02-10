@@ -170,5 +170,5 @@ def handle_create_service(args: argparse.Namespace) -> int:
         return 1
 
     server_name = getattr(args, "server", None) or "default"
-    create_service(args.service, server_group, server=server_name)
+    create_service(args.service, server_group, server_name)
     return 0

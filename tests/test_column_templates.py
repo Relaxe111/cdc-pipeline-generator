@@ -2,10 +2,9 @@
 
 from pathlib import Path
 
-import pytest  # type: ignore[import-not-found]
+import pytest
 
 from cdc_generator.core.column_templates import (
-    ColumnTemplate,
     _parse_single_template,
     clear_cache,
     get_template,
@@ -15,14 +14,13 @@ from cdc_generator.core.column_templates import (
     validate_template_reference,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
-def _reset_cache() -> None:  # type: ignore[misc]
+def _reset_cache() -> None:
     """Clear template cache before each test."""
     clear_cache()
 
@@ -124,7 +122,7 @@ class TestParseSingleTemplate:
         result = _parse_single_template("test", raw)
         assert result is not None
         with pytest.raises(AttributeError):
-            result.name = "changed"  # type: ignore[misc]
+            result.name = "changed"
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +136,8 @@ class TestGetTemplates:
     def test_load_all_templates(self, templates_file: Path) -> None:
         """Load all templates from file."""
         templates = get_templates()
-        assert len(templates) == 3
+        expected_template_count = 3
+        assert len(templates) == expected_template_count
         assert "source_table" in templates
         assert "sync_timestamp" in templates
         assert "environment" in templates

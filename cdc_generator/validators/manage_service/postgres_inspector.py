@@ -3,15 +3,12 @@
 from typing import Any
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info
+from cdc_generator.helpers.psycopg2_loader import (
+    ensure_psycopg2,
+    has_psycopg2,
+)
 
 from .db_inspector_common import get_connection_params, get_service_db_config
-
-try:
-    import psycopg2
-    import psycopg2.extras
-    HAS_PSYCOPG2 = True
-except ImportError:
-    HAS_PSYCOPG2 = False
 
 
 def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
@@ -24,7 +21,7 @@ def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str
     Returns:
         List of table dictionaries with TABLE_SCHEMA, TABLE_NAME, COLUMN_COUNT
     """
-    if not HAS_PSYCOPG2:
+    if not has_psycopg2:
         print_error("psycopg2 not installed - use: pip install psycopg2-binary")
         return None
 
@@ -41,16 +38,18 @@ def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str
 
         print_info(f"Connecting to PostgreSQL: {conn_params['host']}:{conn_params['port']}/{conn_params['database']}")
 
+        pg = ensure_psycopg2()
+
         # Connect to PostgreSQL
-        conn = psycopg2.connect(
+        conn = pg.connect(
             host=conn_params['host'],
             port=conn_params['port'],
-            database=conn_params['database'],
+            dbname=conn_params['database'],
             user=conn_params['user'],
             password=conn_params['password']
         )
 
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cursor = conn.cursor(cursor_factory=pg.extras.RealDictCursor)
 
         # Get all tables with their schemas and column counts
         query = """

@@ -260,21 +260,36 @@ def handle_sink_map_column_error() -> int:
 
 
 def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
-    """Add a custom table to a sink with column definitions."""
+    """Add a custom table to a sink with column definitions.
+
+    Supports two modes:
+    1. Inline columns: ``--column id:uuid:pk --column name:text``
+    2. From pre-defined custom table: ``--from public.audit_log``
+       (loads from service-schemas/{target}/custom-tables/)
+    """
     sink_key = _resolve_sink_key(args)
     if not sink_key:
         return 1
 
-    if not args.column:
+    from_table: str | None = getattr(args, "from_table", None)
+
+    if not args.column and not from_table:
         print_error(
-            "--add-custom-sink-table requires at least one --column"
+            "--add-custom-sink-table requires --column specs"
+            + " or --from <custom-table-ref>"
         )
         print_info(
-            "Example: cdc manage-service --service directory "
+            "Example (inline): cdc manage-service --service directory "
             + "--sink sink_asma.proxy "
             + "--add-custom-sink-table public.audit_log "
             + "--column id:uuid:pk "
             + "--column event_type:text:not_null"
+        )
+        print_info(
+            "Example (from custom): cdc manage-service --service directory "
+            + "--sink sink_asma.proxy "
+            + "--add-custom-sink-table public.audit_log "
+            + "--from public.audit_log"
         )
         return 1
 
@@ -282,7 +297,8 @@ def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
         args.service,
         sink_key,
         args.add_custom_sink_table,
-        args.column,
+        args.column or [],
+        from_custom_table=from_table,
     ):
         print_info("Run 'cdc generate' to update pipelines")
         return 0

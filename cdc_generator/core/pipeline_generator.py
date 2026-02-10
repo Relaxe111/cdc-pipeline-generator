@@ -715,7 +715,7 @@ def build_table_routing_map(
                     primary_key = schema_pk
                     pk_source = 'schema'
                     print(
-                        f"  ℹ️  {schema}.{table_name}: "
+                        f"  [i] {schema}.{table_name}: "
                         + f"Using primary_key from schema: {primary_key}"
                     )
 

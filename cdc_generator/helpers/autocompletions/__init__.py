@@ -23,6 +23,11 @@ from cdc_generator.helpers.autocompletions.scaffold import (
 from cdc_generator.helpers.autocompletions.schemas import (
     list_schemas_for_service,
 )
+from cdc_generator.helpers.autocompletions.service_schemas import (
+    list_custom_table_columns_for_mapping,
+    list_custom_tables_for_schema_service,
+    list_schema_services,
+)
 from cdc_generator.helpers.autocompletions.server_groups import (
     list_databases_from_server_group,
     list_non_inherited_sink_group_names,
@@ -92,6 +97,7 @@ _NO_ARG_COMMANDS: dict[str, Callable[[], list[str]]] = {
     "--list-pg-types": list_pg_column_types,
     "--list-column-templates": list_column_template_keys,
     "--list-transform-rules": list_transform_rule_keys,
+    "--list-schema-services": list_schema_services,
 }
 
 # ---------------------------------------------------------------------------
@@ -178,6 +184,16 @@ _ARG_COMMANDS: dict[str, CompletionCommand] = {
         arg_count=3,
         arg_desc="service_name sink_key table_key",
         handler=list_transforms_for_table,
+    ),
+    "--list-schema-custom-tables": CompletionCommand(
+        arg_count=1,
+        arg_desc="service_name",
+        handler=list_custom_tables_for_schema_service,
+    ),
+    "--list-custom-table-columns-for-mapping": CompletionCommand(
+        arg_count=2,
+        arg_desc="service_name table_ref",
+        handler=list_custom_table_columns_for_mapping,
     ),
 }
 

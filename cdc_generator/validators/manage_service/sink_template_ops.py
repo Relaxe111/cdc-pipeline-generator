@@ -103,6 +103,7 @@ def add_column_template_to_table(
     table_key: str,
     template_key: str,
     name_override: str | None = None,
+    skip_validation: bool = False,
 ) -> bool:
     """Add a column template reference to a sink table.
 
@@ -112,6 +113,7 @@ def add_column_template_to_table(
         table_key: Table key.
         template_key: Column template key from column-templates.yaml.
         name_override: Optional column name override.
+        skip_validation: Skip database schema validation (for migrations).
 
     Returns:
         True on success, False on error.
@@ -119,6 +121,17 @@ def add_column_template_to_table(
     resolved = _resolve_table_config(service, sink_key, table_key)
     if resolved is None:
         return False
+
+    # Validate template against database schema before adding
+    if not skip_validation:
+        from cdc_generator.validators.template_validator import (
+            validate_templates_for_table,
+        )
+
+        print_info(f"\nValidating template '{template_key}' for table '{table_key}'...")
+        if not validate_templates_for_table(service, table_key, [template_key]):
+            print_error("Template validation failed. Use --skip-validation to bypass.")
+            return False
 
     config, table_cfg = resolved
     if not add_column_template(
@@ -179,8 +192,7 @@ def list_column_templates_on_table(
 
     Returns:
         True if any columns found, False otherwise.
-    \"\"\
-"
+    """
     resolved = _resolve_table_config(service, sink_key, table_key)
     if resolved is None:
         return False
@@ -221,6 +233,7 @@ def add_transform_to_table(
     sink_key: str,
     table_key: str,
     rule_key: str,
+    skip_validation: bool = False,
 ) -> bool:
     """Add a transform rule reference to a sink table.
 
@@ -229,6 +242,7 @@ def add_transform_to_table(
         sink_key: Sink key.
         table_key: Table key.
         rule_key: Transform rule key from transform-rules.yaml.
+        skip_validation: Skip database schema validation (for migrations).
 
     Returns:
         True on success, False on error.
@@ -236,6 +250,17 @@ def add_transform_to_table(
     resolved = _resolve_table_config(service, sink_key, table_key)
     if resolved is None:
         return False
+
+    # Validate transform against database schema before adding
+    if not skip_validation:
+        from cdc_generator.validators.template_validator import (
+            validate_transforms_for_table,
+        )
+
+        print_info(f"\nValidating transform '{rule_key}' for table '{table_key}'...")
+        if not validate_transforms_for_table(service, table_key, [rule_key]):
+            print_error("Transform validation failed. Use --skip-validation to bypass.")
+            return False
 
     config, table_cfg = resolved
     if not add_transform(table_cfg, rule_key):

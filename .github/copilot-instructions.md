@@ -61,7 +61,9 @@ config = yaml.safe_load(...)  # No validation, no types
 - ✅ Fix source code type hints (our functions)
 - ✅ Install type stubs for external libraries
 - ✅ Use `cast()` only for external libraries
-- ❌ **NEVER use `# type: ignore`**
+- ❌ **ABSOLUTELY FORBIDDEN: `# type: ignore` - NEVER USE THIS**
+- ❌ **DO NOT ADD `# type: ignore` COMMENTS - FIX THE ACTUAL TYPE ISSUE**
+- ❌ **IF YOU SEE `# type: ignore` - REMOVE IT AND FIX THE ROOT CAUSE**
 
 ### 5. Python Linting & Analysis (Strict)
 - ✅ Follow Pylance strict rules when working in Python

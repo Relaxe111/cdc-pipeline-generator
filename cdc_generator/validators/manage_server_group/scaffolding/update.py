@@ -18,8 +18,9 @@ from .vscode_settings import (
 def _copy_template_library_files(project_root: Path) -> None:
     """Copy template library files from generator to implementation.
 
-    Copies column-templates.yaml and transform-rules.yaml from the generator's
-    service-schemas/ directory to the implementation's service-schemas/.
+    Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
+    from the generator's templates/init/service-schemas/ directory to the
+    implementation's service-schemas/.
 
     Args:
         project_root: Root directory of the implementation
@@ -28,7 +29,7 @@ def _copy_template_library_files(project_root: Path) -> None:
     import cdc_generator
 
     generator_root = Path(cdc_generator.__file__).parent
-    template_source_dir = generator_root / "service-schemas"
+    template_source_dir = generator_root / "templates" / "init" / "service-schemas"
 
     # Files to copy with examples and inline comments
     template_files = [
@@ -48,6 +49,20 @@ def _copy_template_library_files(project_root: Path) -> None:
                 print_success(f"✓ Copied template library: service-schemas/{filename}")
         else:
             print_warning(f"⚠️  Template not found in generator: {filename}")
+
+    # Copy bloblang directory (examples and README)
+    bloblang_source = template_source_dir / "bloblang"
+    bloblang_target = project_root / "service-schemas" / "bloblang"
+
+    if bloblang_source.exists():
+        # Copy entire bloblang directory recursively if it doesn't exist
+        if bloblang_target.exists():
+            print_info("⊘ Skipped (exists): service-schemas/bloblang/")
+        else:
+            shutil.copytree(bloblang_source, bloblang_target)
+            print_success("✓ Copied Bloblang examples: service-schemas/bloblang/")
+    else:
+        print_warning("⚠️  Bloblang templates not found in generator")
 
 
 def update_scaffold(project_root: Path) -> bool:

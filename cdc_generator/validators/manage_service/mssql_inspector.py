@@ -4,14 +4,9 @@ from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.mssql_loader import has_pymssql
 
 from .db_inspector_common import get_connection_params, get_service_db_config
-
-try:
-    import pymssql as _  # type: ignore
-    _has_pymssql = True
-except ImportError:
-    _has_pymssql = False
 
 
 def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
@@ -24,7 +19,7 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, A
     Returns:
         List of table dictionaries with TABLE_SCHEMA, TABLE_NAME, COLUMN_COUNT
     """
-    if not _has_pymssql:
+    if not has_pymssql:
         print_error("pymssql not installed - use: pip install pymssql")
         return None
 
@@ -39,7 +34,11 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, A
         if not conn_params:
             return None
 
-        print_info(f"Connecting to MSSQL: {conn_params['host']}:{conn_params['port']}/{conn_params['database']}")
+        print_info(
+            "Connecting to MSSQL: "
+            + f"{conn_params['host']}:{conn_params['port']}"
+            + f"/{conn_params['database']}"
+        )
 
         # Connect to MSSQL
         conn = create_mssql_connection(

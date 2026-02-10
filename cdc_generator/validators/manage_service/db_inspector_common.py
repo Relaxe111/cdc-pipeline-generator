@@ -597,6 +597,15 @@ def _resolve_sink_group_and_key(
         )
         return None
 
+    # If sink group inherits but has no explicit source_group,
+    # infer from sink group name (e.g., "sink_asma" → "asma")
+    if (
+        not sink_group.get("source_group")
+        and sink_group.get("inherits")
+        and sink_group_name.startswith("sink_")
+    ):
+        sink_group["source_group"] = sink_group_name[5:]
+
     return sink_group_name, target_service, sink_group
 
 
@@ -630,9 +639,19 @@ def _build_sink_connection(
 
     # Handle source_ref servers (inherited from source group)
     if "source_ref" in server_config:
-        resolved = _resolve_source_ref_server(
-            str(server_config["source_ref"]),
-        )
+        source_ref = str(server_config["source_ref"])
+
+        # If source_ref is a bare server name (e.g., "default"),
+        # prepend the source group name from the sink group config
+        if "/" not in source_ref:
+            source_group_name = (
+                sink_group.get("source_group")
+                or (sink_group_name[5:] if sink_group_name.startswith("sink_") else None)
+            )
+            if source_group_name:
+                source_ref = f"{source_group_name}/{source_ref}"
+
+        resolved = _resolve_source_ref_server(source_ref)
         if not resolved:
             return None
         # Apply overrides from sink config

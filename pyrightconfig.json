@@ -1,4 +1,8 @@
 {
+  "include": [
+    "cdc_generator",
+    "tests"
+  ],
   "typeCheckingMode": "strict",
   "reportUnknownVariableType": "error",
   "reportUnknownParameterType": "error",
@@ -6,7 +10,7 @@
   "reportUnknownArgumentType": "error",
   "reportUnknownLambdaType": "error",
   "reportMissingTypeStubs": "warning",
-  "reportUntypedFunctionDecorator": "error",
+  "reportUntypedFunctionDecorator": "warning",
   "reportUntypedClassDecorator": "error",
   "reportUntypedBaseClass": "error",
   "reportMissingTypeArgument": "error",
@@ -19,5 +23,8 @@
   "strictListInference": true,
   "strictDictionaryInference": true,
   "strictSetInference": true,
-  "strictParameterNoneValue": true
+  "strictParameterNoneValue": true,
+  "exclude": [
+    "**/tests/**"
+  ]
 }

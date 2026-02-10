@@ -144,6 +144,74 @@ def load_source_schema(
     return cast(dict[str, Any], raw) if raw else None
 
 
+def _parse_custom_table_raw(
+    raw: dict[str, Any],
+) -> CustomTableReference | None:
+    """Parse raw YAML dict into a CustomTableReference.
+
+    Args:
+        raw: Parsed YAML dict from custom-tables/*.yaml.
+
+    Returns:
+        CustomTableReference if all required fields are present, else None.
+    """
+    # Parse source_reference (required)
+    source_ref_raw = raw.get("source_reference")
+    if not isinstance(source_ref_raw, dict):
+        return None
+
+    source_ref = cast(dict[str, Any], source_ref_raw)
+    source_service = source_ref.get("service")
+    source_schema = source_ref.get("schema")
+    source_table = source_ref.get("table")
+
+    if not all([source_service, source_schema, source_table]):
+        return None
+
+    # Parse sink_target (required)
+    sink_target_raw = raw.get("sink_target")
+    if not isinstance(sink_target_raw, dict):
+        return None
+
+    sink_target = cast(dict[str, Any], sink_target_raw)
+    sink_schema = sink_target.get("schema")
+    sink_table = sink_target.get("table")
+
+    if not all([sink_schema, sink_table]):
+        return None
+
+    # Parse optional fields - prefer column_templates over deprecated extra_columns
+    column_templates = raw.get("column_templates")
+    extra_columns = raw.get("extra_columns")  # Backwards compatibility
+    transforms = raw.get("transforms")
+
+    # Use column_templates if present, otherwise fall back to extra_columns
+    final_column_templates = column_templates if column_templates is not None else extra_columns
+
+    return CustomTableReference(
+        source_service=str(source_service),
+        source_schema=str(source_schema),
+        source_table=str(source_table),
+        sink_schema=str(sink_schema),
+        sink_table=str(sink_table),
+        extra_columns=(
+            cast(list[dict[str, Any]], final_column_templates)
+            if isinstance(final_column_templates, list)
+            else None
+        ),
+        transforms=(
+            cast(list[dict[str, Any]], transforms)
+            if isinstance(transforms, list)
+            else None
+        ),
+        column_templates=(
+            cast(list[dict[str, Any]], final_column_templates)
+            if isinstance(final_column_templates, list)
+            else None
+        ),
+    )
+
+
 def load_custom_table_reference(
     target_service: str,
     table_key: str,
@@ -183,59 +251,7 @@ def load_custom_table_reference(
     if not raw:
         return None
 
-    # Parse source_reference (required)
-    source_ref = raw.get("source_reference")
-    if not isinstance(source_ref, dict):
-        return None
-
-    source_service = source_ref.get("service")
-    source_schema = source_ref.get("schema")
-    source_table = source_ref.get("table")
-
-    if not all([source_service, source_schema, source_table]):
-        return None
-
-    # Parse sink_target (required)
-    sink_target = raw.get("sink_target")
-    if not isinstance(sink_target, dict):
-        return None
-
-    sink_schema = sink_target.get("schema")
-    sink_table = sink_target.get("table")
-
-    if not all([sink_schema, sink_table]):
-        return None
-
-    # Parse optional fields - prefer column_templates over deprecated extra_columns
-    column_templates = raw.get("column_templates")
-    extra_columns = raw.get("extra_columns")  # Backwards compatibility
-    transforms = raw.get("transforms")
-
-    # Use column_templates if present, otherwise fall back to extra_columns
-    final_column_templates = column_templates if column_templates is not None else extra_columns
-
-    return CustomTableReference(
-        source_service=str(source_service),
-        source_schema=str(source_schema),
-        source_table=str(source_table),
-        sink_schema=str(sink_schema),
-        sink_table=str(sink_table),
-        extra_columns=(
-            cast(list[dict[str, Any]], final_column_templates)
-            if isinstance(final_column_templates, list)
-            else None
-        ),
-        transforms=(
-            cast(list[dict[str, Any]], transforms)
-            if isinstance(transforms, list)
-            else None
-        ),
-        column_templates=(
-            cast(list[dict[str, Any]], final_column_templates)
-            if isinstance(final_column_templates, list)
-            else None
-        ),
-    )
+    return _parse_custom_table_raw(raw)
 
 
 def replicate_table_structure(config: ReplicationConfig) -> str | None:

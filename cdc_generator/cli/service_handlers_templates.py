@@ -11,7 +11,6 @@ from cdc_generator.helpers.helpers_logging import (
 from cdc_generator.validators.manage_service.sink_template_ops import (
     add_column_template_to_table,
     add_transform_to_table,
-    list_column_templates_on_table,
     list_transforms_on_table,
     remove_column_template_from_table,
     remove_transform_from_table,
@@ -104,9 +103,10 @@ def handle_add_column_template(args: argparse.Namespace) -> int:
     template_key = args.add_column_template
 
     name_override = getattr(args, "column_name", None)
+    skip_validation = getattr(args, "skip_validation", False)
 
     if add_column_template_to_table(
-        service, sink_key, sink_table, template_key, name_override,
+        service, sink_key, sink_table, template_key, name_override, skip_validation,
     ):
         return 0
     return 1
@@ -128,17 +128,6 @@ def handle_remove_column_template(args: argparse.Namespace) -> int:
     return 1
 
 
-def handle_list_column_templates(args: argparse.Namespace) -> int:
-    """Handle --list-column-templates flag."""
-    resolved = _resolve_sink_and_table(args)
-    if resolved is None:
-        return 1
-
-    service, sink_key, sink_table = resolved
-    list_column_templates_on_table(service, sink_key, sink_table)
-    return 0
-
-
 # ---------------------------------------------------------------------------
 # Transform handlers
 # ---------------------------------------------------------------------------
@@ -152,9 +141,10 @@ def handle_add_transform(args: argparse.Namespace) -> int:
 
     service, sink_key, sink_table = resolved
     rule_key = args.add_transform
+    skip_validation = getattr(args, "skip_validation", False)
 
     if add_transform_to_table(
-        service, sink_key, sink_table, rule_key,
+        service, sink_key, sink_table, rule_key, skip_validation,
     ):
         return 0
     return 1

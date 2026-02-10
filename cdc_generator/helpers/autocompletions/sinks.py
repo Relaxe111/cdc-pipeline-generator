@@ -254,14 +254,11 @@ def list_target_columns_for_sink_table(
         return []
 
     parts = sink_key.split('.', 1)
-    if len(parts) != SCHEMA_TABLE_PARTS:
+    table_parts = target_table.split('.', 1)
+    if len(parts) != SCHEMA_TABLE_PARTS or len(table_parts) != SCHEMA_TABLE_PARTS:
         return []
 
     target_service = parts[1]
-    table_parts = target_table.split('.', 1)
-    if len(table_parts) != SCHEMA_TABLE_PARTS:
-        return []
-
     schema, table = table_parts
     schemas_dir = find_directory_upward('service-schemas')
     table_file = schemas_dir / target_service / schema / f'{table}.yaml' if schemas_dir else None

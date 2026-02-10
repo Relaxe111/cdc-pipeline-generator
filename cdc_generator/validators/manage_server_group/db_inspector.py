@@ -6,25 +6,15 @@ from typing import TYPE_CHECKING, Any
 
 from .types import DatabaseInfo, ExtractedIdentifiers, ServerConfig, ServerGroupConfig
 
-# Type checking imports for database connections
-# These are untyped external libraries - use Any for connection objects
 if TYPE_CHECKING:
-    # Connection types would go here if stubs existed
-    pass
+    from cdc_generator.helpers.pymssql_stub import MSSQLConnection
+    from cdc_generator.helpers.psycopg2_stub import PgConnection
 
-try:
-    import pymssql  # type: ignore[import-not-found]
-    has_pymssql = True
-except ImportError:
-    pymssql = None  # type: ignore[assignment]
-    has_pymssql = False
-
-try:
-    import psycopg2  # type: ignore[import-not-found]
-    has_psycopg2 = True
-except ImportError:
-    psycopg2 = None  # type: ignore[assignment]
-    has_psycopg2 = False
+from cdc_generator.helpers.mssql_loader import has_pymssql
+from cdc_generator.helpers.psycopg2_loader import (
+    ensure_psycopg2,
+    has_psycopg2,
+)
 
 from cdc_generator.helpers.helpers_logging import print_info, print_warning
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
@@ -252,11 +242,11 @@ def _resolve_env_value(value: str | int | None, field_name: str) -> str:
     return expanded
 
 
-def get_mssql_connection(server_config: ServerConfig) -> Any:  # noqa: ANN401 - pymssql has no stubs
+def get_mssql_connection(server_config: ServerConfig) -> MSSQLConnection:
     """Get MSSQL connection from server config.
 
     Returns:
-        pymssql connection object (typed as Any due to missing type stubs)
+        pymssql connection object with type-safe interface.
     """
     if not has_pymssql:
         raise ImportError("pymssql not installed - run: pip install pymssql")
@@ -278,14 +268,16 @@ def get_mssql_connection(server_config: ServerConfig) -> Any:  # noqa: ANN401 - 
     )
 
 
-def get_postgres_connection(server_config: ServerConfig, database: str = 'postgres') -> Any:  # noqa: ANN401 - psycopg2 has no stubs
+def get_postgres_connection(server_config: ServerConfig, database: str = 'postgres') -> PgConnection:
     """Get PostgreSQL connection from server config.
 
     Returns:
-        psycopg2 connection object (typed as Any due to missing type stubs)
+        psycopg2 connection object with type-safe interface.
     """
     if not has_psycopg2:
         raise ImportError("psycopg2 not installed - run: pip install psycopg2-binary")
+
+    pg = ensure_psycopg2()
 
     host = _resolve_env_value(server_config.get('host'), 'host')
     user = _resolve_env_value(
@@ -296,15 +288,15 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
     port = int(_resolve_env_value(server_config.get('port', 5432), 'port'))
 
     try:
-        return psycopg2.connect(  # type: ignore[misc]
+        return pg.connect(
             host=host,
             port=port,
             user=user,
             password=password,
             database=database,
-            connect_timeout=10  # 10 second timeout
+            connect_timeout=10,
         )
-    except psycopg2.OperationalError as e:  # type: ignore[union-attr]
+    except pg.OperationalError as e:
         error_msg = str(e).lower()
 
         # DNS resolution failure

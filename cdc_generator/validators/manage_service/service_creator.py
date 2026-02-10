@@ -9,13 +9,13 @@ from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.validators.manage_server_group.config import load_server_groups
 
 
-def create_service(service_name: str, server_group: str, server: str = "default") -> None:
+def create_service(service_name: str, server_group: str, _server: str = "default") -> None:
     """Create a new service configuration file.
 
     Args:
         service_name: Name of the service to create
         server_group: Server group name (e.g., 'adopus', 'asma')
-        server: Server name for multi-server setups (default: 'default')
+        _server: Server name for multi-server setups (default: 'default')
     """
     project_root = get_project_root()
     services_dir = project_root / 'services'
@@ -101,8 +101,11 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 
             if not validation_database:
                 raise ValueError(
-                    f"Could not find database for service '{service_name}' in server group '{server_group}'.\n" +
-                    f"Expected: sources.{service_name}.<env>.database in source-groups.yaml"
+                    "Could not find database for service "
+                    + f"'{service_name}' in server group "
+                    + f"'{server_group}'.\n"
+                    + f"Expected: sources.{service_name}."
+                    + "<env>.database in source-groups.yaml"
                 )
 
     if not pattern:
@@ -114,7 +117,7 @@ def create_service(service_name: str, server_group: str, server: str = "default"
     if update_mode:
         print_header(f"Updating {pattern} service: {service_name}")
         # Load existing service file
-        with open(service_file) as f:
+        with service_file.open() as f:
             existing_service = yaml.safe_load(f)
     else:
         print_header(f"Creating new {pattern} service: {service_name}")
@@ -203,9 +206,10 @@ def create_service(service_name: str, server_group: str, server: str = "default"
         template = existing_service
 
     # Write YAML with header comment and proper formatting
-    header_comment = f"""# ============================================================================
+    sep = "=" * 76
+    header_comment = f"""# {sep}
 # CDC Service Configuration - Auto-managed
-# ============================================================================
+# {sep}
 # ⚠️  This file is mostly READ-ONLY - modify only through CDC commands:
 #
 #   cdc manage-service --service {service_name} --add-source-table <schema.table>
@@ -221,16 +225,16 @@ def create_service(service_name: str, server_group: str, server: str = "default"
 #   - Service name is derived from filename ({service_name}.yaml)
 #   - source.validation_database (auto-populated from source-groups.yaml)
 #
-# ℹ️  NOTE:
+# [i] NOTE:
 #   - server_group: Auto-detected (only one per implementation)
 #   - server: Determined by environment (from source-groups.yaml)
 #   - source.type: From source-groups.yaml type field
 #   - Database connections: From source-groups.yaml servers configuration
-# ============================================================================
+# {sep}
 
 """
 
-    with open(service_file, 'w') as f:
+    with service_file.open('w') as f:
         f.write(header_comment)
         # Remove 'service' field if present (redundant in new format)
         template_to_save = {k: v for k, v in template.items() if k != 'service'}
@@ -244,11 +248,28 @@ def create_service(service_name: str, server_group: str, server: str = "default"
     if not update_mode:
         print_success("\nNext steps:")
         if pattern == 'db-per-tenant':
-            print_success(f"  1. Edit {service_file} to configure customers and environments")
-            print_success(f"  2. Add CDC tables: cdc manage-service --service {service_name} --add-source-table <schema.table>")
-            print_success(f"  3. Validate: cdc manage-service --service {service_name} --validate-config")
+            print_success(
+                f"  1. Edit {service_file} to configure "
+                + "customers and environments"
+            )
+            print_success(
+                "  2. Add CDC tables: cdc manage-service "
+                + f"--service {service_name} "
+                + "--add-source-table <schema.table>"
+            )
+            print_success(
+                "  3. Validate: cdc manage-service "
+                + f"--service {service_name} --validate-config"
+            )
             print_success("  4. Generate pipelines: cdc generate")
         else:
-            print_success(f"  1. Add CDC tables: cdc manage-service --service {service_name} --add-source-table <schema.table>")
-            print_success(f"  2. Validate: cdc manage-service --service {service_name} --validate-config")
+            print_success(
+                "  1. Add CDC tables: cdc manage-service "
+                + f"--service {service_name} "
+                + "--add-source-table <schema.table>"
+            )
+            print_success(
+                "  2. Validate: cdc manage-service "
+                + f"--service {service_name} --validate-config"
+            )
             print_success("  3. Generate pipelines: cdc generate")

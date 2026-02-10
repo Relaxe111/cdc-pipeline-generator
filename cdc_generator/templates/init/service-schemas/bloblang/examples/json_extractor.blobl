@@ -1,0 +1,18 @@
+# JSON Field Extractor
+# Safely extracts nested field from JSON column
+#
+# Usage in column-templates.yaml:
+#   templates:
+#     extract_email:
+#       name: user_email
+#       type: text
+#       value: file://service-schemas/bloblang/examples/json_extractor.blobl
+
+# Parse JSON and extract email, with fallback
+root = if this.metadata.type() == "string" {
+  this.metadata.parse_json().catch(null).email.or("unknown@example.com")
+} else if this.metadata.type() == "object" {
+  this.metadata.email.or("unknown@example.com")
+} else {
+  "unknown@example.com"
+}

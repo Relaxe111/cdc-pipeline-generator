@@ -34,6 +34,44 @@ from cdc_generator.helpers.helpers_logging import print_error, print_warning
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 # ---------------------------------------------------------------------------
+# File reference resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_file_reference(value: str) -> tuple[str, str | None]:
+    """Resolve file:// reference to actual Bloblang content.
+
+    Args:
+        value: Either inline Bloblang or file:// reference.
+
+    Returns:
+        tuple: (resolved_bloblang, file_path_or_none)
+
+    Example:
+        'this.status == "A"' → ('this.status == "A"', None)
+        'file://service-schemas/bloblang/check.blobl' → ("<content>", "service-schemas/bloblang/check.blobl")
+    """
+    if not value.startswith("file://"):
+        return value, None
+
+    file_path = value[7:]  # Remove file:// prefix
+    from cdc_generator.helpers.service_config import get_project_root
+
+    full_path = get_project_root() / file_path
+
+    if not full_path.exists():
+        print_error(f"Bloblang file not found: {file_path}")
+        return value, file_path
+
+    try:
+        content = full_path.read_text(encoding="utf-8").strip()
+        return content, file_path
+    except Exception as e:
+        print_error(f"Failed to read Bloblang file {file_path}: {e}")
+        return value, file_path
+
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
@@ -198,13 +236,21 @@ def _parse_conditions(
             print_warning(f"Rule '{key}': condition[{idx}] missing 'when' string")
             return None
 
+        # Resolve file:// references in 'when' expressions
+        resolved_when, _ = _resolve_file_reference(when)
+
         value_raw = cond_data.get("value")
         if require_value and not isinstance(value_raw, str):
             print_warning(f"Rule '{key}': condition[{idx}] missing 'value' string")
             return None
 
-        value = str(value_raw) if isinstance(value_raw, str) else None
-        conditions.append(TransformCondition(when=when, value=value))
+        # Resolve file:// references in 'value' expressions
+        value = None
+        if isinstance(value_raw, str):
+            resolved_value, _ = _resolve_file_reference(value_raw)
+            value = resolved_value
+
+        conditions.append(TransformCondition(when=resolved_when, value=value))
 
     if not conditions:
         print_warning(f"Rule '{key}': conditions list is empty")
@@ -295,7 +341,10 @@ def _parse_single_rule(key: str, raw: object) -> TransformRule | None:
 
     # default_value (for conditional_column with on_no_match=default)
     default_raw = data.get("default_value")
-    default_value = str(default_raw) if isinstance(default_raw, str) else None
+    default_value = None
+    if isinstance(default_raw, str):
+        resolved_default, _ = _resolve_file_reference(default_raw)
+        default_value = resolved_default
 
     # Output column (required for conditional_column and row_multiplier)
     output_column: OutputColumn | None = None

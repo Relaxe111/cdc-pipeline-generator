@@ -16,6 +16,12 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.mssql_loader import has_pymssql
+from cdc_generator.helpers.psycopg2_loader import (
+    create_postgres_connection,
+    has_psycopg2,
+)
 from cdc_generator.helpers.service_config import get_project_root
 
 try:
@@ -119,9 +125,7 @@ def _introspect_postgres_types(conn_params: dict[str, Any]) -> dict[str, list[st
     Returns:
         {category: [type_name, ...]} or None on error.
     """
-    try:
-        import psycopg2  # type: ignore[import-not-found]
-    except ImportError:
+    if not has_psycopg2:
         print_error("psycopg2 not installed — use: pip install psycopg2-binary")
         return None
 
@@ -149,10 +153,10 @@ def _introspect_postgres_types(conn_params: dict[str, Any]) -> dict[str, list[st
             "Connecting to PostgreSQL: "
             + f"{conn_params['host']}:{conn_params['port']}/{database}"
         )
-        conn = psycopg2.connect(  # type: ignore[misc]
+        conn = create_postgres_connection(
             host=conn_params["host"],
-            port=conn_params["port"],
-            database=database,
+            port=int(conn_params["port"]),
+            dbname=database,
             user=conn_params["user"],
             password=conn_params["password"],
             connect_timeout=10,
@@ -202,9 +206,7 @@ def _introspect_mssql_types(conn_params: dict[str, Any]) -> dict[str, list[str]]
     Returns:
         {category: [type_name, ...]} or None on error.
     """
-    try:
-        from cdc_generator.helpers.helpers_mssql import create_mssql_connection
-    except ImportError:
+    if not has_pymssql:
         print_error("pymssql not installed — use: pip install pymssql")
         return None
 

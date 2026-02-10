@@ -11,7 +11,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.validators.manage_service.schema_saver import (
-    save_detailed_schema,
+    save_sink_schema,
 )
 from cdc_generator.validators.manage_service.sink_inspector import (
     inspect_sink_schema,
@@ -97,18 +97,26 @@ def handle_inspect_sink(args: argparse.Namespace) -> int:
     )
 
     return _run_sink_inspection(
-        args, tables, db_type, allowed_schemas, schema,
+        args, tables, allowed_schemas, schema,
     )
 
 
 def _run_sink_inspection(
     args: argparse.Namespace,
     tables: list[dict[str, object]],
-    db_type: str,
     allowed_schemas: list[str],
     schema: str | None,
 ) -> int:
     """Execute sink inspection filtering and output."""
+    # Extract target service from sink key
+    # e.g., "sink_asma.activities" → "activities"
+    sink_key: str = args.inspect_sink
+    target_service = (
+        sink_key.split(".", 1)[1]
+        if "." in sink_key
+        else args.service
+    )
+
     # Filter tables by schema
     if args.all and allowed_schemas:
         tables = [
@@ -135,12 +143,12 @@ def _run_sink_inspection(
         return 1
 
     if args.save:
-        ok = save_detailed_schema(
+        ok = save_sink_schema(
+            target_service,
+            sink_key,
             args.service,
             args.env,
-            schema or "",
             tables,
-            db_type,
         )
         return 0 if ok else 1
 

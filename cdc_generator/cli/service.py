@@ -42,6 +42,7 @@ from cdc_generator.cli.service_handlers import (
     handle_sink_remove_table,
     handle_sink_update_schema,
     handle_sink_validate,
+    handle_validate_bloblang,
     handle_validate_config,
     handle_validate_hierarchy,
 )
@@ -314,14 +315,19 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
         help="List transforms on a sink table (requires --sink-table)",
     )
     parser.add_argument(
-        "--list-column-templates",
+        "--list-template-keys",
         action="store_true",
-        help="List all available column templates",
+        help="List all available column template keys",
     )
     parser.add_argument(
-        "--list-transform-rules",
+        "--list-transform-rule-keys",
         action="store_true",
-        help="List all available transform rules",
+        help="List all available transform rule keys",
+    )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip database schema validation when adding templates/transforms",
     )
 
 
@@ -403,6 +409,11 @@ def _build_parser() -> ServiceArgumentParser:
         "--validate-config",
         action="store_true",
         help="Comprehensive validation of config",
+    )
+    parser.add_argument(
+        "--validate-bloblang",
+        action="store_true",
+        help="Validate Bloblang syntax in templates and transforms using rpk",
     )
     parser.add_argument(
         "--all",
@@ -628,11 +639,13 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     validators: dict[str, bool] = {
         "validate_config": args.validate_config,
         "validate_hierarchy": args.validate_hierarchy,
+        "validate_bloblang": args.validate_bloblang,
         "generate_validation": args.generate_validation,
     }
     handlers = {
         "validate_config": handle_validate_config,
         "validate_hierarchy": handle_validate_hierarchy,
+        "validate_bloblang": handle_validate_bloblang,
         "generate_validation": handle_generate_validation,
     }
     for key, active in validators.items():
@@ -654,9 +667,9 @@ def _dispatch_inspect(args: argparse.Namespace) -> int | None:
 def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
     """Handle extra column and transform commands. None = not handled."""
     # Global listing commands (no --service required)
-    if args.list_column_templates:
+    if args.list_template_keys:
         return handle_list_column_templates(args)
-    if args.list_transform_rules:
+    if args.list_transform_rule_keys:
         return handle_list_transform_rules(args)
 
     if not args.service:

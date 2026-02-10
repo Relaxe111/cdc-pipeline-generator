@@ -12,62 +12,10 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
+from cdc_generator.helpers.mssql_loader import (
+    create_mssql_connection,
+)
 from cdc_generator.helpers.yaml_loader import yaml
-
-# pymssql is optional - only required for MSSQL operations
-try:
-    import pymssql
-    _has_pymssql = True
-except ImportError:
-    _has_pymssql = False
-    pymssql = None  # type: ignore[assignment]
-
-
-class MSSQLNotAvailableError(Exception):
-    """Raised when pymssql is not installed but MSSQL operations are requested."""
-    pass
-
-
-def _ensure_pymssql() -> None:
-    """Ensure pymssql is available, raise helpful error if not."""
-    if not _has_pymssql:
-        raise MSSQLNotAvailableError(
-            "pymssql is not installed. Install it with: pip install pymssql\\n" +
-            "Note: pymssql requires FreeTDS. On macOS: brew install freetds"
-        )
-
-
-def create_mssql_connection(
-    host: str,
-    port: int,
-    database: str,
-    user: str,
-    password: str
-) -> Any:  # noqa: ANN401 - pymssql.Connection is untyped
-    """
-    Create a pymssql connection with proper typing.
-
-    Args:
-        host: Server hostname
-        port: Server port
-        database: Database name
-        user: Username
-        password: Password
-
-    Returns:
-        pymssql connection object
-
-    Raises:
-        MSSQLNotAvailableError: If pymssql is not installed
-    """
-    _ensure_pymssql()
-    return cast(Any, pymssql.connect( # type: ignore[misc,union-attr]
-        server=host,
-        port=port,
-        database=database,
-        user=user,
-        password=password
-    ))
 
 
 def get_mssql_connection(env: str = 'nonprod', database: str | None = None) -> tuple[Any, str]:
@@ -99,7 +47,10 @@ def get_mssql_connection(env: str = 'nonprod', database: str | None = None) -> t
     if not user:
         raise ValueError(f"MSSQL_{env_upper}_USER or MSSQL_USER environment variable not set")
     if not password:
-        raise ValueError(f"MSSQL_{env_upper}_PASSWORD or MSSQL_PASSWORD environment variable not set")
+        raise ValueError(
+            f"MSSQL_{env_upper}_PASSWORD or MSSQL_PASSWORD"
+            + " environment variable not set"
+        )
 
     conn = create_mssql_connection(
         host=host,
@@ -129,8 +80,8 @@ def load_table_definition(table_name: str) -> dict[str, Any] | None:
     if not yaml_file.exists():
         return None
 
-    with open(yaml_file) as f:
-        return yaml.safe_load(f)
+    with yaml_file.open() as f:
+        return cast(dict[str, Any], yaml.load(f))
 
 
 def get_pk_columns(table_def: dict[str, Any]) -> list[str]:
@@ -171,7 +122,10 @@ def get_insert_columns(table_def: dict[str, Any], pk_cols: list[str]) -> tuple[l
     """
     first_pk_field: dict[str, Any] | None = None
     raw_fields = table_def.get('fields') or table_def.get('columns', [])
-    fields_list: list[dict[str, Any]] = cast(list[dict[str, Any]], raw_fields if isinstance(raw_fields, list) else [])
+    fields_list: list[dict[str, Any]] = cast(
+        list[dict[str, Any]],
+        raw_fields if isinstance(raw_fields, list) else [],
+    )
 
     if pk_cols:
         # Find first PK field - check both 'mssql' (generated) and 'name' (source) formats
@@ -181,7 +135,11 @@ def get_insert_columns(table_def: dict[str, Any], pk_cols: list[str]) -> tuple[l
                 first_pk_field = field
                 break
 
-    first_pk_is_identity: bool = bool(first_pk_field.get('identity', False)) if first_pk_field else False
+    first_pk_is_identity: bool = (
+        bool(first_pk_field.get('identity', False))
+        if first_pk_field
+        else False
+    )
 
     insert_cols: list[str] = []
     for field in fields_list:
@@ -197,7 +155,10 @@ def get_insert_columns(table_def: dict[str, Any], pk_cols: list[str]) -> tuple[l
             if not first_pk_is_identity:
                 insert_cols.append(col_name)
         # Include non-nullable columns or timestamp columns
-        elif not is_nullable or any(kw in col_name.lower() for kw in ['createdt', 'changedt', 'createuser', 'changeuser']):
+        elif not is_nullable or any(
+            kw in col_name.lower()
+            for kw in ['createdt', 'changedt', 'createuser', 'changeuser']
+        ):
             insert_cols.append(col_name)
 
     return insert_cols, first_pk_is_identity
@@ -218,9 +179,15 @@ def get_value_for_type(field_type: str, col_name: str, prefix: str = 'CDCTest') 
     return 'NULL'
 
 
-def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert_cols: list[str],
-                          first_pk_is_identity: bool, test_id_base: int, num_records: int,
-                          prefix: str = 'CDCTest') -> tuple[list[str], int | None, int | None]:
+def generate_insert_values(
+    table_def: dict[str, Any],
+    pk_cols: list[str],
+    insert_cols: list[str],
+    first_pk_is_identity: bool,
+    test_id_base: int,
+    num_records: int,
+    prefix: str = 'CDCTest',
+) -> tuple[list[str], int | None, int | None]:
     """
     Generate value sets for INSERT statements.
     Handles both adopus-db-schema format (columns) and generated format (fields).
@@ -235,7 +202,10 @@ def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert
     last_pk_val: int | None = None
 
     raw_fields = table_def.get('fields') or table_def.get('columns', [])
-    fields_list: list[dict[str, Any]] = cast(list[dict[str, Any]], raw_fields if isinstance(raw_fields, list) else [])
+    fields_list: list[dict[str, Any]] = cast(
+        list[dict[str, Any]],
+        raw_fields if isinstance(raw_fields, list) else [],
+    )
 
     for record_num in range(num_records):
         test_id: int = test_id_base + record_num
@@ -261,7 +231,11 @@ def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert
                         if field_name == col_name:
                             field_type = str(field.get('type', ''))
                             if 'VARCHAR' in field_type.upper() or 'NVARCHAR' in field_type.upper():
-                                val: str = f"'{prefix}_{record_num}_{pk_idx}'" if pk_idx > 0 else f"'{prefix}_{record_num}'"
+                                val: str = (
+                                    f"'{prefix}_{record_num}_{pk_idx}'"
+                                    if pk_idx > 0
+                                    else f"'{prefix}_{record_num}'"
+                                )
                                 record_vals.append(val)
                             else:
                                 val_int: int = test_id + pk_idx if pk_idx > 0 else test_id
@@ -286,9 +260,15 @@ def generate_insert_values(table_def: dict[str, Any], pk_cols: list[str], insert
     return all_value_sets, first_pk_val, last_pk_val
 
 
-def build_batch_insert_sql(table_name: str, insert_cols: list[str], value_sets: list[str],
-                          first_pk_is_identity: bool, pk_value: int | None = None,
-                          is_last_batch: bool = False, is_first_batch: bool = False) -> str:
+def build_batch_insert_sql(
+    table_name: str,
+    insert_cols: list[str],
+    value_sets: list[str],
+    first_pk_is_identity: bool,
+    pk_value: int | None = None,
+    is_last_batch: bool = False,
+    _is_first_batch: bool = False,
+) -> str:
     """
     Build INSERT SQL statement with optional PK return.
 
@@ -302,13 +282,19 @@ def build_batch_insert_sql(table_name: str, insert_cols: list[str], value_sets: 
     """
     values_clause = ', '.join(value_sets)
 
+    cols = ', '.join(insert_cols)
+    base = f"INSERT INTO {table_name} ({cols}) VALUES {values_clause};"
+
     if first_pk_is_identity:
         if is_last_batch:
-            return f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES {values_clause}; SELECT CAST(SCOPE_IDENTITY() AS INT) as pk_val;"
-        return f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES {values_clause};"
+            return (
+                base[:-1]
+                + "; SELECT CAST(SCOPE_IDENTITY() AS INT) as pk_val;"
+            )
+        return base
     if is_last_batch and pk_value is not None:
-        return f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES {values_clause}; SELECT {pk_value} as pk_val;"
-    return f"INSERT INTO {table_name} ({', '.join(insert_cols)}) VALUES {values_clause};"
+        return base[:-1] + f"; SELECT {pk_value} as pk_val;"
+    return base
 
 
 def discover_cdc_tables() -> list[str]:

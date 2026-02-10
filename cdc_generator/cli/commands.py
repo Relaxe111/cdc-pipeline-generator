@@ -12,6 +12,7 @@ Commands:
     manage-service        Manage service definitions
     manage-source-groups   Manage source groups configuration
     manage-sink-groups  Manage sink groups configuration
+    manage-service-schema Manage custom table schema definitions
     generate [customer]   Generate pipelines
     setup-local          Set up local development environment
     enable <customer> <env>      Enable CDC on MSSQL tables
@@ -162,6 +163,11 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "module": "cdc_generator.cli.sink_group",
         "script": "cli/sink_group.py",
         "description": "Manage sink groups configuration (sink-groups.yaml)",
+    },
+    "manage-service-schema": {
+        "module": "cdc_generator.cli.service_schema",
+        "script": "cli/service_schema.py",
+        "description": "Manage custom table schema definitions (service-schemas/)",
     },
     "setup-local": {
         "script": "cli/setup_local.py",

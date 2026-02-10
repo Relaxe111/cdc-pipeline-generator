@@ -388,28 +388,126 @@ def add_custom_sink_table(
     sink_key: str,
     table_key: str,
     column_specs: list[str],
+    from_custom_table: str | None = None,
 ) -> bool:
     """Add a custom table to a sink with column definitions.
 
-    - Validates table doesn't already exist in service-schemas
-    - Parses column specs
-    - Saves to service YAML (custom=true, managed=true)
-    - Generates service-schemas YAML file
+    Columns can come from:
+    1. Inline ``--column`` specs (column_specs)
+    2. A pre-defined custom table (from_custom_table)
 
     Args:
         service: Service name.
         sink_key: Sink key (e.g., 'sink_asma.proxy').
         table_key: Table in format 'schema.table'.
         column_specs: Column specs (e.g., ['id:uuid:pk', 'name:text:not_null']).
+        from_custom_table: Optional custom table ref (schema.table) to
+            load columns from ``service-schemas/{target}/custom-tables/``.
 
     Returns:
         True on success.
     """
+    # If --from references a custom table, load columns from it
+    if from_custom_table:
+        target_service = _extract_target_service(sink_key)
+        if not target_service:
+            return False
+        columns = _load_columns_from_custom_table(
+            target_service, from_custom_table,
+        )
+        if columns is None:
+            return False
+        return _add_custom_sink_table_with_columns(
+            service, sink_key, table_key, columns,
+        )
+
     validated = _validate_custom_table_inputs(sink_key, table_key, column_specs)
     if validated is None:
         return False
 
-    target_service, schema_name, table_name, columns = validated
+    _target_service, _schema_name, _table_name, columns = validated
+    return _add_custom_sink_table_with_columns(
+        service, sink_key, table_key, columns,
+    )
+
+
+def _load_columns_from_custom_table(
+    target_service: str,
+    table_ref: str,
+) -> list[dict[str, object]] | None:
+    """Load column definitions from a pre-defined custom table.
+
+    Reads from ``service-schemas/{target}/custom-tables/{ref}.yaml``.
+
+    Returns:
+        List of column defs, or None on error.
+    """
+    from cdc_generator.validators.manage_service_schema.custom_table_ops import (
+        show_custom_table,
+    )
+
+    data = show_custom_table(target_service, table_ref)
+    if data is None:
+        print_error(
+            f"Custom table '{table_ref}' not found for "
+            + f"service '{target_service}'"
+        )
+        print_info(
+            "Create it first: cdc manage-service-schema"
+            + f" --service {target_service}"
+            + f" --add-custom-table {table_ref}"
+            + " --column id:uuid:pk ..."
+        )
+        return None
+
+    columns_raw: list[dict[str, Any]] = data.get("columns", [])
+    if not columns_raw:
+        print_error(
+            f"Custom table '{table_ref}' has no columns"
+        )
+        return None
+
+    # Convert to the format expected by _build_custom_table_config
+    columns: list[dict[str, object]] = []
+    for col in columns_raw:
+        col_def: dict[str, object] = {
+            "name": col.get("name", ""),
+            "type": col.get("type", "text"),
+        }
+        if col.get("primary_key"):
+            col_def["primary_key"] = True
+            col_def["nullable"] = False
+        elif col.get("nullable") is not None:
+            col_def["nullable"] = col["nullable"]
+        if col.get("default"):
+            col_def["default"] = col["default"]
+        columns.append(col_def)
+
+    return columns
+
+
+def _add_custom_sink_table_with_columns(
+    service: str,
+    sink_key: str,
+    table_key: str,
+    columns: list[dict[str, object]],
+) -> bool:
+    """Core logic for adding a custom sink table with parsed columns.
+
+    Args:
+        service: Service name.
+        sink_key: Sink key.
+        table_key: Table in format 'schema.table'.
+        columns: Parsed column definitions.
+
+    Returns:
+        True on success.
+    """
+    target_service = _extract_target_service(sink_key)
+    if not target_service:
+        return False
+
+    schema_name, table_name = _split_table_key(table_key)
 
     # Load and update service config
     try:
@@ -441,7 +539,9 @@ def add_custom_sink_table(
 
     # Generate schema file
     if not _save_schema_file(target_service, table_key, columns):
-        print_warning("Service config saved but schema file generation failed")
+        print_warning(
+            "Service config saved but schema file generation failed"
+        )
 
     col_names = [str(c["name"]) for c in columns]
     print_success(

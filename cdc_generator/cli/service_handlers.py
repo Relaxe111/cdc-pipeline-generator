@@ -4,17 +4,11 @@ Split into smaller modules to keep file size manageable and improve
 maintainability. Import from this module to preserve legacy import paths.
 """
 
+from cdc_generator.cli.service_handlers_bloblang import (
+    handle_validate_bloblang,
+)
 from cdc_generator.cli.service_handlers_create import (
     handle_create_service,
-)
-from cdc_generator.cli.service_handlers_templates import (
-    handle_add_column_template,
-    handle_add_transform,
-    handle_list_column_templates,
-    handle_list_transform_rules,
-    handle_list_transforms,
-    handle_remove_column_template,
-    handle_remove_transform,
 )
 from cdc_generator.cli.service_handlers_inspect import (
     handle_inspect,
@@ -45,6 +39,15 @@ from cdc_generator.cli.service_handlers_source import (
     handle_add_source_table,
     handle_add_source_tables,
     handle_remove_table,
+)
+from cdc_generator.cli.service_handlers_templates import (
+    handle_add_column_template,
+    handle_add_transform,
+    handle_list_column_templates,
+    handle_list_transform_rules,
+    handle_list_transforms,
+    handle_remove_column_template,
+    handle_remove_transform,
 )
 from cdc_generator.cli.service_handlers_validation import (
     handle_generate_validation,
@@ -80,6 +83,7 @@ __all__ = [
     "handle_sink_remove_table",
     "handle_sink_update_schema",
     "handle_sink_validate",
+    "handle_validate_bloblang",
     "handle_validate_config",
     "handle_validate_hierarchy",
 ]

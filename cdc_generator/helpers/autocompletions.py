@@ -50,50 +50,38 @@ from cdc_generator.helpers.autocompletions.utils import (
     find_file_upward,
 )
 
-# Private helper function (kept for backward compatibility)
-from cdc_generator.helpers.autocompletions.sinks import (
-    load_sink_tables_for_autocomplete,
-)
-
 __all__ = [
-    # Utilities
-    "find_file_upward",
     "find_directory_upward",
-    # Services
-    "list_existing_services",
-    "list_available_services_from_server_group",
-    # Server groups
-    "list_servers_from_server_group",
-    "list_server_group_names",
-    "list_sink_group_names",
-    "list_non_inherited_sink_group_names",
-    "list_servers_for_sink_group",
-    "list_databases_from_server_group",
-    # Schemas
-    "list_schemas_for_service",
-    # Tables
-    "list_tables_for_service",
-    "list_columns_for_table",
-    "list_source_tables_for_service",
-    # Sinks
-    "list_sink_keys_for_service",
-    "list_available_sink_keys",
-    "list_target_tables_for_sink",
-    "list_tables_for_sink_target",
+    "find_file_upward",
     "get_default_sink_for_service",
-    "list_target_columns_for_sink_table",
-    "list_custom_tables_for_service_sink",
+    "list_available_services_from_server_group",
+    "list_available_sink_keys",
+    "list_columns_for_table",
     "list_custom_table_columns_for_autocomplete",
-    # Types
+    "list_custom_tables_for_service_sink",
+    "list_databases_from_server_group",
+    "list_existing_services",
+    "list_non_inherited_sink_group_names",
     "list_pg_column_types",
-    # Scaffold
+    "list_schemas_for_service",
+    "list_server_group_names",
+    "list_servers_for_sink_group",
+    "list_servers_from_server_group",
+    "list_sink_group_names",
+    "list_sink_keys_for_service",
+    "list_source_tables_for_service",
+    "list_tables_for_service",
+    "list_tables_for_sink_target",
+    "list_target_columns_for_sink_table",
+    "list_target_tables_for_sink",
     "scaffold_flag_completions",
 ]
 
 
 if __name__ == '__main__':
     # Delegate to the new modular implementation
-    from cdc_generator.helpers.autocompletions import main
     import sys
+
+    from cdc_generator.helpers.autocompletions import main
     sys.exit(main())
 

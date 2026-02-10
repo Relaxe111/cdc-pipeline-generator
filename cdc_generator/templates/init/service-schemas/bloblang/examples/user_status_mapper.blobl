@@ -1,0 +1,18 @@
+# User Status Mapper
+# Maps raw status codes to human-readable labels
+#
+# Usage in column-templates.yaml:
+#   templates:
+#     user_status:
+#       name: user_status_label
+#       type: text
+#       value: file://service-schemas/bloblang/examples/user_status_mapper.blobl
+
+root = match this.status {
+  "A" => "ACTIVE",
+  "I" => "INACTIVE",
+  "P" => "PENDING",
+  "S" => "SUSPENDED",
+  "D" => "DELETED",
+  _ => "UNKNOWN"
+}

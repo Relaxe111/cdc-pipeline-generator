@@ -12,16 +12,10 @@ import yaml  # type: ignore
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info, print_success
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.mssql_loader import has_pymssql
 from cdc_generator.helpers.service_config import load_customer_config, load_service_config
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-
-# Check for pymssql availability
-try:
-    import pymssql  # type: ignore
-    HAS_PYMSSQL = True
-except ImportError:
-    HAS_PYMSSQL = False  # type: ignore[misc]
 
 
 def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[str, Any]]) -> bool:
@@ -40,7 +34,7 @@ def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[
     Returns:
         True if schema saved successfully, False otherwise
     """
-    if not HAS_PYMSSQL:
+    if not has_pymssql:
         print_error("pymssql not installed - use: pip install pymssql")
         return False
 

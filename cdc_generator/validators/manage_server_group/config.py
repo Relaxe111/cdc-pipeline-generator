@@ -49,7 +49,7 @@ def save_server_group_preserving_comments(
     """
     try:
         # Read entire file to preserve comments
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             file_content = f.read()
 
         # Split into comment header and YAML content
@@ -74,18 +74,26 @@ def save_server_group_preserving_comments(
         updater(config)
 
         # Regenerate YAML content
-        yaml_output = yaml.dump(config, default_flow_style=False, sort_keys=False, indent=2, allow_unicode=True)  # type: ignore[misc]
+        yaml_output = yaml.dump(  # type: ignore[misc]
+            config,
+            default_flow_style=False,
+            sort_keys=False,
+            indent=2,
+            allow_unicode=True,
+        )
 
         # Combine header with updated YAML
         final_content = '\n'.join(header_lines) + '\n' + yaml_output
 
-        with open(SERVER_GROUPS_FILE, 'w') as f:
+        with SERVER_GROUPS_FILE.open('w') as f:
             f.write(final_content)
 
     except FileNotFoundError:
-        raise RuntimeError(f"Failed to {error_context}: source-groups.yaml not found")
+        raise RuntimeError(
+            f"Failed to {error_context}: source-groups.yaml not found"
+        ) from None
     except Exception as e:
-        raise RuntimeError(f"Failed to {error_context}: {e}")
+        raise RuntimeError(f"Failed to {error_context}: {e}") from e
 
 
 def load_server_groups() -> ServerGroupFile:
@@ -102,11 +110,11 @@ def load_server_groups() -> ServerGroupFile:
             f"Configuration file not found: {SERVER_GROUPS_FILE}"
         )
 
-    with open(SERVER_GROUPS_FILE) as f:
+    with SERVER_GROUPS_FILE.open() as f:
         return cast(ServerGroupFile, yaml.safe_load(f) or {})  # type: ignore[misc]
 
 
-def validate_server_group_structure(group_data: Any, name: str) -> None:
+def validate_server_group_structure(group_data: object, name: str) -> None:
     """Validate server group has expected structure.
 
     Raises ValueError with helpful message if structure is invalid.
@@ -127,7 +135,11 @@ def validate_server_group_structure(group_data: Any, name: str) -> None:
         raise ValueError(f"Server group '{name}' missing required field 'pattern'")
 
     if group_data['pattern'] not in ('db-shared', 'db-per-tenant'):
-        raise ValueError(f"Server group '{name}' has invalid pattern '{group_data['pattern']}' (must be 'db-shared' or 'db-per-tenant')")
+        raise ValueError(
+            f"Server group '{name}' has invalid pattern "
+            + f"'{group_data['pattern']}' "
+            + "(must be 'db-shared' or 'db-per-tenant')"
+        )
 
     # New structure requires 'sources' at root level
     if 'sources' not in group_data:
@@ -173,7 +185,10 @@ def get_single_server_group(config: ServerGroupFile) -> ServerGroupConfig | None
     return None
 
 
-def get_server_group_for_service(service_name: str, config: ServerGroupFile | None = None) -> str | None:
+def get_server_group_for_service(
+    service_name: str,
+    config: ServerGroupFile | None = None,
+) -> str | None:
     """Find which server group a service belongs to.
 
     Args:
@@ -190,9 +205,8 @@ def get_server_group_for_service(service_name: str, config: ServerGroupFile | No
             return None
 
     for sg_name, sg_data in config.items():
-        if 'sources' in sg_data:
-            if service_name in sg_data.get('sources', {}):
-                return sg_name
+        if 'sources' in sg_data and service_name in sg_data.get('sources', {}):
+            return sg_name
 
     return None
 
@@ -226,7 +240,7 @@ def load_database_exclude_patterns() -> list[str]:
     Format: server_group_name as root key with database_exclude_patterns field.
     """
     try:
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
 
         # Flat format: server_group_name as root key with 'pattern' field
@@ -247,7 +261,7 @@ def load_schema_exclude_patterns() -> list[str]:
     Format: server_group_name as root key with schema_exclude_patterns field.
     """
     try:
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
 
         # Flat format: server_group_name as root key with 'pattern' field
@@ -300,7 +314,7 @@ def load_env_mappings() -> dict[str, str]:
     Example: {"staging": "stage", "production": "prod"}
     """
     try:
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
 
         # Flat format: server_group_name as root key with 'pattern' field

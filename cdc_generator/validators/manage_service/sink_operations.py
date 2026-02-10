@@ -9,7 +9,7 @@ Sink key format: {sink_group}.{target_service}
 """
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import (
     Colors,
@@ -412,7 +412,6 @@ def _save_custom_table_structure(
         from_table: Source table key (e.g., 'public.customer_user').
         source_service: Source service name to find original schema.
     """
-    from cdc_generator.helpers.yaml_loader import save_yaml_file
 
     target_service = _get_target_service_from_sink_key(sink_key)
     if not target_service:
@@ -487,8 +486,6 @@ def _save_custom_table_structure(
             + "\n",
             encoding="utf-8",
         )
-        # Append the YAML data
-        from cdc_generator.helpers.yaml_loader import save_yaml_file
 
         with target_file.open("a", encoding="utf-8") as f:
             import yaml
@@ -528,11 +525,11 @@ def add_sink_table(
         return False
 
     opts = table_opts if table_opts is not None else {}
-    
+
     # Handle sink_schema override - change table_key schema
     sink_schema = opts.get("sink_schema")
     final_table_key = table_key
-    
+
     if sink_schema is not None:
         # Override schema in table_key
         if "." in table_key:
@@ -547,7 +544,7 @@ def add_sink_table(
                 f"Invalid table key '{table_key}': expected 'schema.table' format"
             )
             return False
-    
+
     tables, error = _validate_table_add(
         config, sink_key, final_table_key, opts, skip_schema_validation=sink_schema is not None
     )
@@ -636,6 +633,43 @@ def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:
     return True
 
 
+def _validate_schema_update_inputs(
+    service: str,
+    sink_key: str,
+    table_key: str,
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Validate inputs for update_sink_table_schema.
+
+    Returns:
+        Tuple of (config, tables_dict) if valid, None on error.
+    """
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError as exc:
+        print_error(f"Service not found: {exc}")
+        return None
+
+    sinks = _get_sinks_dict(config)
+    if sink_key not in sinks:
+        print_error(f"Sink '{sink_key}' not found in service '{service}'")
+        return None
+
+    sink_cfg = _resolve_sink_config(sinks, sink_key)
+    if sink_cfg is None:
+        return None
+
+    tables = _get_sink_tables(sink_cfg)
+    if table_key not in tables:
+        print_error(f"Table '{table_key}' not found in sink '{sink_key}'")
+        print_info(
+            f"Available tables in '{sink_key}':\n  "
+            + "\n  ".join(str(k) for k in tables)
+        )
+        return None
+
+    return config, tables
+
+
 def update_sink_table_schema(
     service: str,
     sink_key: str,
@@ -652,37 +686,19 @@ def update_sink_table_schema(
 
     Returns:
         True on success, False otherwise.
-    
+
     Example:
         update_sink_table_schema(
-            'directory', 'sink_asma.calendar', 
+            'directory', 'sink_asma.calendar',
             'public.customer_user', 'calendar'
         )
         # Changes 'public.customer_user' to 'calendar.customer_user'
     """
-    try:
-        config = load_service_config(service)
-    except FileNotFoundError as exc:
-        print_error(f"Service not found: {exc}")
+    result = _validate_schema_update_inputs(service, sink_key, table_key)
+    if result is None:
         return False
 
-    sinks = _get_sinks_dict(config)
-    if sink_key not in sinks:
-        print_error(f"Sink '{sink_key}' not found in service '{service}'")
-        return False
-
-    sink_cfg = _resolve_sink_config(sinks, sink_key)
-    if sink_cfg is None:
-        return False
-
-    tables = _get_sink_tables(sink_cfg)
-    if table_key not in tables:
-        print_error(f"Table '{table_key}' not found in sink '{sink_key}'")
-        print_info(
-            f"Available tables in '{sink_key}':\n  "
-            + "\n  ".join(str(k) for k in tables)
-        )
-        return False
+    config, tables = result
 
     # Parse current table key to get table name
     if "." not in table_key:

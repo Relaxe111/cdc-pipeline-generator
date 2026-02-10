@@ -497,7 +497,7 @@ def _validate_inspect_args(
             )
             print_info(
                 "Inherited sink groups (created with --create)"
-                " use source_ref and inherit from source groups."
+                + " use source_ref and inherit from source groups."
             )
             return 1
 
@@ -563,11 +563,11 @@ def _run_inspection(
 
     print_info(
         "Note: Use this information to manually configure"
-        " sink destinations."
+        + " sink destinations."
     )
     print_info(
         "Future enhancement: Add databases to sink group"
-        " configuration automatically."
+        + " configuration automatically."
     )
     return 0
 
@@ -1079,7 +1079,7 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
     if server_name in servers:
         print_warning(
             f"Server '{server_name}' already exists"
-            f" in sink group '{sink_group_name}'"
+            + f" in sink group '{sink_group_name}'"
         )
         return 1
 

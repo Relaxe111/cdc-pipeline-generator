@@ -197,7 +197,7 @@ def update_server_group_yaml(
     """
     try:
         # Read file and parse lines
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             file_content = f.read()
 
         lines = file_content.split('\n')
@@ -208,7 +208,7 @@ def update_server_group_yaml(
         preserved_comments = ensure_file_header_exists(preserved_comments)
 
         # Load and validate server group config
-        with open(SERVER_GROUPS_FILE) as f:
+        with SERVER_GROUPS_FILE.open() as f:
             config = yaml.safe_load(f)  # type: ignore[misc]
 
         server_group = get_single_server_group(config)
@@ -312,7 +312,7 @@ def update_server_group_yaml(
         # Validate and write
         validate_output_has_metadata(output_lines)
 
-        with open(SERVER_GROUPS_FILE, 'w') as f:
+        with SERVER_GROUPS_FILE.open('w') as f:
             f.write('\n'.join(output_lines))
             f.write('\n')
 

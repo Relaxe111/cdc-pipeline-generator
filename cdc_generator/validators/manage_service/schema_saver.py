@@ -4,32 +4,33 @@ from typing import Any
 
 import yaml
 
-from cdc_generator.helpers.helpers_logging import print_error, print_info, print_success
+from cdc_generator.helpers.helpers_logging import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
+from cdc_generator.helpers.mssql_loader import has_pymssql
+from cdc_generator.helpers.psycopg2_loader import (
+    ensure_psycopg2,
+    has_psycopg2,
+)
 from cdc_generator.helpers.service_config import get_project_root
 
 from .db_inspector_common import get_connection_params, get_service_db_config
 
-try:
-    import pymssql
-    HAS_PYMSSQL = True
-except ImportError:
-    HAS_PYMSSQL = False
 
-try:
-    import psycopg2
-    import psycopg2.extras
-    HAS_PSYCOPG2 = True
-except ImportError:
-    HAS_PSYCOPG2 = False
-
-
-def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list[dict[str, Any]], conn_params: dict[str, Any]) -> dict[str, Any]:
+def save_detailed_schema_mssql(
+    service: str,
+    schema: str,
+    tables: list[dict[str, Any]],
+    conn_params: dict[str, Any],
+) -> dict[str, Any]:
     """Save detailed MSSQL table schema to YAML.
 
     Args:
         service: Service name
-        env: Environment name
         schema: Database schema name
         tables: List of table dictionaries
         conn_params: Connection parameters
@@ -37,8 +38,11 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
     Returns:
         Dictionary mapping table names to their schema data
     """
-    if not HAS_PYMSSQL:
-        print_error("pymssql not installed")
+    if not has_pymssql:
+        print_error(
+            "pymssql not installed — "
+            + "use: pip install pymssql"
+        )
         return {}
 
     conn = create_mssql_connection(
@@ -46,15 +50,16 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
         port=conn_params['port'],
         database=conn_params['database'],
         user=conn_params['user'],
-        password=conn_params['password']
+        password=conn_params['password'],
     )
     cursor = conn.cursor()
 
-    tables_data = {}
+    tables_data: dict[str, Any] = {}
 
     for i, table in enumerate(tables, 1):
         table_name = table['TABLE_NAME']
-        table_schema = table.get('TABLE_SCHEMA', schema)  # Use table's schema or fallback to parameter
+        # Use table's schema or fallback to parameter
+        table_schema = table.get('TABLE_SCHEMA', schema)
         print(f"  [{i}/{len(tables)}] {table_schema}.{table_name}")
 
         # Get detailed column info
@@ -80,38 +85,46 @@ def save_detailed_schema_mssql(service: str, env: str, schema: str, tables: list
             ORDER BY c.ORDINAL_POSITION
         """)
 
-        columns = []
-        primary_keys = []
-        for row in cursor:
-            col_name, data_type, max_len, is_nullable, is_pk = row
+        columns: list[dict[str, Any]] = []
+        primary_keys: list[str] = []
+        for row in cursor.fetchall():
+            col_name, data_type, _max_len, is_nullable, is_pk = row
             columns.append({
                 'name': col_name,
                 'type': data_type,
                 'nullable': is_nullable == 'YES',
-                'primary_key': bool(is_pk)
+                'primary_key': bool(is_pk),
             })
             if is_pk:
                 primary_keys.append(col_name)
 
         tables_data[table_name] = {
             'database': conn_params['database'],
-            'schema': table_schema,  # Use table's actual schema
+            'schema': table_schema,
             'service': service,
             'table': table_name,
             'columns': columns,
-            'primary_key': primary_keys[0] if len(primary_keys) == 1 else primary_keys
+            'primary_key': (
+                primary_keys[0]
+                if len(primary_keys) == 1
+                else primary_keys
+            ),
         }
 
     conn.close()
     return tables_data
 
 
-def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: list[dict[str, Any]], conn_params: dict[str, Any]) -> dict[str, Any]:
+def save_detailed_schema_postgres(
+    service: str,
+    schema: str,
+    tables: list[dict[str, Any]],
+    conn_params: dict[str, Any],
+) -> dict[str, Any]:
     """Save detailed PostgreSQL table schema to YAML.
 
     Args:
         service: Service name
-        env: Environment name
         schema: Database schema name
         tables: List of table dictionaries
         conn_params: Connection parameters
@@ -119,24 +132,32 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: l
     Returns:
         Dictionary mapping table names to their schema data
     """
-    if not HAS_PSYCOPG2:
-        print_error("psycopg2 not installed")
+    if not has_psycopg2:
+        print_error(
+            "psycopg2 not installed — "
+            + "use: pip install psycopg2-binary"
+        )
         return {}
 
-    conn = psycopg2.connect(
+    pg = ensure_psycopg2()
+
+    conn = pg.connect(
         host=conn_params['host'],
         port=conn_params['port'],
-        database=conn_params['database'],
+        dbname=conn_params['database'],
         user=conn_params['user'],
-        password=conn_params['password']
+        password=conn_params['password'],
     )
-    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor = conn.cursor(
+        cursor_factory=pg.extras.RealDictCursor,
+    )
 
-    tables_data = {}
+    tables_data: dict[str, Any] = {}
 
     for i, table in enumerate(tables, 1):
         table_name = table['TABLE_NAME']
-        table_schema = table.get('TABLE_SCHEMA', schema)  # Use table's schema or fallback to parameter
+        # Use table's schema or fallback to parameter
+        table_schema = table.get('TABLE_SCHEMA', schema)
         print(f"  [{i}/{len(tables)}] {table_schema}.{table_name}")
 
         # Get detailed column info with primary key detection
@@ -163,14 +184,14 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: l
             ORDER BY c.ordinal_position
         """, (table_schema, table_name, table_schema, table_name))
 
-        columns = []
-        primary_keys = []
-        for row in cursor:
+        columns: list[dict[str, Any]] = []
+        primary_keys: list[str] = []
+        for row in cursor.fetchall():
             columns.append({
                 'name': row['column_name'],
                 'type': row['data_type'],
                 'nullable': row['is_nullable'] == 'YES',
-                'primary_key': row['is_primary_key']
+                'primary_key': row['is_primary_key'],
             })
             if row['is_primary_key']:
                 primary_keys.append(row['column_name'])
@@ -181,77 +202,227 @@ def save_detailed_schema_postgres(service: str, env: str, schema: str, tables: l
             'service': service,
             'table': table_name,
             'columns': columns,
-            'primary_key': primary_keys[0] if len(primary_keys) == 1 else primary_keys
+            'primary_key': (
+                primary_keys[0]
+                if len(primary_keys) == 1
+                else primary_keys
+            ),
         }
 
     conn.close()
     return tables_data
 
 
-def save_detailed_schema(service: str, env: str, schema: str, tables: list[dict[str, Any]], db_type: str) -> bool:
-    """Save detailed table schema information to YAML file.
+def _save_tables_to_yaml(
+    service: str,
+    tables_data: dict[str, Any],
+) -> bool:
+    """Write table schema data to YAML files.
+
+    Groups tables by schema and saves each table to its own
+    YAML file under ``service-schemas/{service}/{schema}/``.
+
+    Args:
+        service: Service name (used for output directory)
+        tables_data: Mapping of table_name → table schema dict
+
+    Returns:
+        True if all tables saved successfully.
+    """
+    tables_by_schema: dict[str, dict[str, Any]] = {}
+    for table_name, table_data in tables_data.items():
+        table_schema = table_data.get("schema") or "unknown"
+        if table_schema not in tables_by_schema:
+            tables_by_schema[table_schema] = {}
+        tables_by_schema[table_schema][table_name] = table_data
+
+    total_saved = 0
+    for schema_name, schema_tables in tables_by_schema.items():
+        output_dir = (
+            get_project_root()
+            / "service-schemas"
+            / service
+            / schema_name
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for table_name, table_data in schema_tables.items():
+            output_file = output_dir / f"{table_name}.yaml"
+            with output_file.open("w") as f:
+                yaml.dump(
+                    table_data,
+                    f,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    indent=2,
+                )
+
+        total_saved += len(schema_tables)
+        print_success(
+            f"✓ Saved {len(schema_tables)} table schemas "
+            + f"to {output_dir}/"
+        )
+
+    return total_saved > 0
+
+
+def _fetch_and_save(
+    service: str,
+    schema: str,
+    tables: list[dict[str, Any]],
+    db_type: str,
+    conn_params: dict[str, Any],
+) -> bool:
+    """Fetch column details and save table schemas.
+
+    Shared logic used by both source and sink save paths.
+
+    Args:
+        service: Service name (used for output directory)
+        schema: Database schema name
+        tables: List of table dicts from inspection
+        db_type: Database type ('mssql' or 'postgres')
+        conn_params: Connection parameters for the target DB
+
+    Returns:
+        True if schemas saved successfully.
+    """
+    print_info(
+        f"Saving detailed schema for {len(tables)} tables..."
+    )
+
+    if db_type == "mssql":
+        tables_data = save_detailed_schema_mssql(
+            service, schema, tables, conn_params,
+        )
+    elif db_type == "postgres":
+        tables_data = save_detailed_schema_postgres(
+            service, schema, tables, conn_params,
+        )
+    else:
+        print_error(f"Unsupported database type: {db_type}")
+        return False
+
+    if not tables_data:
+        return False
+
+    saved = _save_tables_to_yaml(service, tables_data)
+
+    # Generate type definitions as side-effect of --save
+    if saved:
+        _generate_type_definitions_quietly(db_type, conn_params)
+
+    return saved
+
+
+def _generate_type_definitions_quietly(
+    db_type: str,
+    conn_params: dict[str, Any],
+) -> None:
+    """Generate type definitions without failing the save.
+
+    Type definition generation is a best-effort side-effect.
+    Failures are logged as warnings, not errors.
+    """
+    try:
+        from cdc_generator.validators.manage_service_schema.type_definitions import (
+            generate_type_definitions,
+        )
+
+        generate_type_definitions(
+            db_type, conn_params, source_label="auto (--save)",
+        )
+    except Exception as exc:
+        print_warning(
+            f"Type definitions generation skipped: {exc}"
+        )
+
+
+def save_detailed_schema(
+    service: str,
+    env: str,
+    schema: str,
+    tables: list[dict[str, Any]],
+    db_type: str,
+) -> bool:
+    """Save detailed table schema for a *source* database.
+
+    Resolves connection params from the service's source config.
 
     Args:
         service: Service name
         env: Environment name
-        schema: Database schema name (None for all schemas)
-        tables: List of table dictionaries from inspection
+        schema: Database schema name
+        tables: List of table dicts from inspection
         db_type: Database type ('mssql' or 'postgres')
 
     Returns:
         True if schema saved successfully, False otherwise
     """
     try:
-        print_info(f"Saving detailed schema for {len(tables)} tables...")
-
-        # Get database configuration
         db_config = get_service_db_config(service, env)
         if not db_config:
             return False
 
-        # Get connection parameters
         conn_params = get_connection_params(db_config, db_type)
         if not conn_params:
             return False
 
-        # Call appropriate saver based on database type
-        if db_type == 'mssql':
-            tables_data = save_detailed_schema_mssql(service, env, schema, tables, conn_params)
-        elif db_type == 'postgres':
-            tables_data = save_detailed_schema_postgres(service, env, schema, tables, conn_params)
-        else:
-            print_error(f"Unsupported database type: {db_type}")
-            return False
-
-        if not tables_data:
-            return False
-
-        # Group tables by schema (important when --all is used)
-        tables_by_schema = {}
-        for table_name, table_data in tables_data.items():
-            table_schema = table_data.get('schema') or 'unknown'
-            if table_schema not in tables_by_schema:
-                tables_by_schema[table_schema] = {}
-            tables_by_schema[table_schema][table_name] = table_data
-
-        # Save each table to its own YAML file in /{schema}/ directory
-        total_saved = 0
-        for schema_name, schema_tables in tables_by_schema.items():
-            output_dir = get_project_root() / 'service-schemas' / service / schema_name
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            for table_name, table_data in schema_tables.items():
-                output_file = output_dir / f'{table_name}.yaml'
-                with open(output_file, 'w') as f:
-                    yaml.dump(table_data, f, default_flow_style=False, sort_keys=False, indent=2)
-
-            total_saved += len(schema_tables)
-            print_success(f"✓ Saved {len(schema_tables)} table schemas to {output_dir}/")
-
-        return True
+        return _fetch_and_save(
+            service, schema, tables, db_type, conn_params,
+        )
 
     except Exception as e:
         print_error(f"Failed to save schema: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def save_sink_schema(
+    target_service: str,
+    sink_key: str,
+    source_service: str,
+    env: str,
+    tables: list[dict[str, Any]],
+) -> bool:
+    """Save detailed table schema for a *sink* database.
+
+    Resolves connection params from the sink group config
+    instead of the source service config.
+
+    Args:
+        target_service: Target service name (for output path)
+        sink_key: Sink key (e.g., 'sink_asma.activities')
+        source_service: Source service requesting the save
+        env: Environment name
+        tables: List of table dicts from inspection
+
+    Returns:
+        True if schema saved successfully, False otherwise
+    """
+    try:
+        from .db_inspector_common import get_sink_db_config
+
+        sink_config = get_sink_db_config(
+            source_service, sink_key, env,
+        )
+        if not sink_config:
+            return False
+
+        db_type: str = sink_config["db_type"]
+        conn_params = get_connection_params(sink_config, db_type)
+        if not conn_params:
+            return False
+
+        schema = ""
+        return _fetch_and_save(
+            target_service, schema, tables,
+            db_type, conn_params,
+        )
+
+    except Exception as e:
+        print_error(f"Failed to save sink schema: {e}")
         import traceback
         traceback.print_exc()
         return False

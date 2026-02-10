@@ -58,7 +58,7 @@ def list_available_services_from_server_group() -> list[str]:
 
     try:
         config = load_yaml_file(server_group_file)
-        if not config or not isinstance(config, dict):
+        if not config:
             return []
 
         # Extract sources from server_group structure (flat format)

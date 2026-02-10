@@ -21,3 +21,5 @@ Use [0000-template.md](0000-template.md) as a starting point.
 | 0001 | [Split copilot instructions for token efficiency](0001-split-copilot-instructions.md) | Accepted | 2026-02-06 |
 | 0002 | [Strict Python type checking with pyrightconfig](0002-strict-type-checking.md) | Accepted | 2026-02-06 |
 | 0003 | [Shared data structures for config objects](0003-shared-data-structures.md) | Proposed | 2026-02-06 |
+| 0004 | [Runtime Bloblang validation with sample data](0004-runtime-bloblang-validation.md) | Proposed | 2026-02-08 |
+| 0005 | [Schema management CLI and type definitions](0005-schema-management-and-type-definitions.md) | Proposed | 2026-02-10 |

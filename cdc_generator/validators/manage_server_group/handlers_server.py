@@ -31,6 +31,7 @@ from .config import (
     get_single_server_group,
     load_server_groups,
 )
+from .types import ServerConfig
 from .validation import (
     validate_server_name,
     validate_source_type_match,
@@ -186,7 +187,7 @@ def handle_list_servers(_args: Namespace) -> int:
 
     # Display all servers
     for name, server_config in servers.items():
-        display_server_info(name, cast(dict[str, Any], server_config), group_type)
+        display_server_info(name, cast(ServerConfig, server_config), group_type)
 
     # Count and display sources per server
     sources: dict[str, Any] = server_group.get('sources', server_group.get('services', {}))
