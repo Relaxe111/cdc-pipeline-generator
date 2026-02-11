@@ -13,12 +13,12 @@ Covers:
 """
 
 import pytest
+
 from cdc_generator.helpers.type_mapper import (
     TypeMapper,
     get_available_adapters,
     get_supported_engines,
 )
-
 
 # ── Direct mapping: MSSQL → PostgreSQL ─────────────────────────────────────
 

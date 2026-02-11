@@ -5,9 +5,6 @@ from pathlib import Path
 import pytest  # type: ignore[import-not-found]
 
 from cdc_generator.core.transform_rules import (
-    OutputColumn,
-    TransformCondition,
-    TransformRule,
     _parse_conditions,
     _parse_output_column,
     _parse_single_rule,
@@ -18,7 +15,6 @@ from cdc_generator.core.transform_rules import (
     set_rules_path,
     validate_rule_reference,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -106,6 +106,35 @@ def handle_add_source_table(args: argparse.Namespace) -> int:
     return 1
 
 
+def handle_update_source_table(args: argparse.Namespace) -> int:
+    """Update an existing source table (track/ignore columns)."""
+    spec = args.source_table
+    if "." in spec:
+        schema, table = spec.split(".", 1)
+    else:
+        schema = args.schema if args.schema else "dbo"
+        table = spec
+
+    ignore_cols, track_cols = _parse_column_specs(
+        args, schema, table,
+    )
+
+    if not ignore_cols and not track_cols:
+        print_warning(
+            f"No columns specified for {spec}."
+            + " Use --track-columns or --ignore-columns."
+        )
+        return 1
+
+    if add_table_to_service(
+        args.service, schema, table,
+        None, ignore_cols, track_cols,
+    ):
+        print_info("\nRun 'cdc generate' to update pipelines")
+        return 0
+    return 1
+
+
 def handle_remove_table(args: argparse.Namespace) -> int:
     """Remove a table from service."""
     if "." in args.remove_table:

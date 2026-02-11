@@ -8,11 +8,10 @@ import yaml
 
 from cdc_generator.validators.manage_service.sink_operations import (
     TableConfigOptions,
-    _build_table_config,  # noqa: PLC2701 - Testing internal function
-    _validate_table_add,  # noqa: PLC2701 - Testing internal function
+    _build_table_config,
+    _validate_table_add,
     add_sink_table,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test data

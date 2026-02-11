@@ -108,7 +108,7 @@ max-statements = 65
 [tool.ruff.lint.per-file-ignores]
 # Allow Any in type stub files and tests if needed
 "*.pyi" = ["ANN401"]
-"tests/*" = ["ANN401", "ARG"]
+"tests/*" = ["ANN401", "ARG", "PLR2004"]
 # CLI dispatch functions are inherently complex
 "cdc_generator/cli/server_group.py" = ["PLR0911", "PLR0912", "PLR0915"]
 # Service creator has complex branching for pattern handling

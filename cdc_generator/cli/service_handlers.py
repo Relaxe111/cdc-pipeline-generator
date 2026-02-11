@@ -39,6 +39,7 @@ from cdc_generator.cli.service_handlers_source import (
     handle_add_source_table,
     handle_add_source_tables,
     handle_remove_table,
+    handle_update_source_table,
 )
 from cdc_generator.cli.service_handlers_templates import (
     handle_add_column_template,
@@ -83,6 +84,7 @@ __all__ = [
     "handle_sink_remove_table",
     "handle_sink_update_schema",
     "handle_sink_validate",
+    "handle_update_source_table",
     "handle_validate_bloblang",
     "handle_validate_config",
     "handle_validate_hierarchy",

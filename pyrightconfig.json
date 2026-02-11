@@ -24,7 +24,26 @@
   "strictDictionaryInference": true,
   "strictSetInference": true,
   "strictParameterNoneValue": true,
-  "exclude": [
-    "**/tests/**"
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "extraPaths": ["."],
+      "reportUnknownVariableType": "none",
+      "reportUnknownMemberType": "none",
+      "reportUnknownArgumentType": "none",
+      "reportUnknownParameterType": "none",
+      "reportUnknownLambdaType": "none",
+      "reportMissingTypeStubs": "none",
+      "reportMissingModuleSource": "none",
+      "reportMissingImports": "none",
+      "reportUntypedFunctionDecorator": "none",
+      "reportPrivateUsage": "none",
+      "reportImplicitStringConcatenation": "none",
+      "reportIndexIssue": "none",
+      "reportOperatorIssue": "none",
+      "reportOptionalSubscript": "none",
+      "reportCallIssue": "none",
+      "reportArgumentType": "none"
+    }
   ]
 }

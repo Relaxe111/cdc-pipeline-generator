@@ -11,9 +11,10 @@ Covers:
 """
 
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pytest
+
 from cdc_generator.core.structure_replicator import (
     ReplicationConfig,
     get_replication_summary,

@@ -129,8 +129,35 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-ta
 complete -c cdc -n "__fish_seen_subcommand_from manage-service; and string match -q -- '*--service*' (commandline -opc)" -l list-source-tables -d "List all source tables in service"
 
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-tables -d "Add multiple tables (space-separated)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"\$service_name\" 2>/dev/null
+    end
+)"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect -d "Inspect database schema and list tables"
+
+# --source-table: Dynamic completion from existing source tables in service YAML
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l source-table -d "Manage existing source table (use with --track-columns/--ignore-columns)" -r -f -a "(
+    set -l cmd (commandline -opc)
+    set -l service_name ''
+    for i in (seq (count \$cmd))
+        if test \"\$cmd[\$i]\" = '--service'
+            set service_name \$cmd[(math \$i + 1)]
+            break
+        end
+    end
+    if test -n \"\$service_name\"
+        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"\$service_name\" 2>/dev/null
+    end
+)"
 
 # --inspect-sink: Dynamic completion from service's existing sinks
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect-sink -d "Inspect sink database schema" -r -f -a "(
@@ -176,7 +203,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l primary-key -
 
 # Dynamic column completion for --track-columns and --ignore-columns
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-columns -d "Column to ignore (schema.table.column)" -r -f -a "(
-    # Extract --service and --add-source-table values from command line
+    # Extract --service and --add-source-table/--source-table values from command line
     set -l cmd (commandline -opc)
     set -l service_name ''
     set -l table_spec ''
@@ -185,6 +212,8 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-column
         if test \"\$cmd[\$i]\" = '--service'
             set service_name \$cmd[(math \$i + 1)]
         else if test \"\$cmd[\$i]\" = '--add-source-table'
+            set table_spec \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--source-table'
             set table_spec \$cmd[(math \$i + 1)]
         end
     end
@@ -201,7 +230,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l ignore-column
 )"
 
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns -d "Column to track (schema.table.column)" -r -f -a "(
-    # Extract --service and --add-source-table values from command line
+    # Extract --service and --add-source-table/--source-table values from command line
     set -l cmd (commandline -opc)
     set -l service_name ''
     set -l table_spec ''
@@ -210,6 +239,8 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l track-columns
         if test \"\$cmd[\$i]\" = '--service'
             set service_name \$cmd[(math \$i + 1)]
         else if test \"\$cmd[\$i]\" = '--add-source-table'
+            set table_spec \$cmd[(math \$i + 1)]
+        else if test \"\$cmd[\$i]\" = '--source-table'
             set table_spec \$cmd[(math \$i + 1)]
         end
     end

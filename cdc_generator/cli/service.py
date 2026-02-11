@@ -42,6 +42,7 @@ from cdc_generator.cli.service_handlers import (
     handle_sink_remove_table,
     handle_sink_update_schema,
     handle_sink_validate,
+    handle_update_source_table,
     handle_validate_bloblang,
     handle_validate_config,
     handle_validate_hierarchy,
@@ -68,6 +69,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--remove-table": (
         "Table name to remove (format: schema.table)",
         "cdc manage-service --service adopus --remove-table dbo.Actor",
+    ),
+    "--source-table": (
+        "Existing source table to manage (format: schema.table)",
+        (
+            "cdc manage-service --service proxy"
+            " --source-table public.queries"
+            " --track-columns public.queries.status"
+        ),
     ),
     "--inspect-sink": (
         "Sink key to inspect (format: sink_group.target_service)",
@@ -374,6 +383,14 @@ def _build_parser() -> ServiceArgumentParser:
         "--remove-table",
         help="Remove table (format: schema.table)",
     )
+    parser.add_argument(
+        "--source-table",
+        metavar="TABLE",
+        help=(
+            "Manage existing source table (format: schema.table)."
+            " Use with --track-columns or --ignore-columns."
+        ),
+    )
 
     # Inspect / validation args
     parser.add_argument(
@@ -578,9 +595,6 @@ def _build_parser() -> ServiceArgumentParser:
         "--source-schema", help=argparse.SUPPRESS,
     )
     parser.add_argument(
-        "--source-table", help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
         "--sink-table",
         metavar="TABLE",
         help="Target sink table for update operations (schema.table)",
@@ -739,6 +753,9 @@ def _dispatch_source(args: argparse.Namespace) -> int | None:
     """Handle source table commands. None = not handled."""
     if not args.service:
         return None
+
+    if args.source_table:
+        return handle_update_source_table(args)
 
     if args.add_source_tables:
         return handle_add_source_tables(args)

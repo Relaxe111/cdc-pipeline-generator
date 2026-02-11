@@ -4,10 +4,6 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-not-found]
 
-from cdc_generator.core.column_templates import (
-    clear_cache as clear_template_cache,
-    set_templates_path,
-)
 from cdc_generator.core.column_template_operations import (
     add_column_template,
     add_transform,
@@ -18,11 +14,18 @@ from cdc_generator.core.column_template_operations import (
     resolve_column_templates,
     resolve_transforms,
 )
+from cdc_generator.core.column_templates import (
+    clear_cache as clear_template_cache,
+)
+from cdc_generator.core.column_templates import (
+    set_templates_path,
+)
 from cdc_generator.core.transform_rules import (
     clear_cache as clear_rule_cache,
+)
+from cdc_generator.core.transform_rules import (
     set_rules_path,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
