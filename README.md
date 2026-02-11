@@ -456,7 +456,7 @@ All your project files are mounted at `/workspace`, so changes are reflected imm
 
 ## 📁 Project Structure
 
-After running `cdc init`, your project will have:
+After running `cdc scaffold`, your project will have:
 
 ```
 my-cdc-project/

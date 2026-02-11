@@ -61,7 +61,8 @@ include = ["cdc_generator*"]
 
 [tool.setuptools.package-data]
 cdc_generator = [
-    "templates/init/*",
+    "templates/init/cdc.fish",
+    "templates/init/service-schemas/**/*",
 ]
 
 [tool.black]

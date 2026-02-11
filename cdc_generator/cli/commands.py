@@ -28,8 +28,6 @@ Commands:
     reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
     help                 Show this help message
     test                 Run project tests (unit and CLI e2e)
-
-Note: 'cdc init' is deprecated. Use the pre-built Docker image from Docker Hub instead.
 """
 
 from __future__ import annotations
@@ -357,11 +355,6 @@ def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
     Returns:
         Exit code if handled, None if not a special command.
     """
-    if command == "init":
-        from cdc_generator.cli.init_project import init_project
-
-        return init_project(extra_args)
-
     if command == "scaffold":
         from cdc_generator.cli.scaffold_command import main as scaffold_main
 
