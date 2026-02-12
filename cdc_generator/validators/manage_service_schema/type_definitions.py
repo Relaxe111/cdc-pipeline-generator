@@ -449,4 +449,7 @@ def _load_existing(engine: str) -> dict[str, Any] | None:
     if not type_file.is_file():
         return None
     with type_file.open(encoding="utf-8") as f:
-        return yaml.safe_load(f)  # type: ignore[no-any-return]
+        data = yaml.load(f)
+    if isinstance(data, dict):
+        return cast(dict[str, Any], data)
+    return None

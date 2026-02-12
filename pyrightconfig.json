@@ -43,6 +43,7 @@
       "reportOperatorIssue": "none",
       "reportOptionalSubscript": "none",
       "reportCallIssue": "none",
+      "reportUnusedFunction": "none",
       "reportArgumentType": "none"
     }
   ]

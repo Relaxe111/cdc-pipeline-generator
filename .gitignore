@@ -30,6 +30,8 @@ env/
 .coverage
 htmlcov/
 .tox/
+.test-workspace/*
+!.test-workspace/README.md
 
 # IDE
 .vscode/
@@ -45,6 +47,11 @@ Thumbs.db
 # Generated files
 generated/
 *.log
+
+# Test artifacts (created by tests, should auto-cleanup but gitignored as safety)
+# Note: Tests use pytest tmp_path for isolation, these are only created if tests fail
+source-groups.yaml
+service-schemas/
 
 # Environment
 .env

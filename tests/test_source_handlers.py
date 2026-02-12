@@ -5,10 +5,7 @@ handle_remove_table including schema parsing and column specs.
 """
 
 import argparse
-import os
-from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +13,7 @@ from cdc_generator.cli.service_handlers_source import (
     handle_add_source_table,
     handle_add_source_tables,
     handle_remove_table,
+    handle_update_source_table,
 )
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 from cdc_generator.validators.manage_service.table_operations import (
@@ -23,29 +21,7 @@ from cdc_generator.validators.manage_service.table_operations import (
     remove_table_from_service,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def project_dir(tmp_path: Path) -> Iterator[Path]:
-    """Isolated project with services/ dir and SERVICES_DIR patched."""
-    services_dir = tmp_path / "services"
-    services_dir.mkdir()
-    (tmp_path / "source-groups.yaml").write_text(
-        "asma:\n  pattern: db-shared\n"
-    )
-    original_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    with patch(
-        "cdc_generator.validators.manage_service.config.SERVICES_DIR",
-        services_dir,
-    ):
-        try:
-            yield tmp_path
-        finally:
-            os.chdir(original_cwd)
+# project_dir fixture is provided by tests/conftest.py
 
 
 @pytest.fixture()
@@ -358,3 +334,76 @@ class TestHandleRemoveTable:
         args = _ns(remove_table="public.nonexistent")
         result = handle_remove_table(args)
         assert result == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Handler: handle_update_source_table
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleUpdateSourceTable:
+    """Tests for handle_update_source_table handler."""
+
+    def test_no_columns_returns_1(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """Returns 1 when neither --track-columns nor --ignore-columns."""
+        args = _ns(
+            source_table="public.queries",
+            track_columns=None,
+            ignore_columns=None,
+        )
+        result = handle_update_source_table(args)
+        assert result == 1
+
+    def test_update_with_track_columns(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """Returns 0 when track-columns provided for existing table."""
+        args = _ns(
+            source_table="public.queries",
+            track_columns=["public.queries.col_a", "public.queries.col_b"],
+            ignore_columns=None,
+        )
+        result = handle_update_source_table(args)
+        assert result == 0
+        saved = load_yaml_file(service_yaml)
+        table_cfg = saved["proxy"]["source"]["tables"]["public.queries"]
+        assert "include_columns" in table_cfg
+        assert "col_a" in table_cfg["include_columns"]
+        assert "col_b" in table_cfg["include_columns"]
+
+    def test_update_with_ignore_columns(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """Returns 0 when ignore-columns provided for existing table."""
+        args = _ns(
+            source_table="public.users",
+            track_columns=None,
+            ignore_columns=["public.users.password_hash"],
+        )
+        result = handle_update_source_table(args)
+        assert result == 0
+        saved = load_yaml_file(service_yaml)
+        table_cfg = saved["proxy"]["source"]["tables"]["public.users"]
+        assert "ignore_columns" in table_cfg
+        assert "password_hash" in table_cfg["ignore_columns"]
+
+    def test_defaults_to_dbo_schema(
+        self, project_dir: Path,
+    ) -> None:
+        """Table without dot defaults to dbo schema."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+        )
+        args = _ns(
+            source_table="Actor",
+            track_columns=["dbo.Actor.name"],
+            ignore_columns=None,
+        )
+        result = handle_update_source_table(args)
+        assert result == 0

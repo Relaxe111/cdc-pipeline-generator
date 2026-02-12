@@ -173,6 +173,7 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "description": "Manage column template definitions (column-templates.yaml)",
     },
     "setup-local": {
+        "module": "cdc_generator.cli.setup_local",
         "script": "cli/setup_local.py",
         "description": "Set up local development environment with on-demand services",
     },

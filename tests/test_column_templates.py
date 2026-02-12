@@ -122,7 +122,7 @@ class TestParseSingleTemplate:
         result = _parse_single_template("test", raw)
         assert result is not None
         with pytest.raises(AttributeError):
-            result.name = "changed"
+            result.name = "changed"  # pyright: ignore[reportAttributeAccessIssue]
 
 
 # ---------------------------------------------------------------------------

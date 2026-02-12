@@ -9,8 +9,6 @@ and the _resolve_sink_and_table helper.
 """
 
 import argparse
-import os
-from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,38 +29,11 @@ from cdc_generator.cli.service_handlers_validation import (
     handle_validate_config,
     handle_validate_hierarchy,
 )
+from cdc_generator.cli.service_handlers_bloblang import (
+    handle_validate_bloblang,
+)
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def project_dir(tmp_path: Path) -> Iterator[Path]:
-    """Isolated project with services/, service-schemas/, and patching."""
-    services_dir = tmp_path / "services"
-    services_dir.mkdir()
-    schemas_dir = tmp_path / "service-schemas"
-    schemas_dir.mkdir()
-    (tmp_path / "source-groups.yaml").write_text(
-        "asma:\n  pattern: db-shared\n"
-    )
-    (tmp_path / "sink-groups.yaml").write_text(
-        "sink_asma:\n  type: postgres\n  server: sink-pg\n"
-    )
-    original_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    with patch(
-        "cdc_generator.validators.manage_service.config.SERVICES_DIR",
-        services_dir,
-    ), patch(
-        "cdc_generator.validators.manage_service.config.SERVICE_SCHEMAS_DIR",
-        schemas_dir,
-    ):
-        try:
-            yield tmp_path
-        finally:
-            os.chdir(original_cwd)
+# project_dir fixture is provided by tests/conftest.py
 
 
 @pytest.fixture()
@@ -146,6 +117,63 @@ class TestResolveSinkAndTable:
         result = _resolve_sink_and_table(args)
         assert result is None
 
+    def test_returns_none_service_not_found(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns None when service file doesn't exist (FileNotFoundError)."""
+        args = _ns(service="nonexistent", sink=None, sink_table="public.t")
+        result = _resolve_sink_and_table(args)
+        assert result is None
+
+    def test_returns_none_multiple_sinks_no_sink_flag(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns None when service has >1 sinks and --sink not provided."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.queries: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        public.users:\n"
+            "          target_exists: true\n"
+            "    sink_asma.calendar:\n"
+            "      tables:\n"
+            "        public.events:\n"
+            "          target_exists: true\n"
+        )
+        args = _ns(sink=None, sink_table="public.users")
+        result = _resolve_sink_and_table(args)
+        assert result is None
+
+    def test_auto_selects_single_sink(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Auto-selects sink when service has exactly one sink."""
+        args = _ns(sink=None)
+        result = _resolve_sink_and_table(args)
+        assert result is not None
+        _, sink_key, _ = result
+        assert sink_key == "sink_asma.chat"
+
+    def test_returns_none_no_sinks_configured(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns None when service has no sinks section."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.queries: {}\n"
+        )
+        args = _ns(sink=None, sink_table="public.users")
+        result = _resolve_sink_and_table(args)
+        assert result is None
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Column template handlers
@@ -172,6 +200,44 @@ class TestHandleAddColumnTemplate:
         result = handle_add_column_template(args)
         assert result == 1
 
+    def test_returns_0_on_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when add_column_template operation succeeds."""
+        args = _ns(
+            add_column_template="tenant_id",
+            column_name="tenant_id",
+            skip_validation=True,
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_templates.add_column_template_to_table",
+            return_value=True,
+        ) as add_template_mock:
+            result = handle_add_column_template(args)
+
+        assert result == 0
+        add_template_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.users",
+            "tenant_id",
+            "tenant_id",
+            None,
+            True,
+        )
+
+    def test_returns_1_on_operation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when add_column_template operation fails."""
+        args = _ns(add_column_template="tenant_id")
+        with patch(
+            "cdc_generator.cli.service_handlers_templates.add_column_template_to_table",
+            return_value=False,
+        ):
+            result = handle_add_column_template(args)
+        assert result == 1
+
 
 class TestHandleRemoveColumnTemplate:
     """Tests for handle_remove_column_template."""
@@ -179,6 +245,44 @@ class TestHandleRemoveColumnTemplate:
     def test_returns_1_without_service(self) -> None:
         """Returns 1 when --service missing."""
         args = _ns(service=None, remove_column_template="audit_created_at")
+        result = handle_remove_column_template(args)
+        assert result == 1
+
+    def test_returns_0_on_success(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 0 when template is successfully removed."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        public.users:\n"
+            "          target_exists: false\n"
+            "          column_templates:\n"
+            "            - template: tenant_id\n"
+        )
+        args = _ns(
+            remove_column_template="tenant_id",
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
+        result = handle_remove_column_template(args)
+        assert result == 0
+
+    def test_returns_1_on_operation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when remove operation fails (template not found)."""
+        args = _ns(
+            remove_column_template="nonexistent_template",
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
         result = handle_remove_column_template(args)
         assert result == 1
 
@@ -205,6 +309,38 @@ class TestHandleAddTransform:
         result = handle_add_transform(args)
         assert result == 1
 
+    def test_returns_0_on_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when add_transform operation succeeds."""
+        args = _ns(add_transform="map_boolean", skip_validation=True)
+        with patch(
+            "cdc_generator.cli.service_handlers_templates.add_transform_to_table",
+            return_value=True,
+        ) as add_transform_mock:
+            result = handle_add_transform(args)
+
+        assert result == 0
+        add_transform_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.users",
+            "map_boolean",
+            True,
+        )
+
+    def test_returns_1_on_operation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when add_transform operation fails."""
+        args = _ns(add_transform="map_boolean")
+        with patch(
+            "cdc_generator.cli.service_handlers_templates.add_transform_to_table",
+            return_value=False,
+        ):
+            result = handle_add_transform(args)
+        assert result == 1
+
 
 class TestHandleRemoveTransform:
     """Tests for handle_remove_transform."""
@@ -212,6 +348,44 @@ class TestHandleRemoveTransform:
     def test_returns_1_without_service(self) -> None:
         """Returns 1 when --service missing."""
         args = _ns(service=None, remove_transform="map_boolean")
+        result = handle_remove_transform(args)
+        assert result == 1
+
+    def test_returns_0_on_success(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 0 when transform is successfully removed."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        public.users:\n"
+            "          target_exists: false\n"
+            "          transforms:\n"
+            "            - rule: map_boolean\n"
+        )
+        args = _ns(
+            remove_transform="map_boolean",
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
+        result = handle_remove_transform(args)
+        assert result == 0
+
+    def test_returns_1_on_operation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when remove operation fails (transform not found)."""
+        args = _ns(
+            remove_transform="nonexistent_rule",
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
         result = handle_remove_transform(args)
         assert result == 1
 
@@ -224,6 +398,44 @@ class TestHandleListTransforms:
         args = _ns(service=None, list_transforms=True)
         result = handle_list_transforms(args)
         assert result == 1
+
+    def test_returns_0_with_transforms(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 0 when listing transforms on a table."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        public.users:\n"
+            "          target_exists: false\n"
+            "          transforms:\n"
+            "            - rule: map_boolean\n"
+        )
+        args = _ns(
+            list_transforms=True,
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
+        result = handle_list_transforms(args)
+        assert result == 0
+
+    def test_returns_0_empty_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 even when no transforms configured."""
+        args = _ns(
+            list_transforms=True,
+            sink="sink_asma.chat",
+            sink_table="public.users",
+        )
+        result = handle_list_transforms(args)
+        assert result == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -304,6 +516,18 @@ class TestHandleValidateHierarchy:
         result = handle_validate_hierarchy(args)
         assert result == 0
 
+    def test_returns_1_on_validation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when hierarchy validation fails."""
+        args = _ns()
+        with patch(
+            "cdc_generator.cli.service_handlers_validation.validate_hierarchy_no_duplicates",
+            return_value=False,
+        ):
+            result = handle_validate_hierarchy(args)
+        assert result == 1
+
 
 class TestHandleGenerateValidation:
     """Tests for handle_generate_validation."""
@@ -314,4 +538,68 @@ class TestHandleGenerateValidation:
         """Returns 1 when neither --all nor --schema provided."""
         args = _ns()
         result = handle_generate_validation(args)
+        assert result == 1
+
+    def test_returns_0_with_all(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when generation succeeds with --all."""
+        args = _ns(all=True, generate_validation=True)
+        with patch(
+            "cdc_generator.cli.service_handlers_validation.generate_service_validation_schema",
+            return_value=True,
+        ):
+            result = handle_generate_validation(args)
+        assert result == 0
+
+    def test_returns_0_with_schema(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when generation succeeds with --schema."""
+        args = _ns(schema="public", generate_validation=True)
+        with patch(
+            "cdc_generator.cli.service_handlers_validation.generate_service_validation_schema",
+            return_value=True,
+        ):
+            result = handle_generate_validation(args)
+        assert result == 0
+
+    def test_returns_1_on_generation_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when schema generation fails."""
+        args = _ns(all=True, generate_validation=True)
+        with patch(
+            "cdc_generator.cli.service_handlers_validation.generate_service_validation_schema",
+            return_value=False,
+        ):
+            result = handle_generate_validation(args)
+        assert result == 1
+
+
+class TestHandleValidateBloblang:
+    """Tests for handle_validate_bloblang."""
+
+    def test_returns_0_when_validation_succeeds(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 0 when bloblang validator succeeds."""
+        args = _ns()
+        with patch(
+            "cdc_generator.cli.service_handlers_bloblang.validate_service_bloblang",
+            return_value=True,
+        ):
+            result = handle_validate_bloblang(args)
+        assert result == 0
+
+    def test_returns_1_when_validation_fails(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 1 when bloblang validator fails."""
+        args = _ns()
+        with patch(
+            "cdc_generator.cli.service_handlers_bloblang.validate_service_bloblang",
+            return_value=False,
+        ):
+            result = handle_validate_bloblang(args)
         assert result == 1

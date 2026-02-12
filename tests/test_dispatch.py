@@ -6,8 +6,6 @@ and _dispatch_source.
 """
 
 import argparse
-import os
-from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,46 +18,9 @@ from cdc_generator.cli.service import (
     _dispatch_sink_conditional,
     _dispatch_source,
     _dispatch_validation,
-    _is_sink_context,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def project_dir(tmp_path: Path) -> Iterator[Path]:
-    """Isolated project dir with services/ and source-groups.yaml."""
-    services_dir = tmp_path / "services"
-    services_dir.mkdir()
-    (tmp_path / "source-groups.yaml").write_text(
-        "asma:\n"
-        "  pattern: db-shared\n"
-        "  sources:\n"
-        "    proxy:\n"
-        "      schemas:\n"
-        "        - public\n"
-        "      nonprod:\n"
-        "        server: default\n"
-        "        database: proxy_db\n"
-    )
-    (tmp_path / "sink-groups.yaml").write_text(
-        "sink_asma:\n  type: postgres\n  server: sink-pg\n"
-    )
-    original_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    with patch(
-        "cdc_generator.validators.manage_service.config.SERVICES_DIR",
-        services_dir,
-    ), patch(
-        "cdc_generator.validators.manage_server_group.config.SERVER_GROUPS_FILE",
-        tmp_path / "source-groups.yaml",
-    ):
-        try:
-            yield tmp_path
-        finally:
-            os.chdir(original_cwd)
+# project_dir fixture is provided by tests/conftest.py
 
 
 @pytest.fixture()

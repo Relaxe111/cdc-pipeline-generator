@@ -3,8 +3,8 @@
 Covers handle_sink_add, handle_sink_remove, handle_sink_list,
 handle_sink_validate, handle_sink_add_table, handle_sink_remove_table,
 handle_sink_update_schema, handle_sink_map_column_error,
-handle_sink_add_custom_table, handle_modify_custom_table,
-and _resolve_sink_key.
+handle_sink_map_column_on_table, handle_sink_add_custom_table,
+handle_modify_custom_table, and _resolve_sink_key.
 """
 
 import argparse
@@ -23,6 +23,7 @@ from cdc_generator.cli.service_handlers_sink import (
     handle_sink_add_table,
     handle_sink_list,
     handle_sink_map_column_error,
+    handle_sink_map_column_on_table,
     handle_sink_remove,
     handle_sink_remove_table,
     handle_sink_update_schema,
@@ -280,6 +281,18 @@ class TestHandleSinkValidate:
         result = handle_sink_validate(args)
         assert result == 0
 
+    def test_validate_returns_1_on_invalid(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when sink validation fails."""
+        args = _ns()
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.validate_sinks",
+            return_value=False,
+        ):
+            result = handle_sink_validate(args)
+        assert result == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_sink_add_table
@@ -344,6 +357,32 @@ class TestHandleSinkAddTable:
         result = handle_sink_add_table(args)
         assert result == 1
 
+    def test_replicate_auto_sets_target_exists_false(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Replicate mode auto-sets target_exists=false when omitted."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            replicate_structure=True,
+            sink_schema="chat",
+            target_exists=None,
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_sink_table_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        add_sink_table_mock.assert_called_once()
+        call_kwargs = add_sink_table_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["target_exists"] is False
+        assert table_opts["replicate_structure"] is True
+        assert table_opts["sink_schema"] == "chat"
+
     def test_from_table_used_as_name(
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
@@ -368,6 +407,19 @@ class TestHandleSinkAddTable:
         result = handle_sink_add_table(args)
         assert result == 0
 
+    def test_requires_table_name_or_from(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when neither --add-sink-table nor --from provided."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table=None,
+            from_table=None,
+            target_exists="false",
+        )
+        result = handle_sink_add_table(args)
+        assert result == 1
+
     def test_with_target_mapping(
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
@@ -380,6 +432,28 @@ class TestHandleSinkAddTable:
         )
         result = handle_sink_add_table(args)
         assert result == 0
+
+    def test_sink_schema_override_non_replicate(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--sink-schema is passed to table_opts without replicate mode."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="true",
+            sink_schema="custom_schema",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        call_kwargs = add_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["sink_schema"] == "custom_schema"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -460,6 +534,60 @@ class TestHandleSinkMapColumnError:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# handle_sink_map_column_on_table
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleSinkMapColumnOnTable:
+    """Tests for handle_sink_map_column_on_table."""
+
+    def test_requires_sink_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when --sink-table not provided."""
+        args = _ns(
+            sink="sink_asma.chat",
+            map_column=[["id", "user_id"]],
+            sink_table=None,
+        )
+        result = handle_sink_map_column_on_table(args)
+        assert result == 1
+
+    def test_returns_0_on_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when column mapping succeeds."""
+        args = _ns(
+            sink="sink_asma.chat",
+            sink_table="public.users",
+            map_column=[["id", "user_id"]],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.map_sink_columns",
+            return_value=True,
+        ) as map_mock:
+            result = handle_sink_map_column_on_table(args)
+        assert result == 0
+        map_mock.assert_called_once()
+
+    def test_returns_1_on_mapping_failure(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when column mapping operation fails."""
+        args = _ns(
+            sink="sink_asma.chat",
+            sink_table="public.users",
+            map_column=[["nonexistent", "user_id"]],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.map_sink_columns",
+            return_value=False,
+        ):
+            result = handle_sink_map_column_on_table(args)
+        assert result == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # handle_sink_add_custom_table
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -489,6 +617,31 @@ class TestHandleSinkAddCustomTable:
         )
         result = handle_sink_add_custom_table(args)
         assert result == 1
+
+    def test_from_custom_table_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Supports --from mode without inline --column definitions."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_custom_sink_table="public.audit_copy",
+            column=None,
+            from_table="public.audit_template",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_custom_sink_table",
+            return_value=True,
+        ) as add_custom_mock:
+            result = handle_sink_add_custom_table(args)
+
+        assert result == 0
+        add_custom_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.audit_copy",
+            [],
+            from_custom_table="public.audit_template",
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -581,3 +734,89 @@ class TestHandleSinkRemoveTableCleansUpFiles:
 
         assert result == 0
         assert not ct_file.exists(), "File with slash→underscore should be deleted"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# handle_sink_add_custom_table — happy path
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleAddCustomSinkTableHappyPath:
+    """Happy-path tests for handle_sink_add_custom_table."""
+
+    def test_returns_0_on_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 0 when custom table is successfully created."""
+        args = _ns(
+            add_custom_sink_table="public.e2e_custom_test",
+            sink="sink_asma.chat",
+            column=["id:uuid:pk", "event_type:text:not_null"],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink_custom.SERVICE_SCHEMAS_DIR",
+            project_dir / "service-schemas",
+        ):
+            result = handle_sink_add_custom_table(args)
+        assert result == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# handle_modify_custom_table — happy paths
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleModifyCustomTableHappyPath:
+    """Happy-path tests for handle_modify_custom_table."""
+
+    @pytest.fixture()
+    def service_with_custom_table(
+        self, project_dir: Path,
+    ) -> Path:
+        """Service with a custom managed table in the sink."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.queries: {}\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        public.audit_log:\n"
+            "          target_exists: false\n"
+            "          custom: true\n"
+            "          managed: true\n"
+            "          columns:\n"
+            "            id:\n"
+            "              type: uuid\n"
+            "              primary_key: true\n"
+            "            event_type:\n"
+            "              type: text\n"
+        )
+        return sf
+
+    def test_add_column_returns_0(
+        self, project_dir: Path, service_with_custom_table: Path,
+    ) -> None:
+        """Returns 0 when column is successfully added."""
+        args = _ns(
+            modify_custom_table="public.audit_log",
+            sink="sink_asma.chat",
+            add_column="created_at:timestamptz:default_now",
+        )
+        result = handle_modify_custom_table(args)
+        assert result == 0
+
+    def test_remove_column_returns_0(
+        self, project_dir: Path, service_with_custom_table: Path,
+    ) -> None:
+        """Returns 0 when column is successfully removed."""
+        args = _ns(
+            modify_custom_table="public.audit_log",
+            sink="sink_asma.chat",
+            remove_column="event_type",
+        )
+        result = handle_modify_custom_table(args)
+        assert result == 0

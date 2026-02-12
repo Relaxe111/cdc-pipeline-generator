@@ -264,6 +264,25 @@ class TestCliSinkAddTable:
         )
         assert result.returncode == 1
 
+    def test_add_table_from_only_uses_source_name(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """--add-sink-table with no value falls back to --from table name."""
+        _create_project(isolated_project, with_sink=True)
+        schemas_dir = isolated_project / "service-schemas" / "chat" / "public"
+        schemas_dir.mkdir(parents=True)
+        (schemas_dir / "queries.yaml").write_text("columns: []\n")
+
+        result = run_cdc(
+            "manage-service", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--add-sink-table",
+            "--from", "public.queries",
+            "--target-exists", "false",
+        )
+        assert result.returncode == 0
+        assert "public.queries" in _read_yaml(isolated_project)
+
 
 class TestCliSinkRemoveTable:
     """CLI e2e: --remove-sink-table."""
@@ -310,6 +329,66 @@ class TestCliValidateConfig:
             "--validate-config",
         )
         assert result.returncode == 0
+
+
+class TestCliValidateHierarchy:
+    """CLI e2e: --validate-hierarchy."""
+
+    def test_validate_hierarchy(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _create_project(isolated_project)
+        result = run_cdc(
+            "manage-service", "--service", "proxy",
+            "--validate-hierarchy",
+        )
+        assert result.returncode == 0
+
+
+class TestCliGenerateValidation:
+    """CLI e2e: --generate-validation."""
+
+    def test_generate_validation_for_schema(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _create_project(isolated_project)
+
+        sf = isolated_project / "services" / "proxy.yaml"
+        sf.write_text(
+            "service: proxy\n"
+            "server_group: asma\n"
+            "mode: db-shared\n"
+            "source:\n"
+            "  validation_database: proxy\n"
+            "shared:\n"
+            "  source_tables:\n"
+            "    - schema: public\n"
+            "      tables:\n"
+            "        - name: queries\n"
+            "          primary_key: id\n"
+        )
+
+        schema_dir = isolated_project / "service-schemas" / "proxy" / "public"
+        schema_dir.mkdir(parents=True)
+        (schema_dir / "queries.yaml").write_text(
+            "columns:\n"
+            "  - name: id\n"
+            "    type: uuid\n"
+            "    nullable: false\n"
+            "    primary_key: true\n"
+        )
+
+        result = run_cdc(
+            "manage-service", "--service", "proxy",
+            "--generate-validation", "--schema", "public",
+        )
+        assert result.returncode == 0
+        assert (
+            isolated_project
+            / ".vscode"
+            / "schemas"
+            / "proxy.service-validation.schema.json"
+        ).exists()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

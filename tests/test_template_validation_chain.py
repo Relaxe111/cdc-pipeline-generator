@@ -689,7 +689,7 @@ class TestValidateSinkColumnExists:
             "cdc_generator.core.structure_replicator._find_schema_dir",
             return_value=tmp_path / "service-schemas",
         ):
-            is_valid, errors, warnings = validate_sink_column_exists(
+            is_valid, errors, _warnings = validate_sink_column_exists(
                 "proxy", "public.users", "nonexistent_col",
             )
 

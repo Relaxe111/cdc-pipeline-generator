@@ -80,6 +80,15 @@ def _build_pytest_args(
         else:
             pytest_passthrough.append(arg)
 
+    # Show skip reasons in all-tests mode unless user already controls
+    # pytest report chars (e.g. -rA, -rx, --reportchars=...).
+    has_report_chars = any(
+        arg.startswith("-r") or arg.startswith("--reportchars")
+        for arg in pytest_passthrough
+    )
+    if run_all and not has_report_chars:
+        pytest_passthrough.append("-rs")
+
     # Determine test directories
     if run_all:
         test_dirs = [str(project_root / _UNIT_TESTS_DIR)]

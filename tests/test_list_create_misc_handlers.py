@@ -5,10 +5,7 @@ handle_no_service, and _auto_detect_service.
 """
 
 import argparse
-import os
-from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -25,40 +22,7 @@ from cdc_generator.cli.service_handlers_misc import (
     handle_no_service,
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def project_dir(tmp_path: Path) -> Iterator[Path]:
-    """Isolated project dir with services/ and chdir + SERVICES_DIR patch."""
-    services_dir = tmp_path / "services"
-    services_dir.mkdir()
-    (tmp_path / "source-groups.yaml").write_text(
-        "asma:\n"
-        "  pattern: db-shared\n"
-        "  sources:\n"
-        "    proxy:\n"
-        "      schemas:\n"
-        "        - public\n"
-        "      nonprod:\n"
-        "        server: default\n"
-        "        database: proxy_db\n"
-    )
-    original_cwd = Path.cwd()
-    os.chdir(tmp_path)
-    with patch(
-        "cdc_generator.validators.manage_service.config.SERVICES_DIR",
-        services_dir,
-    ), patch(
-        "cdc_generator.validators.manage_server_group.config.SERVER_GROUPS_FILE",
-        tmp_path / "source-groups.yaml",
-    ):
-        try:
-            yield tmp_path
-        finally:
-            os.chdir(original_cwd)
+# project_dir fixture is provided by tests/conftest.py
 
 
 @pytest.fixture()
@@ -200,6 +164,30 @@ class TestHandleCreateService:
         result = handle_create_service(args)
         assert result == 1
 
+    def test_no_server_group_found_returns_1(
+        self, project_dir: Path,
+    ) -> None:
+        """Returns 1 when service is in source-groups but resolves to no group.
+
+        This covers the branch: ``if not server_group: return 1``
+        (after _detect_server_group returns None for the group name).
+        """
+        # Write source-groups with multiple groups, neither containing 'newservice'
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "group_a:\n"
+            "  sources:\n"
+            "    proxy:\n"
+            "      server: srv\n"
+            "group_b:\n"
+            "  sources:\n"
+            "    other:\n"
+            "      server: srv\n"
+        )
+        args = _ns(service="newservice", create_service="newservice")
+        result = handle_create_service(args)
+        assert result == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_no_service
@@ -271,3 +259,13 @@ class TestAutoDetectService:
         result = _auto_detect_service(args)
         assert result is not None
         assert result.service is None
+
+    def test_create_service_skips_multiple_services_error(
+        self, project_dir: Path,
+    ) -> None:
+        """create_service set bypasses multiple-services error."""
+        (project_dir / "services" / "proxy.yaml").write_text("a: {}\n")
+        (project_dir / "services" / "chat.yaml").write_text("b: {}\n")
+        args = _ns(service=None, create_service="newservice")
+        result = _auto_detect_service(args)
+        assert result is not None
