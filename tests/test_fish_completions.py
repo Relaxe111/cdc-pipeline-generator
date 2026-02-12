@@ -456,7 +456,81 @@ class TestSmartCompletion:
         opts = self._complete("cdc manage-service --")
         assert "--inspect" in opts
         assert "--add-source-table" in opts
+        # --add-sink-table requires --sink which requires --service
+        assert "--add-sink-table" not in opts
+
+    def test_entry_points_with_service_unlock_sink(self) -> None:
+        """With --service set, sink-related entry-points become visible."""
+        opts = self._complete("cdc manage-service --service directory --")
+        assert "--sink" in opts
+        assert "--inspect" in opts
+        # But deeper options still hidden (need --sink first)
+        assert "--add-sink-table" not in opts
+        assert "--sink-table" not in opts
+
+    def test_positional_service_unlocks_sink(self) -> None:
+        """Positional service name also satisfies the service prerequisite."""
+        opts = self._complete("cdc manage-service directory --")
+        assert "--sink" in opts
+
+    # -- hierarchical prerequisites -------------------------------------------
+
+    def test_no_service_hides_sink_entry_point(self) -> None:
+        """Without --service, --sink is hidden (prerequisite not met)."""
+        opts = self._complete("cdc manage-service --")
+        assert "--sink" not in opts
+        # But non-sink entry-points remain
+        assert "--inspect" in opts
+        assert "--add-source-table" in opts
+
+    def test_sink_without_service_still_expands(self) -> None:
+        """If --sink is somehow present without --service, its sub-options
+        still show (prerequisites check sub-options, not the flag itself)."""
+        opts = self._complete(
+            "cdc manage-service --sink sink_asma.proxy --"
+        )
         assert "--add-sink-table" in opts
+        assert "--sink-table" in opts
+
+    def test_sink_table_requires_sink(self) -> None:
+        """--sink-table only appears when --sink is active."""
+        opts = self._complete(
+            "cdc manage-service directory --sink sink_asma.proxy --"
+        )
+        assert "--sink-table" in opts
+
+    def test_column_template_requires_sink_table(self) -> None:
+        """--add-column-template only appears when --sink-table is active."""
+        opts = self._complete(
+            "cdc manage-service --sink asma --sink-table pub.Actor --"
+        )
+        assert "--add-column-template" in opts
+        assert "--add-transform" in opts
+        assert "--remove-column-template" in opts
+
+    def test_column_template_hidden_without_sink_table(self) -> None:
+        """--add-column-template hidden when only --sink is set."""
+        opts = self._complete(
+            "cdc manage-service --sink sink_asma.proxy --"
+        )
+        assert "--add-column-template" not in opts
+        assert "--add-transform" not in opts
+
+    def test_column_name_requires_add_column_template(self) -> None:
+        """--column-name only appears after --add-column-template."""
+        opts = self._complete(
+            "cdc manage-service --sink a --sink-table t --add-column-template tpl --"
+        )
+        assert "--column-name" in opts
+        assert "--value" in opts
+
+    def test_column_name_hidden_without_add_column_template(self) -> None:
+        """--column-name hidden when only --sink-table is set."""
+        opts = self._complete(
+            "cdc manage-service --sink a --sink-table t --"
+        )
+        assert "--column-name" not in opts
+        assert "--value" not in opts
 
     def test_entry_points_exclude_sub_options(self) -> None:
         opts = self._complete("cdc manage-service --")
@@ -487,7 +561,7 @@ class TestSmartCompletion:
 
     def test_add_sink_table_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service --add-sink-table pub.Actor --"
+            "cdc manage-service --service dir --add-sink-table pub.Actor --"
         )
         assert "--sink" in opts
         assert "--target" in opts

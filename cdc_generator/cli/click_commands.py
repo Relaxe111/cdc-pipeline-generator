@@ -57,10 +57,13 @@ from cdc_generator.cli.completions import (
 from cdc_generator.cli.smart_command import (
     MANAGE_SERVICE_ALWAYS,
     MANAGE_SERVICE_GROUPS,
+    MANAGE_SERVICE_REQUIRES,
     MANAGE_SINK_GROUPS_ALWAYS,
     MANAGE_SINK_GROUPS_GROUPS,
+    MANAGE_SINK_GROUPS_REQUIRES,
     MANAGE_SOURCE_GROUPS_ALWAYS,
     MANAGE_SOURCE_GROUPS_GROUPS,
+    MANAGE_SOURCE_GROUPS_REQUIRES,
     SmartCommand,
 )
 
@@ -78,6 +81,7 @@ _PASSTHROUGH_CTX: dict[str, object] = {
     cls=SmartCommand,
     smart_groups=MANAGE_SERVICE_GROUPS,
     smart_always=MANAGE_SERVICE_ALWAYS,
+    smart_requires=MANAGE_SERVICE_REQUIRES,
     help="Manage CDC service definitions",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
@@ -205,6 +209,7 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     cls=SmartCommand,
     smart_groups=MANAGE_SOURCE_GROUPS_GROUPS,
     smart_always=MANAGE_SOURCE_GROUPS_ALWAYS,
+    smart_requires=MANAGE_SOURCE_GROUPS_REQUIRES,
     help="Manage source groups configuration (source-groups.yaml)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
@@ -295,6 +300,7 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     cls=SmartCommand,
     smart_groups=MANAGE_SINK_GROUPS_GROUPS,
     smart_always=MANAGE_SINK_GROUPS_ALWAYS,
+    smart_requires=MANAGE_SINK_GROUPS_REQUIRES,
     help="Manage sink groups configuration (sink-groups.yaml)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,

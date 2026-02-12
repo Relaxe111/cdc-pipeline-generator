@@ -5,7 +5,7 @@ of completions shown when the user presses tab.  Instead of dumping all
 40+ options at once, it shows only the options relevant to what has
 already been typed on the command line.
 
-The filtering is driven by two data structures:
+The filtering is driven by three data structures:
 
 ``smart_groups``
     Maps a "context flag" (option param name) to the set of sub-option
@@ -14,6 +14,12 @@ The filtering is driven by two data structures:
 ``smart_always``
     A set of option param names that are always visible regardless of
     context (e.g. ``service``, ``server``).
+
+``smart_requires``
+    Maps an option param name to a set of prerequisite option param
+    names that must be present (active) for the option to appear.
+    Enforces hierarchical ordering — e.g. ``sink_table`` requires
+    ``sink``, so ``--sink-table`` only appears after ``--sink`` is set.
 
 Option-group definitions for each command live in this module as well
 so that click_commands.py stays focused on Click decorators.
@@ -33,7 +39,7 @@ class SmartCommand(click.Command):
     """A Click command that filters completion options based on context.
 
     When the user presses tab, only options relevant to what they've
-    already typed are shown.  This is driven by two data structures
+    already typed are shown.  This is driven by three data structures
     passed as keyword arguments to ``@click.command(cls=SmartCommand)``:
 
     ``smart_groups``
@@ -48,16 +54,29 @@ class SmartCommand(click.Command):
         regardless of context.  Typically the top-level entry-point
         flags like ``service``, ``create_service``.
 
+    ``smart_requires``
+        Maps an option name to a set of prerequisite option names that
+        must all be active (present on the command line) for the option
+        to appear in completions.  Enforces hierarchical ordering::
+
+            {"sink_table": {"sink"}}       # --sink-table needs --sink first
+            {"add_column_template": {"sink_table"}}  # needs --sink-table
+
+        Prerequisites are checked *after* group filtering, so an option
+        must be both allowed by its group AND have its prerequisites met.
+
     If neither attribute is set the command behaves like a normal
     ``click.Command`` — all options are always shown.
     """
 
     smart_groups: dict[str, set[str]]
     smart_always: set[str]
+    smart_requires: dict[str, set[str]]
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         self.smart_groups = kwargs.pop("smart_groups", {})  # type: ignore[arg-type]
         self.smart_always = kwargs.pop("smart_always", set())  # type: ignore[arg-type]
+        self.smart_requires = kwargs.pop("smart_requires", {})  # type: ignore[arg-type]
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
 
     def shell_complete(
@@ -73,20 +92,29 @@ class SmartCommand(click.Command):
         # Get all default completions from Click
         all_completions = super().shell_complete(ctx, incomplete)
 
-        # Determine which context flags are active
+        # Determine which context flags are active (group keys only)
         active_contexts = self._get_active_contexts(ctx)
 
-        # If no context flags are active, show only "always" + entry-point options
+        # All active params including always-visible (for prerequisites)
+        all_active = self._get_all_active_params(ctx)
+
+        # If no context group flags are active, show entry-point options
         if not active_contexts:
-            return self._filter_to_entry_points(all_completions)
+            return self._filter_to_entry_points(all_completions, all_active)
 
         # Build the set of allowed option names based on active contexts
-        allowed = self._build_allowed_set(active_contexts)
+        allowed = self._build_allowed_set(active_contexts, all_active)
 
         return [c for c in all_completions if self._is_allowed(c.value, allowed)]
 
     def _get_active_contexts(self, ctx: click.Context) -> set[str]:
-        """Find which context flags are set in the current params."""
+        """Find which context *group* flags are set in the current params.
+
+        Only checks keys of ``smart_groups`` — these drive which
+        sub-options are expanded.  Always-visible options are checked
+        separately by ``_get_all_active_params`` for prerequisite
+        evaluation.
+        """
         active: set[str] = set()
         for flag_name in self.smart_groups:
             val = ctx.params.get(flag_name)
@@ -95,22 +123,78 @@ class SmartCommand(click.Command):
                 active.add(flag_name)
         return active
 
-    def _build_allowed_set(self, active_contexts: set[str]) -> set[str]:
-        """Union all sub-options for active context flags + always-visible."""
+    def _get_all_active_params(self, ctx: click.Context) -> set[str]:
+        """Find ALL option params that are set (groups + always-visible).
+
+        Used for prerequisite checking — prerequisites can reference
+        any active param including always-visible ones like ``service``.
+
+        Aliases: ``service_positional`` is treated as ``service`` so
+        that prerequisites like ``"sink": {"service"}`` work whether
+        the user typed ``--service X`` or just ``X`` as a positional.
+        """
+        active: set[str] = set()
+        check_names = set(self.smart_groups.keys()) | self.smart_always
+        for flag_name in check_names:
+            val = ctx.params.get(flag_name)
+            if val is True or (val is not None and val is not False and val != ()):
+                active.add(flag_name)
+        # Alias: positional service counts as "service"
+        if "service_positional" in active:
+            active.add("service")
+        return active
+
+    def _build_allowed_set(
+        self,
+        active_contexts: set[str],
+        all_active: set[str],
+    ) -> set[str]:
+        """Union all sub-options for active context flags + always-visible.
+
+        After building the union, removes any option whose prerequisites
+        (from ``smart_requires``) are not all satisfied by the full set
+        of active params (including always-visible options).
+        """
         allowed = set(self.smart_always)
         # The context flags themselves stay visible
         allowed.update(active_contexts)
         for ctx_flag in active_contexts:
             allowed.update(self.smart_groups.get(ctx_flag, set()))
+
+        # Enforce prerequisites: remove options whose required params
+        # are not all active
+        if self.smart_requires:
+            to_remove: set[str] = set()
+            for opt_name in allowed:
+                required = self.smart_requires.get(opt_name)
+                if required and not required.issubset(all_active):
+                    to_remove.add(opt_name)
+            allowed -= to_remove
+
         return allowed
 
     def _filter_to_entry_points(
         self,
         completions: list[CompletionItem],
+        all_active: set[str] | None = None,
     ) -> list[CompletionItem]:
-        """When no context is active, show always-visible + all entry-point flags."""
+        """When no context group is active, show always-visible + entry-point flags.
+
+        If ``smart_requires`` is configured, entry-point flags whose
+        prerequisites are not met are also hidden.
+        """
         # Entry points = all keys of smart_groups + always-visible
         entry_points = set(self.smart_groups.keys()) | self.smart_always
+
+        # Remove entry-points whose prerequisites are not met
+        if self.smart_requires:
+            active = all_active or set()
+            entry_points = {
+                ep for ep in entry_points
+                if not self.smart_requires.get(ep)
+                or self.smart_requires[ep].issubset(active)
+            }
+
         return [c for c in completions if self._is_allowed(c.value, entry_points)]
 
     def _is_allowed(self, opt_str: str, allowed_names: set[str]) -> bool:
@@ -200,6 +284,39 @@ MANAGE_SERVICE_ALWAYS: set[str] = {
     "service", "service_positional", "server",
 }
 
+# Hierarchical prerequisites for manage-service.
+# An option only appears if ALL its prerequisites are active.
+#
+# Hierarchy:
+#   service → sink → sink_table → column template / transform ops
+#   service → inspect, add_source_table, etc.
+#   sink → add_sink_table, remove_sink_table, sink_table, ...
+#   sink_table → add_column_template, remove_column_template, ...
+#
+MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
+    # ── Sink qualifier requires service ────────────────────────
+    # Either --service or positional service_positional satisfies
+    # this — see _check_prerequisites() which treats them as aliases.
+    "sink": {"service"},
+    # ── Sink actions require --sink ────────────────────────────
+    "add_sink_table": {"sink"},
+    "remove_sink_table": {"sink"},
+    "sink_table": {"sink"},
+    "update_schema": {"sink"},
+    "add_custom_sink_table": {"sink"},
+    "modify_custom_table": {"sink"},
+    # ── Sink-table actions require --sink-table ────────────────
+    "add_column_template": {"sink_table"},
+    "remove_column_template": {"sink_table"},
+    "list_column_templates": {"sink_table"},
+    "add_transform": {"sink_table"},
+    "remove_transform": {"sink_table"},
+    "list_transforms": {"sink_table"},
+    # ── Column template details require --add-column-template ──
+    "column_name": {"add_column_template"},
+    "value": {"add_column_template"},
+}
+
 
 # manage-source-groups: context flag → sub-options
 MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
@@ -233,6 +350,8 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
 
 MANAGE_SOURCE_GROUPS_ALWAYS: set[str] = set()
 
+MANAGE_SOURCE_GROUPS_REQUIRES: dict[str, set[str]] = {}
+
 
 # manage-sink-groups: context flag → sub-options
 MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
@@ -262,3 +381,5 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
 }
 
 MANAGE_SINK_GROUPS_ALWAYS: set[str] = set()
+
+MANAGE_SINK_GROUPS_REQUIRES: dict[str, set[str]] = {}

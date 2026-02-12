@@ -513,9 +513,9 @@ class TestCliManageServiceCompletions:
     def test_sink_table_flag_visible(
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        """--sink-table visible with --add-column-template context."""
+        """--sink-table visible with --sink + --add-column-template context."""
         result = run_cdc_completion(
-            "cdc manage-service --add-column-template tmpl --sink-"
+            "cdc manage-service --sink asma --add-column-template tmpl --sink-"
         )
         out = result.stdout
         assert "--sink-table" in out
