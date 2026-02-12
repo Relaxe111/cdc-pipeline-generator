@@ -32,6 +32,13 @@ def _create_project(
     with_sink: bool = False,
 ) -> None:
     """Create minimal project structure."""
+    # Create docker-compose.yml to satisfy project root detection
+    (root / "docker-compose.yml").write_text(
+        "services:\n"
+        "  dev:\n"
+        "    image: busybox\n"
+    )
+
     services_dir = root / "services"
     services_dir.mkdir(exist_ok=True)
 
@@ -305,30 +312,195 @@ class TestCliSinkRemoveTable:
 
 
 class TestCliValidateConfig:
-    """CLI e2e: --validate-config."""
+    """Validation config tests - unit tests calling validation functions directly."""
 
-    def test_validate_config(
-        self, run_cdc: RunCdc, isolated_project: Path,
-    ) -> None:
-        _create_project(isolated_project)
-        # Rewrite with complete config that passes validation
-        sf = isolated_project / "services" / "proxy.yaml"
-        sf.write_text(
-            "service: proxy\n"
-            "server_group: asma\n"
-            "mode: db-shared\n"
-            "shared:\n"
-            "  source_tables:\n"
-            "    - schema: public\n"
+    def test_validate_config_new_format(self, tmp_path: Path) -> None:
+        """Test validation with new simplified format."""
+        # Setup project structure
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    validation_database: directory_dev\n"
+            "    tables:\n"
+            "      public.users:\n"
+            "        include_columns:\n"
+            "        - id\n"
+            "        - name\n"
+            "  sinks:\n"
+            "    sink_asma.proxy:\n"
             "      tables:\n"
-            "        - name: queries\n"
-            "          primary_key: id\n"
+            "        public.dir_users:\n"
+            "          target_exists: true\n"
+            "          from: public.users\n"
+            "          replicate_structure: true\n"
         )
-        result = run_cdc(
-            "manage-service", "--service", "proxy",
-            "--validate-config",
+        
+        # Change to project dir
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+            result = validate_service_config("directory")
+            assert result is True
+        finally:
+            os.chdir(original_cwd)
+
+    def test_validate_config_missing_source(self, tmp_path: Path) -> None:
+        """Test validation fails when source section is missing."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
         )
-        assert result.returncode == 0
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    chat:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "chat.yaml").write_text(
+            "chat:\n"
+            "  sinks: {}\n"  # Missing source section
+        )
+        
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+            result = validate_service_config("chat")
+            assert result is False
+        finally:
+            os.chdir(original_cwd)
+
+    def test_validate_config_empty_tables(self, tmp_path: Path) -> None:
+        """Test validation warns when no tables defined."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    calendar:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "calendar.yaml").write_text(
+            "calendar:\n"
+            "  source:\n"
+            "    validation_database: calendar_dev\n"
+            "    tables: {}\n"
+        )
+        
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+            # Should pass with warnings (empty tables is allowed)
+            result = validate_service_config("calendar")
+            assert result is True
+        finally:
+            os.chdir(original_cwd)
+
+    def test_validate_config_invalid_sink_table(self, tmp_path: Path) -> None:
+        """Test validation catches missing 'from' field in sink tables."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    auth:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "auth.yaml").write_text(
+            "auth:\n"
+            "  source:\n"
+            "    validation_database: auth_dev\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.proxy:\n"
+            "      tables:\n"
+            "        public.auth_users:\n"
+            "          target_exists: true\n"
+            # Missing 'from' field
+        )
+        
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+            result = validate_service_config("auth")
+            assert result is False
+        finally:
+            os.chdir(original_cwd)
+
+    def test_validate_all_services(self, tmp_path: Path) -> None:
+        """Test validation of all services when no service specified."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    service1:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "    service2:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "service1.yaml").write_text(
+            "service1:\n"
+            "  source:\n"
+            "    validation_database: s1_dev\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+        )
+        (tmp_path / "services" / "service2.yaml").write_text(
+            "service2:\n"
+            "  source:\n"
+            "    validation_database: s2_dev\n"
+            "    tables:\n"
+            "      public.orders: {}\n"
+        )
+        
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.cli.service_handlers_validation import handle_validate_config
+            import argparse
+            args = argparse.Namespace(service=None, all=False, schema=None, env='dev')
+            result = handle_validate_config(args)
+            # Both services are valid
+            assert result == 0
+        finally:
+            os.chdir(original_cwd)
 
 
 class TestCliValidateHierarchy:

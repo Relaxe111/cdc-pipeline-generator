@@ -66,6 +66,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "save": False,
         "server": None,
         "create_service": None,
+        "validate_config": False,
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)

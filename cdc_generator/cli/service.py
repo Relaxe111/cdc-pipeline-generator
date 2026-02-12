@@ -645,6 +645,10 @@ def _auto_detect_service(
         args.service = service_files[0].stem
         print_info(f"Auto-detected service: {args.service}")
     elif len(service_files) > 1 and not args.create_service:
+        # Allow --validate-config to run on all services
+        if args.validate_config:
+            return args
+        
         available = ", ".join(
             f.stem for f in sorted(service_files)
         )
@@ -668,17 +672,19 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     if args.create_service:
         return handle_create_service(args)
 
+    # Special case: --validate-config can run without --service (validates all)
+    if args.validate_config:
+        return handle_validate_config(args)
+
     if not args.service:
         return None
 
     validators: dict[str, bool] = {
-        "validate_config": args.validate_config,
         "validate_hierarchy": args.validate_hierarchy,
         "validate_bloblang": args.validate_bloblang,
         "generate_validation": args.generate_validation,
     }
     handlers = {
-        "validate_config": handle_validate_config,
         "validate_hierarchy": handle_validate_hierarchy,
         "validate_bloblang": handle_validate_bloblang,
         "generate_validation": handle_generate_validation,

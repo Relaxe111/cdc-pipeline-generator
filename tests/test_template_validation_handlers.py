@@ -474,18 +474,15 @@ class TestHandleValidateConfig:
     def test_valid_service(
         self, project_dir: Path,
     ) -> None:
-        """Returns 0 for valid config with all required fields."""
+        """Returns 0 for valid config with new format."""
         sf = project_dir / "services" / "proxy.yaml"
         sf.write_text(
-            "service: proxy\n"
-            "server_group: asma\n"
-            "mode: db-shared\n"
-            "shared:\n"
-            "  source_tables:\n"
-            "    - schema: public\n"
-            "      tables:\n"
-            "        - name: queries\n"
-            "          primary_key: id\n"
+            "proxy:\n"
+            "  source:\n"
+            "    validation_database: proxy_dev\n"
+            "    tables:\n"
+            "      public.queries:\n"
+            "        primary_key: id\n"
         )
         args = _ns()
         result = handle_validate_config(args)
