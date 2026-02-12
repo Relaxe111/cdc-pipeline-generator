@@ -522,11 +522,13 @@ def validate_column_template(
         )
 
     # Validate each referenced column exists
+    source_label = f"{source_schema.schema_name}.{source_schema.table_name}"
     for col in referenced_columns:
         if col not in source_schema.columns:
             errors.append(
-                f"Template '{template_key}' references non-existent column '{col}'. "
-                + f"Available: {', '.join(sorted(source_schema.columns.keys()))}"
+                f"Template '{template_key}' references column '{col}' "
+                + f"which does not exist in source table '{source_label}'. "
+                + f"Available columns: {', '.join(sorted(source_schema.columns.keys()))}"
             )
 
     return ValidationResult(
@@ -589,7 +591,8 @@ def validate_transform_rule(
             if col not in source_schema.columns:
                 errors.append(
                     f"Transform '{rule_key}' condition[{idx}].when "
-                    + f"references non-existent column '{col}'"
+                    + f"references column '{col}' which does not exist "
+                    + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
                 )
 
         # Check 'value' expression if present
@@ -603,7 +606,8 @@ def validate_transform_rule(
                 if col not in source_schema.columns:
                     errors.append(
                         f"Transform '{rule_key}' condition[{idx}].value "
-                        + f"references non-existent column '{col}'"
+                        + f"references column '{col}' which does not exist "
+                        + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
                     )
 
     # Check default_value if present
@@ -617,7 +621,8 @@ def validate_transform_rule(
             if col not in source_schema.columns:
                 errors.append(
                     f"Transform '{rule_key}' default_value "
-                    + f"references non-existent column '{col}'"
+                    + f"references column '{col}' which does not exist "
+                    + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
                 )
 
     return ValidationResult(
