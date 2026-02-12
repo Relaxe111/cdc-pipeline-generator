@@ -249,6 +249,34 @@ function __cdc_complete_include_sink_columns --description "Complete columns for
     end
 end
 
+function __cdc_complete_available_tables --description "Complete available tables from service-schemas"
+    set -l service_name (__cdc_get_service_name)
+    if test -n "$service_name"
+        python3 -m cdc_generator.helpers.autocompletions --list-tables "$service_name" 2>/dev/null
+    end
+end
+
+function __cdc_complete_source_tables --description "Complete existing source tables in service"
+    set -l service_name (__cdc_get_service_name)
+    if test -n "$service_name"
+        python3 -m cdc_generator.helpers.autocompletions --list-source-tables "$service_name" 2>/dev/null
+    end
+end
+
+function __cdc_complete_sink_keys --description "Complete sink keys for current service"
+    set -l service_name (__cdc_get_service_name)
+    if test -n "$service_name"
+        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys "$service_name" 2>/dev/null
+    end
+end
+
+function __cdc_complete_schemas --description "Complete schemas for current service"
+    set -l service_name (__cdc_get_service_name)
+    if test -n "$service_name"
+        python3 -m cdc_generator.helpers.autocompletions --list-schemas "$service_name" 2>/dev/null
+    end
+end
+
 # Main command description
 complete -c cdc -f -d "CDC Pipeline Management CLI"
 
@@ -347,48 +375,23 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l create-servic
 )"
 
 # Dynamic table completion - lists available tables from service-schemas/{service}/{schema}/{TableName}.yaml
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-table -d "Add single table to service (schema.table)" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-tables \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-table -d "Add single table to service (schema.table)" -r -f -a "(__cdc_complete_available_tables)"
 
 # Completion for --list-source-tables (only when service is available)
 complete -c cdc -n "__fish_seen_subcommand_from manage-service; and __cdc_has_service" -l list-source-tables -d "List all source tables in service"
 
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-source-tables -d "Add multiple tables (space-separated)" -r
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-table -d "Remove table from service" -r -f -a "(__cdc_complete_source_tables)"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect -d "Inspect database schema and list tables"
 
 # --source-table: Dynamic completion from existing source tables in service YAML
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l source-table -d "Manage existing source table (use with --track-columns/--ignore-columns)" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l source-table -d "Manage existing source table (use with --track-columns/--ignore-columns)" -r -f -a "(__cdc_complete_source_tables)"
 
 # --inspect-sink: Dynamic completion from service's existing sinks
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect-sink -d "Inspect sink database schema" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l inspect-sink -d "Inspect sink database schema" -r -f -a "(__cdc_complete_sink_keys)"
 
 # Dynamic schema completion - lists schemas from source-groups.yaml for the current service
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-schemas \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l schema -d "Database schema to inspect or filter" -r -f -a "(__cdc_complete_schemas)"
 
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l save -d "Save detailed table schemas to YAML"
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l generate-validation -d "Generate JSON Schema for validation"
@@ -415,20 +418,10 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l add-sink -d "
 )"
 
 # --remove-sink: Dynamic completion from service's existing sinks
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-sink -d "Remove sink destination" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l remove-sink -d "Remove sink destination" -r -f -a "(__cdc_complete_sink_keys)"
 
 # --sink: Select existing sink for table operations
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l sink -d "Target sink for table operations (sink_group.target_service)" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-sink-keys \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l sink -d "Target sink for table operations (sink_group.target_service)" -r -f -a "(__cdc_complete_sink_keys)"
 
 # --add-sink-table: Dynamic completion from sink's target service tables (service-schemas)
 # Reads --sink from command line; if not specified, auto-defaults when service has only one sink
@@ -444,12 +437,7 @@ complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target -d "Ta
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l target-exists -d "Table exists in target? (true=map, false=autocreate)" -r -f -a "true false"
 
 # --from: Dynamic completion from service source tables (for explicit source reference)
-complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l from -d "Source table reference (defaults to sink table name)" -r -f -a "(
-    set -l service_name (__cdc_get_service_name)
-    if test -n \"$service_name\"
-        python3 -m cdc_generator.helpers.autocompletions --list-source-tables \"$service_name\" 2>/dev/null
-    end
-)"
+complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l from -d "Source table reference (defaults to sink table name)" -r -f -a "(__cdc_complete_source_tables)"
 
 # --replicate-structure: Boolean flag for auto-generating sink table DDL
 complete -c cdc -n "__fish_seen_subcommand_from manage-service" -l replicate-structure -d "Auto-generate sink table DDL from source schema"
