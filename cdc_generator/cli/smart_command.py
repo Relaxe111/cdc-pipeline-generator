@@ -191,11 +191,13 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "add_custom_sink_table": {"sink", "column"},
     # ── Modify custom table ────────────────────────────────────
     "modify_custom_table": {"sink", "add_column", "remove_column"},
+    # ── Create service (standalone action) ─────────────────────
+    "create_service": set(),
 }
 
 # Options always shown for manage-service
 MANAGE_SERVICE_ALWAYS: set[str] = {
-    "service", "service_positional", "create_service", "server",
+    "service", "service_positional", "server",
 }
 
 
