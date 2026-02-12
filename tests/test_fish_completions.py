@@ -580,6 +580,30 @@ class TestSmartCompletion:
         # create sub-options hidden
         assert "--source-group" not in opts
 
+    # -- --sink as qualifier context -----------------------------------------
+
+    def test_sink_qualifier_narrows_to_actions(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --sink sink_asma.proxy --"
+        )
+        assert "--add-sink-table" in opts
+        assert "--remove-sink-table" in opts
+        assert "--sink-table" in opts
+        assert "--update-schema" in opts
+        # Unrelated entry-points hidden
+        assert "--inspect" not in opts
+        assert "--add-source-table" not in opts
+        assert "--validate-config" not in opts
+
+    def test_sink_qualifier_plus_action(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --sink asma --add-sink-table pub.A --"
+        )
+        # Union: sink actions + add_sink_table sub-options
+        assert "--target" in opts
+        assert "--map-column" in opts
+        assert "--sink-table" in opts
+
     # -- non-smart commands unaffected ----------------------------------------
 
     def test_non_smart_command_unchanged(self) -> None:

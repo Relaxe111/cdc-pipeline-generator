@@ -154,6 +154,11 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "remove_sink": set(),
     "list_sinks": set(),
     "validate_sinks": set(),
+    # ── Sink qualifier (--sink narrows to sink actions) ────────
+    "sink": {
+        "add_sink_table", "remove_sink_table", "sink_table",
+        "update_schema", "add_custom_sink_table", "modify_custom_table",
+    },
     # ── Add sink table (requires --sink) ───────────────────────
     "add_sink_table": {
         "sink", "from_table", "target", "target_exists",
