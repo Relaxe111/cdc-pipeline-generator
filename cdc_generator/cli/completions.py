@@ -51,11 +51,30 @@ def _get_param(ctx: click.Context, name: str) -> str:
     return str(val)
 
 
+def _get_service(ctx: click.Context) -> str:
+    """Get service name from --service flag or positional argument.
+
+    manage-service supports both ``--service directory`` and the shorthand
+    ``cdc manage-service directory``.  With ``allow_extra_args=True``,
+    Click puts the positional word into ``ctx.args`` (not ``ctx.params``).
+    We pick the first non-flag token from ``ctx.args`` as the service name.
+    """
+    svc = _get_param(ctx, "service")
+    if not svc:
+        svc = _get_param(ctx, "service_positional")
+    if not svc and ctx.args:
+        # First non-flag token in extra args is the positional service name
+        for arg in ctx.args:
+            if not arg.startswith("-"):
+                return arg
+    return svc
+
+
 def _get_sink_key_with_default(ctx: click.Context) -> str:
     """Get --sink value, falling back to auto-default for single-sink services."""
     sink_key = _get_param(ctx, "sink")
     if not sink_key:
-        service = _get_param(ctx, "service")
+        service = _get_service(ctx)
         if service:
             from cdc_generator.helpers.autocompletions.sinks import (
                 get_default_sink_for_service,
@@ -226,7 +245,7 @@ def complete_available_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with available tables from service-schemas."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     if not service:
         return []
 
@@ -243,7 +262,7 @@ def complete_source_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with existing source tables in service YAML."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     if not service:
         return []
 
@@ -263,7 +282,7 @@ def complete_sink_keys(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with sink keys for current service."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     if not service:
         return []
 
@@ -283,7 +302,7 @@ def complete_schemas(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with schemas for current service."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     if not service:
         return []
 
@@ -303,7 +322,7 @@ def complete_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for a service table (needs --source-table or --add-source-table)."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     table_spec = _get_table_spec(ctx)
     if not service or not table_spec:
         return []
@@ -334,7 +353,7 @@ def complete_sink_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete sink tables for current service and sink."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     if not service or not sink_key:
         return []
@@ -355,7 +374,7 @@ def complete_add_sink_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete tables available to add to a sink."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_param(ctx, "sink")
     if not sink_key and service:
         from cdc_generator.helpers.autocompletions.sinks import (
@@ -384,7 +403,7 @@ def complete_remove_sink_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete tables to remove from a sink."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     if not service or not sink_key:
         return []
@@ -405,7 +424,7 @@ def complete_target_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete target tables for a sink."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_param(ctx, "sink")
     if not service or not sink_key:
         return []
@@ -452,7 +471,7 @@ def complete_templates_on_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete column templates applied to a sink table."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     sink_table = _get_param(ctx, "sink_table")
     if not service or not sink_key or not sink_table:
@@ -476,7 +495,7 @@ def complete_transforms_on_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete transforms applied to a sink table."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     sink_table = _get_param(ctx, "sink_table")
     if not service or not sink_key or not sink_table:
@@ -500,7 +519,7 @@ def complete_map_column(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete --map-column args (source columns context-aware)."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_param(ctx, "sink")
     sink_table = _get_param(ctx, "sink_table")
     target_table = _get_param(ctx, "target")
@@ -554,7 +573,7 @@ def complete_include_sink_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for --include-sink-columns (from --add-sink-table)."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     table_spec = _get_param(ctx, "add_sink_table")
     if not service or not table_spec:
         return []
@@ -585,7 +604,7 @@ def complete_custom_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete custom tables for a sink."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     if not service or not sink_key:
         return []
@@ -606,7 +625,7 @@ def complete_custom_table_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for a custom table."""
-    service = _get_param(ctx, "service")
+    service = _get_service(ctx)
     sink_key = _get_sink_key_with_default(ctx)
     table_key = _get_param(ctx, "modify_custom_table")
     if not service or not sink_key or not table_key:
@@ -669,6 +688,6 @@ def complete_sink_group_context_aware(
 
     if add_server or remove_server:
         return complete_non_inherited_sink_group_names(
-            ctx, param, incomplete
+            ctx, _param, incomplete
         )
-    return complete_sink_group_names(ctx, param, incomplete)
+    return complete_sink_group_names(ctx, _param, incomplete)
