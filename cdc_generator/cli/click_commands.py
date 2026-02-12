@@ -6,6 +6,16 @@ argument parsing is still done by the existing argparse handlers.
 
 The commands use ``allow_extra_args=True`` and ``ignore_unknown_options=True``
 so Click doesn't reject args it doesn't know about (argparse handles that).
+
+Smart completion branching
+--------------------------
+Commands that use ``SmartCommand`` (via ``cls=SmartCommand``) only show
+options relevant to what the user has already typed.  For example, once
+``--inspect`` is on the command line, only ``--schema``, ``--all``,
+``--save``, and ``--env`` are offered — not the full 40+ option list.
+
+The branching rules live in ``smart_command.py`` and are passed as
+``smart_groups`` to each command.
 """
 
 from __future__ import annotations
@@ -44,6 +54,15 @@ from cdc_generator.cli.completions import (
     complete_transform_rules,
     complete_transforms_on_table,
 )
+from cdc_generator.cli.smart_command import (
+    MANAGE_SERVICE_ALWAYS,
+    MANAGE_SERVICE_GROUPS,
+    MANAGE_SINK_GROUPS_ALWAYS,
+    MANAGE_SINK_GROUPS_GROUPS,
+    MANAGE_SOURCE_GROUPS_ALWAYS,
+    MANAGE_SOURCE_GROUPS_GROUPS,
+    SmartCommand,
+)
 
 # Shared context settings for all passthrough commands
 _PASSTHROUGH_CTX: dict[str, object] = {
@@ -53,11 +72,12 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 
 
 # ============================================================================
-# manage-service
-# ============================================================================
 
 @click.command(
     name="manage-service",
+    cls=SmartCommand,
+    smart_groups=MANAGE_SERVICE_GROUPS,
+    smart_always=MANAGE_SERVICE_ALWAYS,
     help="Manage CDC service definitions",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
@@ -182,6 +202,9 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 @click.command(
     name="manage-source-groups",
+    cls=SmartCommand,
+    smart_groups=MANAGE_SOURCE_GROUPS_GROUPS,
+    smart_always=MANAGE_SOURCE_GROUPS_ALWAYS,
     help="Manage source groups configuration (source-groups.yaml)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
@@ -269,6 +292,9 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 @click.command(
     name="manage-sink-groups",
+    cls=SmartCommand,
+    smart_groups=MANAGE_SINK_GROUPS_GROUPS,
+    smart_always=MANAGE_SINK_GROUPS_ALWAYS,
     help="Manage sink groups configuration (sink-groups.yaml)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,

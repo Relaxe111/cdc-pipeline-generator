@@ -212,6 +212,8 @@ class TestSourceTableCompletions:
         self,
         run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        """--track-columns is offered as a completion for manage-service."""
-        result = run_cdc_completion("cdc manage-service --track-")
+        """--track-columns appears with --source-table context."""
+        result = run_cdc_completion(
+            "cdc manage-service --source-table Actor --track-"
+        )
         assert "track-columns" in result.stdout

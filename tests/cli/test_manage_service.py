@@ -503,16 +503,29 @@ class TestCliManageServiceCompletions:
     def test_map_column_flag_visible(
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        """--map-column flag appears in manage-service completions."""
-        result = run_cdc_completion("cdc manage-service --map-")
+        """--map-column appears after --add-sink-table context."""
+        result = run_cdc_completion(
+            "cdc manage-service --add-sink-table pub.Actor --map-"
+        )
         out = result.stdout
         assert "--map-column" in out
 
     def test_sink_table_flag_visible(
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        """--sink-table flag appears in manage-service completions."""
-        result = run_cdc_completion("cdc manage-service --sink-")
+        """--sink-table visible with --add-column-template context."""
+        result = run_cdc_completion(
+            "cdc manage-service --add-column-template tmpl --sink-"
+        )
         out = result.stdout
         assert "--sink-table" in out
+
+    def test_sink_schema_flag_visible(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--sink-schema visible with --add-sink-table context."""
+        result = run_cdc_completion(
+            "cdc manage-service --add-sink-table pub.Actor --sink-"
+        )
+        out = result.stdout
         assert "--sink-schema" in out

@@ -417,3 +417,172 @@ class TestShellCompleteCallbacksWired:
             assert self._has_shell_complete(cmd, opt), (
                 f"manage-column-templates {opt} missing shell_complete callback"
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Smart completion (context-aware option filtering)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSmartCompletion:
+    """SmartCommand filters completions based on active context flags.
+
+    When no context flag is set the user sees only entry-point flags
+    (+ always-visible options). Once a context flag is present, only
+    its sub-options (+ always-visible) are shown.
+    """
+
+    @staticmethod
+    def _complete(partial_cmd: str) -> list[str]:
+        """Return completion values for *partial_cmd* via Click API."""
+        import shlex
+
+        from click.shell_completion import ShellComplete
+
+        cli = _get_click_cli()
+        parts = shlex.split(partial_cmd)
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+        incomplete = parts.pop() if parts else ""
+        comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
+        return [c.value for c in comp.get_completions(parts, incomplete)]
+
+    # -- manage-service: entry-point filtering --------------------------------
+
+    def test_entry_points_include_service(self) -> None:
+        assert "--service" in self._complete("cdc manage-service --")
+
+    def test_entry_points_include_context_flags(self) -> None:
+        opts = self._complete("cdc manage-service --")
+        assert "--inspect" in opts
+        assert "--add-source-table" in opts
+        assert "--add-sink-table" in opts
+
+    def test_entry_points_exclude_sub_options(self) -> None:
+        opts = self._complete("cdc manage-service --")
+        assert "--schema" not in opts  # sub-option of --inspect
+        assert "--primary-key" not in opts  # sub-option of --add-source-table
+        assert "--map-column" not in opts  # sub-option of --add-sink-table
+
+    # -- manage-service: context-filtered options -----------------------------
+
+    def test_inspect_context_shows_sub_options(self) -> None:
+        opts = self._complete("cdc manage-service --inspect --")
+        assert "--schema" in opts
+        assert "--save" in opts
+        assert "--env" in opts
+
+    def test_inspect_context_hides_unrelated(self) -> None:
+        opts = self._complete("cdc manage-service --inspect --")
+        assert "--primary-key" not in opts
+        assert "--map-column" not in opts
+
+    def test_add_source_table_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --add-source-table Actor --"
+        )
+        assert "--primary-key" in opts
+        assert "--schema" in opts
+        assert "--map-column" not in opts
+
+    def test_add_sink_table_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --add-sink-table pub.Actor --"
+        )
+        assert "--sink" in opts
+        assert "--target" in opts
+        assert "--map-column" in opts
+        assert "--primary-key" not in opts
+
+    def test_source_table_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --source-table Actor --"
+        )
+        assert "--ignore-columns" in opts
+        assert "--track-columns" in opts
+
+    def test_modify_custom_table_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --modify-custom-table tbl --"
+        )
+        assert "--add-column" in opts
+        assert "--remove-column" in opts
+
+    # -- multi-context union --------------------------------------------------
+
+    def test_multiple_contexts_union(self) -> None:
+        opts = self._complete(
+            "cdc manage-service --inspect --add-source-table Actor --"
+        )
+        # Union of inspect + add_source_table sub-options
+        assert "--schema" in opts
+        assert "--save" in opts
+        assert "--primary-key" in opts
+
+    # -- always-visible options persist in context ----------------------------
+
+    def test_always_visible_in_context(self) -> None:
+        opts = self._complete("cdc manage-service --inspect --")
+        assert "--service" in opts
+        assert "--server" in opts
+
+    # -- positional + smart completion ----------------------------------------
+
+    def test_positional_service_with_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-service directory --inspect --"
+        )
+        assert "--schema" in opts
+        assert "--primary-key" not in opts
+
+    # -- manage-source-groups -------------------------------------------------
+
+    def test_source_groups_entry_points(self) -> None:
+        opts = self._complete("cdc manage-source-groups --")
+        assert "--update" in opts
+        assert "--add-server" in opts
+        assert "--introspect-types" in opts
+
+    def test_source_groups_introspect_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-source-groups --introspect-types --"
+        )
+        assert "--server" in opts
+        # Should NOT show unrelated sub-options
+        assert "--host" not in opts
+
+    def test_source_groups_add_server_context(self) -> None:
+        opts = self._complete(
+            "cdc manage-source-groups --add-server srv1 --"
+        )
+        assert "--host" in opts
+        assert "--port" in opts
+        assert "--user" in opts
+
+    # -- manage-sink-groups ---------------------------------------------------
+
+    def test_sink_groups_entry_points(self) -> None:
+        opts = self._complete("cdc manage-sink-groups --")
+        assert "--create" in opts
+        assert "--inspect" in opts
+        assert "--add-server" in opts
+
+    def test_sink_groups_create_context(self) -> None:
+        opts = self._complete("cdc manage-sink-groups --create --")
+        assert "--source-group" in opts
+        assert "--type" in opts
+        assert "--pattern" in opts
+
+    def test_sink_groups_inspect_context(self) -> None:
+        opts = self._complete("cdc manage-sink-groups --inspect --")
+        assert "--server" in opts
+        assert "--include-pattern" in opts
+        # create sub-options hidden
+        assert "--source-group" not in opts
+
+    # -- non-smart commands unaffected ----------------------------------------
+
+    def test_non_smart_command_unchanged(self) -> None:
+        opts = self._complete("cdc generate --")
+        assert "--all" in opts
+        assert "--force" in opts

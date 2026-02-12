@@ -1,0 +1,257 @@
+"""SmartCommand — context-aware option filtering for shell completion.
+
+``SmartCommand`` is a ``click.Command`` subclass that filters the list
+of completions shown when the user presses tab.  Instead of dumping all
+40+ options at once, it shows only the options relevant to what has
+already been typed on the command line.
+
+The filtering is driven by two data structures:
+
+``smart_groups``
+    Maps a "context flag" (option param name) to the set of sub-option
+    param names that become visible when that flag is present.
+
+``smart_always``
+    A set of option param names that are always visible regardless of
+    context (e.g. ``service``, ``server``).
+
+Option-group definitions for each command live in this module as well
+so that click_commands.py stays focused on Click decorators.
+"""
+
+from __future__ import annotations
+
+import click
+from click.shell_completion import CompletionItem
+
+# ============================================================================
+# SmartCommand class
+# ============================================================================
+
+
+class SmartCommand(click.Command):
+    """A Click command that filters completion options based on context.
+
+    When the user presses tab, only options relevant to what they've
+    already typed are shown.  This is driven by two data structures
+    passed as keyword arguments to ``@click.command(cls=SmartCommand)``:
+
+    ``smart_groups``
+        Maps a "context flag" (option name without ``--``) to a set of
+        sub-option names (also without ``--``) that become visible when
+        that flag is present.  Example::
+
+            {"inspect": {"schema", "all", "save", "env"}}
+
+    ``smart_always``
+        A set of option names (without ``--``) that are always visible
+        regardless of context.  Typically the top-level entry-point
+        flags like ``service``, ``create_service``.
+
+    If neither attribute is set the command behaves like a normal
+    ``click.Command`` — all options are always shown.
+    """
+
+    smart_groups: dict[str, set[str]]
+    smart_always: set[str]
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self.smart_groups = kwargs.pop("smart_groups", {})  # type: ignore[arg-type]
+        self.smart_always = kwargs.pop("smart_always", set())  # type: ignore[arg-type]
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+
+    def shell_complete(
+        self,
+        ctx: click.Context,
+        incomplete: str,
+    ) -> list[CompletionItem]:
+        """Override to filter options based on already-typed context flags."""
+        # If no smart groups defined, fall back to default behavior
+        if not self.smart_groups:
+            return super().shell_complete(ctx, incomplete)
+
+        # Get all default completions from Click
+        all_completions = super().shell_complete(ctx, incomplete)
+
+        # Determine which context flags are active
+        active_contexts = self._get_active_contexts(ctx)
+
+        # If no context flags are active, show only "always" + entry-point options
+        if not active_contexts:
+            return self._filter_to_entry_points(all_completions)
+
+        # Build the set of allowed option names based on active contexts
+        allowed = self._build_allowed_set(active_contexts)
+
+        return [c for c in all_completions if self._is_allowed(c.value, allowed)]
+
+    def _get_active_contexts(self, ctx: click.Context) -> set[str]:
+        """Find which context flags are set in the current params."""
+        active: set[str] = set()
+        for flag_name in self.smart_groups:
+            val = ctx.params.get(flag_name)
+            # Flag is active if it's True (is_flag) or has a non-None value
+            if val is True or (val is not None and val is not False and val != ()):
+                active.add(flag_name)
+        return active
+
+    def _build_allowed_set(self, active_contexts: set[str]) -> set[str]:
+        """Union all sub-options for active context flags + always-visible."""
+        allowed = set(self.smart_always)
+        # The context flags themselves stay visible
+        allowed.update(active_contexts)
+        for ctx_flag in active_contexts:
+            allowed.update(self.smart_groups.get(ctx_flag, set()))
+        return allowed
+
+    def _filter_to_entry_points(
+        self,
+        completions: list[CompletionItem],
+    ) -> list[CompletionItem]:
+        """When no context is active, show always-visible + all entry-point flags."""
+        # Entry points = all keys of smart_groups + always-visible
+        entry_points = set(self.smart_groups.keys()) | self.smart_always
+        return [c for c in completions if self._is_allowed(c.value, entry_points)]
+
+    def _is_allowed(self, opt_str: str, allowed_names: set[str]) -> bool:
+        """Check if a completion value (e.g. '--add-sink-table') is in allowed set."""
+        if not opt_str.startswith("-"):
+            return True  # positional args always pass
+        # Normalize: --add-sink-table → add_sink_table
+        normalized = opt_str.lstrip("-").replace("-", "_")
+        return normalized in allowed_names
+
+
+# ============================================================================
+# Option group definitions for smart completion
+# ============================================================================
+
+
+# manage-service: context flag → sub-options that become relevant
+# Keys and values use underscore form (Click param names).
+MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
+    # ── Source inspection ──────────────────────────────────────
+    "inspect": {"schema", "all_flag", "save", "env", "server"},
+    # ── Sink inspection ────────────────────────────────────────
+    "inspect_sink": {"schema", "all_flag", "env"},
+    # ── Add single source table ────────────────────────────────
+    "add_source_table": {"primary_key", "schema"},
+    # ── Add multiple source tables ─────────────────────────────
+    "add_source_tables": {"primary_key"},
+    # ── Manage existing source table ───────────────────────────
+    "source_table": {"track_columns", "ignore_columns"},
+    # ── Remove source table (standalone) ───────────────────────
+    "remove_table": set(),
+    # ── List source tables (standalone) ────────────────────────
+    "list_source_tables": set(),
+    # ── Validation (standalone) ────────────────────────────────
+    "validate_config": set(),
+    "validate_hierarchy": set(),
+    "validate_bloblang": set(),
+    "generate_validation": set(),
+    # ── Sink lifecycle (standalone) ────────────────────────────
+    "add_sink": set(),
+    "remove_sink": set(),
+    "list_sinks": set(),
+    "validate_sinks": set(),
+    # ── Add sink table (requires --sink) ───────────────────────
+    "add_sink_table": {
+        "sink", "from_table", "target", "target_exists",
+        "target_schema", "sink_schema", "replicate_structure",
+        "map_column", "include_sink_columns",
+    },
+    # ── Remove sink table ──────────────────────────────────────
+    "remove_sink_table": {"sink"},
+    # ── Update sink table schema ───────────────────────────────
+    "update_schema": {"sink", "sink_table"},
+    # ── Sink table operations (--sink-table as context) ────────
+    "sink_table": {
+        "sink", "map_column", "add_column_template",
+        "remove_column_template", "list_column_templates",
+        "add_transform", "remove_transform", "list_transforms",
+        "column_name", "value", "skip_validation",
+    },
+    # ── Column templates ───────────────────────────────────────
+    "add_column_template": {
+        "sink", "sink_table", "column_name", "value", "skip_validation",
+    },
+    "remove_column_template": {"sink", "sink_table"},
+    "list_column_templates": {"sink", "sink_table"},
+    # ── Transforms ─────────────────────────────────────────────
+    "add_transform": {"sink", "sink_table", "skip_validation"},
+    "remove_transform": {"sink", "sink_table"},
+    "list_transforms": {"sink", "sink_table"},
+    "list_transform_rules": set(),
+    # ── Custom sink tables ─────────────────────────────────────
+    "add_custom_sink_table": {"sink", "column"},
+    # ── Modify custom table ────────────────────────────────────
+    "modify_custom_table": {"sink", "add_column", "remove_column"},
+}
+
+# Options always shown for manage-service
+MANAGE_SERVICE_ALWAYS: set[str] = {
+    "service", "service_positional", "create_service", "server",
+}
+
+
+# manage-source-groups: context flag → sub-options
+MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
+    "update": {"all_flag", "server"},
+    "info": set(),
+    "list_env_services": set(),
+    "add_to_ignore_list": set(),
+    "list_ignore_patterns": set(),
+    "add_to_schema_excludes": set(),
+    "list_schema_excludes": set(),
+    "add_env_mapping": set(),
+    "list_env_mappings": set(),
+    "add_server": {
+        "source_type", "host", "port", "user", "password",
+    },
+    "list_servers": set(),
+    "remove_server": set(),
+    "set_kafka_topology": set(),
+    "add_extraction_pattern": {
+        "env", "strip_suffixes", "description",
+    },
+    "set_extraction_pattern": set(),
+    "list_extraction_patterns": set(),
+    "remove_extraction_pattern": set(),
+    "introspect_types": {"server"},
+    "pattern": {
+        "source_type", "host", "port", "user", "password",
+        "extraction_pattern", "environment_aware",
+    },
+}
+
+MANAGE_SOURCE_GROUPS_ALWAYS: set[str] = set()
+
+
+# manage-sink-groups: context flag → sub-options
+MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
+    "create": {
+        "source_group", "type", "pattern", "environment_aware",
+        "no_environment_aware", "for_source_group",
+    },
+    "add_new_sink_group": {
+        "type", "pattern", "environment_aware",
+        "no_environment_aware", "for_source_group",
+        "host", "port", "user", "password",
+    },
+    "list_flag": set(),
+    "info": set(),
+    "inspect": {"server", "include_pattern"},
+    "introspect_types": {"sink_group"},
+    "validate": set(),
+    "sink_group": {
+        "add_server", "remove_server",
+        "host", "port", "user", "password", "extraction_patterns",
+    },
+    "add_server": {
+        "sink_group", "host", "port", "user", "password",
+    },
+    "remove_server": {"sink_group"},
+    "remove": set(),
+}
+
+MANAGE_SINK_GROUPS_ALWAYS: set[str] = set()
