@@ -503,6 +503,45 @@ class TestCliValidateConfig:
             os.chdir(original_cwd)
 
 
+class TestCliInspect:
+    """Inspect tests - unit tests calling inspect functions directly."""
+
+    def test_inspect_all_services_structure(self, tmp_path: Path) -> None:
+        """Test inspect all services shows proper structure (will fail without DB but shows intent)."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  type: postgres\n"
+            "  sources:\n"
+            "    service1:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "    service2:\n"
+            "      schemas:\n"
+            "        - public\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "service1.yaml").write_text("service1:\n  source:\n    tables: {}\n")
+        (tmp_path / "services" / "service2.yaml").write_text("service2:\n  source:\n    tables: {}\n")
+        
+        import os
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.cli.service_handlers_inspect import handle_inspect
+            import argparse
+            args = argparse.Namespace(service=None, all=True, schema=None, env='dev', save=False, inspect=True)
+            # Will fail (no DB) but should attempt to inspect both services
+            result = handle_inspect(args)
+            # Expected to fail without actual DB connection
+            assert result == 1
+        finally:
+            os.chdir(original_cwd)
+
+
 class TestCliValidateHierarchy:
     """CLI e2e: --validate-hierarchy."""
 

@@ -6,6 +6,7 @@ from cdc_generator.helpers.helpers_logging import (
     Colors,
     print_error,
     print_header,
+    print_info,
     print_success,
     print_warning,
 )
@@ -124,7 +125,56 @@ def _schemas_for_shared(
 
 
 def handle_inspect(args: argparse.Namespace) -> int:
-    """Inspect database schema and list available tables."""
+    """Inspect database schema and list available tables.
+    
+    If args.service is None, inspects all services in services/ directory.
+    """
+    if args.service:
+        # Inspect single service
+        return _inspect_single_service(args)
+    
+    # Inspect all services
+    from cdc_generator.helpers.service_config import get_project_root
+    
+    services_dir = get_project_root() / "services"
+    if not services_dir.exists():
+        print_error("No services directory found")
+        return 1
+    
+    service_files = sorted(services_dir.glob("*.yaml"))
+    if not service_files:
+        print_error("No service files found in services/")
+        return 1
+    
+    print_info(f"Inspecting {len(service_files)} service(s)...\n")
+    
+    results: dict[str, bool] = {}
+    for service_file in service_files:
+        service_name = service_file.stem
+        print_info(f"{'=' * 80}")
+        args_copy = argparse.Namespace(**vars(args))
+        args_copy.service = service_name
+        results[service_name] = _inspect_single_service(args_copy) == 0
+        print()  # Blank line between services
+    
+    # Summary
+    print_info(f"{'=' * 80}")
+    print_info("Inspection Summary")
+    print_info(f"{'=' * 80}\n")
+    
+    passed = [s for s, ok in results.items() if ok]
+    failed = [s for s, ok in results.items() if not ok]
+    
+    if passed:
+        print_info(f"✓ Completed ({len(passed)}): {', '.join(passed)}")
+    if failed:
+        print_error(f"✗ Failed ({len(failed)}): {', '.join(failed)}")
+    
+    return 0 if all(results.values()) else 1
+
+
+def _inspect_single_service(args: argparse.Namespace) -> int:
+    """Inspect database schema for a single service."""
     db_type, server_group, server_groups_data = (
         _resolve_inspect_db_type(args.service)
     )

@@ -645,8 +645,8 @@ def _auto_detect_service(
         args.service = service_files[0].stem
         print_info(f"Auto-detected service: {args.service}")
     elif len(service_files) > 1 and not args.create_service:
-        # Allow --validate-config to run on all services
-        if args.validate_config:
+        # Allow these commands to run on all services
+        if args.validate_config or args.inspect:
             return args
         
         available = ", ".join(
@@ -698,10 +698,17 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
 
 def _dispatch_inspect(args: argparse.Namespace) -> int | None:
     """Handle inspect-related commands. None = not handled."""
+    # Special case: --inspect can run without --service (inspects all)
     if args.inspect:
         return handle_inspect(args)
+    
+    # inspect_sink requires a specific service
     if args.inspect_sink:
+        if not args.service:
+            print_error("--inspect-sink requires --service <name>")
+            return 1
         return handle_inspect_sink(args)
+    
     return None
 
 
