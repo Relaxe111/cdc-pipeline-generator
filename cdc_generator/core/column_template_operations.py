@@ -52,11 +52,14 @@ class ResolvedColumnTemplate:
     Attributes:
         template_key: Reference to column-templates.yaml key.
         name: Final column name (may be overridden from template default).
+        value: Final Bloblang expression (may be overridden from template default).
+            Can be a source-group reference like ``{asma.sources.*.customer_id}``.
         template: Resolved ColumnTemplate.
     """
 
     template_key: str
     name: str
+    value: str
     template: ColumnTemplate
 
 
@@ -121,6 +124,7 @@ def add_column_template(
     table_cfg: dict[str, object],
     template_key: str,
     name_override: str | None = None,
+    value_override: str | None = None,
     table_key: str | None = None,
 ) -> bool:
     """Add a column template reference to a sink table config.
@@ -129,6 +133,8 @@ def add_column_template(
         table_cfg: Sink table configuration dict (mutated in place).
         template_key: Template key from column-templates.yaml.
         name_override: Optional column name override.
+        value_override: Optional value override (Bloblang expression or
+            source-group reference like ``{asma.sources.*.customer_id}``).
         table_key: Optional table identifier for applies_to validation (schema.table).
 
     Returns:
@@ -160,13 +166,30 @@ def add_column_template(
     entry: dict[str, object] = {"template": template_key}
     if name_override is not None:
         entry["name"] = name_override
+    if value_override is not None:
+        # Validate source-group reference syntax (if applicable)
+        from cdc_generator.core.source_ref_resolver import (
+            is_source_ref,
+            parse_source_ref,
+        )
+
+        if is_source_ref(value_override):
+            ref = parse_source_ref(value_override)
+            if ref is None:
+                print_error(
+                    f"Invalid source-group reference: {value_override}\n"
+                    + "Expected format: {group.sources.*.key}"
+                )
+                return False
+        entry["value"] = value_override
 
     column_templates.append(entry)
 
     template = get_template(template_key)
     default_name = template.name if template else template_key
     final_name = name_override if name_override is not None else default_name
-    print_success(f"Added column template '{final_name}' (key: {template_key})")
+    value_info = f", value: {value_override}" if value_override else ""
+    print_success(f"Added column template '{final_name}' (key: {template_key}{value_info})")
     return True
 
 
@@ -428,9 +451,13 @@ def resolve_column_templates(
         name_override = entry.get("name")
         final_name = str(name_override) if isinstance(name_override, str) else template.name
 
+        value_override = entry.get("value")
+        final_value = str(value_override) if isinstance(value_override, str) else template.value
+
         result.append(ResolvedColumnTemplate(
             template_key=template_key,
             name=final_name,
+            value=final_value,
             template=template,
         ))
 

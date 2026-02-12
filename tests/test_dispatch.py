@@ -20,6 +20,7 @@ from cdc_generator.cli.service import (
     _dispatch_sink_conditional,
     _dispatch_source,
     _dispatch_validation,
+    _is_sink_context,
 )
 
 # ---------------------------------------------------------------------------
@@ -427,6 +428,51 @@ class TestDispatchSource:
         result = _dispatch_source(args)
         # Should dispatch source_table, not add
         assert result is not None
+
+    def test_source_table_redirects_to_sink_when_sink_flag(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """--source-table + --sink redirects to sink handler as --from."""
+        args = _full_ns(
+            source_table="public.users",
+            sink="sink_asma.chat",
+            add_sink_table=None,
+            target_exists="false",
+        )
+        result = _dispatch_source(args)
+        assert result is not None
+        # source_table should have been moved to from_table
+        assert args.from_table == "public.users"
+        assert args.source_table is None
+
+    def test_source_table_redirects_with_replicate_structure(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """--source-table + --replicate-structure redirects to sink."""
+        args = _full_ns(
+            source_table="public.users",
+            replicate_structure=True,
+            sink="sink_asma.chat",
+            sink_schema="chat",
+        )
+        result = _dispatch_source(args)
+        assert result is not None
+        assert args.from_table == "public.users"
+        assert args.source_table is None
+
+    def test_source_table_stays_source_without_sink_flags(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """--source-table without sink flags stays in source handler."""
+        args = _full_ns(
+            source_table="public.queries",
+            track_columns=["public.queries.status"],
+        )
+        result = _dispatch_source(args)
+        assert result is not None
+        # source_table should NOT have been moved
+        assert args.source_table == "public.queries"
+        assert args.from_table is None
 
 
 # ═══════════════════════════════════════════════════════════════════════════

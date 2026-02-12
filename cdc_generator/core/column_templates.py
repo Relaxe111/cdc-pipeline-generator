@@ -66,8 +66,14 @@ _cached_templates: dict[str, ColumnTemplate] | None = None
 _templates_file: Path | None = None
 
 
-def _get_templates_path() -> Path:
-    """Return the path to column-templates.yaml."""
+def get_templates_path() -> Path:
+    """Return the path to column-templates.yaml.
+
+    Respects any override set via ``set_templates_path()``.
+
+    Returns:
+        Path to the column-templates.yaml file.
+    """
     if _templates_file is not None:
         return _templates_file
     from cdc_generator.helpers.service_config import get_project_root
@@ -112,7 +118,8 @@ def _resolve_file_reference(value: str) -> tuple[str, str | None]:
 
     Example:
         "meta('table')" → ("meta('table')", None)
-        "file://service-schemas/bloblang/mapper.blobl" → ("<file content>", "service-schemas/bloblang/mapper.blobl")
+        "file://service-schemas/bloblang/mapper.blobl"
+            → ("<file content>", "service-schemas/...")
     """
     if not value.startswith("file://"):
         return value, None
@@ -188,7 +195,8 @@ def _parse_single_template(
     applies_to: list[str] | None = None
     if applies_to_raw is not None:
         if isinstance(applies_to_raw, list):
-            applies_to = [str(p) for p in applies_to_raw if p is not None]
+            items = cast(list[object], applies_to_raw)
+            applies_to = [str(p) for p in items if p is not None]
         elif isinstance(applies_to_raw, str):
             applies_to = [applies_to_raw]  # Convert single string to list
 
@@ -254,7 +262,7 @@ def get_templates() -> dict[str, ColumnTemplate]:
     """
     global _cached_templates  # noqa: PLW0603
     if _cached_templates is None:
-        path = _get_templates_path()
+        path = get_templates_path()
         _cached_templates = _load_all_templates(path)
     return _cached_templates
 

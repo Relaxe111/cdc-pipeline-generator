@@ -425,3 +425,75 @@ def list_custom_table_columns_for_autocomplete(
     columns_dict = cast(dict[str, Any], columns)
 
     return sorted(str(k) for k in columns_dict)
+
+
+def list_source_columns_for_sink_table(
+    service_name: str,
+    sink_key: str,
+    table_key: str,
+) -> list[str]:
+    """List source columns for a sink table (from the sink table's 'from' field).
+
+    Resolves the source table from the sink table's 'from' field, then loads
+    columns from service-schemas/{source_service}/{schema}/{table}.yaml.
+
+    Args:
+        service_name: Source service name.
+        sink_key: Sink key (e.g., 'sink_asma.proxy').
+        table_key: Sink table key (e.g., 'public.directory_user_name').
+
+    Returns:
+        List of source column names.
+
+    Example:
+        >>> list_source_columns_for_sink_table(
+        ...     'directory', 'sink_asma.proxy', 'public.directory_user_name',
+        ... )
+        ['brukerBrukerNavn', 'customer_id', 'email', 'user_id', ...]
+    """
+    tables = load_sink_tables_for_autocomplete(service_name, sink_key)
+    if tables is None:
+        return []
+
+    tbl_cfg = tables.get(table_key, {})
+    if not isinstance(tbl_cfg, dict):
+        return []
+    tbl_cfg_dict = cast(dict[str, Any], tbl_cfg)
+
+    # Resolve source table from 'from' field
+    from_table = tbl_cfg_dict.get('from')
+    if not isinstance(from_table, str):
+        # Fall back to table_key if no 'from' field
+        from_table = table_key
+
+    table_parts = from_table.split('.', 1)
+    if len(table_parts) != SCHEMA_TABLE_PARTS:
+        return []
+
+    schema, table = table_parts
+    schemas_dir = find_directory_upward('service-schemas')
+    table_file = (
+        schemas_dir / service_name / schema / f'{table}.yaml'
+        if schemas_dir else None
+    )
+    if not table_file or not table_file.is_file():
+        return []
+
+    try:
+        table_schema = load_yaml_file(table_file)
+        if not table_schema:
+            return []
+
+        columns = table_schema.get('columns', [])
+        return (
+            sorted(
+                str(col.get('name', ''))
+                for col in columns
+                if isinstance(col, dict) and col.get('name')
+            )
+            if isinstance(columns, list)
+            else []
+        )
+
+    except Exception:
+        return []

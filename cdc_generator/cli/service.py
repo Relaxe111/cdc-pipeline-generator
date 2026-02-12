@@ -38,6 +38,7 @@ from cdc_generator.cli.service_handlers import (
     handle_sink_add_table,
     handle_sink_list,
     handle_sink_map_column_error,
+    handle_sink_map_column_on_table,
     handle_sink_remove,
     handle_sink_remove_table,
     handle_sink_update_schema,
@@ -303,6 +304,15 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--value",
+        metavar="VALUE",
+        help=(
+            "Override column value when adding column template. "
+            + "Supports source-group references: "
+            + "{group.sources.*.key}"
+        ),
+    )
+    parser.add_argument(
         "--add-transform",
         metavar="RULE",
         help=(
@@ -346,6 +356,14 @@ def _build_parser() -> ServiceArgumentParser:
         description="Interactive CDC service management tool",
         epilog=_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Positional service name (shorthand for --service)
+    parser.add_argument(
+        "service_name",
+        nargs="?",
+        default=None,
+        help=argparse.SUPPRESS,
     )
 
     # Core args
@@ -633,7 +651,10 @@ def _auto_detect_service(
         print_error(
             f"Multiple services found: {available}"
         )
-        print_error("Please specify --service <name>")
+        print_error(
+            "Please specify: cdc manage-service <name>"
+            + " or --service <name>"
+        )
         return None
 
     return args
@@ -743,10 +764,26 @@ def _dispatch_sink_conditional(args: argparse.Namespace) -> int | None:
     if has_add_table and args.sink:
         return handle_sink_add_table(args)
 
-    if args.map_column and args.sink and not args.add_sink_table:
+    # --map-column on existing sink table (requires --sink-table)
+    if args.map_column and args.sink_table and not args.add_sink_table:
+        return handle_sink_map_column_on_table(args)
+
+    if args.map_column and not args.add_sink_table and not args.sink_table:
         return handle_sink_map_column_error()
 
     return None
+
+
+def _is_sink_context(args: argparse.Namespace) -> bool:
+    """Return True when args indicate a sink-table operation.
+
+    Detects when ``--source-table`` is used together with sink flags
+    like ``--add-sink-table``, ``--sink``, or ``--replicate-structure``.
+    """
+    has_add_sink = args.add_sink_table is not None
+    has_sink = args.sink is not None
+    has_replicate = hasattr(args, "replicate_structure") and args.replicate_structure
+    return has_sink or has_add_sink or has_replicate
 
 
 def _dispatch_source(args: argparse.Namespace) -> int | None:
@@ -755,6 +792,13 @@ def _dispatch_source(args: argparse.Namespace) -> int | None:
         return None
 
     if args.source_table:
+        # When --source-table is used alongside sink flags, treat it as
+        # --from (source reference for a sink table) and re-dispatch to
+        # the sink handler instead of the source-update handler.
+        if _is_sink_context(args):
+            args.from_table = args.source_table
+            args.source_table = None
+            return handle_sink_add_table(args)
         return handle_update_source_table(args)
 
     if args.add_source_tables:
@@ -797,6 +841,10 @@ def main() -> int:
     """Entry point for `cdc manage-service`."""
     parser = _build_parser()
     args = parser.parse_args()
+
+    # Merge positional service_name into --service
+    if args.service_name and not args.service:
+        args.service = args.service_name
 
     if args.create_service:
         args.service = args.create_service

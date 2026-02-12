@@ -47,6 +47,7 @@ from cdc_generator.helpers.autocompletions.sinks import (
     list_custom_tables_for_service_sink,
     list_sink_keys_for_service,
     list_sink_tables_for_service,
+    list_source_columns_for_sink_table,
     list_tables_for_sink_target,
     list_target_columns_for_sink_table,
     list_target_tables_for_sink,
@@ -194,6 +195,11 @@ _ARG_COMMANDS: dict[str, CompletionCommand] = {
         arg_count=2,
         arg_desc="service_name table_ref",
         handler=list_custom_table_columns_for_mapping,
+    ),
+    "--list-source-columns-for-sink-table": CompletionCommand(
+        arg_count=3,
+        arg_desc="service_name sink_key table_key",
+        handler=list_source_columns_for_sink_table,
     ),
 }
 

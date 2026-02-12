@@ -520,3 +520,64 @@ class TestHandleModifyCustomTable:
         )
         result = handle_modify_custom_table(args)
         assert result == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# handle_sink_remove_table — custom-table file cleanup
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestHandleSinkRemoveTableCleansUpFiles:
+    """Ensure remove-sink-table deletes the custom-table YAML file."""
+
+    def test_removes_custom_table_file(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Custom-table YAML is deleted when the sink table is removed."""
+        # Create custom-table file for chat target
+        ct_dir = project_dir / "service-schemas" / "chat" / "custom-tables"
+        ct_dir.mkdir(parents=True)
+        ct_file = ct_dir / "public.users.yaml"
+        ct_file.write_text("columns:\n  - name: id\n    type: integer\n")
+
+        args = _ns(sink="sink_asma.chat", remove_sink_table="public.users")
+        result = handle_sink_remove_table(args)
+
+        assert result == 0
+        assert not ct_file.exists(), "Custom-table YAML should be deleted"
+
+    def test_succeeds_without_custom_table_file(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Removal succeeds even when no custom-table file exists."""
+        args = _ns(sink="sink_asma.chat", remove_sink_table="public.users")
+        result = handle_sink_remove_table(args)
+
+        assert result == 0
+
+    def test_custom_table_file_with_slash_in_key(
+        self, project_dir: Path,
+    ) -> None:
+        """Table keys with '/' are converted to '_' in filename."""
+        sf = project_dir / "services" / "proxy.yaml"
+        sf.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.queries: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        myschema/mytable:\n"
+            "          target_exists: false\n"
+        )
+        ct_dir = project_dir / "service-schemas" / "chat" / "custom-tables"
+        ct_dir.mkdir(parents=True)
+        ct_file = ct_dir / "myschema_mytable.yaml"
+        ct_file.write_text("columns: []\n")
+
+        args = _ns(sink="sink_asma.chat", remove_sink_table="myschema/mytable")
+        result = handle_sink_remove_table(args)
+
+        assert result == 0
+        assert not ct_file.exists(), "File with slash→underscore should be deleted"

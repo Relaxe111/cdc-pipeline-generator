@@ -420,3 +420,20 @@ class TestCliManageServiceCompletions:
         result = run_cdc_completion("cdc manage-service --validate-")
         out = result.stdout
         assert "--validate-config" in out or "--validate-hierarchy" in out
+
+    def test_map_column_flag_visible(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--map-column flag appears in manage-service completions."""
+        result = run_cdc_completion("cdc manage-service --map-")
+        out = result.stdout
+        assert "--map-column" in out
+
+    def test_sink_table_flag_visible(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--sink-table flag appears in manage-service completions."""
+        result = run_cdc_completion("cdc manage-service --sink-")
+        out = result.stdout
+        assert "--sink-table" in out
+        assert "--sink-schema" in out

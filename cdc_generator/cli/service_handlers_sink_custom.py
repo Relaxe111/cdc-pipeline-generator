@@ -23,6 +23,9 @@ from cdc_generator.validators.manage_service.config import (
     SERVICE_SCHEMAS_DIR,
     save_service_config,
 )
+from cdc_generator.validators.manage_service.sink_operations import (
+    validate_pg_schema_name,
+)
 
 try:
     from cdc_generator.helpers.yaml_loader import yaml
@@ -362,6 +365,13 @@ def _validate_custom_table_inputs(
         return None
 
     schema_name, table_name = parts
+
+    # Validate schema name is a valid PostgreSQL identifier
+    schema_error = validate_pg_schema_name(schema_name)
+    if schema_error:
+        print_error(schema_error)
+        return None
+
     schema_file = (
         SERVICE_SCHEMAS_DIR / target_service / schema_name
         / f"{table_name}.yaml"

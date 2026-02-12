@@ -56,6 +56,12 @@ templates:
     not_null: true
     description: Deployment environment
     value: "${ENVIRONMENT}"
+  tenant_id:
+    name: _tenant_id
+    type: text
+    not_null: true
+    description: Tenant identifier
+    value: "${TENANT_ID}"
 """
     file_path = tmp_path / "column-templates.yaml"
     file_path.write_text(content)
@@ -149,6 +155,48 @@ class TestAddExtraColumn:
         result = add_column_template(table_cfg, "nonexistent")
         assert result is False
         assert "column_templates" not in table_cfg
+
+    def test_add_with_value_override(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_column_template(
+            table_cfg, "tenant_id", value_override='"hardcoded_tenant"',
+        )
+        assert result is True
+        cols = table_cfg["column_templates"]
+        assert isinstance(cols, list)
+        assert cols[0] == {
+            "template": "tenant_id",
+            "value": '"hardcoded_tenant"',
+        }
+
+    def test_add_with_source_ref_value(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_column_template(
+            table_cfg, "tenant_id",
+            value_override="{asma.sources.*.customer_id}",
+        )
+        assert result is True
+        cols = table_cfg["column_templates"]
+        assert isinstance(cols, list)
+        assert cols[0] == {
+            "template": "tenant_id",
+            "value": "{asma.sources.*.customer_id}",
+        }
+
+    def test_add_with_name_and_value_override(self, setup_templates: Path) -> None:
+        table_cfg = _make_table_cfg()
+        result = add_column_template(
+            table_cfg, "tenant_id", "my_tenant",
+            value_override="{asma.sources.*.customer_id}",
+        )
+        assert result is True
+        cols = table_cfg["column_templates"]
+        assert isinstance(cols, list)
+        assert cols[0] == {
+            "template": "tenant_id",
+            "name": "my_tenant",
+            "value": "{asma.sources.*.customer_id}",
+        }
 
 
 class TestRemoveExtraColumn:
@@ -293,9 +341,11 @@ class TestResolveExtraColumns:
         assert len(resolved) == 2
         assert resolved[0].template_key == "source_table"
         assert resolved[0].name == "_source_table"
+        assert resolved[0].value == 'meta("table")'
         assert resolved[0].template.column_type == "text"
         assert resolved[1].template_key == "environment"
         assert resolved[1].name == "deploy_env"  # name override
+        assert resolved[1].value == "${ENVIRONMENT}"
 
     def test_resolve_empty(self) -> None:
         table_cfg = _make_table_cfg()
@@ -312,6 +362,44 @@ class TestResolveExtraColumns:
         resolved = resolve_column_templates(table_cfg)
         assert len(resolved) == 1
         assert resolved[0].template_key == "source_table"
+
+    def test_resolve_with_value_override(self, setup_templates: Path) -> None:
+        """Value override replaces the template default value."""
+        table_cfg = _make_table_cfg()
+        add_column_template(
+            table_cfg, "tenant_id",
+            value_override="{asma.sources.*.customer_id}",
+        )
+        resolved = resolve_column_templates(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].template_key == "tenant_id"
+        assert resolved[0].name == "_tenant_id"
+        assert resolved[0].value == "{asma.sources.*.customer_id}"
+
+    def test_resolve_uses_template_default_value(self, setup_templates: Path) -> None:
+        """Without value override, template default is used."""
+        table_cfg = _make_table_cfg()
+        add_column_template(table_cfg, "tenant_id")
+        resolved = resolve_column_templates(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].value == "${TENANT_ID}"
+
+    def test_resolve_mixed_overrides(self, setup_templates: Path) -> None:
+        """Mix of name and value overrides."""
+        table_cfg = _make_table_cfg()
+        add_column_template(table_cfg, "source_table")
+        add_column_template(
+            table_cfg, "tenant_id", "my_tenant",
+            value_override='"literal_value"',
+        )
+        resolved = resolve_column_templates(table_cfg)
+        assert len(resolved) == 2
+        # First: no overrides
+        assert resolved[0].name == "_source_table"
+        assert resolved[0].value == 'meta("table")'
+        # Second: both overrides
+        assert resolved[1].name == "my_tenant"
+        assert resolved[1].value == '"literal_value"'
 
 
 class TestResolveTransforms:

@@ -103,6 +103,7 @@ def add_column_template_to_table(
     table_key: str,
     template_key: str,
     name_override: str | None = None,
+    value_override: str | None = None,
     skip_validation: bool = False,
 ) -> bool:
     """Add a column template reference to a sink table.
@@ -113,6 +114,8 @@ def add_column_template_to_table(
         table_key: Table key.
         template_key: Column template key from column-templates.yaml.
         name_override: Optional column name override.
+        value_override: Optional value override (Bloblang expression or
+            source-group reference like ``{asma.sources.*.key}``).
         skip_validation: Skip database schema validation (for migrations).
 
     Returns:
@@ -120,6 +123,26 @@ def add_column_template_to_table(
     """
     resolved = _resolve_table_config(service, sink_key, table_key)
     if resolved is None:
+        return False
+
+    config, table_cfg = resolved
+
+    # When target_exists=true, the table already exists in the sink database.
+    # Adding a column template without --column-name would try to create a
+    # new column (e.g. _tenant_id) that doesn't exist on the target table.
+    # Require an explicit name override so the template maps to an existing column.
+    target_exists = table_cfg.get("target_exists", False)
+    if target_exists and name_override is None:
+        from cdc_generator.core.column_templates import get_template
+
+        tpl = get_template(template_key)
+        default_name = tpl.name if tpl else f"_{template_key}"
+        print_error(
+            f"Table '{table_key}' has target_exists=true — "
+            f"cannot add column '{default_name}' (it may not exist on the target).\n"
+            f"  Use --column-name to map to an existing column, e.g.:\n"
+            f"  --add-column-template {template_key} --column-name <existing_column>"
+        )
         return False
 
     # Validate template against database schema before adding
@@ -133,9 +156,9 @@ def add_column_template_to_table(
             print_error("Template validation failed. Use --skip-validation to bypass.")
             return False
 
-    config, table_cfg = resolved
     if not add_column_template(
-        table_cfg, template_key, name_override, table_key=table_key,
+        table_cfg, template_key, name_override,
+        value_override=value_override, table_key=table_key,
     ):
         return False
 

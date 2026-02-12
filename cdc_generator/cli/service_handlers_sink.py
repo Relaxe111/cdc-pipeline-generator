@@ -16,6 +16,7 @@ from cdc_generator.validators.manage_service.sink_operations import (
     add_sink_table,
     add_sink_to_service,
     list_sinks,
+    map_sink_columns,
     remove_sink_from_service,
     remove_sink_table,
     validate_sinks,
@@ -77,13 +78,18 @@ def handle_sink_validate(args: argparse.Namespace) -> int:
 
 def handle_sink_add(args: argparse.Namespace) -> int:
     """Add sink destination(s) to a service."""
-    sink_keys = args.add_sink if isinstance(args.add_sink, list) else [args.add_sink]
+    raw = getattr(args, "add_sink", None)
+    sink_keys: list[str] = (
+        [str(x) for x in cast(list[object], raw)]
+        if isinstance(raw, list)
+        else [str(raw)]
+    )
     success_count = 0
-    
+
     for sink_key in sink_keys:
         if add_sink_to_service(args.service, sink_key):
             success_count += 1
-    
+
     if success_count > 0:
         print_info("Run 'cdc generate' to update pipelines")
         return 0
@@ -92,13 +98,18 @@ def handle_sink_add(args: argparse.Namespace) -> int:
 
 def handle_sink_remove(args: argparse.Namespace) -> int:
     """Remove sink destination(s) from a service."""
-    sink_keys = args.remove_sink if isinstance(args.remove_sink, list) else [args.remove_sink]
+    raw = getattr(args, "remove_sink", None)
+    sink_keys: list[str] = (
+        [str(x) for x in cast(list[object], raw)]
+        if isinstance(raw, list)
+        else [str(raw)]
+    )
     success_count = 0
-    
+
     for sink_key in sink_keys:
         if remove_sink_from_service(args.service, sink_key):
             success_count += 1
-    
+
     if success_count > 0:
         print_info("Run 'cdc generate' to update pipelines")
         return 0
@@ -244,16 +255,56 @@ def handle_sink_update_schema(args: argparse.Namespace) -> int:
     return 1
 
 
+def handle_sink_map_column_on_table(args: argparse.Namespace) -> int:
+    """Map columns on an existing sink table with validation.
+
+    Requires --sink (or auto-default), --sink-table, and --map-column pairs.
+    Validates column existence and type compatibility.
+    """
+    sink_key = _resolve_sink_key(args)
+    if not sink_key:
+        return 1
+
+    if not hasattr(args, "sink_table") or args.sink_table is None:
+        print_error("--map-column on existing table requires --sink-table")
+        print_info(
+            "Example: cdc manage-service --service directory "
+            + "--sink sink_asma.proxy "
+            + "--sink-table public.directory_user_name "
+            + "--map-column brukerBrukerNavn user_name"
+        )
+        return 1
+
+    column_mappings: list[tuple[str, str]] = [
+        (str(pair[0]), str(pair[1])) for pair in args.map_column
+    ]
+
+    if map_sink_columns(
+        args.service,
+        sink_key,
+        args.sink_table,
+        column_mappings,
+    ):
+        return 0
+    return 1
+
+
 def handle_sink_map_column_error() -> int:
-    """Error: --map-column used without --add-sink-table."""
+    """Error: --map-column used without --add-sink-table or --sink-table."""
     print_error(
-        "--map-column requires --add-sink-table "
-        + "to specify which table to map"
+        "--map-column requires --add-sink-table or "
+        + "--sink-table to specify which table to map"
     )
     print_info(
-        "Example: cdc manage-service --service directory "
+        "Add new table: cdc manage-service --service directory "
         + "--sink sink_asma.chat "
         + "--add-sink-table public.users "
+        + "--map-column id user_id"
+    )
+    print_info(
+        "Map existing: cdc manage-service --service directory "
+        + "--sink sink_asma.proxy "
+        + "--sink-table public.users "
         + "--map-column id user_id"
     )
     return 1

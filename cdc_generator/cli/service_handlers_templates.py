@@ -103,10 +103,12 @@ def handle_add_column_template(args: argparse.Namespace) -> int:
     template_key = args.add_column_template
 
     name_override = getattr(args, "column_name", None)
+    value_override = getattr(args, "value", None)
     skip_validation = getattr(args, "skip_validation", False)
 
     if add_column_template_to_table(
-        service, sink_key, sink_table, template_key, name_override, skip_validation,
+        service, sink_key, sink_table, template_key,
+        name_override, value_override, skip_validation,
     ):
         return 0
     return 1

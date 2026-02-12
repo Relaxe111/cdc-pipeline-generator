@@ -8,6 +8,7 @@ Sink key format: {sink_group}.{target_service}
     - target_service: target service/database in that sink group
 """
 
+import re
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -28,6 +29,60 @@ from .config import SERVICE_SCHEMAS_DIR, save_service_config
 # ---------------------------------------------------------------------------
 _SINK_KEY_SEPARATOR = "."
 _SINK_KEY_PARTS = 2
+
+# Valid unquoted PostgreSQL identifier: starts with letter or underscore,
+# followed by letters, digits, underscores, or dollar signs. Max 63 chars.
+_PG_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_$]*$")
+_PG_IDENTIFIER_MAX_LENGTH = 63
+
+
+def validate_pg_schema_name(schema: str) -> str | None:
+    """Validate that *schema* is a valid unquoted PostgreSQL identifier.
+
+    Valid identifiers start with a letter or underscore, followed by
+    letters, digits, underscores, or dollar signs (max 63 chars).
+    Hyphens, spaces, and leading digits are NOT allowed.
+
+    Args:
+        schema: Schema name to validate.
+
+    Returns:
+        Error message if invalid, None if valid.
+
+    Examples:
+        >>> validate_pg_schema_name('public')  # None (valid)
+        >>> validate_pg_schema_name('directory_clone')  # None (valid)
+        >>> validate_pg_schema_name('directory-clone')  # error message
+        >>> validate_pg_schema_name('123abc')  # error message
+    """
+    if not schema:
+        return "Schema name cannot be empty"
+
+    if len(schema) > _PG_IDENTIFIER_MAX_LENGTH:
+        return (
+            f"Schema name '{schema}' exceeds PostgreSQL maximum "
+            f"of {_PG_IDENTIFIER_MAX_LENGTH} characters"
+        )
+
+    if not _PG_IDENTIFIER_PATTERN.match(schema):
+        # Build a specific hint about what's wrong
+        if "-" in schema:
+            suggestion = schema.replace("-", "_")
+            return (
+                f"Schema name '{schema}' contains hyphens which are invalid "
+                f"in PostgreSQL identifiers. Use underscores instead: '{suggestion}'"
+            )
+        if schema[0].isdigit():
+            return (
+                f"Schema name '{schema}' starts with a digit. "
+                f"PostgreSQL identifiers must start with a letter or underscore"
+            )
+        return (
+            f"Schema name '{schema}' contains invalid characters. "
+            f"Only letters, digits, underscores, and dollar signs are allowed"
+        )
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +459,7 @@ def _save_custom_table_structure(
 
     Creates a lightweight YAML reference that points to the source table schema.
     Base structure (columns, PKs, types) is deduced from source at generation time.
-    Only non-deducible content (extra_columns, transforms, templates) is stored here.
+    Only non-deducible content (column_templates, transforms) is stored here.
 
     Args:
         sink_key: Sink key (e.g., 'sink_asma.notification').
@@ -472,17 +527,13 @@ def _save_custom_table_structure(
             + "# Base structure (columns, types, PKs) is deduced from source at generation time.\n"
             + "# Only store non-deducible content here:\n"
             + "#\n"
-            + "# extra_columns:\n"
-            + "#   - name: user_class\n"
-            + "#     type: text\n"
-            + "#     not_null: true\n"
-            + "#     description: User classification derived at pipeline runtime\n"
-            + "#\n"
-            + "# transforms:\n"
-            + "#   - rule: user_class_splitter\n"
-            + "#\n"
-            + "# column_templates:\n"
+            + "# column_templates:  (references column-templates.yaml)\n"
             + "#   - template: source_table\n"
+            + "#   - template: environment\n"
+            + "#     name: deploy_env\n"
+            + "#\n"
+            + "# transforms:  (references transform-rules.yaml)\n"
+            + "#   - rule: user_class_splitter\n"
             + "\n",
             encoding="utf-8",
         )
@@ -531,6 +582,12 @@ def add_sink_table(
     final_table_key = table_key
 
     if sink_schema is not None:
+        # Validate schema name before using it
+        schema_error = validate_pg_schema_name(str(sink_schema))
+        if schema_error:
+            print_error(schema_error)
+            return False
+
         # Override schema in table_key
         if "." in table_key:
             _schema, table_name = table_key.split(".", 1)
@@ -559,6 +616,14 @@ def add_sink_table(
     target = opts.get("target")
     from_table = opts.get("from")
     replicate_structure = bool(opts.get("replicate_structure", False))
+
+    # Validate target_schema if provided
+    raw_target_schema = opts.get("target_schema")
+    if raw_target_schema is not None:
+        ts_error = validate_pg_schema_name(str(raw_target_schema))
+        if ts_error:
+            print_error(ts_error)
+            return False
 
     config_opts = TableConfigOptions(
         target_exists=target_exists,
@@ -602,6 +667,9 @@ def add_sink_table(
 def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:
     """Remove *table_key* from a service sink.
 
+    Also removes the related custom-table YAML file from
+    ``service-schemas/{target_service}/custom-tables/`` if it exists.
+
     Returns:
         True on success, False otherwise.
     """
@@ -629,8 +697,40 @@ def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:
     if not save_service_config(service, config):
         return False
 
+    # Clean up custom-table YAML if it exists
+    _remove_custom_table_file(sink_key, table_key)
+
     print_success(f"Removed table '{table_key}' from sink '{sink_key}'")
     return True
+
+
+def _remove_custom_table_file(sink_key: str, table_key: str) -> None:
+    """Remove the custom-table YAML reference file if it exists.
+
+    Looks for ``service-schemas/{target_service}/custom-tables/{table_key}.yaml``.
+
+    Args:
+        sink_key: Sink key (e.g., 'sink_asma.proxy').
+        table_key: Table key (e.g., 'directory-clone.customers').
+    """
+    target_service = _get_target_service_from_sink_key(sink_key)
+    if not target_service:
+        return
+
+    custom_file = (
+        SERVICE_SCHEMAS_DIR
+        / target_service
+        / "custom-tables"
+        / f"{table_key.replace('/', '_')}.yaml"
+    )
+
+    if custom_file.is_file():
+        custom_file.unlink()
+        print_info(
+            f"Removed custom table file: "
+            f"service-schemas/{target_service}/custom-tables/"
+            f"{table_key.replace('/', '_')}.yaml"
+        )
 
 
 def _validate_schema_update_inputs(
@@ -694,6 +794,12 @@ def update_sink_table_schema(
         )
         # Changes 'public.customer_user' to 'calendar.customer_user'
     """
+    # Validate new schema name
+    schema_error = validate_pg_schema_name(new_schema)
+    if schema_error:
+        print_error(schema_error)
+        return False
+
     result = _validate_schema_update_inputs(service, sink_key, table_key)
     if result is None:
         return False
@@ -792,6 +898,388 @@ def map_sink_column(
         f"Mapped column '{source_column}' → '{target_column}'"
         + f" in '{table_key}' of sink '{sink_key}'"
     )
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Public API — column mapping on existing sink table (with validation)
+# ---------------------------------------------------------------------------
+
+
+def _load_table_columns(
+    service: str,
+    table_key: str,
+) -> list[dict[str, Any]] | None:
+    """Load column definitions from service-schemas/{service}/{schema}/{table}.yaml.
+
+    Returns:
+        List of column dicts (name, type, nullable, primary_key), or None.
+    """
+    if "." not in table_key:
+        return None
+
+    schema, table = table_key.split(".", 1)
+    schema_file = SERVICE_SCHEMAS_DIR / service / schema / f"{table}.yaml"
+    if not schema_file.exists():
+        return None
+
+    try:
+        from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+        data = load_yaml_file(schema_file)
+        columns = data.get("columns", [])
+        if isinstance(columns, list):
+            return cast(list[dict[str, Any]], columns)
+    except (FileNotFoundError, ValueError):
+        pass
+    return None
+
+
+def _get_column_type(
+    columns: list[dict[str, Any]],
+    column_name: str,
+) -> str | None:
+    """Find a column's type from a column definitions list."""
+    for col in columns:
+        if col.get("name") == column_name:
+            raw_type = col.get("type")
+            return str(raw_type) if raw_type is not None else None
+    return None
+
+
+def _check_type_compatibility(
+    source_type: str,
+    sink_type: str,
+    source_engine: str = "pgsql",
+    sink_engine: str = "pgsql",
+) -> bool:
+    """Check if source_type is compatible with sink_type.
+
+    Uses TypeMapper to normalize types, then compares.
+    """
+    try:
+        from cdc_generator.helpers.type_mapper import TypeMapper
+
+        mapper = TypeMapper(source_engine, sink_engine)
+        mapped = mapper.map_type(source_type)
+        # Normalize both sides for comparison
+        sink_mapper = TypeMapper(sink_engine, sink_engine)
+        normalized_sink = sink_mapper.map_type(sink_type)
+        normalized_mapped = sink_mapper.map_type(mapped)
+        return normalized_mapped == normalized_sink
+    except FileNotFoundError:
+        # No mapping file — fall back to direct string comparison
+        return source_type.lower() == sink_type.lower()
+
+
+def _resolve_source_table_from_sink(
+    config: dict[str, object],
+    sink_key: str,
+    table_key: str,
+) -> str | None:
+    """Resolve the source table for a sink table entry.
+
+    Checks the 'from' field first, then falls back to matching source tables.
+    """
+    sinks = _get_sinks_dict(config)
+    sink_cfg = _resolve_sink_config(sinks, sink_key)
+    if sink_cfg is None:
+        return None
+
+    tables = _get_sink_tables(sink_cfg)
+    tbl_raw = tables.get(table_key)
+    if not isinstance(tbl_raw, dict):
+        return None
+
+    tbl_cfg = cast(dict[str, object], tbl_raw)
+
+    # Check explicit 'from' field
+    from_table = tbl_cfg.get("from")
+    if isinstance(from_table, str):
+        return from_table
+
+    # Fall back: check if sink table_key matches a source table
+    source_tables = _get_source_table_keys(config)
+    if table_key in source_tables:
+        return table_key
+
+    return None
+
+
+def _validate_column_mappings(
+    column_mappings: list[tuple[str, str]],
+    source_columns: list[dict[str, Any]],
+    sink_columns: list[dict[str, Any]],
+    source_table: str,
+    table_key: str,
+) -> list[str]:
+    """Validate column mapping pairs against source/sink schemas.
+
+    Returns:
+        List of error messages (empty = all valid).
+    """
+    source_col_names = {col["name"] for col in source_columns if "name" in col}
+    sink_col_names = {col["name"] for col in sink_columns if "name" in col}
+
+    errors: list[str] = []
+    for src_col, tgt_col in column_mappings:
+        if src_col not in source_col_names:
+            errors.append(
+                f"Source column '{src_col}' not found in "
+                + f"'{source_table}' (available: "
+                + f"{', '.join(sorted(source_col_names))})"
+            )
+            continue
+
+        if tgt_col not in sink_col_names:
+            errors.append(
+                f"Sink column '{tgt_col}' not found in "
+                + f"'{table_key}' (available: "
+                + f"{', '.join(sorted(sink_col_names))})"
+            )
+            continue
+
+        # Type compatibility check
+        src_type = _get_column_type(source_columns, src_col)
+        tgt_type = _get_column_type(sink_columns, tgt_col)
+        if src_type and tgt_type and not _check_type_compatibility(src_type, tgt_type):
+            errors.append(
+                f"Type mismatch: '{src_col}' ({src_type}) "
+                + f"→ '{tgt_col}' ({tgt_type})"
+            )
+    return errors
+
+
+def _apply_column_mappings(
+    tables: dict[str, object],
+    table_key: str,
+    column_mappings: list[tuple[str, str]],
+) -> dict[str, str]:
+    """Write column mapping pairs into the table config.
+
+    Returns:
+        The columns dict after applying.
+    """
+    tbl_raw = tables[table_key]
+    if not isinstance(tbl_raw, dict):
+        tbl_raw = {}
+        tables[table_key] = tbl_raw
+    tbl_cfg = cast(dict[str, object], tbl_raw)
+    tbl_cfg["target_exists"] = True
+
+    cols_raw = tbl_cfg.get("columns")
+    if not isinstance(cols_raw, dict):
+        tbl_cfg["columns"] = {}
+        cols_raw = tbl_cfg["columns"]
+    cols = cast(dict[str, str], cols_raw)
+
+    for src_col, tgt_col in column_mappings:
+        cols[src_col] = tgt_col
+    return cols
+
+
+def _warn_unmapped_required(
+    sink_columns: list[dict[str, Any]],
+    cols: dict[str, str],
+    source_col_names: set[str],
+    sink_col_names: set[str],
+) -> None:
+    """Warn about unmapped non-nullable sink columns."""
+    mapped_sink_cols = set(cols.values())
+    identity_mapped = source_col_names & sink_col_names
+    all_covered = mapped_sink_cols | identity_mapped
+
+    unmapped_required: list[str] = []
+    for col in sink_columns:
+        col_name = col.get("name", "")
+        nullable = col.get("nullable", True)
+        is_pk = col.get("primary_key", False)
+        if (not nullable or is_pk) and col_name not in all_covered:
+            unmapped_required.append(col_name)
+
+    if unmapped_required:
+        print_warning(
+            "Unmapped required sink columns (non-nullable or PK): "
+            + ", ".join(sorted(unmapped_required))
+        )
+
+
+def _load_schemas_for_mapping(
+    source_service: str,
+    source_table: str,
+    target_service: str,
+    table_key: str,
+    service: str,
+    sink_key: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    """Load source and sink column schemas for column mapping.
+
+    Returns:
+        (source_columns, sink_columns) tuple, or None on error.
+    """
+    source_columns = _load_table_columns(source_service, source_table)
+    sink_columns = _load_table_columns(target_service, table_key)
+
+    if source_columns is None:
+        src_path = source_table.replace(".", "/")
+        print_error(
+            "Source table schema not found: "
+            + f"service-schemas/{source_service}/{src_path}.yaml"
+        )
+        print_info(
+            "Run: cdc manage-service --service "
+            + f"{service} --inspect --all --save"
+        )
+        return None
+
+    if sink_columns is None:
+        tgt_path = table_key.replace(".", "/")
+        print_error(
+            "Sink table schema not found: "
+            + f"service-schemas/{target_service}/{tgt_path}.yaml"
+        )
+        print_info(
+            f"Run: cdc manage-service --service {service}"
+            + f" --inspect-sink {sink_key} --all --save"
+        )
+        return None
+
+    return source_columns, sink_columns
+
+
+@dataclass
+class _MappingContext:
+    """Resolved context needed for column mapping."""
+
+    config: dict[str, object]
+    tables: dict[str, object]
+    source_table: str
+    source_columns: list[dict[str, Any]]
+    sink_columns: list[dict[str, Any]]
+
+
+def _resolve_mapping_context(
+    service: str,
+    sink_key: str,
+    table_key: str,
+) -> _MappingContext | None:
+    """Resolve and validate all context needed for column mapping.
+
+    Returns:
+        _MappingContext on success, None on error (messages printed).
+    """
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError as exc:
+        print_error(f"Service not found: {exc}")
+        return None
+
+    sinks = _get_sinks_dict(config)
+    if sink_key not in sinks:
+        print_error(f"Sink '{sink_key}' not found in service '{service}'")
+        return None
+
+    sink_cfg = _resolve_sink_config(sinks, sink_key)
+    if sink_cfg is None:
+        return None
+
+    tables = _get_sink_tables(sink_cfg)
+    if table_key not in tables:
+        print_error(f"Table '{table_key}' not found in sink '{sink_key}'")
+        available = [str(k) for k in tables]
+        if available:
+            print_info(f"Available tables: {', '.join(available)}")
+        return None
+
+    source_table = _resolve_source_table_from_sink(config, sink_key, table_key)
+    if source_table is None:
+        print_error(
+            f"Cannot determine source table for '{table_key}' in sink '{sink_key}'"
+        )
+        print_info(
+            "Ensure the sink table has a 'from' field or matches a source table"
+        )
+        return None
+
+    target_service = _get_target_service_from_sink_key(sink_key)
+    if target_service is None:
+        print_error(f"Invalid sink key format: '{sink_key}'")
+        return None
+
+    schemas = _load_schemas_for_mapping(
+        service, source_table, target_service, table_key, service, sink_key,
+    )
+    if schemas is None:
+        return None
+    source_columns, sink_columns = schemas
+
+    return _MappingContext(
+        config=config,
+        tables=tables,
+        source_table=source_table,
+        source_columns=source_columns,
+        sink_columns=sink_columns,
+    )
+
+
+def map_sink_columns(
+    service: str,
+    sink_key: str,
+    table_key: str,
+    column_mappings: list[tuple[str, str]],
+) -> bool:
+    """Map multiple columns on an existing sink table with validation.
+
+    Validates that:
+    - Source columns exist in the source table schema
+    - Sink columns exist in the sink table schema
+    - Column types are compatible between source and sink
+    - Warns about unmapped required (non-nullable) sink columns
+
+    Args:
+        service: Service name.
+        sink_key: Sink key (e.g., 'sink_asma.proxy').
+        table_key: Sink table key (e.g., 'public.directory_user_name').
+        column_mappings: List of (source_column, sink_column) tuples.
+
+    Returns:
+        True on success, False on validation error.
+    """
+    ctx = _resolve_mapping_context(service, sink_key, table_key)
+    if ctx is None:
+        return False
+
+    # Validate each mapping
+    errors = _validate_column_mappings(
+        column_mappings, ctx.source_columns, ctx.sink_columns,
+        ctx.source_table, table_key,
+    )
+    if errors:
+        for err in errors:
+            print_error(f"  ✗ {err}")
+        return False
+
+    # Apply mappings
+    cols = _apply_column_mappings(ctx.tables, table_key, column_mappings)
+
+    if not save_service_config(service, ctx.config):
+        return False
+
+    for src_col, tgt_col in column_mappings:
+        print_success(f"Mapped column '{src_col}' → '{tgt_col}'")
+
+    # Warn about unmapped required sink columns
+    source_col_names = {
+        col["name"] for col in ctx.source_columns if "name" in col
+    }
+    sink_col_names = {
+        col["name"] for col in ctx.sink_columns if "name" in col
+    }
+    _warn_unmapped_required(
+        ctx.sink_columns, cols, source_col_names, sink_col_names,
+    )
+
+    print_info("Run 'cdc generate' to update pipelines")
     return True
 
 
@@ -955,6 +1443,16 @@ def _validate_single_sink(
     tables = cast(dict[str, object], tables_raw)
     for tbl_key_raw, tbl_raw in tables.items():
         tbl_key = str(tbl_key_raw)
+
+        # Validate schema portion of table key
+        if "." in tbl_key:
+            tbl_schema = tbl_key.split(".", 1)[0]
+            schema_err = validate_pg_schema_name(tbl_schema)
+            if schema_err:
+                errors.append(
+                    f"Table '{tbl_key}' in sink '{sink_key_str}': {schema_err}"
+                )
+
         if tbl_key not in source_tables:
             print_warning(
                 f"Table '{tbl_key}' in sink '{sink_key_str}'"
