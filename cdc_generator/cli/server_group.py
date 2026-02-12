@@ -63,12 +63,14 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_schema_exclude,
     handle_add_server,
     handle_info,
+    handle_list_envs,
     handle_list_extraction_patterns,
     handle_list_servers,
     handle_remove_extraction_pattern,
     handle_remove_server,
     handle_set_extraction_pattern,
     handle_set_kafka_topology,
+    handle_set_validation_env,
     handle_update,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
@@ -204,6 +206,19 @@ def main() -> int:
     parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
                        help="Change the Kafka topology. 'shared' = same Kafka for all servers, " +
                             "'per-server' = isolated Kafka per server.")
+
+    # Validation environment management
+    parser.add_argument(
+        "--set-validation-env",
+        metavar="ENV",
+        help="Set the validation environment for the server group (e.g., 'dev', 'nonprod').",
+    )
+    parser.add_argument(
+        "--list-envs",
+        action="store_true",
+        help="List available environments for the server group.",
+    )
+
     parser.add_argument(
         "--set-extraction-pattern",
         nargs=2,
@@ -434,6 +449,14 @@ def main() -> int:
             print_error(f"Failed to view services: {e}")
             return 1
 
+
+    # Handle set validation env
+    if args.set_validation_env:
+        return handle_set_validation_env(args)
+
+    # Handle list envs
+    if args.list_envs:
+        return handle_list_envs(args)
 
     # Handle update (the primary action)
     if args.all and args.update is None:

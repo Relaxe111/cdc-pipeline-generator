@@ -22,6 +22,11 @@ _MISSING_ENV_VARS: set[str] = set()
 _ENV_WARNING_STATE = {"printed": False}
 
 
+class ValidationEnvMissingError(Exception):
+    """Raised when validation_env is not set in server group configuration."""
+    pass
+
+
 def expand_env_vars(value: str | int | None) -> str | int | None:
     """Expand ${VAR} and $VAR patterns in environment variables.
 
@@ -102,13 +107,13 @@ def _print_env_var_warnings_once() -> None:
 
 def get_service_db_config(
     service: str,
-    env: str = "nonprod",
+    _env: str = "nonprod",
 ) -> dict[str, Any] | None:
     """Get database connection configuration for a service.
 
     Args:
         service: Service name
-        env: Environment name (default: nonprod)
+        _env: Environment name (default: nonprod)
 
     Returns:
         Dictionary with connection config or None if not found
@@ -142,69 +147,106 @@ def get_service_db_config(
             )
             return None
 
+        # Get validation_env from server group (REQUIRED at server group level)
+        validation_env = server_group.get("validation_env")
+        if not validation_env:
+            raise ValidationEnvMissingError(
+                f"validation_env not set for server group '{server_group_name}'"
+            )
+
         # Find the environment with this database in source-groups.yaml sources
         sources = server_group.get("sources", {})
         service_sources = sources.get(service, {})
 
-        # Find which environment has this database
+        # Use validation_env to find the specific environment
         env_config_found: dict[str, Any] | None = None
-        for env_name, env_data in service_sources.items():
-            if env_name == "schemas":
-                continue
-            env_data_dict = cast(dict[str, Any], env_data)
-            if env_data_dict.get("database") == validation_database:
-                # Get server configuration
-                server_name = str(env_data_dict.get("server", "default"))
-                servers = server_group.get("servers", {})
-                server_config = servers.get(server_name, {})
+        if validation_env in service_sources:
+            env_data_dict = cast(dict[str, Any], service_sources[validation_env])
+            db_in_env = env_data_dict.get("database")
 
-                # Build connection config based on database type
-                if db_type == "postgres":
-                    host_val = expand_env_vars(server_config.get("host"))
-                    port_val = expand_env_vars(server_config.get("port"))
-                    user_raw = server_config.get("user") or server_config.get(
-                        "username",
-                    )
-                    user_val = expand_env_vars(user_raw)
-                    password_val = expand_env_vars(
-                        server_config.get("password"),
-                    )
-                    env_config_found = {
-                        "postgres": {
-                            "host": str(host_val or "localhost"),
-                            "port": int(port_val or 5432),
-                            "user": str(user_val or "postgres"),
-                            "password": str(password_val or ""),
-                            "database": validation_database,
-                        },
-                        "database_name": validation_database,
-                    }
-                else:  # mssql
-                    host_val = expand_env_vars(server_config.get("host"))
-                    port_val = expand_env_vars(server_config.get("port"))
-                    user_raw = server_config.get("user") or server_config.get(
-                        "username",
-                    )
-                    user_val = expand_env_vars(user_raw)
-                    password_val = expand_env_vars(
-                        server_config.get("password"),
-                    )
-                    env_config_found = {
-                        "mssql": {
-                            "host": str(host_val or "localhost"),
-                            "port": int(port_val or 1433),
-                            "user": str(user_val or "sa"),
-                            "password": str(password_val or ""),
-                        },
-                        "database_name": validation_database,
-                    }
-                break
+            # Verify that validation_database matches the database in validation_env
+            if db_in_env != validation_database:
+                available_envs = [k for k in service_sources if k != "schemas"]
+                print_error(
+                    f"❌ Mismatch: validation_database '{validation_database}' does not match \n"
+                    + f"   database '{db_in_env}' in environment '{validation_env}'\n"
+                    + "\n"
+                    + f"   Available environments in source-groups.yaml for service '{service}':\n"
+                )
+                for e in available_envs:
+                    e_data = cast(dict[str, Any], service_sources[e])
+                    e_db = e_data.get("database", "?")
+                    print_error(f"     - {e}: {e_db}")
+                return None
+
+            # Get server configuration
+            server_name = str(env_data_dict.get("server", "default"))
+            servers = server_group.get("servers", {})
+            server_config = servers.get(server_name, {})
+
+            # Build connection config based on database type
+            if db_type == "postgres":
+                host_val = expand_env_vars(server_config.get("host"))
+                port_val = expand_env_vars(server_config.get("port"))
+                user_raw = server_config.get("user") or server_config.get(
+                    "username",
+                )
+                user_val = expand_env_vars(user_raw)
+                password_val = expand_env_vars(
+                    server_config.get("password"),
+                )
+                env_config_found = {
+                    "postgres": {
+                        "host": str(host_val or "localhost"),
+                        "port": int(port_val or 5432),
+                        "user": str(user_val or "postgres"),
+                        "password": str(password_val or ""),
+                        "database": validation_database,
+                    },
+                    "database_name": validation_database,
+                }
+            else:  # mssql
+                host_val = expand_env_vars(server_config.get("host"))
+                port_val = expand_env_vars(server_config.get("port"))
+                user_raw = server_config.get("user") or server_config.get(
+                    "username",
+                )
+                user_val = expand_env_vars(user_raw)
+                password_val = expand_env_vars(
+                    server_config.get("password"),
+                )
+                env_config_found = {
+                    "mssql": {
+                        "host": str(host_val or "localhost"),
+                        "port": int(port_val or 1433),
+                        "user": str(user_val or "sa"),
+                        "password": str(password_val or ""),
+                    },
+                    "database_name": validation_database,
+                }
+        else:
+            # validation_env not found in source-groups.yaml
+            available_envs = [k for k in service_sources if k != "schemas"]
+            print_error(
+                f"❌ Environment '{validation_env}' not found in source-groups.yaml\n"
+                + "\n"
+                + f"   Available environments for service '{service}':\n"
+            )
+            for e in available_envs:
+                e_data = cast(dict[str, Any], service_sources[e])
+                e_db = e_data.get("database", "?")
+                print_error(f"     - {e}: {e_db}")
+            print_error(
+                "\n"
+                + f"   Update validation_env in services/{service}.yaml to one of the above.\n"
+            )
+            return None
 
         if not env_config_found:
             print_error(
-                "Could not find environment config for database "
-                + f"'{validation_database}' in source-groups.yaml "
-                + f"(env: {env})"
+                f"❌ Failed to build connection config for service '{service}'\n"
+                + f"   validation_database: {validation_database}\n"
+                + f"   validation_env: {validation_env}\n"
             )
             return None
 
@@ -215,6 +257,9 @@ def get_service_db_config(
         _print_env_var_warnings_once()
         return result
 
+    except ValidationEnvMissingError:
+        # Re-raise to allow caller to handle it
+        raise
     except Exception as e:
         print_error(f"Failed to load service config: {e}")
         return None

@@ -1,6 +1,5 @@
 """JSON Schema builder for service validation (main schema assembly)."""
 
-from pathlib import Path
 from typing import Any
 
 from cdc_generator.helpers.helpers_logging import print_error, print_success
@@ -20,7 +19,7 @@ def build_json_schema_structure(
     database: str,
     server_group: str,
     schema_ref: str,
-    schemas_data: dict[str, Any]
+    schemas_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the comprehensive JSON Schema structure for service validation.
 
@@ -37,45 +36,62 @@ def build_json_schema_structure(
     json_schema: dict[str, Any] = {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": f"{service.title()} Service Validation Schema",
-        "description": f"Comprehensive validation schema for {service} service: structure + table content validation (from service-schemas/{service})",
+        "description": (
+            f"Comprehensive validation schema for {service} service: "
+            + "structure + table content validation "
+            + f"(from service-schemas/{service})"
+        ),
         "type": "object",
         "required": [],
         "definitions": {},
         "properties": {
             "service": {
                 "$ref": "keys/service.schema.json",
-                "description": "⚠️ DEPRECATED: Service name is now the root key in YAML (e.g., adopus:, directory:). This field is kept for backward compatibility."
+                "description": (
+                    "⚠️ DEPRECATED: Service name is now the root key in YAML "
+                    + "(e.g., adopus:, directory:). "
+                    + "This field is kept for backward compatibility."
+                ),
             },
             "server_group": {
-                "$ref": "keys/server_group.schema.json"
+                "$ref": "keys/server_group.schema.json",
             },
             "reference": {
                 "type": "string",
-                "description": "Reference customer/database for schema validation (db-per-tenant only)"
+                "description": (
+                    "Reference customer/database for schema validation "
+                    + "(db-per-tenant only)"
+                ),
             },
             "mode": {
                 "type": "string",
                 "enum": ["db-per-tenant", "shared-db"],
-                "description": "⚠️ LEGACY: Service mode - use server_group instead. db-per-tenant (database per customer) or shared-db (customer_id column)"
+                "description": (
+                    "⚠️ LEGACY: Service mode - use server_group instead. "
+                    + "db-per-tenant (database per customer) "
+                    + "or shared-db (customer_id column)"
+                ),
             },
             "source": {
                 "type": "object",
+                "required": ["validation_database"],
                 "properties": {
                     "type": {
                         "type": "string",
                         "enum": ["mssql", "postgres"],
-                        "description": "⚠️ LEGACY: Source database type (auto-detected from server_group)"
+                        "description": (
+                            "⚠️ LEGACY: Source database type "
+                            + "(auto-detected from server_group)"
+                        ),
                     },
                     "validation_database": {
                         "$ref": f"keys/database_name/{server_group}.schema.json",
-                        "description": f"Database name for schema validation (from server_group: {server_group})"
+                        "description": (
+                            "Database name for schema validation "
+                            + f"(from server_group: {server_group})"
+                        ),
                     },
-                    "validation_env": {
-                        "type": "string",
-                        "enum": ["local", "nonprod", "prod", "prod-fretex"],
-                        "description": "Environment for schema validation"
-                    }
-                }
+                },
             },
             "source_tables": {
                 "type": "array",
@@ -86,23 +102,26 @@ def build_json_schema_structure(
                     "properties": {
                         "schema": {
                             "$ref": schema_ref,
-                            "description": f"Database schema name (from validation_database: {database})"
+                            "description": (
+                                "Database schema name "
+                                + f"(from validation_database: {database})"
+                            ),
                         },
                         "tables": {
                             "type": "array",
                             "description": "List of tables in this schema",
                             "items": {
-                                "anyOf": []
-                            }
-                        }
-                    }
-                }
+                                "anyOf": [],
+                            },
+                        },
+                    },
+                },
             },
             "environments": build_environments_schema(),
             "environment": build_single_environment_schema(),
-            "customers": build_customers_schema()
+            "customers": build_customers_schema(),
         },
-        "allOf": build_conditional_requirements()
+        "allOf": build_conditional_requirements(),
     }
 
     # Add table definitions
@@ -111,7 +130,11 @@ def build_json_schema_structure(
     return json_schema
 
 
-def update_service_yaml_header(service: str, database: str, schemas_data: dict[str, Any]) -> bool:
+def update_service_yaml_header(
+    service: str,
+    database: str,
+    schemas_data: dict[str, Any],
+) -> bool:
     """Update service YAML file with schema validation comment and informational header.
 
     Args:
@@ -123,26 +146,33 @@ def update_service_yaml_header(service: str, database: str, schemas_data: dict[s
         True if update succeeded
     """
     try:
-        services_dir = get_project_root() / 'services'
-        service_yaml_path = services_dir / f'{service}.yaml'
-        schema_comment = f"# yaml-language-server: $schema=../.vscode/schemas/{database}.service-validation.schema.json"
+        services_dir = get_project_root() / "services"
+        service_yaml_path = services_dir / f"{service}.yaml"
+        schema_comment = (
+            "# yaml-language-server: "
+            + f"$schema=../.vscode/schemas/{database}.service-validation.schema.json"
+        )
 
         # Detect case-variant column names
         case_variants: dict[str, set[str]] = {}
         for _schema_name, tables in schemas_data.items():
             for _table_name, table_info in tables.items():
-                for col in table_info['columns']:
-                    col_name = col['name']
+                for col in table_info["columns"]:
+                    col_name = col["name"]
                     col_lower = col_name.lower()
                     if col_lower not in case_variants:
                         case_variants[col_lower] = set()
                     case_variants[col_lower].add(col_name)
 
-        overlapping_columns = {col_lower: sorted(variants) for col_lower, variants in case_variants.items() if len(variants) > 1}
+        overlapping_columns = {
+            col_lower: sorted(variants)
+            for col_lower, variants in case_variants.items()
+            if len(variants) > 1
+        }
         has_case_variants = len(overlapping_columns) > 0
 
         # Build informational header
-        info_header = f"""# The redhat.vscode-yaml extension shows ALL possible column names from ALL tables
+        info_header = f"""# redhat.vscode-yaml shows column names from all tables
 # in autocomplete suggestions, not just columns for the specific table being edited.
 # This is a known limitation of the extension's JSON Schema support.
 #
@@ -169,9 +199,9 @@ def update_service_yaml_header(service: str, database: str, schemas_data: dict[s
         warning_comment = ""
         if has_case_variants:
             overlap_list: list[str] = []
-            for col_lower, variants in sorted(overlapping_columns.items()):
+            for _col_lower, variants in sorted(overlapping_columns.items()):
                 overlap_list.append(f"#   - {', '.join(variants)}")
-            overlap_section = '\n'.join(overlap_list)
+            overlap_section = "\n".join(overlap_list)
 
             warning_comment = f"""#
 # ⚠️  CASE SENSITIVITY WARNING
@@ -181,27 +211,36 @@ def update_service_yaml_header(service: str, database: str, schemas_data: dict[s
 # Always verify the exact column name casing for your specific table.
 """
 
-        final_comment = f"# 📝 To verify column names for a specific table:\n#    cdc manage-service --service {service} --inspect --schema {{schema_name}}\n# ==================================================================================\n"
+        final_comment = (
+            "# 📝 To verify column names for a specific table:\n"
+            + f"#    cdc manage-service --service {service} "
+            + "--inspect --schema {schema_name}\n"
+            + "# "
+            + ("=" * 82)
+            + "\n"
+        )
 
-        full_header = schema_comment + '\n' + info_header + warning_comment + final_comment
+        full_header = (
+            schema_comment + "\n" + info_header + warning_comment + final_comment
+        )
 
-        with open(service_yaml_path) as f:
+        with service_yaml_path.open() as f:
             content = f.read()
 
         # Remove ALL old header comments (everything before first non-comment line)
-        lines = content.split('\n')
+        lines = content.split("\n")
         first_non_comment_idx = 0
         for i, line in enumerate(lines):
-            if line and not line.startswith('#'):
+            if line and not line.startswith("#"):
                 first_non_comment_idx = i
                 break
 
         # Keep only the actual YAML content
-        yaml_content = '\n'.join(lines[first_non_comment_idx:])
+        yaml_content = "\n".join(lines[first_non_comment_idx:])
 
         # Write new header + content
-        with open(service_yaml_path, 'w') as f:
-            f.write(full_header + '\n' + yaml_content)
+        with service_yaml_path.open("w") as f:
+            f.write(full_header + "\n" + yaml_content)
 
         print_success(f"\n✓ Updated schema validation in {service}.yaml")
         return True

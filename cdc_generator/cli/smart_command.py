@@ -341,6 +341,8 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "set_extraction_pattern": set(),
     "list_extraction_patterns": set(),
     "remove_extraction_pattern": set(),
+    "set_validation_env": set(),
+    "list_envs": set(),
     "introspect_types": {"server"},
     "pattern": {
         "source_type", "host", "port", "user", "password",

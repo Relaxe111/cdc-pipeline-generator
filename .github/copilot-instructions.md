@@ -116,6 +116,13 @@ config = yaml.safe_load(...)  # No validation, no types
 - `validators/` - Config validation
 - `cli/` - Command-line interface
 
+**CLI Completion Model:**
+- CLI is implemented with Click, which provides declarative command/option definitions and built-in shell completion hooks
+- Dynamic completions are generated on-the-fly via `_CDC_COMPLETE=fish_complete`
+- Smart completions show only relevant subcommands/options inferred from the parent command context
+- When adding new CLI flags/options, update both Click option registration and smart completion group mappings
+- This Click + smart-completion model is AI-friendly: command structure is predictable, options are discoverable, and context-aware completions reduce ambiguity during automated assistance
+
 **Design Checklist:**
 - [ ] Uses `server_group_type`, not service names
 - [ ] Backward compatible (optional params)

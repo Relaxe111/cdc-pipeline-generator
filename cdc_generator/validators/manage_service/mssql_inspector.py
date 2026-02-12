@@ -6,7 +6,11 @@ from cdc_generator.helpers.helpers_logging import print_error, print_info
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from cdc_generator.helpers.mssql_loader import has_pymssql
 
-from .db_inspector_common import get_connection_params, get_service_db_config
+from .db_inspector_common import (
+    ValidationEnvMissingError,
+    get_connection_params,
+    get_service_db_config,
+)
 
 
 def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
@@ -72,6 +76,9 @@ def inspect_mssql_schema(service: str, env: str = 'nonprod') -> list[dict[str, A
 
         return tables
 
+    except ValidationEnvMissingError:
+        # Re-raise to allow proper handling in CLI
+        raise
     except Exception as e:
         print_error(f"MSSQL inspection failed: {e}")
         return None

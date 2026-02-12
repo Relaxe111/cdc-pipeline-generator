@@ -22,8 +22,10 @@ from .db_inspector import (
     list_postgres_databases,
 )
 from .handlers_group import ensure_project_structure
+from .handlers_validation_env import update_envs_list
 from .types import DatabaseInfo, ServerConfig, ServerGroupConfig
 from .utils import regenerate_all_validation_schemas, update_completions, update_vscode_schema
+from .yaml_io import write_server_group_yaml
 from .yaml_writer import update_server_group_yaml
 
 
@@ -252,6 +254,17 @@ def _apply_updates(sg_name: str, all_databases: list[DatabaseInfo]) -> bool:
 
     print_success(f"✓ Updated server group '{sg_name}' with {len(all_databases)} databases")
 
+    # Update envs list based on discovered environments
+    try:
+        config = load_server_groups()
+        server_group = get_single_server_group(config)
+        if server_group:
+            update_envs_list(server_group)
+            write_server_group_yaml(sg_name, server_group)
+            print_info("✓ Updated available environments list")
+    except Exception as e:
+        print_warning(f"Could not update envs list: {e}")
+
     # Update VS Code schema
     update_vscode_schema(all_databases)
 
@@ -385,7 +398,8 @@ def handle_update(args: Namespace) -> int:
             servers = server_group.get('servers', {})
             if not servers:
                 print_error(
-                    "No servers configured. Add a 'servers' section with at least a 'default' server."
+                    "No servers configured. Add a 'servers' section "
+                    + "with at least a 'default' server."
                 )
                 break
 
@@ -450,7 +464,9 @@ def handle_update(args: Namespace) -> int:
                 break
 
             print_success(
-                f"\nTotal: {len(all_databases)} database(s) across {len(servers_to_update)} server(s)"
+                "\nTotal: "
+                + f"{len(all_databases)} database(s) across "
+                + f"{len(servers_to_update)} server(s)"
             )
 
             # Apply updates

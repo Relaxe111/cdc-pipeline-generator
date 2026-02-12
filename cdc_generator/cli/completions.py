@@ -140,6 +140,30 @@ def complete_server_names(
     return _filter(_safe_call(list_servers_from_server_group), incomplete)
 
 
+def complete_available_envs(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete with available environment names from source-groups.yaml."""
+    from cdc_generator.validators.manage_server_group import (
+        get_single_server_group,
+        load_server_groups,
+    )
+    from cdc_generator.validators.manage_server_group.handlers_validation_env import (
+        get_available_envs,
+    )
+
+    def _list_envs() -> list[str]:
+        config = load_server_groups()
+        server_group = get_single_server_group(config)
+        if not server_group:
+            return []
+        return get_available_envs(server_group)
+
+    return _filter(_safe_call(_list_envs), incomplete)
+
+
 def complete_server_group_names(
     _ctx: click.Context,
     _param: click.Parameter,

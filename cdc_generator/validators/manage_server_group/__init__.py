@@ -18,6 +18,7 @@ from .cli_handlers import (
     list_server_groups,
     validate_multi_server_config,
 )
+from .comment_processor import parse_existing_comments
 from .config import (
     PROJECT_ROOT,
     SERVER_GROUPS_FILE,
@@ -41,6 +42,12 @@ from .filters import (
     should_ignore_database,
     should_include_database,
 )
+from .handlers_validation_env import (
+    get_available_envs,
+    handle_list_envs,
+    handle_set_validation_env,
+    update_envs_list,
+)
 from .metadata_comments import (
     add_metadata_stats_comments,
     ensure_file_header_exists,
@@ -60,7 +67,6 @@ from .utils import (
     update_completions,
     update_vscode_schema,
 )
-from .comment_processor import parse_existing_comments
 from .yaml_writer import update_server_group_yaml
 
 __all__ = [
@@ -68,6 +74,7 @@ __all__ = [
     'SERVER_GROUPS_FILE',
     'add_metadata_stats_comments',
     'ensure_file_header_exists',
+    'get_available_envs',
     # Metadata Comments
     'get_file_header_comments',
     'get_single_server_group',
@@ -79,12 +86,14 @@ __all__ = [
     'handle_add_schema_exclude',
     'handle_add_server',
     'handle_info',
+    'handle_list_envs',
     'handle_list_extraction_patterns',
     'handle_list_servers',
     'handle_remove_extraction_pattern',
     'handle_remove_server',
     'handle_set_extraction_pattern',
     'handle_set_kafka_topology',
+    'handle_set_validation_env',
     'handle_update',
     'infer_service_name',
     # Type Introspection
@@ -114,6 +123,7 @@ __all__ = [
     'should_ignore_database',
     'should_include_database',
     'update_completions',
+    'update_envs_list',
     'update_scaffold',
     'update_server_group_yaml',
     'update_vscode_schema',

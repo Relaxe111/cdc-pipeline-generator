@@ -26,6 +26,7 @@ import click
 
 from cdc_generator.cli.completions import (
     complete_add_sink_table,
+    complete_available_envs,
     complete_available_services,
     complete_available_sink_keys,
     complete_available_tables,
@@ -250,11 +251,13 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Change Kafka topology")
 # -- Extraction patterns --
 @click.option("--add-extraction-pattern",
+              shell_complete=complete_server_names,
               help="Add extraction pattern: SERVER PATTERN")
 @click.option("--set-extraction-pattern",
+              shell_complete=complete_server_names,
               help="Set single extraction pattern: SERVER PATTERN")
 @click.option("--list-extraction-patterns",
-              shell_complete=complete_server_names,
+              is_flag=True,
               help="List extraction patterns")
 @click.option("--remove-extraction-pattern",
               help="Remove extraction pattern: SERVER INDEX")
@@ -263,6 +266,12 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Comma-separated suffixes to strip")
 @click.option("--description",
               help="Human-readable description for extraction pattern")
+# -- Validation environment --
+@click.option("--set-validation-env",
+              shell_complete=complete_available_envs,
+              help="Set validation environment")
+@click.option("--list-envs", is_flag=True,
+              help="List available environments")
 # -- Type introspection --
 @click.option("--introspect-types", is_flag=True,
               help="Introspect column types from source DB")
@@ -429,7 +438,7 @@ def manage_service_schema_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Table glob pattern restriction")
 @click.pass_context
 def manage_column_templates_cmd(
-    ctx: click.Context, **_kwargs: object,
+    _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """Manage-column-templates passthrough."""
     from cdc_generator.cli.commands import execute_command

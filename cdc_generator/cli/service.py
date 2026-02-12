@@ -648,7 +648,7 @@ def _auto_detect_service(
         # Allow these commands to run on all services
         if args.validate_config or args.inspect:
             return args
-        
+
         available = ", ".join(
             f.stem for f in sorted(service_files)
         )
@@ -676,6 +676,11 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     if args.validate_config:
         return handle_validate_config(args)
 
+    # Special case: --inspect can run without --service (inspects all)
+    # Check this BEFORE the service requirement check
+    if args.inspect or args.inspect_sink:
+        return _dispatch_inspect(args)
+
     if not args.service:
         return None
 
@@ -693,7 +698,7 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
         if active:
             return handlers[key](args)
 
-    return _dispatch_inspect(args)
+    return None
 
 
 def _dispatch_inspect(args: argparse.Namespace) -> int | None:
@@ -701,14 +706,14 @@ def _dispatch_inspect(args: argparse.Namespace) -> int | None:
     # Special case: --inspect can run without --service (inspects all)
     if args.inspect:
         return handle_inspect(args)
-    
+
     # inspect_sink requires a specific service
     if args.inspect_sink:
         if not args.service:
             print_error("--inspect-sink requires --service <name>")
             return 1
         return handle_inspect_sink(args)
-    
+
     return None
 
 

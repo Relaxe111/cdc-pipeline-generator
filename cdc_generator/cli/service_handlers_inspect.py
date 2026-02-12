@@ -19,6 +19,9 @@ from cdc_generator.validators.manage_server_group.types import (
     ServerGroupFile,
     SourceConfig,
 )
+from cdc_generator.validators.manage_service.db_inspector_common import (
+    ValidationEnvMissingError,
+)
 from cdc_generator.validators.manage_service.mssql_inspector import (
     inspect_mssql_schema,
 )
@@ -28,6 +31,8 @@ from cdc_generator.validators.manage_service.postgres_inspector import (
 from cdc_generator.validators.manage_service.schema_saver import (
     save_detailed_schema,
 )
+
+_VALIDATION_ENV_MISSING_EXIT_CODE = 2
 
 
 def _resolve_inspect_db_type(
@@ -126,59 +131,95 @@ def _schemas_for_shared(
 
 def handle_inspect(args: argparse.Namespace) -> int:
     """Inspect database schema and list available tables.
-    
+
     If args.service is None, inspects all services in services/ directory.
     """
     if args.service:
         # Inspect single service
         return _inspect_single_service(args)
-    
+
     # Inspect all services - default to --all if not specified
     if not args.all and not args.schema:
         args.all = True
-    
+
     # Inspect all services
     from cdc_generator.helpers.service_config import get_project_root
-    
+
     services_dir = get_project_root() / "services"
     if not services_dir.exists():
         print_error("No services directory found")
         return 1
-    
+
     service_files = sorted(services_dir.glob("*.yaml"))
     if not service_files:
         print_error("No service files found in services/")
         return 1
-    
+
     print_info(f"Inspecting {len(service_files)} service(s)...\n")
-    
+
     results: dict[str, bool] = {}
+    validation_env_missing = False  # Track if validation_env is missing
+
     for service_file in service_files:
         service_name = service_file.stem
         print_info(f"{'=' * 80}")
         args_copy = argparse.Namespace(**vars(args))
         args_copy.service = service_name
-        results[service_name] = _inspect_single_service(args_copy) == 0
+        result = _inspect_single_service(args_copy)
+        results[service_name] = result == 0
+
+        # Check if failure was due to missing validation_env (exit code 2)
+        if result == _VALIDATION_ENV_MISSING_EXIT_CODE:
+            validation_env_missing = True
+
         print()  # Blank line between services
-    
+
     # Summary
     print_info(f"{'=' * 80}")
     print_info("Inspection Summary")
     print_info(f"{'=' * 80}\n")
-    
+
     passed = [s for s, ok in results.items() if ok]
     failed = [s for s, ok in results.items() if not ok]
-    
+
     if passed:
         print_info(f"✓ Completed ({len(passed)}): {', '.join(passed)}")
     if failed:
         print_error(f"✗ Failed ({len(failed)}): {', '.join(failed)}")
-    
+
+        # Show consolidated validation_env error if applicable
+        if validation_env_missing:
+            _show_validation_env_help()
+
     return 0 if all(results.values()) else 1
 
 
+def _show_validation_env_help() -> None:
+    """Show consolidated help message for missing validation_env."""
+    print()
+    print_error("❌ Configuration Error: validation_env not set")
+    print()
+    print_info("   The 'validation_env' field is required in source-groups.yaml to determine")
+    print_info("   which environment's database to use for inspection and validation.")
+    print()
+    print_info("   You can set it using the CLI command:")
+    print()
+    print_success("     cdc manage-source-groups --set-validation-env <env>")
+    print()
+    print_info("   Or list available environments:")
+    print()
+    print_success("     cdc manage-source-groups --list-envs")
+    print()
+
+
 def _inspect_single_service(args: argparse.Namespace) -> int:
-    """Inspect database schema for a single service."""
+    """Inspect database schema for a single service.
+
+    Returns:
+        0 on success
+        1 on general failure
+        2 on missing validation_env (special case for consolidated error)
+    """
     db_type, server_group, server_groups_data = (
         _resolve_inspect_db_type(args.service)
     )
@@ -241,14 +282,24 @@ def _run_inspection(
     allowed_schemas: list[str],
     schema: str | None,
 ) -> int:
-    """Execute the inspection and print results."""
-    if db_type == "mssql":
-        tables = inspect_mssql_schema(args.service, args.env)
-    elif db_type == "postgres":
-        tables = inspect_postgres_schema(args.service, args.env)
-    else:
-        print_error(f"Unsupported database type: {db_type}")
-        return 1
+    """Execute the inspection and print results.
+
+    Returns:
+        0 on success
+        1 on general failure
+        2 on missing validation_env
+    """
+    try:
+        if db_type == "mssql":
+            tables = inspect_mssql_schema(args.service, args.env)
+        elif db_type == "postgres":
+            tables = inspect_postgres_schema(args.service, args.env)
+        else:
+            print_error(f"Unsupported database type: {db_type}")
+            return 1
+    except ValidationEnvMissingError:
+        # Don't print error here - will be shown consolidated at the end
+        return _VALIDATION_ENV_MISSING_EXIT_CODE
 
     if tables:
         if args.all:

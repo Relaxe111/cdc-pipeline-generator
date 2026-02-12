@@ -8,7 +8,11 @@ from cdc_generator.helpers.psycopg2_loader import (
     has_psycopg2,
 )
 
-from .db_inspector_common import get_connection_params, get_service_db_config
+from .db_inspector_common import (
+    ValidationEnvMissingError,
+    get_connection_params,
+    get_service_db_config,
+)
 
 
 def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str, Any]] | None:
@@ -36,7 +40,11 @@ def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str
         if not conn_params:
             return None
 
-        print_info(f"Connecting to PostgreSQL: {conn_params['host']}:{conn_params['port']}/{conn_params['database']}")
+        print_info(
+            "Connecting to PostgreSQL: "
+            + f"{conn_params['host']}:{conn_params['port']}/"
+            + f"{conn_params['database']}"
+        )
 
         pg = ensure_psycopg2()
 
@@ -75,6 +83,9 @@ def inspect_postgres_schema(service: str, env: str = 'nonprod') -> list[dict[str
         # Convert RealDictRow to regular dict for consistency with MSSQL inspector
         return [dict(table) for table in tables]
 
+    except ValidationEnvMissingError:
+        # Re-raise to allow proper handling in CLI
+        raise
     except Exception as e:
         print_error(f"Failed to inspect PostgreSQL schema: {e}")
         import traceback

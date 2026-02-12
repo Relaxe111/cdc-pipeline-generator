@@ -92,8 +92,10 @@ class ExtractionPattern(TypedDict, total=False):
     Fields:
         pattern: Regex with named groups (?P<service>...) and optionally (?P<env>...)
         env: Fixed environment name (overrides captured (?P<env>) group if present)
-        strip_patterns: List of regex patterns to remove from service name (e.g., ['_db', '_database$'])
-        env_mapping: Optional dict to transform extracted env (e.g., {'prod_adcuris': 'prod-adcuris'})
+        strip_patterns: List of regex patterns to remove from service name
+          (e.g., ['_db', '_database$'])
+        env_mapping: Optional dict to transform extracted env
+          (e.g., {'prod_adcuris': 'prod-adcuris'})
         description: Human-readable description of what this pattern matches
 
     Examples:
@@ -236,8 +238,10 @@ class ServerGroupConfig(TypedDict, total=False):
 
     # Filtering and extraction
     include_pattern: str                    # Regex to filter databases
-    extraction_pattern: str                 # DEPRECATED: Global pattern, use servers.{name}.extraction_pattern instead
-    database_ref: str                       # Reference database for schema discovery (db-per-tenant)
+    extraction_pattern: str                 # DEPRECATED: use servers.{name}.extraction_pattern
+    database_ref: str                       # Reference DB for schema discovery (db-per-tenant)
+    validation_env: str                     # Validation environment used for inspect/validation
+    envs: list[str]                         # Discovered available environments
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]
     env_mappings: dict[str, str]           # e.g., {"production": "prod", "staging": "stage"}
