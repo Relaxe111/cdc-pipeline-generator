@@ -92,6 +92,156 @@ def _show_available_tables(tables: dict[str, object]) -> None:
         print_info(f"Available tables: {', '.join(available)}")
 
 
+def _resolve_source_table_key(
+    table_cfg: dict[str, object],
+    table_key: str,
+) -> str | None:
+    """Derive the source table key for schema validation.
+
+    Sink tables often live under a *different* schema name than their
+    source (e.g. sink key ``directory_replica.customers`` references
+    source ``public.customers`` via the ``from`` field).
+
+    When the ``from`` field points to a different schema than
+    *table_key*, we return the ``from`` value so schema validation
+    loads the correct source schema file.
+
+    Args:
+        table_cfg: Resolved table configuration dict.
+        table_key: The sink table key (e.g. "directory_replica.customers").
+
+    Returns:
+        The source table key to use for schema lookup, or ``None`` when
+        *table_key* already matches the source schema.
+    """
+    from_value = table_cfg.get("from")
+    if not isinstance(from_value, str) or not from_value:
+        return None
+
+    # Return from_value whenever it differs from table_key
+    # (different schema OR different table name)
+    if from_value != table_key:
+        return from_value
+
+    return None
+
+
+def _get_sink_service(sink_key: str) -> str | None:
+    """Extract target service from sink key ``sink_group.target_service``.
+
+    Args:
+        sink_key: E.g. ``"sink_asma.proxy"``.
+
+    Returns:
+        Target service name (e.g. ``"proxy"``), or None if invalid.
+    """
+    parts = sink_key.split(".", 1)
+    if len(parts) < 2:  # noqa: PLR2004
+        return None
+    return parts[1]
+
+
+def _validate_sink_column(
+    sink_key: str,
+    table_key: str,
+    column_name: str,
+) -> bool:
+    """Validate that *column_name* exists on the sink table.
+
+    Loads the sink-side schema and checks the column is present.
+    Prints an error on failure, a warning when the schema is unavailable.
+
+    Args:
+        sink_key: Sink key (e.g. ``"sink_asma.proxy"``).
+        table_key: Table key.
+        column_name: Column name to validate.
+
+    Returns:
+        True if valid or schema unavailable (warn only), False on error.
+    """
+    from cdc_generator.validators.template_validator import (
+        validate_sink_column_exists,
+    )
+
+    sink_service = _get_sink_service(sink_key)
+    if sink_service is None:
+        return True  # can't validate — don't block
+
+    is_valid, errors, warnings = validate_sink_column_exists(
+        sink_service, table_key, column_name,
+    )
+
+    for warning in warnings:
+        print_info(f"  ⚠ {warning}")
+    for error in errors:
+        print_error(f"  {error}")
+
+    if not is_valid:
+        print_error(
+            "Sink column validation failed. "
+            + "Use --skip-validation to bypass."
+        )
+
+    return is_valid
+
+
+def _validate_column_mapping(
+    service: str,
+    sink_key: str,
+    table_key: str,
+    table_cfg: dict[str, object],
+) -> None:
+    """Validate source↔sink column mappings for target_exists=true tables.
+
+    Loads both source and sink schemas, then checks each mapping entry
+    for missing columns and type mismatches.  Prints warnings — does
+    **not** block the operation.
+
+    Args:
+        service: Service name.
+        sink_key: Sink key.
+        table_key: Table key.
+        table_cfg: Table config dict.
+    """
+    from cdc_generator.validators.template_validator import (
+        get_sink_table_schema,
+        validate_column_mapping_types,
+    )
+
+    columns_raw = table_cfg.get("columns")
+    if not isinstance(columns_raw, dict):
+        return  # no explicit mapping → nothing to check
+
+    columns_mapping = cast(dict[str, str], columns_raw)
+
+    sink_service = _get_sink_service(sink_key)
+    if sink_service is None:
+        return
+
+    # Load source schema
+    from cdc_generator.validators.template_validator import (
+        get_source_table_schema,
+    )
+
+    source_table_key = _resolve_source_table_key(table_cfg, table_key)
+    source_schema = get_source_table_schema(
+        service, table_key, source_table_key=source_table_key,
+    )
+
+    # Load sink schema
+    sink_schema = get_sink_table_schema(sink_service, table_key)
+
+    if source_schema is None or sink_schema is None:
+        return  # can't validate — silently skip
+
+    type_warnings = validate_column_mapping_types(
+        source_schema, sink_schema, columns_mapping, table_key,
+    )
+
+    for warning in type_warnings:
+        print_info(f"  ⚠ {warning}")
+
+
 # ---------------------------------------------------------------------------
 # Public API — extra columns
 # ---------------------------------------------------------------------------
@@ -138,12 +288,24 @@ def add_column_template_to_table(
         tpl = get_template(template_key)
         default_name = tpl.name if tpl else f"_{template_key}"
         print_error(
-            f"Table '{table_key}' has target_exists=true — "
-            f"cannot add column '{default_name}' (it may not exist on the target).\n"
-            f"  Use --column-name to map to an existing column, e.g.:\n"
-            f"  --add-column-template {template_key} --column-name <existing_column>"
+            f"Table '{table_key}' has target_exists=true —"
+            + f" cannot add column '{default_name}' (it may not exist on the target).\n"
+            + "  Use --column-name to map to an existing column, e.g.:\n"
+            + f"  --add-column-template {template_key} --column-name <existing_column>"
         )
         return False
+
+    # Validate --column-name exists on the sink table (target_exists=true)
+    if target_exists and name_override and not skip_validation and not _validate_sink_column(
+        sink_key, table_key, name_override,
+    ):
+        return False
+
+    # Validate source↔sink column mapping for target_exists=true tables
+    if target_exists and not skip_validation:
+        _validate_column_mapping(
+            service, sink_key, table_key, table_cfg,
+        )
 
     # Validate template against database schema before adding
     if not skip_validation:
@@ -151,8 +313,17 @@ def add_column_template_to_table(
             validate_templates_for_table,
         )
 
+        # Resolve source table key from 'from' field when the sink table
+        # key differs from the actual source schema location.
+        # e.g. table_key="directory_replica.customers" with from="public.customers"
+        source_table_key = _resolve_source_table_key(table_cfg, table_key)
+
         print_info(f"\nValidating template '{template_key}' for table '{table_key}'...")
-        if not validate_templates_for_table(service, table_key, [template_key]):
+        if not validate_templates_for_table(
+            service, table_key, [template_key],
+            source_table_key=source_table_key,
+            value_override=value_override,
+        ):
             print_error("Template validation failed. Use --skip-validation to bypass.")
             return False
 
@@ -274,18 +445,26 @@ def add_transform_to_table(
     if resolved is None:
         return False
 
+    config, table_cfg = resolved
+
     # Validate transform against database schema before adding
     if not skip_validation:
         from cdc_generator.validators.template_validator import (
             validate_transforms_for_table,
         )
 
+        # Resolve source table key from 'from' field when the sink table
+        # key differs from the actual source schema location.
+        source_table_key = _resolve_source_table_key(table_cfg, table_key)
+
         print_info(f"\nValidating transform '{rule_key}' for table '{table_key}'...")
-        if not validate_transforms_for_table(service, table_key, [rule_key]):
+        if not validate_transforms_for_table(
+            service, table_key, [rule_key],
+            source_table_key=source_table_key,
+        ):
             print_error("Transform validation failed. Use --skip-validation to bypass.")
             return False
 
-    config, table_cfg = resolved
     if not add_transform(table_cfg, rule_key):
         return False
 

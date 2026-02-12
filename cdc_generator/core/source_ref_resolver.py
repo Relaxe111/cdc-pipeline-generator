@@ -240,6 +240,11 @@ def validate_all_sources_have_key(
     Used at generation time to ensure the reference is valid for every
     source that will generate a pipeline.
 
+    Errors are grouped for readability — instead of one error per
+    source/environment combination, the output summarises which sources
+    are missing the key and, when it is universally absent, collapses
+    everything into a single message.
+
     Args:
         ref: Parsed source reference.
         config: Pre-loaded source-groups config. Loaded from disk if None.
@@ -260,13 +265,62 @@ def validate_all_sources_have_key(
 
     sources_dict = cast(dict[str, object], sources)
 
-    errors: list[str] = []
+    # Collect per-source errors
+    # Key: source name → Value: list of error strings from that source
+    per_source_errors: dict[str, list[str]] = {}
+    total_sources = 0
     for src_name in sorted(sources_dict):
+        total_sources += 1
         src_errors = validate_source_ref_for_all_envs(
             ref, str(src_name), config,
         )
-        errors.extend(src_errors)
+        if src_errors:
+            per_source_errors[str(src_name)] = src_errors
 
+    if not per_source_errors:
+        return []
+
+    return _summarise_source_ref_errors(
+        ref, per_source_errors, total_sources,
+    )
+
+
+def _summarise_source_ref_errors(
+    ref: SourceRef,
+    per_source_errors: dict[str, list[str]],
+    total_sources: int,
+) -> list[str]:
+    """Collapse per-source-ref errors into grouped, human-friendly messages.
+
+    Args:
+        ref: The source reference being validated.
+        per_source_errors: Mapping of source name → individual error messages.
+        total_sources: Total number of sources in the group.
+
+    Returns:
+        Compact list of error messages.
+    """
+    failing_count = len(per_source_errors)
+    total_errors = sum(len(e) for e in per_source_errors.values())
+
+    # Case 1: ALL sources are missing the key → single summary message
+    if failing_count == total_sources:
+        return [
+            f"Key '{ref.key}' not found in any of the "
+            + f"{total_sources} sources in group '{ref.group}' "
+            + f"({total_errors} environments checked). "
+            + f"Add '{ref.key}' to your sources in source-groups.yaml."
+        ]
+
+    # Case 2: Only some sources missing → list them compactly
+    errors: list[str] = []
+    for src_name, src_errs in per_source_errors.items():
+        env_count = len(src_errs)
+        errors.append(
+            f"Key '{ref.key}' missing in "
+            + f"{ref.group}.sources.{src_name} "
+            + f"({env_count} environment{'s' if env_count != 1 else ''})"
+        )
     return errors
 
 

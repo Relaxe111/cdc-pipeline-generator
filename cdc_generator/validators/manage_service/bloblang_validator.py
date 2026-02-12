@@ -17,7 +17,7 @@ from cdc_generator.helpers.helpers_logging import (
 )
 
 
-def _check_rpk_available() -> bool:
+def check_rpk_available() -> bool:
     """Check if rpk CLI is available."""
     try:
         result = subprocess.run(
@@ -31,7 +31,7 @@ def _check_rpk_available() -> bool:
         return False
 
 
-def _validate_bloblang_expression(
+def validate_bloblang_expression(
     expression: str,
     _context: str,
 ) -> tuple[bool, str | None]:
@@ -160,7 +160,7 @@ def validate_column_templates_bloblang(
 
             value = str(raw_value)
             context = f"column_template: {key}"
-            is_valid, error_msg = _validate_bloblang_expression(value, context)
+            is_valid, error_msg = validate_bloblang_expression(value, context)
 
             if is_valid:
                 print_success(f"  ✓ {key}: {value[:50]}...")
@@ -222,7 +222,7 @@ def validate_transform_rules_bloblang(
 
             mapping = str(raw_mapping)
             context = f"transform_rule: {key}"
-            is_valid, error_msg = _validate_bloblang_expression(mapping, context)
+            is_valid, error_msg = validate_bloblang_expression(mapping, context)
 
             if is_valid:
                 print_success(f"  ✓ {key}: {mapping[:50]}...")
@@ -251,7 +251,7 @@ def validate_service_bloblang(service: str) -> bool:
     Returns:
         bool: True if all validations passed
     """
-    if not _check_rpk_available():
+    if not check_rpk_available():
         print_error("rpk CLI not found. Please install Redpanda Connect CLI:")
         print_error("  https://docs.redpanda.com/current/get-started/rpk-install/")
         return False
@@ -313,7 +313,7 @@ def validate_bloblang_files() -> tuple[int, int]:
             continue
 
         # Validate by wrapping in a minimal pipeline (same as templates)
-        is_valid, error_msg = _validate_bloblang_expression(
+        is_valid, error_msg = validate_bloblang_expression(
             content,
             str(blobl_file.relative_to("service-schemas/bloblang")),
         )
