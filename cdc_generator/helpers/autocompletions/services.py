@@ -34,12 +34,13 @@ def list_existing_services() -> list[str]:
 
 
 def list_available_services_from_server_group() -> list[str]:
-    """List sources defined in source-groups.yaml (sources: section).
+    """List sources defined in source-groups.yaml that don't have service files yet.
 
     Used for --create-service flag autocompletion (shows sources that can be created).
+    Filters out services that already have a services/<name>.yaml file.
 
     Returns:
-        List of source names from source-groups.yaml.
+        List of source names from source-groups.yaml that aren't created yet.
 
     Expected YAML structure:
         server_group_name:
@@ -50,7 +51,7 @@ def list_available_services_from_server_group() -> list[str]:
 
     Example:
         >>> list_available_services_from_server_group()
-        ['chat', 'directory', 'calendar']
+        ['calendar', 'notification']  # chat, directory already exist
     """
     server_group_file = find_file_upward('source-groups.yaml')
     if not server_group_file:
@@ -63,6 +64,7 @@ def list_available_services_from_server_group() -> list[str]:
 
         # Extract sources from server_group structure (flat format)
         # Look for root key with 'pattern' field (server group marker)
+        all_sources: list[str] = []
         for group_data in config.values():
             if isinstance(group_data, dict) and 'pattern' in group_data:
                 group_dict = cast(dict[str, Any], group_data)
@@ -74,10 +76,15 @@ def list_available_services_from_server_group() -> list[str]:
 
                 if isinstance(sources_obj, dict):
                     sources_dict = cast(dict[str, Any], sources_obj)
-                    return sorted(sources_dict.keys())
+                    all_sources = sorted(sources_dict.keys())
                 break
 
-        return []
+        if not all_sources:
+            return []
+
+        # Filter out services that already have YAML files
+        existing = set(list_existing_services())
+        return [svc for svc in all_sources if svc not in existing]
 
     except Exception:
         return []
