@@ -36,6 +36,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import click
+
 # Minimum number of CLI args (program name + command)
 _MIN_ARGS = 2
 
@@ -403,16 +405,8 @@ def _handle_reload_completions(is_dev_container: bool) -> int:
         return 1
 
 
-def main() -> int:
-    """Main CLI entry point."""
-    if len(sys.argv) < _MIN_ARGS or sys.argv[1] in ["help", "--help", "-h"]:
-        workspace_root, implementation_name, is_dev_container = detect_environment()
-        print_help(workspace_root, implementation_name, is_dev_container)
-        return 0
-
-    command = sys.argv[1]
-    extra_args: list[str] = sys.argv[_MIN_ARGS:]
-
+def _execute_command(command: str, extra_args: list[str]) -> int:
+    """Execute a cdc command using the existing command handlers."""
     # Commands that run without environment detection
     special_result = _handle_special_commands(command, extra_args)
     if special_result is not None:
@@ -434,6 +428,84 @@ def main() -> int:
     print(f"❌ Unknown command: {command}")
     print("\nRun 'cdc help' to see available commands.")
     return 1
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+def _click_cli(ctx: click.Context) -> int:
+    """Top-level CDC command group with passthrough command registration."""
+    if ctx.invoked_subcommand is not None:
+        return 0
+
+    workspace_root, implementation_name, is_dev_container = detect_environment()
+    print_help(workspace_root, implementation_name, is_dev_container)
+    return 0
+
+
+def _register_passthrough_command(
+    command_name: str,
+    description: str,
+) -> None:
+    """Register a click command that forwards argv to existing handlers."""
+
+    @click.command(
+        name=command_name,
+        help=description,
+        context_settings={
+            "allow_extra_args": True,
+            "ignore_unknown_options": True,
+        },
+        add_help_option=False,
+    )
+    @click.pass_context
+    def _cmd(ctx: click.Context) -> int:
+        extra_args: list[str] = list(ctx.args)
+        return _execute_command(command_name, extra_args)
+
+    _click_cli.add_command(_cmd)
+
+
+def _register_commands() -> None:
+    """Register all top-level commands in the click app."""
+    for cmd, info in GENERATOR_COMMANDS.items():
+        _register_passthrough_command(cmd, info["description"])
+
+    for cmd, info in LOCAL_COMMANDS.items():
+        _register_passthrough_command(cmd, info["description"])
+
+    _register_passthrough_command("test", "Run project tests (unit and CLI e2e)")
+    _register_passthrough_command("test-coverage", "Show test coverage report by cdc command")
+
+    @click.command(name="help", help="Show help message")
+    def _help_cmd() -> int:
+        workspace_root, implementation_name, is_dev_container = detect_environment()
+        print_help(workspace_root, implementation_name, is_dev_container)
+        return 0
+
+    _click_cli.add_command(_help_cmd)
+
+
+_register_commands()
+
+
+def main() -> int:
+    """Main CLI entry point."""
+    if len(sys.argv) < _MIN_ARGS or sys.argv[1] in ["help", "--help", "-h"]:
+        workspace_root, implementation_name, is_dev_container = detect_environment()
+        print_help(workspace_root, implementation_name, is_dev_container)
+        return 0
+
+    try:
+        result = _click_cli.main(
+            args=sys.argv[1:],
+            prog_name="cdc",
+            standalone_mode=False,
+        )
+    except click.ClickException as exc:
+        exc.show()
+        return exc.exit_code
+
+    return 0 if result is None else int(result)
 
 
 if __name__ == "__main__":
