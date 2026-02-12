@@ -133,6 +133,10 @@ def handle_inspect(args: argparse.Namespace) -> int:
         # Inspect single service
         return _inspect_single_service(args)
     
+    # Inspect all services - default to --all if not specified
+    if not args.all and not args.schema:
+        args.all = True
+    
     # Inspect all services
     from cdc_generator.helpers.service_config import get_project_root
     

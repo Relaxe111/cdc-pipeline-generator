@@ -15,46 +15,46 @@ from cdc_generator.validators.manage_service.validation import (
 
 def handle_validate_config(args: argparse.Namespace) -> int:
     """Comprehensive validation of service config.
-    
+
     If args.service is None, validates all services in services/ directory.
     """
     if args.service:
         # Validate single service
         return 0 if validate_service_config(args.service) else 1
-    
+
     # Validate all services
     services_dir = get_project_root() / "services"
     if not services_dir.exists():
         print_error("No services directory found")
         return 1
-    
+
     service_files = sorted(services_dir.glob("*.yaml"))
     if not service_files:
         print_error("No service files found in services/")
         return 1
-    
+
     print_info(f"Validating {len(service_files)} service(s)...\n")
-    
+
     results: dict[str, bool] = {}
     for service_file in service_files:
         service_name = service_file.stem
         print_info(f"{'=' * 80}")
         results[service_name] = validate_service_config(service_name)
         print()  # Blank line between services
-    
+
     # Summary
     print_info(f"{'=' * 80}")
     print_info("Validation Summary")
     print_info(f"{'=' * 80}\n")
-    
+
     passed = [s for s, ok in results.items() if ok]
     failed = [s for s, ok in results.items() if not ok]
-    
+
     if passed:
         print_info(f"✓ Passed ({len(passed)}): {', '.join(passed)}")
     if failed:
         print_error(f"✗ Failed ({len(failed)}): {', '.join(failed)}")
-    
+
     return 0 if all(results.values()) else 1
 
 
