@@ -277,6 +277,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "modify_custom_table": {"sink", "add_column", "remove_column"},
     # ── Create service (standalone action) ─────────────────────
     "create_service": set(),
+    # ── Remove service (standalone action) ─────────────────────
+    "remove_service": set(),
 }
 
 # Options always shown for manage-service
@@ -344,6 +346,7 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "set_validation_env": set(),
     "list_envs": set(),
     "introspect_types": {"server"},
+    "db_definitions": {"server"},
     "pattern": {
         "source_type", "host", "port", "user", "password",
         "extraction_pattern", "environment_aware",
@@ -370,6 +373,7 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "info": set(),
     "inspect": {"server", "include_pattern"},
     "introspect_types": {"sink_group"},
+    "db_definitions": {"sink_group"},
     "validate": set(),
     "sink_group": {
         "add_server", "remove_server",

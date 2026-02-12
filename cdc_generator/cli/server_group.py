@@ -133,6 +133,73 @@ def _handle_introspect_types(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def _handle_db_definitions(args: argparse.Namespace) -> int:
+    """Generate service-schemas/definitions type file once from source DB server."""
+    from cdc_generator.validators.manage_server_group.config import (
+        get_single_server_group,
+        load_server_groups,
+    )
+    from cdc_generator.validators.manage_service_schema.type_definitions import (
+        generate_type_definitions,
+    )
+
+    try:
+        config = load_server_groups()
+        server_group = get_single_server_group(config)
+    except Exception as exc:
+        print_error(f"Failed to load server groups: {exc}")
+        return 1
+
+    if not server_group:
+        print_error("No server group found in configuration")
+        return 1
+
+    servers = server_group.get("servers", {})
+    if not servers:
+        print_error("No servers configured in server group")
+        return 1
+
+    # Pick server: explicit --server or first available
+    server_name: str = getattr(args, "server", None) or next(iter(servers))
+    if server_name not in servers:
+        print_error(f"Server '{server_name}' not found")
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    db_type = str(server_group.get("type", "postgres"))
+    if db_type not in {"postgres", "mssql"}:
+        print_error(
+            f"Unsupported source type '{db_type}' for --db-definitions"
+        )
+        print_info("Supported types: postgres, mssql")
+        return 1
+
+    print_header(
+        "Generating DB definitions from "
+        + f"{db_type.upper()} server '{server_name}'"
+    )
+
+    conn_params: dict[str, Any] = {
+        "host": server_config.get("host", ""),
+        "port": server_config.get("port", ""),
+        "user": server_config.get(
+            "username", server_config.get("user", "")
+        ),
+        "password": server_config.get("password", ""),
+    }
+
+    success = generate_type_definitions(
+        db_type,
+        conn_params,
+        source_label=(
+            "manage-source-groups --db-definitions"
+            + f" ({server_name})"
+        ),
+    )
+    return 0 if success else 1
+
+
 def main() -> int:
     # Note: .env loading handled by implementations, not generator library
 
@@ -295,8 +362,16 @@ def main() -> int:
                             "and generate/update type definition files. " +
                             "Use --server to pick a specific server " +
                             "(default: first available).")
+    parser.add_argument(
+        "--db-definitions",
+        action="store_true",
+        help=(
+            "Generate service-schemas/definitions/{pgsql|mssql}.yaml once "
+            "from source database server metadata."
+        ),
+    )
     parser.add_argument("--server", metavar="NAME",
-                       help="Server to use for --introspect-types " +
+                       help="Server to use for --introspect-types/--db-definitions " +
                             "(default: first available).")
 
     args = parser.parse_args()
@@ -382,6 +457,10 @@ def main() -> int:
     # Handle type introspection
     if args.introspect_types:
         return _handle_introspect_types(args)
+
+    # Handle one-shot DB definitions generation
+    if args.db_definitions:
+        return _handle_db_definitions(args)
 
     # Handle info
     if args.info:

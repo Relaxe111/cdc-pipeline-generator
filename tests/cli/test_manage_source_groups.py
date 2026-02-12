@@ -595,3 +595,22 @@ class TestCliCompletions:
         output = result.stdout
         # Fish should suggest at least some known flags
         assert "info" in output or "update" in output or "list" in output
+
+
+class TestCliDbDefinitions:
+    """CLI e2e: --db-definitions guard rails."""
+
+    def test_db_definitions_unknown_server_fails_before_connection(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+
+        result = run_cdc(
+            "manage-source-groups",
+            "--db-definitions",
+            "--server",
+            "ghost",
+        )
+
+        assert result.returncode == 1
+        assert "Server 'ghost' not found" in result.stdout + result.stderr

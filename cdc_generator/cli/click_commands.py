@@ -94,6 +94,8 @@ _PASSTHROUGH_CTX: dict[str, object] = {
               help="Existing service name")
 @click.option("--create-service", shell_complete=complete_available_services,
               help="Create service from source-groups.yaml")
+@click.option("--remove-service", shell_complete=complete_existing_services,
+              help="Remove service and related local configuration")
 @click.option("--server", help="Server name for multi-server setups")
 # -- Source table management --
 @click.option("--list-source-tables", is_flag=True,
@@ -275,8 +277,10 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 # -- Type introspection --
 @click.option("--introspect-types", is_flag=True,
               help="Introspect column types from source DB")
+@click.option("--db-definitions", is_flag=True,
+              help="Generate service-schemas/definitions type file once")
 @click.option("--server", shell_complete=complete_server_names,
-              help="Server for --introspect-types")
+              help="Server for --introspect-types/--db-definitions")
 # -- Creation flags --
 @click.option("--pattern",
               type=click.Choice(["db-per-tenant", "db-shared"]),
@@ -346,6 +350,8 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Only include databases matching regex")
 @click.option("--introspect-types", is_flag=True,
               help="Introspect column types from database server")
+@click.option("--db-definitions", is_flag=True,
+              help="Generate service-schemas/definitions type file once")
 @click.option("--validate", is_flag=True,
               help="Validate sink group configuration")
 # -- Server management --

@@ -139,6 +139,13 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
             " --introspect-types"
         ),
     ),
+    "--db-definitions": (
+        "Requires --sink-group to identify sink DB engine",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --db-definitions"
+        ),
+    ),
     "--remove": (
         "Sink group name to remove",
         "cdc manage-sink-groups --remove sink_test",
@@ -447,6 +454,8 @@ def handle_list(_args: argparse.Namespace) -> int:
 
 def _validate_inspect_args(
     args: argparse.Namespace,
+    *,
+    action_flag: str = "--inspect",
 ) -> tuple[dict[str, SinkGroupConfig], SinkGroupConfig, str] | int:
     """Validate inspect command arguments and load required data.
 
@@ -457,9 +466,12 @@ def _validate_inspect_args(
     sink_file = get_sink_file_path()
 
     if not args.sink_group:
-        print_error("Error: --inspect requires --sink-group <name>")
+        print_error(
+            f"Error: {action_flag} requires --sink-group <name>"
+        )
         print_info(
-            "Usage: cdc manage-sink-groups --inspect --sink-group <name>"
+            "Usage: cdc manage-sink-groups "
+            + f"{action_flag} --sink-group <name>"
         )
         return 1
 
@@ -625,7 +637,7 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     source_file = get_source_group_file_path()
 
     # Validate args and load sink group
-    result = _validate_inspect_args(args)
+    result = _validate_inspect_args(args, action_flag="--inspect")
     if isinstance(result, int):
         return result
 
@@ -649,7 +661,10 @@ def handle_introspect_types_command(args: argparse.Namespace) -> int:
     source_file = get_source_group_file_path()
 
     # Validate args and load sink group
-    result = _validate_inspect_args(args)
+    result = _validate_inspect_args(
+        args,
+        action_flag="--introspect-types",
+    )
     if isinstance(result, int):
         return result
 
@@ -695,6 +710,79 @@ def handle_introspect_types_command(args: argparse.Namespace) -> int:
     }
 
     success = introspect_types(engine, conn_params)
+    return 0 if success else 1
+
+
+def handle_db_definitions_command(args: argparse.Namespace) -> int:
+    """Generate service-schemas/definitions type file once from sink server."""
+    from cdc_generator.validators.manage_service_schema.type_definitions import (
+        generate_type_definitions,
+    )
+
+    source_file = get_source_group_file_path()
+
+    # Validate args and load sink group
+    result = _validate_inspect_args(
+        args,
+        action_flag="--db-definitions",
+    )
+    if isinstance(result, int):
+        return result
+
+    _sink_groups, sink_group, sink_group_name = result
+
+    # Load source groups for resolution
+    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+
+    # Resolve sink group (handles inherited servers)
+    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
+
+    # Pick server: explicit --server or first available
+    servers = resolved.get("servers", {})
+    if not servers:
+        print_error(f"No servers in sink group '{sink_group_name}'")
+        return 1
+
+    server_name = args.server or next(iter(servers))
+    if server_name not in servers:
+        print_error(
+            f"Server '{server_name}' not found"
+            + f" in sink group '{sink_group_name}'"
+        )
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    db_type = str(resolved.get("type", "postgres"))
+    if db_type not in {"postgres", "mssql"}:
+        print_error(
+            f"Unsupported sink type '{db_type}' for --db-definitions"
+        )
+        print_info("Supported sink types: postgres, mssql")
+        return 1
+
+    print_header(
+        "Generating DB definitions from sink "
+        + f"{db_type.upper()} server '{server_name}'"
+    )
+
+    conn_params: dict[str, Any] = {
+        "host": server_config.get("host", ""),
+        "port": server_config.get("port", ""),
+        "user": server_config.get(
+            "username", server_config.get("user", "")
+        ),
+        "password": server_config.get("password", ""),
+    }
+
+    success = generate_type_definitions(
+        db_type,
+        conn_params,
+        source_label=(
+            "manage-sink-groups --db-definitions"
+            + f" ({sink_group_name}:{server_name})"
+        ),
+    )
     return 0 if success else 1
 
 
@@ -1427,6 +1515,14 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
             f" database server (requires --sink-group){Colors.RESET}"
         ),
     )
+    parser.add_argument(
+        "--db-definitions",
+        action="store_true",
+        help=(
+            f"{Colors.CYAN}Generate service-schemas/definitions/{{pgsql|mssql}}.yaml"
+            f" once from sink DB metadata (requires --sink-group){Colors.RESET}"
+        ),
+    )
 
     # Validation
     parser.add_argument(
@@ -1504,6 +1600,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "info": (args.info, lambda: handle_info_command(args)),
         "inspect": (args.inspect, lambda: handle_inspect_command(args)),
         "introspect_types": (args.introspect_types, lambda: handle_introspect_types_command(args)),
+        "db_definitions": (args.db_definitions, lambda: handle_db_definitions_command(args)),
         "validate": (args.validate, lambda: handle_validate_command(args)),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "remove_server": (args.remove_server, lambda: handle_remove_server_command(args)),

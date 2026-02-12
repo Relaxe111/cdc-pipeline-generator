@@ -8,7 +8,6 @@ from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
     print_success,
-    print_warning,
 )
 from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from cdc_generator.helpers.mssql_loader import has_pymssql
@@ -306,36 +305,7 @@ def _fetch_and_save(
     if not tables_data:
         return False
 
-    saved = _save_tables_to_yaml(service, tables_data)
-
-    # Generate type definitions as side-effect of --save
-    if saved:
-        _generate_type_definitions_quietly(db_type, conn_params)
-
-    return saved
-
-
-def _generate_type_definitions_quietly(
-    db_type: str,
-    conn_params: dict[str, Any],
-) -> None:
-    """Generate type definitions without failing the save.
-
-    Type definition generation is a best-effort side-effect.
-    Failures are logged as warnings, not errors.
-    """
-    try:
-        from cdc_generator.validators.manage_service_schema.type_definitions import (
-            generate_type_definitions,
-        )
-
-        generate_type_definitions(
-            db_type, conn_params, source_label="auto (--save)",
-        )
-    except Exception as exc:
-        print_warning(
-            f"Type definitions generation skipped: {exc}"
-        )
+    return _save_tables_to_yaml(service, tables_data)
 
 
 def save_detailed_schema(

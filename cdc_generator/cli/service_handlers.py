@@ -23,6 +23,9 @@ from cdc_generator.cli.service_handlers_misc import (
     handle_interactive,
     handle_no_service,
 )
+from cdc_generator.cli.service_handlers_remove import (
+    handle_remove_service,
+)
 from cdc_generator.cli.service_handlers_sink import (
     handle_modify_custom_table,
     handle_sink_add,
@@ -74,6 +77,7 @@ __all__ = [
     "handle_modify_custom_table",
     "handle_no_service",
     "handle_remove_column_template",
+    "handle_remove_service",
     "handle_remove_table",
     "handle_remove_transform",
     "handle_sink_add",

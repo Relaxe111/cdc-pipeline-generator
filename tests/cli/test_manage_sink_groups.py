@@ -311,6 +311,35 @@ class TestCliInspectAndIntrospect:
         assert result.returncode == 1
         assert "Server 'ghost' not found" in result.stdout + result.stderr
 
+    def test_db_definitions_missing_sink_group_fails(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc("manage-sink-groups", "--db-definitions")
+
+        assert result.returncode == 1
+        assert "requires --sink-group" in result.stdout + result.stderr
+
+    def test_db_definitions_unknown_server_fails_before_connection(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--db-definitions",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "ghost",
+        )
+
+        assert result.returncode == 1
+        assert "Server 'ghost' not found" in result.stdout + result.stderr
+
 
 class TestCliServerManagement:
     """CLI e2e: add/remove server in standalone sink group."""

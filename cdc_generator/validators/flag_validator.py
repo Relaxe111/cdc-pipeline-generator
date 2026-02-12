@@ -15,6 +15,7 @@ Example:
 
 import argparse
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 @dataclass
@@ -37,20 +38,32 @@ class ManageServerGroupFlagValidator:
     """Validates flag combinations for manage-source-groups command."""
 
     # Action flags (mutually exclusive)
-    ACTIONS = {
+    ACTIONS: ClassVar[frozenset[str]] = frozenset({
         'update', 'info',
+        'db_definitions',
         'add_server', 'remove_server', 'list_servers',
         'set_kafka_topology',
         'add_to_ignore_list', 'list_ignore_patterns',
         'add_to_schema_excludes', 'list_schema_excludes',
-        'add_env_mapping', 'list_env_mappings'
-    }
+        'add_env_mapping', 'list_env_mappings',
+    })
+
+    OK_ACTIONS: ClassVar[frozenset[str]] = frozenset({
+        'db_definitions',
+        'info',
+        'list_servers',
+        'list_ignore_patterns',
+        'list_schema_excludes',
+        'list_env_mappings',
+    })
 
     # Flags that only make sense with --update
-    UPDATE_ONLY_FLAGS = {'all'}
+    UPDATE_ONLY_FLAGS: ClassVar[frozenset[str]] = frozenset({'all'})
 
     # Connection flags (work with --add-server)
-    CONNECTION_FLAGS = {'host', 'port', 'user', 'password', 'source_type'}
+    CONNECTION_FLAGS: ClassVar[frozenset[str]] = frozenset(
+        {'host', 'port', 'user', 'password', 'source_type'}
+    )
 
     def validate(self, args: argparse.Namespace) -> ValidationResult:
         """Validate flag combinations.
@@ -83,17 +96,19 @@ class ManageServerGroupFlagValidator:
 
         # Validate based on specific action
         if action == 'update':
-            return self._validate_update(args)
-        if action == 'add_server':
-            return self._validate_add_server(args)
-        if action == 'info' or action in {'list_servers', 'list_ignore_patterns',
-                       'list_schema_excludes', 'list_env_mappings'}:
-            return ValidationResult(valid=True, level='ok')
-        if action == 'remove_server':
-            return self._validate_remove_server(args)
-        if action == 'set_kafka_topology':
-            return self._validate_set_kafka_topology(args)
-        return self._validate_config_action(args, action)
+            result = self._validate_update(args)
+        elif action == 'add_server':
+            result = self._validate_add_server(args)
+        elif action == 'remove_server':
+            result = self._validate_remove_server(args)
+        elif action == 'set_kafka_topology':
+            result = self._validate_set_kafka_topology(args)
+        elif action in self.OK_ACTIONS:
+            result = ValidationResult(valid=True, level='ok')
+        else:
+            result = self._validate_config_action(args, action)
+
+        return result
 
     def _get_active_actions(self, args: argparse.Namespace) -> list[str]:
         """Get list of active action flags.
@@ -134,8 +149,10 @@ class ManageServerGroupFlagValidator:
                     message="❌ Cannot use both --all and specific server name",
                     suggestion=(
                         "💡 Choose one approach:\n"
-                        "   cdc manage-source-groups --update --all          # Update all servers\n"
-                        "   cdc manage-source-groups --update prod           # Update specific server"
+                        "   cdc manage-source-groups --update --all "
+                        "# Update all servers\n"
+                        "   cdc manage-source-groups --update prod "
+                        "# Update specific server"
                     )
                 )
 
@@ -215,8 +232,10 @@ class ManageServerGroupFlagValidator:
                 message="❌ --set-kafka-topology requires a value",
                 suggestion=(
                     "💡 Valid values:\n"
-                    "   cdc manage-source-groups --set-kafka-topology shared       # Same Kafka for all servers\n"
-                    "   cdc manage-source-groups --set-kafka-topology per-server   # Separate Kafka per server"
+                    "   cdc manage-source-groups --set-kafka-topology shared "
+                    "# Same Kafka for all servers\n"
+                    "   cdc manage-source-groups --set-kafka-topology per-server "
+                    "# Separate Kafka per server"
                 )
             )
 

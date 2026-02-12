@@ -31,6 +31,7 @@ from cdc_generator.cli.service_handlers import (
     handle_modify_custom_table,
     handle_no_service,
     handle_remove_column_template,
+    handle_remove_service,
     handle_remove_table,
     handle_remove_transform,
     handle_sink_add,
@@ -62,6 +63,10 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--create-service": (
         "Name for the new service to create",
         "cdc manage-service --create-service myservice",
+    ),
+    "--remove-service": (
+        "Name of the service to remove",
+        "cdc manage-service --remove-service myservice",
     ),
     "--add-source-table": (
         "Table name to add (format: schema.table)",
@@ -215,6 +220,9 @@ _EPILOG = """\
 Examples:
   # Create a new service
   cdc manage-service --service myservice --create-service
+
+    # Remove a service
+    cdc manage-service --remove-service myservice
 
   # Inspect database tables
   cdc manage-service --service adopus --inspect --schema dbo
@@ -376,6 +384,11 @@ def _build_parser() -> ServiceArgumentParser:
         "--create-service",
         metavar="SERVICE_NAME",
         help="Create a new service configuration file",
+    )
+    parser.add_argument(
+        "--remove-service",
+        metavar="SERVICE_NAME",
+        help="Remove a service configuration and related local artifacts",
     )
     parser.add_argument(
         "--server",
@@ -672,6 +685,9 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     if args.create_service:
         return handle_create_service(args)
 
+    if args.remove_service:
+        return handle_remove_service(args)
+
     # Special case: --validate-config can run without --service (validates all)
     if args.validate_config:
         return handle_validate_config(args)
@@ -866,6 +882,8 @@ def main() -> int:
 
     if args.create_service:
         args.service = args.create_service
+    elif args.remove_service and not args.service:
+        args.service = args.remove_service
 
     result = _auto_detect_service(args)
     if result is None:

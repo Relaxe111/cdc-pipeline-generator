@@ -10,6 +10,7 @@ These definitions are used for:
 - Future: type mapping between DB engines
 """
 
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -42,6 +43,27 @@ _DEFINITIONS_DIR_NAME = "definitions"
 def _get_definitions_dir() -> Path:
     """Return path to service-schemas/definitions/ in project root."""
     return get_project_root() / "service-schemas" / _DEFINITIONS_DIR_NAME
+
+
+def _require_conn_param(conn_params: dict[str, Any], key: str) -> str | None:
+    """Return required connection parameter as string, or print error and return None."""
+    value = conn_params.get(key)
+    if value is None:
+        print_error(
+            "Missing required connection parameter: "
+            + f"'{key}'"
+        )
+        return None
+
+    text = str(value).strip()
+    if not text:
+        print_error(
+            "Connection parameter cannot be empty: "
+            + f"'{key}'"
+        )
+        return None
+
+    return text
 
 
 # -------------------------------------------------------------------
@@ -102,13 +124,46 @@ def _introspect_postgres_types(
     """
 
     try:
+        host_raw = _require_conn_param(conn_params, "host")
+        port_raw = _require_conn_param(conn_params, "port")
+        user_raw = _require_conn_param(conn_params, "user")
+        password_raw = _require_conn_param(conn_params, "password")
+        if (
+            host_raw is None
+            or port_raw is None
+            or user_raw is None
+            or password_raw is None
+        ):
+            return None
+
+        host = os.path.expandvars(host_raw)
+        port_expanded = os.path.expandvars(port_raw)
+        user = os.path.expandvars(user_raw)
+        password = os.path.expandvars(password_raw)
+
+        if port_expanded == port_raw and "$" in port_raw:
+            print_error(
+                "Failed to query PostgreSQL types: unresolved"
+                + f" port env var '{port_raw}'"
+            )
+            return None
+
+        try:
+            port = int(port_expanded)
+        except ValueError:
+            print_error(
+                "Failed to query PostgreSQL types: invalid port"
+                + f" value '{port_expanded}'"
+            )
+            return None
+
         database = conn_params.get("database") or "postgres"
         conn = create_postgres_connection(
-            host=conn_params["host"],
-            port=int(conn_params["port"]),
+            host=host,
+            port=port,
             dbname=database,
-            user=conn_params["user"],
-            password=conn_params["password"],
+            user=user,
+            password=password,
             connect_timeout=10,
         )
         cursor = conn.cursor()
@@ -185,12 +240,37 @@ def _introspect_mssql_types(
     }
 
     try:
+        host_raw = _require_conn_param(conn_params, "host")
+        port_raw_raw = _require_conn_param(conn_params, "port")
+        user_raw = _require_conn_param(conn_params, "user")
+        password_raw = _require_conn_param(conn_params, "password")
+        if (
+            host_raw is None
+            or port_raw_raw is None
+            or user_raw is None
+            or password_raw is None
+        ):
+            return None
+
+        host = os.path.expandvars(host_raw)
+        port_raw = os.path.expandvars(port_raw_raw)
+        try:
+            port = int(port_raw)
+        except ValueError:
+            print_error(
+                "Failed to query MSSQL types: invalid port"
+                + f" value '{port_raw}'"
+            )
+            return None
+        user = os.path.expandvars(user_raw)
+        password = os.path.expandvars(password_raw)
+
         conn = create_mssql_connection(
-            host=conn_params["host"],
-            port=conn_params["port"],
+            host=host,
+            port=port,
             database="master",
-            user=conn_params["user"],
-            password=conn_params["password"],
+            user=user,
+            password=password,
         )
         cursor = conn.cursor()
         cursor.execute(
