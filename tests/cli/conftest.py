@@ -8,13 +8,15 @@ exactly as a user would type in the dev container terminal.  This validates
 the full chain: fish shell → ``cdc`` entry point → ``commands.py`` dispatch
 → subcommand module → handler.
 
-The ``run_cdc_completion`` fixture additionally lets us assert that fish
-autocompletions return the expected suggestions.
+The ``run_cdc_completion`` fixture uses Click's ``ShellComplete`` API to
+query completions at the Python level — the same logic that drives the
+runtime ``_CDC_COMPLETE`` protocol.  Tests don't need fish installed.
 
 **Isolation:** If ``fish`` or the ``cdc`` entry point are not installed
 (e.g. running outside the dev container, or in a bare CI environment),
-every test that depends on ``run_cdc`` / ``run_cdc_completion`` is
-automatically skipped with a clear reason.
+every test that depends on ``run_cdc`` is automatically skipped with a
+clear reason.  ``run_cdc_completion`` never requires fish because it
+works at the Python/Click level.
 """
 
 import os
@@ -25,6 +27,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from click.shell_completion import ShellComplete
 
 # Type aliases for the callable fixtures.
 RunCdc = Callable[..., subprocess.CompletedProcess[str]]
@@ -103,34 +106,55 @@ def run_cdc(isolated_project: Path) -> RunCdc:
 
 @pytest.fixture()
 def run_cdc_completion() -> RunCdcCompletion:
-    """Return a helper that queries fish autocompletions for ``cdc``.
+    """Return a helper that queries Click completions for ``cdc``.
 
-    Uses ``complete -C '<partial>'`` to ask fish what completions it
-    would offer for the given input — identical to pressing Tab.
+    Uses Click's ``ShellComplete`` API directly — the same logic that
+    drives the runtime ``_CDC_COMPLETE`` protocol in the dev container.
+    No fish shell required; works in CI and locally.
 
-    Tests that use this fixture are **automatically skipped** when ``fish``
-    is not installed.
+    The returned callable accepts a partial command string (e.g.
+    ``"cdc manage-service --ser"``) and returns a
+    ``CompletedProcess``-like object whose ``.stdout`` contains one
+    completion per line (``value\\thelp``), matching the fish format.
 
     Usage in tests::
 
         def test_completions(run_cdc_completion: RunCdcCompletion) -> None:
-            result = run_cdc_completion("cdc scaff")
-            assert "scaffold" in result.stdout
+            result = run_cdc_completion("cdc manage-service --ser")
+            assert "--service" in result.stdout
 
     Returns:
         A callable ``(partial_cmd) -> CompletedProcess[str]``.
-        stdout contains one completion per line (word + tab + description).
     """
-    if not _FISH_AVAILABLE:
-        pytest.skip(_SKIP_REASON_FISH)
+    from cdc_generator.cli.commands import _click_cli
 
     def _complete(partial_cmd: str) -> subprocess.CompletedProcess[str]:
-        fish_cmd = f"complete -C {shlex.quote(partial_cmd)}"
-        return subprocess.run(
-            ["fish", "-c", fish_cmd],
-            capture_output=True,
-            text=True,
-            check=False,
+        parts = shlex.split(partial_cmd)
+        # Drop the program name ("cdc") — Click handles it via prog_name.
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+
+        # The last token is the incomplete word being typed.
+        if parts:
+            incomplete = parts[-1]
+            args = parts[:-1]
+        else:
+            incomplete = ""
+            args = []
+
+        comp = ShellComplete(_click_cli, {}, "cdc", "_CDC_COMPLETE")
+        completions = comp.get_completions(args, incomplete)
+        # Format like fish: "value\thelp_text\n"
+        lines = [
+            f"{c.value}\t{c.help or ''}" if c.help else c.value
+            for c in completions
+        ]
+        stdout = "\n".join(lines) + "\n" if lines else ""
+        return subprocess.CompletedProcess(
+            args=["click-complete", partial_cmd],
+            returncode=0,
+            stdout=stdout,
+            stderr="",
         )
 
     return _complete

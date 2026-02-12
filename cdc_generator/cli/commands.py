@@ -32,6 +32,7 @@ Commands:
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
 from pathlib import Path
@@ -405,7 +406,7 @@ def _handle_reload_completions(is_dev_container: bool) -> int:
         return 1
 
 
-def _execute_command(command: str, extra_args: list[str]) -> int:
+def execute_command(command: str, extra_args: list[str]) -> int:
     """Execute a cdc command using the existing command handlers."""
     # Commands that run without environment detection
     special_result = _handle_special_commands(command, extra_args)
@@ -446,7 +447,7 @@ def _register_passthrough_command(
     command_name: str,
     description: str,
 ) -> None:
-    """Register a click command that forwards argv to existing handlers."""
+    """Register a generic passthrough click command (no typed options)."""
 
     @click.command(
         name=command_name,
@@ -460,21 +461,32 @@ def _register_passthrough_command(
     @click.pass_context
     def _cmd(ctx: click.Context) -> int:
         extra_args: list[str] = list(ctx.args)
-        return _execute_command(command_name, extra_args)
+        return execute_command(command_name, extra_args)
 
     _click_cli.add_command(_cmd)
 
 
 def _register_commands() -> None:
-    """Register all top-level commands in the click app."""
+    """Register all top-level commands in the click app.
+
+    Commands with typed Click option declarations (from click_commands.py)
+    are registered directly. Remaining commands use generic passthrough.
+    """
+    from cdc_generator.cli.click_commands import CLICK_COMMANDS
+
+    # Register typed commands (have full Click option declarations)
+    for _name, cmd_obj in CLICK_COMMANDS.items():
+        _click_cli.add_command(cmd_obj)
+
+    # Register remaining commands as generic passthrough
+    typed_names = set(CLICK_COMMANDS.keys())
     for cmd, info in GENERATOR_COMMANDS.items():
-        _register_passthrough_command(cmd, info["description"])
+        if cmd not in typed_names:
+            _register_passthrough_command(cmd, info["description"])
 
     for cmd, info in LOCAL_COMMANDS.items():
-        _register_passthrough_command(cmd, info["description"])
-
-    _register_passthrough_command("test", "Run project tests (unit and CLI e2e)")
-    _register_passthrough_command("test-coverage", "Show test coverage report by cdc command")
+        if cmd not in typed_names:
+            _register_passthrough_command(cmd, info["description"])
 
     @click.command(name="help", help="Show help message")
     def _help_cmd() -> int:
@@ -490,6 +502,19 @@ _register_commands()
 
 def main() -> int:
     """Main CLI entry point."""
+    import os
+
+    # Let Click handle shell completion protocol before anything else.
+    # When _CDC_COMPLETE is set, Click outputs completion data and exits.
+    if os.environ.get("_CDC_COMPLETE"):
+        with contextlib.suppress(SystemExit):
+            _click_cli.main(
+                args=sys.argv[1:],
+                prog_name="cdc",
+                standalone_mode=True,
+            )
+        return 0
+
     if len(sys.argv) < _MIN_ARGS or sys.argv[1] in ["help", "--help", "-h"]:
         workspace_root, implementation_name, is_dev_container = detect_environment()
         print_help(workspace_root, implementation_name, is_dev_container)

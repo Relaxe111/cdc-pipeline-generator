@@ -57,4 +57,5 @@ class TestCliSetupLocalCompletions:
         output = result.stdout
         if not output.strip():
             pytest.skip("No fish flag completions registered for setup-local")
-        assert "--help" in output
+        assert "--all" in output
+        assert "--postgres" in output

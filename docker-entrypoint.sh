@@ -12,12 +12,8 @@ pip install -e . --quiet
 echo "Installed version:"
 pip show cdc-pipeline-generator | grep "^Version:"
 
-# Update Fish completions from latest source (in case of changes)
-# Single source of truth: template file
-if test -f /workspace/cdc_generator/templates/init/cdc.fish
-    echo "Updating Fish completions..."
-    cp /workspace/cdc_generator/templates/init/cdc.fish /usr/share/fish/vendor_completions.d/cdc.fish
-end
+# Fish completions are generated at runtime by Click's shell completion
+# protocol (eval in cdc.fish). No manual file copy needed.
 
 # Execute the main command (usually tail -f /dev/null to keep container running)
 exec $argv
