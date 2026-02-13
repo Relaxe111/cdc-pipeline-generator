@@ -7,7 +7,7 @@ Usage:
     cdc <command> [options]
 
 Commands:
-    scaffold              Scaffold a new CDC pipeline project with server group configuration
+    scaffold              Scaffold a new CDC pipeline project with source group configuration
     validate              Validate all customer configurations
     manage-service        Manage service definitions
     manage-source-groups   Manage source groups configuration
@@ -143,7 +143,7 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
     "scaffold": {
         "module": "cdc_generator.cli.scaffold_command",
         "script": "cli/scaffold_command.py",
-        "description": "Scaffold a new CDC pipeline project with server group configuration",
+        "description": "Scaffold a new CDC pipeline project with source group configuration",
     },
     "generate": {
         "module": "cdc_generator.core.pipeline_generator",
@@ -156,8 +156,8 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "description": "Manage CDC service definitions",
     },
     "manage-source-groups": {
-        "module": "cdc_generator.cli.server_group",
-        "script": "cli/server_group.py",
+        "module": "cdc_generator.cli.source_group",
+        "script": "cli/source_group.py",
         "description": "Manage source groups configuration (source-groups.yaml)",
     },
     "manage-sink-groups": {

@@ -7,46 +7,8 @@ from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
     print_success,
-    print_warning,
 )
 from cdc_generator.helpers.service_config import get_project_root
-from cdc_generator.helpers.yaml_loader import (
-    load_yaml_file,
-    save_yaml_file,
-)
-
-
-def _remove_from_source_groups(service_name: str) -> bool:
-    """Remove service from source-groups.yaml sources entries.
-
-    Returns:
-        True if any source-group entry was updated.
-    """
-    source_groups_file = get_project_root() / "source-groups.yaml"
-    if not source_groups_file.exists():
-        return False
-
-    try:
-        raw_data = load_yaml_file(source_groups_file)
-    except (FileNotFoundError, ValueError) as exc:
-        print_warning(f"Could not read source-groups.yaml: {exc}")
-        return False
-
-    changed = False
-    for _sg_name, sg_data in raw_data.items():
-        if not isinstance(sg_data, dict):
-            continue
-        sources_raw = sg_data.get("sources")
-        if not isinstance(sources_raw, dict):
-            continue
-        if service_name in sources_raw:
-            del sources_raw[service_name]
-            changed = True
-
-    if changed:
-        save_yaml_file(raw_data, source_groups_file)
-
-    return changed
 
 
 def handle_remove_service(args: argparse.Namespace) -> int:
@@ -69,12 +31,8 @@ def handle_remove_service(args: argparse.Namespace) -> int:
     service_file.unlink()
     print_success(f"✓ Removed {service_file.relative_to(project_root)}")
 
-    # 2) Remove source-groups.yaml sources.<service> entries
-    removed_from_source_groups = _remove_from_source_groups(service_name)
-    if removed_from_source_groups:
-        print_success("✓ Removed service from source-groups.yaml sources")
-    else:
-        print_info("No source-groups.yaml sources entry found for service")
+    # 2) Keep source-groups.yaml untouched by design.
+    print_info("Keeping source-groups.yaml unchanged")
 
     # 3) Remove service-schemas/<service>/
     schemas_dir = project_root / "service-schemas" / service_name

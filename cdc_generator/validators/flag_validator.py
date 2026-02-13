@@ -306,3 +306,8 @@ def validate_manage_server_group_flags(args: argparse.Namespace) -> ValidationRe
     """
     validator = ManageServerGroupFlagValidator()
     return validator.validate(args)
+
+
+def validate_manage_source_group_flags(args: argparse.Namespace) -> ValidationResult:
+    """Alias for validating manage-source-groups flags."""
+    return validate_manage_server_group_flags(args)

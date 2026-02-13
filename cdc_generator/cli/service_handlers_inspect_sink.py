@@ -17,6 +17,17 @@ from cdc_generator.validators.manage_service.sink_inspector import (
     inspect_sink_schema,
 )
 
+_INSPECT_ALL_SINKS = "__all_sinks__"
+
+
+def _get_available_sinks(service_name: str) -> list[str]:
+    """Return configured sinks for a service."""
+    from cdc_generator.validators.manage_service.db_inspector_common import (
+        get_available_sinks,
+    )
+
+    return get_available_sinks(service_name)
+
 
 def _validate_inspect_sink_args(
     args: argparse.Namespace,
@@ -26,12 +37,23 @@ def _validate_inspect_sink_args(
     Returns:
         (sink_key, available_sinks) on success, or int exit code.
     """
-    from cdc_generator.validators.manage_service.db_inspector_common import (
-        get_available_sinks,
-    )
-
     sink_key: str = args.inspect_sink
-    available = get_available_sinks(args.service)
+    available = _get_available_sinks(args.service)
+
+    if sink_key == _INSPECT_ALL_SINKS:
+        if not args.all:
+            print_error(
+                "Error: --inspect-sink without SINK_KEY requires --all "
+                + "(inspect all configured sinks)"
+            )
+            return 1
+        if not available:
+            print_error(
+                f"No sinks configured for service '{args.service}'"
+            )
+            return 1
+        # Sentinel is handled by caller; return first item for type compatibility.
+        return sink_key, available
 
     if sink_key not in available:
         print_error(
@@ -65,8 +87,49 @@ def handle_inspect_sink(args: argparse.Namespace) -> int:
     if isinstance(validation, int):
         return validation
 
-    sink_key, _available = validation
+    sink_key, available = validation
 
+    if sink_key == _INSPECT_ALL_SINKS:
+        return _inspect_all_sinks(args, available)
+
+    return _inspect_single_sink(args, sink_key)
+
+
+def _inspect_all_sinks(
+    args: argparse.Namespace,
+    sink_keys: list[str],
+) -> int:
+    """Inspect all sinks configured for the service."""
+    print_info(
+        f"Inspecting {len(sink_keys)} sink(s) for service '{args.service}'...\n"
+    )
+
+    results: dict[str, bool] = {}
+    for sink_key in sorted(sink_keys):
+        print_info(f"{'=' * 80}")
+        results[sink_key] = _inspect_single_sink(args, sink_key) == 0
+        print()
+
+    print_info(f"{'=' * 80}")
+    print_info("Sink Inspection Summary")
+    print_info(f"{'=' * 80}\n")
+
+    passed = [sink for sink, ok in results.items() if ok]
+    failed = [sink for sink, ok in results.items() if not ok]
+
+    if passed:
+        print_success(f"✓ Completed ({len(passed)}): {', '.join(passed)}")
+    if failed:
+        print_error(f"✗ Failed ({len(failed)}): {', '.join(failed)}")
+
+    return 0 if all(results.values()) else 1
+
+
+def _inspect_single_sink(
+    args: argparse.Namespace,
+    sink_key: str,
+) -> int:
+    """Inspect one sink and render/save results."""
     result = inspect_sink_schema(
         args.service, sink_key, args.env,
     )
@@ -97,12 +160,17 @@ def handle_inspect_sink(args: argparse.Namespace) -> int:
     )
 
     return _run_sink_inspection(
-        args, tables, allowed_schemas, schema,
+        args,
+        sink_key,
+        tables,
+        allowed_schemas,
+        schema,
     )
 
 
 def _run_sink_inspection(
     args: argparse.Namespace,
+    sink_key: str,
     tables: list[dict[str, object]],
     allowed_schemas: list[str],
     schema: str | None,
@@ -110,7 +178,6 @@ def _run_sink_inspection(
     """Execute sink inspection filtering and output."""
     # Extract target service from sink key
     # e.g., "sink_asma.activities" → "activities"
-    sink_key: str = args.inspect_sink
     target_service = (
         sink_key.split(".", 1)[1]
         if "." in sink_key

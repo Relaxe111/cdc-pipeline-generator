@@ -112,7 +112,7 @@ max-statements = 65
 "*.pyi" = ["ANN401"]
 "tests/*" = ["ANN401", "ARG", "PLR2004"]
 # CLI dispatch functions are inherently complex
-"cdc_generator/cli/server_group.py" = ["PLR0911", "PLR0912", "PLR0915"]
+"cdc_generator/cli/source_group.py" = ["PLR0911", "PLR0912", "PLR0915"]
 # Service creator has complex branching for pattern handling
 "cdc_generator/validators/manage_service/service_creator.py" = ["PLR0912", "PLR0915"]
 

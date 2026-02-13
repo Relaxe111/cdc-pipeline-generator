@@ -150,6 +150,92 @@ class TestListAvailableServicesFromServerGroup:
             result = list_available_services_from_server_group()
             assert result == []
 
+    def test_ignores_parent_services_directory_when_local_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Uses only the services/ folder next to source-groups.yaml for filtering."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+
+            # Parent workspace with unrelated services files
+            parent_services = root / "services"
+            parent_services.mkdir()
+            (parent_services / "chat.yaml").write_text("# unrelated parent chat\n")
+            (parent_services / "directory.yaml").write_text(
+                "# unrelated parent directory\n"
+            )
+
+            # Child project contains source-groups.yaml but no local services/
+            child = root / "project"
+            child.mkdir()
+            (child / "source-groups.yaml").write_text(
+                """
+asma:
+  pattern: db-shared
+  source_type: postgres
+  sources:
+    directory:
+      database_name: asma_directory
+    chat:
+      database_name: asma_chat
+    proxy:
+      database_name: asma_proxy
+"""
+            )
+
+            monkeypatch.chdir(child)
+
+            from cdc_generator.helpers.autocompletions.services import (
+                list_available_services_from_server_group,
+            )
+
+            result = list_available_services_from_server_group()
+
+            # Local project has no created services, so all sources are available
+            assert result == ["chat", "directory", "proxy"]
+
+    def test_aggregates_sources_from_multiple_server_groups(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Returns available services from all server groups in source-groups.yaml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "source-groups.yaml").write_text(
+                """
+alpha:
+  pattern: db-shared
+  source_type: postgres
+  sources:
+    chat:
+      database_name: chat_dev
+    directory:
+      database_name: directory_dev
+
+beta:
+  pattern: db-shared
+  source_type: postgres
+  sources:
+    proxy:
+      database_name: proxy_dev
+    tracing:
+      database_name: tracing_dev
+"""
+            )
+
+            services_dir = workspace / "services"
+            services_dir.mkdir()
+            (services_dir / "chat.yaml").write_text("# created\n")
+
+            monkeypatch.chdir(workspace)
+
+            from cdc_generator.helpers.autocompletions.services import (
+                list_available_services_from_server_group,
+            )
+
+            result = list_available_services_from_server_group()
+
+            assert result == ["directory", "proxy", "tracing"]
+
 
 class TestCreateServiceCompletion:
     """Tests for --create-service flag completion."""

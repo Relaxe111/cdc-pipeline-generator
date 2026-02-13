@@ -215,7 +215,7 @@ cdc-pipeline-generator/
 │   │   └── manage_service/            # 18 validator modules
 │   └── cli/
 │       ├── service.py                 # manage-service command
-│       └── server_group.py            # manage-server-group command
+│       └── service_group            # manage-server-group command
 ├── examples/
 │   ├── db-per-tenant/                 # Adopus pattern reference
 │   │   ├── README.md                  # Pattern documentation

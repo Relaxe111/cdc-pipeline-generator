@@ -215,9 +215,9 @@ class SmartCommand(click.Command):
 # Keys and values use underscore form (Click param names).
 MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     # ── Source inspection ──────────────────────────────────────
-    "inspect": {"schema", "all_flag", "save", "env", "server"},
+    "inspect": {"schema", "all", "save", "env", "server"},
     # ── Sink inspection ────────────────────────────────────────
-    "inspect_sink": {"schema", "all_flag", "env"},
+    "inspect_sink": {"schema", "all", "save", "env"},
     # ── Add single source table ────────────────────────────────
     "add_source_table": {"primary_key", "schema"},
     # ── Add multiple source tables ─────────────────────────────
@@ -322,7 +322,7 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
 
 # manage-source-groups: context flag → sub-options
 MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
-    "update": {"all_flag", "server"},
+    "update": {"all", "server"},
     "info": set(),
     "list_env_services": set(),
     "add_to_ignore_list": set(),

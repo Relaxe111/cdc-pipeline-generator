@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Manage the server group configuration file (source-groups.yaml).
+Manage the source group configuration file (source-groups.yaml).
 
 This command helps you keep your source-groups.yaml file up-to-date by
 inspecting the source database and populating it with the correct database
@@ -17,7 +17,7 @@ Usage:
     # Inspect all servers
     cdc manage-source-groups --update --all
 
-    # Show information about the configured server group
+    # Show information about the configured source group
     cdc manage-source-groups --info
 
     # Manage database/schema exclude patterns
@@ -27,10 +27,10 @@ Usage:
     cdc manage-source-groups --add-to-schema-excludes "schema_to_exclude"
 
 Note:
-To create a new server group, use 'cdc scaffold <name>' command.
+To create a new source group, use 'cdc scaffold <name>' command.
 
 Example:
-    cdc scaffold myproject --pattern db-shared --source-type postgres \\
+    cdc scaffold myproject --pattern db-shared --source-type postgres \
         --extraction-pattern "" --environment-aware
 """
 
@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-# When executed directly (python cdc_generator/cli/server_group.py), ensure the
+# When executed directly (python cdc_generator/cli/source_group.py), ensure the
 # project root is on sys.path so package imports succeed.
 if __package__ in (None, ""):
     project_root = Path(__file__).resolve().parents[2]
@@ -54,7 +54,7 @@ from cdc_generator.helpers.helpers_logging import (
 from cdc_generator.helpers.yaml_loader import ConfigDict
 
 # Import flag validator
-from cdc_generator.validators.flag_validator import validate_manage_server_group_flags
+from cdc_generator.validators.flag_validator import validate_manage_source_group_flags
 
 # Import from modular package
 from cdc_generator.validators.manage_server_group import (
@@ -75,6 +75,9 @@ from cdc_generator.validators.manage_server_group import (
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
 )
+
+# Backward-compat alias for tests/extensions that patch this symbol directly.
+validate_manage_server_group_flags = validate_manage_source_group_flags
 
 
 def _handle_introspect_types(args: argparse.Namespace) -> int:
@@ -204,7 +207,9 @@ def main() -> int:
     # Note: .env loading handled by implementations, not generator library
 
     parser = argparse.ArgumentParser(
-        description="Manage the source-groups.yaml file for your implementation.",
+        description=(
+            "Manage the source/service-groups.yaml file for your implementation."
+        ),
         prog="cdc manage-source-groups",  # Use the alias in help messages
         formatter_class=argparse.RawTextHelpFormatter
     )
@@ -216,7 +221,7 @@ def main() -> int:
         const="default",
         metavar="SERVER",
         help=(
-            "Update the server group by inspecting the source database. "
+            "Update the source group by inspecting the source database. "
             "Optionally provide a server name (default: 'default')."
         ),
     )
@@ -228,7 +233,7 @@ def main() -> int:
     parser.add_argument(
         "--info",
         action="store_true",
-        help="Show detailed information for the server group.",
+        help="Show detailed information for the source group.",
     )
     parser.add_argument(
         "--view-services",
@@ -261,7 +266,7 @@ def main() -> int:
                        help="Add a new server configuration (e.g., 'analytics', 'reporting'). " +
                             "Use with --source-type, --host, --port, --user, --password.")
     parser.add_argument("--list-servers", action="store_true",
-                       help="List all configured servers in the server group.")
+                       help="List all configured servers in the source group.")
     parser.add_argument(
         "--remove-server",
         metavar="NAME",
@@ -278,12 +283,12 @@ def main() -> int:
     parser.add_argument(
         "--set-validation-env",
         metavar="ENV",
-        help="Set the validation environment for the server group (e.g., 'dev', 'nonprod').",
+        help="Set the validation environment for the source group (e.g., 'dev', 'nonprod').",
     )
     parser.add_argument(
         "--list-envs",
         action="store_true",
-        help="List available environments for the server group.",
+        help="List available environments for the source group.",
     )
 
     parser.add_argument(

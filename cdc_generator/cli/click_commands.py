@@ -109,8 +109,8 @@ _PASSTHROUGH_CTX: dict[str, object] = {
               help="Manage existing source table")
 # -- Inspect / validation --
 @click.option("--inspect", is_flag=True, help="Inspect database schema")
-@click.option("--inspect-sink", shell_complete=complete_sink_keys,
-              help="Inspect sink database schema")
+@click.option("--inspect-sink", is_flag=True,
+              help="Inspect sink database schema (use with --all for all sinks)")
 @click.option("--schema", shell_complete=complete_schemas,
               help="Database schema to inspect or filter")
 @click.option("--save", is_flag=True, help="Save detailed table schemas to YAML")
@@ -260,6 +260,7 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Set single extraction pattern: SERVER PATTERN")
 @click.option("--list-extraction-patterns",
               is_flag=True,
+              shell_complete=complete_server_names,
               help="List extraction patterns")
 @click.option("--remove-extraction-pattern",
               help="Remove extraction pattern: SERVER INDEX")

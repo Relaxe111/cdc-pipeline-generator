@@ -63,10 +63,12 @@ def list_available_services_from_server_group() -> list[str]:
             return []
 
         # Extract sources from server_group structure (flat format)
-        # Look for root key with 'pattern' field (server group marker)
-        all_sources: list[str] = []
+        # Look for root key with server-group markers.
+        all_source_names: set[str] = set()
         for group_data in config.values():
-            if isinstance(group_data, dict) and 'pattern' in group_data:
+            if isinstance(group_data, dict) and (
+                'pattern' in group_data or 'server_group_type' in group_data
+            ):
                 group_dict = cast(dict[str, Any], group_data)
                 # Found server group - check for 'sources' key
                 sources_obj = group_dict.get('sources', {})
@@ -76,14 +78,25 @@ def list_available_services_from_server_group() -> list[str]:
 
                 if isinstance(sources_obj, dict):
                     sources_dict = cast(dict[str, Any], sources_obj)
-                    all_sources = sorted(sources_dict.keys())
-                break
+                    all_source_names.update(sources_dict.keys())
+
+        all_sources = sorted(all_source_names)
 
         if not all_sources:
             return []
 
-        # Filter out services that already have YAML files
-        existing = set(list_existing_services())
+        # Filter out services that already have YAML files in the SAME project
+        # as source-groups.yaml. This avoids accidentally picking services/
+        # from parent folders in multi-workspace layouts.
+        project_services_dir = server_group_file.parent / "services"
+        existing: set[str] = set()
+        if project_services_dir.is_dir():
+            existing = {
+                yaml_file.stem
+                for yaml_file in project_services_dir.glob("*.yaml")
+                if yaml_file.is_file()
+            }
+
         return [svc for svc in all_sources if svc not in existing]
 
     except Exception:

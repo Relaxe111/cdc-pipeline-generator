@@ -135,6 +135,14 @@ class TestHandleInspectSinkErrors:
         result = handle_inspect_sink(args)
         assert result == 1
 
+    def test_all_sinks_mode_requires_all_flag(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """--inspect-sink without key requires --all to inspect all sinks."""
+        args = _ns(inspect_sink="__all_sinks__", all=False)
+        result = handle_inspect_sink(args)
+        assert result == 1
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Happy paths
@@ -287,6 +295,31 @@ class TestHandleInspectSinkHappyPath:
         assert isinstance(saved_tables, list)
         assert len(saved_tables) == 1
         assert saved_tables[0]["TABLE_SCHEMA"] == "public"
+
+    def test_inspect_all_sinks_success(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """--inspect-sink --all inspects each configured sink."""
+        args = _ns(inspect_sink="__all_sinks__", all=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "users",
+                "COLUMN_COUNT": 5,
+            },
+        ]
+
+        with patch(
+            "cdc_generator.cli.service_handlers_inspect_sink._get_available_sinks",
+            return_value=["sink_asma.activities", "sink_asma.chat"],
+        ), patch(
+            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+            return_value=(tables, "postgres", ["public"]),
+        ) as inspect_mock:
+            result = handle_inspect_sink(args)
+
+        assert result == 0
+        assert inspect_mock.call_count == 2
 
 
 # ═══════════════════════════════════════════════════════════════════════════

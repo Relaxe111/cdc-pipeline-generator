@@ -54,6 +54,8 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
 )
 
+_INSPECT_ALL_SINKS = "__all_sinks__"
+
 # flag → (description, example)
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--service": (
@@ -431,8 +433,14 @@ def _build_parser() -> ServiceArgumentParser:
     )
     parser.add_argument(
         "--inspect-sink",
+        nargs="?",
+        const=_INSPECT_ALL_SINKS,
         metavar="SINK_KEY",
-        help="Inspect sink database schema (e.g., sink_asma.calendar)",
+        help=(
+            "Inspect sink database schema. "
+            "Provide SINK_KEY for one sink, or use --inspect-sink --all "
+            "to inspect all configured sinks."
+        ),
     )
     parser.add_argument(
         "--schema",
@@ -679,31 +687,31 @@ def _auto_detect_service(
 
 def _dispatch_validation(args: argparse.Namespace) -> int | None:
     """Handle validation-related commands. None = not handled."""
-    if args.list_source_tables:
+    if getattr(args, "list_source_tables", False):
         return handle_list_source_tables(args)
 
-    if args.create_service:
+    if getattr(args, "create_service", False):
         return handle_create_service(args)
 
-    if args.remove_service:
+    if getattr(args, "remove_service", False):
         return handle_remove_service(args)
 
     # Special case: --validate-config can run without --service (validates all)
-    if args.validate_config:
+    if getattr(args, "validate_config", False):
         return handle_validate_config(args)
 
     # Special case: --inspect can run without --service (inspects all)
     # Check this BEFORE the service requirement check
-    if args.inspect or args.inspect_sink:
+    if getattr(args, "inspect", False) or getattr(args, "inspect_sink", False):
         return _dispatch_inspect(args)
 
-    if not args.service:
+    if not getattr(args, "service", None):
         return None
 
     validators: dict[str, bool] = {
-        "validate_hierarchy": args.validate_hierarchy,
-        "validate_bloblang": args.validate_bloblang,
-        "generate_validation": args.generate_validation,
+        "validate_hierarchy": getattr(args, "validate_hierarchy", False),
+        "validate_bloblang": getattr(args, "validate_bloblang", False),
+        "generate_validation": getattr(args, "generate_validation", False),
     }
     handlers = {
         "validate_hierarchy": handle_validate_hierarchy,

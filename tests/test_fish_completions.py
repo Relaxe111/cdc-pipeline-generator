@@ -71,8 +71,8 @@ class TestCdcFishBootstrap:
         """The cdc.fish file should be a small eval bootstrap, not 700+ lines."""
         content = CDC_FISH.read_text(encoding="utf-8")
         lines = content.strip().split("\n")
-        _MAX_BOOTSTRAP_LINES = 20
-        assert len(lines) <= _MAX_BOOTSTRAP_LINES, (
+        max_bootstrap_lines = 20
+        assert len(lines) <= max_bootstrap_lines, (
             f"cdc.fish should be a small eval bootstrap, "
             f"got {len(lines)} lines"
         )
@@ -543,13 +543,24 @@ class TestSmartCompletion:
     def test_inspect_context_shows_sub_options(self) -> None:
         opts = self._complete("cdc manage-service --inspect --")
         assert "--schema" in opts
+        assert "--all" in opts
         assert "--save" in opts
         assert "--env" in opts
+
+    def test_inspect_save_partial_dash_suggests_all(self) -> None:
+        """Regression: after --inspect --save -, --all must still be offered."""
+        opts = self._complete("cdc manage-service --inspect --save -")
+        assert "--all" in opts
 
     def test_inspect_context_hides_unrelated(self) -> None:
         opts = self._complete("cdc manage-service --inspect --")
         assert "--primary-key" not in opts
         assert "--map-column" not in opts
+
+    def test_inspect_sink_all_context_shows_save(self) -> None:
+        """Regression: --inspect-sink --all should still suggest --save."""
+        opts = self._complete("cdc manage-service directory --inspect-sink --all --")
+        assert "--save" in opts
 
     def test_add_source_table_context(self) -> None:
         opts = self._complete(
@@ -632,6 +643,10 @@ class TestSmartCompletion:
         assert "--host" in opts
         assert "--port" in opts
         assert "--user" in opts
+
+    def test_source_groups_update_context_shows_all(self) -> None:
+        opts = self._complete("cdc manage-source-groups --update default -")
+        assert "--all" in opts
 
     # -- manage-sink-groups ---------------------------------------------------
 

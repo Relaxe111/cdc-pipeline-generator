@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 # Helpers
 # ---------------------------------------------------------------------------
 
+_SINK_KEY_PARTS = 2
+
 
 def _filter(items: list[str], incomplete: str) -> list[CompletionItem]:
     """Filter a list of strings by prefix and wrap as CompletionItem."""
@@ -207,16 +209,46 @@ def complete_non_inherited_sink_group_names(
 
 
 def complete_available_sink_keys(
-    _ctx: click.Context,
+    ctx: click.Context,
     _param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
-    """Complete with available sink keys from sink-groups.yaml."""
+    """Complete with available sink keys from sink-groups.yaml.
+
+        When a service is selected (via ``--service`` or positional shorthand),
+        the result is filtered to hide:
+        - sink keys already configured on that service
+        - sink keys whose target service is the same as the source service
+            (self-sink, e.g. ``sink_asma.directory`` on ``directory``)
+
+        This keeps ``--add-sink`` focused on valid cross-service candidates.
+    """
     from cdc_generator.helpers.autocompletions.sinks import (
         list_available_sink_keys,
+        list_sink_keys_for_service,
     )
 
-    return _filter(_safe_call(list_available_sink_keys), incomplete)
+    available_keys = _safe_call(list_available_sink_keys)
+    service = _get_service(ctx)
+
+    if not service:
+        return _filter(available_keys, incomplete)
+
+    existing_keys = set(_safe_call(list_sink_keys_for_service, service))
+    filtered_keys = sorted(
+        key for key in available_keys
+        if key not in existing_keys
+        and _sink_target_service(key) != service
+    )
+    return _filter(filtered_keys, incomplete)
+
+
+def _sink_target_service(sink_key: str) -> str:
+    """Extract target service from sink key (sink_group.target_service)."""
+    parts = sink_key.split(".", 1)
+    if len(parts) != _SINK_KEY_PARTS:
+        return ""
+    return parts[1]
 
 
 def complete_column_templates(
