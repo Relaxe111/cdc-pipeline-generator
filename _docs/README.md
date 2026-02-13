@@ -18,6 +18,8 @@ Core CDC concepts and system design:
 - **FIELD_MAPPING.md** - MSSQL → PostgreSQL field mapping
 - **EVENT_DRIVEN_MERGE_SYSTEM.md** - Merge/upsert strategy
 - **CDC_PRODUCTION_SAFEGUARDS.md** - Production deployment checklist
+- **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bytewax & Materialize evaluation, potential use cases, and phased introduction plan
+- **[CDC_EVENT_TRACING.md](./architecture/CDC_EVENT_TRACING.md)** - End-to-end event latency tracing with embedded timestamps, sampling strategies (≤5% permanent + 100% debug mode), bottleneck detection queries, and performance mitigations
 
 ### [Development](./development/)
 Contributing and coding standards:

@@ -629,6 +629,9 @@ def main() -> int:
             prog_name="cdc",
             standalone_mode=False,
         )
+    except click.Abort:
+        print("\n⚠️  Cancelled by user")
+        return 130
     except click.ClickException as exc:
         exc.show()
         return exc.exit_code
