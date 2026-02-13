@@ -55,6 +55,24 @@ def _get_command_option_names(cmd: click.Command) -> set[str]:
     return names
 
 
+def _get_manage_services_config_command() -> click.Command:
+    """Return the typed command for `manage-services config`."""
+    cmds = _get_typed_commands()
+    group = cmds["manage-services"]
+    assert isinstance(group, click.Group)
+    return group.commands["config"]
+
+
+def _get_manage_services_schema_column_templates_command() -> click.Command:
+    """Return the typed command for `manage-services schema column-templates`."""
+    cmds = _get_typed_commands()
+    root_group = cmds["manage-services"]
+    assert isinstance(root_group, click.Group)
+    schema_group = root_group.commands["schema"]
+    assert isinstance(schema_group, click.Group)
+    return schema_group.commands["column-templates"]
+
+
 # ---------------------------------------------------------------------------
 # Tests: cdc.fish bootstrap file
 # ---------------------------------------------------------------------------
@@ -131,7 +149,9 @@ class TestClickCommandRegistration:
         cli = _get_click_cli()
         registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
 
-        for cmd_name in ["manage-pipelines", "manage-migrations"]:
+        for cmd_name in [
+            "manage-services", "manage-pipelines", "manage-migrations",
+        ]:
             assert cmd_name in registered, (
                 f"Management group {cmd_name!r} not registered"
             )
@@ -142,19 +162,17 @@ class TestClickCommandRegistration:
 # ---------------------------------------------------------------------------
 
 
-class TestManageServiceOptions:
-    """manage-service must have typed Click option declarations."""
+class TestManageServicesConfigOptions:
+    """manage-services config must have typed Click option declarations."""
 
     def test_has_service_option(self) -> None:
         """--service must be declared with shell_complete."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         assert "--service" in opts
 
     def test_has_sink_management_options(self) -> None:
         """Sink management options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--add-sink",
             "--remove-sink",
@@ -167,8 +185,7 @@ class TestManageServiceOptions:
 
     def test_has_source_table_options(self) -> None:
         """Source table management options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--add-source-table",
             "--remove-table",
@@ -179,8 +196,7 @@ class TestManageServiceOptions:
 
     def test_has_column_template_options(self) -> None:
         """Column template options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--add-column-template",
             "--remove-column-template",
@@ -193,8 +209,7 @@ class TestManageServiceOptions:
 
     def test_has_custom_table_options(self) -> None:
         """Custom table options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--add-custom-sink-table",
             "--modify-custom-table",
@@ -204,8 +219,7 @@ class TestManageServiceOptions:
 
     def test_has_inspect_options(self) -> None:
         """Inspect/validation options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-service"])
+        opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--inspect",
             "--inspect-sink",
@@ -262,20 +276,22 @@ class TestManageSinkGroupsOptions:
             assert opt in opts, f"Missing option: {opt}"
 
 
-class TestManageColumnTemplatesOptions:
-    """manage-column-templates must have typed Click option declarations."""
+class TestManageServicesSchemaColumnTemplatesOptions:
+    """manage-services schema column-templates options must be declared."""
 
     def test_has_crud_options(self) -> None:
         """CRUD options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-column-templates"])
+        opts = _get_command_option_names(
+            _get_manage_services_schema_column_templates_command(),
+        )
         for opt in ["--list", "--show", "--add", "--edit", "--remove"]:
             assert opt in opts, f"Missing option: {opt}"
 
     def test_has_field_options(self) -> None:
         """Template field options must be declared."""
-        cmds = _get_typed_commands()
-        opts = _get_command_option_names(cmds["manage-column-templates"])
+        opts = _get_command_option_names(
+            _get_manage_services_schema_column_templates_command(),
+        )
         for opt in ["--name", "--type", "--value", "--not-null"]:
             assert opt in opts, f"Missing option: {opt}"
 
@@ -357,6 +373,27 @@ class TestManageMigrationsOptions:
             assert opt in opts, f"Missing option: {opt}"
 
 
+class TestManageServicesOptions:
+    """manage-services subcommands must be available."""
+
+    def test_has_config_and_schema_subcommands(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-services"]
+        assert isinstance(group, click.Group)
+        assert "config" in group.commands
+        assert "schema" in group.commands
+
+    def test_schema_has_canonical_nested_subcommands(self) -> None:
+        cmds = _get_typed_commands()
+        root_group = cmds["manage-services"]
+        assert isinstance(root_group, click.Group)
+        schema_group = root_group.commands["schema"]
+        assert isinstance(schema_group, click.Group)
+        assert "custom-tables" in schema_group.commands
+        assert "column-templates" in schema_group.commands
+        assert "transforms" in schema_group.commands
+
+
 # ---------------------------------------------------------------------------
 # Tests: Click completion protocol
 # ---------------------------------------------------------------------------
@@ -418,9 +455,8 @@ class TestShellCompleteCallbacksWired:
         return False
 
     def test_manage_service_dynamic_options(self) -> None:
-        """manage-service dynamic options must have shell_complete."""
-        cmds = _get_typed_commands()
-        cmd = cmds["manage-service"]
+        """manage-services config dynamic options must have shell_complete."""
+        cmd = _get_manage_services_config_command()
         for opt in [
             "--service",
             "--add-source-table",
@@ -435,7 +471,7 @@ class TestShellCompleteCallbacksWired:
             "--remove-transform",
         ]:
             assert self._has_shell_complete(cmd, opt), (
-                f"manage-service {opt} missing shell_complete callback"
+                f"manage-services config {opt} missing shell_complete callback"
             )
 
     def test_manage_source_groups_dynamic_options(self) -> None:
@@ -462,13 +498,13 @@ class TestShellCompleteCallbacksWired:
                 f"manage-sink-groups {opt} missing shell_complete callback"
             )
 
-    def test_manage_column_templates_dynamic_options(self) -> None:
-        """manage-column-templates dynamic options must have shell_complete."""
-        cmds = _get_typed_commands()
-        cmd = cmds["manage-column-templates"]
+    def test_manage_services_schema_column_templates_dynamic_options(self) -> None:
+        """manage-services schema column-templates options have shell_complete."""
+        cmd = _get_manage_services_schema_column_templates_command()
         for opt in ["--show", "--edit", "--remove", "--type"]:
             assert self._has_shell_complete(cmd, opt), (
-                f"manage-column-templates {opt} missing shell_complete callback"
+                "manage-services schema column-templates "
+                + f"{opt} missing shell_complete callback"
             )
 
 
@@ -500,13 +536,13 @@ class TestSmartCompletion:
         comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
         return [c.value for c in comp.get_completions(parts, incomplete)]
 
-    # -- manage-service: entry-point filtering --------------------------------
+    # -- manage-services config: entry-point filtering -------------------------
 
     def test_entry_points_include_service(self) -> None:
-        assert "--service" in self._complete("cdc manage-service --")
+        assert "--service" in self._complete("cdc manage-services config --")
 
     def test_entry_points_include_context_flags(self) -> None:
-        opts = self._complete("cdc manage-service --")
+        opts = self._complete("cdc manage-services config --")
         assert "--inspect" in opts
         assert "--add-source-table" in opts
         # --add-sink-table requires --sink which requires --service
@@ -514,7 +550,7 @@ class TestSmartCompletion:
 
     def test_entry_points_with_service_unlock_sink(self) -> None:
         """With --service set, sink-related entry-points become visible."""
-        opts = self._complete("cdc manage-service --service directory --")
+        opts = self._complete("cdc manage-services config --service directory --")
         assert "--sink" in opts
         assert "--inspect" in opts
         # But deeper options still hidden (need --sink first)
@@ -523,14 +559,14 @@ class TestSmartCompletion:
 
     def test_positional_service_unlocks_sink(self) -> None:
         """Positional service name also satisfies the service prerequisite."""
-        opts = self._complete("cdc manage-service directory --")
+        opts = self._complete("cdc manage-services config directory --")
         assert "--sink" in opts
 
     # -- hierarchical prerequisites -------------------------------------------
 
     def test_no_service_hides_sink_entry_point(self) -> None:
         """Without --service, --sink is hidden (prerequisite not met)."""
-        opts = self._complete("cdc manage-service --")
+        opts = self._complete("cdc manage-services config --")
         assert "--sink" not in opts
         # But non-sink entry-points remain
         assert "--inspect" in opts
@@ -540,7 +576,7 @@ class TestSmartCompletion:
         """If --sink is somehow present without --service, its sub-options
         still show (prerequisites check sub-options, not the flag itself)."""
         opts = self._complete(
-            "cdc manage-service --sink sink_asma.proxy --"
+            "cdc manage-services config --sink sink_asma.proxy --"
         )
         assert "--add-sink-table" in opts
         assert "--sink-table" in opts
@@ -548,14 +584,14 @@ class TestSmartCompletion:
     def test_sink_table_requires_sink(self) -> None:
         """--sink-table only appears when --sink is active."""
         opts = self._complete(
-            "cdc manage-service directory --sink sink_asma.proxy --"
+            "cdc manage-services config directory --sink sink_asma.proxy --"
         )
         assert "--sink-table" in opts
 
     def test_column_template_requires_sink_table(self) -> None:
         """--add-column-template only appears when --sink-table is active."""
         opts = self._complete(
-            "cdc manage-service --sink asma --sink-table pub.Actor --"
+            "cdc manage-services config --sink asma --sink-table pub.Actor --"
         )
         assert "--add-column-template" in opts
         assert "--add-transform" in opts
@@ -564,7 +600,7 @@ class TestSmartCompletion:
     def test_column_template_hidden_without_sink_table(self) -> None:
         """--add-column-template hidden when only --sink is set."""
         opts = self._complete(
-            "cdc manage-service --sink sink_asma.proxy --"
+            "cdc manage-services config --sink sink_asma.proxy --"
         )
         assert "--add-column-template" not in opts
         assert "--add-transform" not in opts
@@ -572,7 +608,7 @@ class TestSmartCompletion:
     def test_column_name_requires_add_column_template(self) -> None:
         """--column-name only appears after --add-column-template."""
         opts = self._complete(
-            "cdc manage-service --sink a --sink-table t --add-column-template tpl --"
+            "cdc manage-services config --sink a --sink-table t --add-column-template tpl --"
         )
         assert "--column-name" in opts
         assert "--value" in opts
@@ -580,21 +616,39 @@ class TestSmartCompletion:
     def test_column_name_hidden_without_add_column_template(self) -> None:
         """--column-name hidden when only --sink-table is set."""
         opts = self._complete(
-            "cdc manage-service --sink a --sink-table t --"
+            "cdc manage-services config --sink a --sink-table t --"
         )
         assert "--column-name" not in opts
         assert "--value" not in opts
 
+    def test_schema_custom_tables_keeps_service_visible(self) -> None:
+        """--service remains visible after selecting custom-tables action."""
+        opts = self._complete(
+            "cdc manage-services schema custom-tables "
+            + "--add-custom-table public.audit_log --"
+        )
+        assert "--service" in opts
+
+    def test_add_custom_sink_table_shows_from_option(self) -> None:
+        """--from is visible once --add-custom-sink-table is active."""
+        opts = self._complete(
+            "cdc manage-services config "
+            + "--service directory "
+            + "--sink sink_asma.proxy "
+            + "--add-custom-sink-table public.audit_log --"
+        )
+        assert "--from" in opts
+
     def test_entry_points_exclude_sub_options(self) -> None:
-        opts = self._complete("cdc manage-service --")
+        opts = self._complete("cdc manage-services config --")
         assert "--schema" not in opts  # sub-option of --inspect
         assert "--primary-key" not in opts  # sub-option of --add-source-table
         assert "--map-column" not in opts  # sub-option of --add-sink-table
 
-    # -- manage-service: context-filtered options -----------------------------
+    # -- manage-services config: context-filtered options ----------------------
 
     def test_inspect_context_shows_sub_options(self) -> None:
-        opts = self._complete("cdc manage-service --inspect --")
+        opts = self._complete("cdc manage-services config --inspect --")
         assert "--schema" in opts
         assert "--all" in opts
         assert "--save" in opts
@@ -602,22 +656,24 @@ class TestSmartCompletion:
 
     def test_inspect_save_partial_dash_suggests_all(self) -> None:
         """Regression: after --inspect --save -, --all must still be offered."""
-        opts = self._complete("cdc manage-service --inspect --save -")
+        opts = self._complete("cdc manage-services config --inspect --save -")
         assert "--all" in opts
 
     def test_inspect_context_hides_unrelated(self) -> None:
-        opts = self._complete("cdc manage-service --inspect --")
+        opts = self._complete("cdc manage-services config --inspect --")
         assert "--primary-key" not in opts
         assert "--map-column" not in opts
 
     def test_inspect_sink_all_context_shows_save(self) -> None:
         """Regression: --inspect-sink --all should still suggest --save."""
-        opts = self._complete("cdc manage-service directory --inspect-sink --all --")
+        opts = self._complete(
+            "cdc manage-services config directory --inspect-sink --all --"
+        )
         assert "--save" in opts
 
     def test_add_source_table_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service --add-source-table Actor --"
+            "cdc manage-services config --add-source-table Actor --"
         )
         assert "--primary-key" in opts
         assert "--schema" in opts
@@ -625,7 +681,7 @@ class TestSmartCompletion:
 
     def test_add_sink_table_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service --service dir --add-sink-table pub.Actor --"
+            "cdc manage-services config --service dir --add-sink-table pub.Actor --"
         )
         assert "--sink" in opts
         assert "--target" in opts
@@ -634,14 +690,14 @@ class TestSmartCompletion:
 
     def test_source_table_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service --source-table Actor --"
+            "cdc manage-services config --source-table Actor --"
         )
         assert "--ignore-columns" in opts
         assert "--track-columns" in opts
 
     def test_modify_custom_table_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service --modify-custom-table tbl --"
+            "cdc manage-services config --modify-custom-table tbl --"
         )
         assert "--add-column" in opts
         assert "--remove-column" in opts
@@ -650,7 +706,7 @@ class TestSmartCompletion:
 
     def test_multiple_contexts_union(self) -> None:
         opts = self._complete(
-            "cdc manage-service --inspect --add-source-table Actor --"
+            "cdc manage-services config --inspect --add-source-table Actor --"
         )
         # Union of inspect + add_source_table sub-options
         assert "--schema" in opts
@@ -660,7 +716,7 @@ class TestSmartCompletion:
     # -- always-visible options persist in context ----------------------------
 
     def test_always_visible_in_context(self) -> None:
-        opts = self._complete("cdc manage-service --inspect --")
+        opts = self._complete("cdc manage-services config --inspect --")
         assert "--service" in opts
         assert "--server" in opts
 
@@ -668,7 +724,7 @@ class TestSmartCompletion:
 
     def test_positional_service_with_context(self) -> None:
         opts = self._complete(
-            "cdc manage-service directory --inspect --"
+            "cdc manage-services config directory --inspect --"
         )
         assert "--schema" in opts
         assert "--primary-key" not in opts
@@ -726,7 +782,7 @@ class TestSmartCompletion:
 
     def test_sink_qualifier_narrows_to_actions(self) -> None:
         opts = self._complete(
-            "cdc manage-service --sink sink_asma.proxy --"
+            "cdc manage-services config --sink sink_asma.proxy --"
         )
         assert "--add-sink-table" in opts
         assert "--remove-sink-table" in opts
@@ -739,7 +795,7 @@ class TestSmartCompletion:
 
     def test_sink_qualifier_plus_action(self) -> None:
         opts = self._complete(
-            "cdc manage-service --sink asma --add-sink-table pub.A --"
+            "cdc manage-services config --sink asma --add-sink-table pub.A --"
         )
         # Union: sink actions + add_sink_table sub-options
         assert "--target" in opts

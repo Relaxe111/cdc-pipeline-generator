@@ -29,6 +29,7 @@ from cdc_generator.cli.service_handlers_sink import (
     handle_sink_update_schema,
     handle_sink_validate,
 )
+from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -759,6 +760,88 @@ class TestHandleAddCustomSinkTableHappyPath:
         ):
             result = handle_sink_add_custom_table(args)
         assert result == 0
+
+        data = load_yaml_file(service_with_sink)
+        tables = data["proxy"]["sinks"]["sink_asma.chat"]["tables"]
+        table_cfg = tables["public.e2e_custom_test"]
+        assert table_cfg["custom"] is True
+        assert table_cfg["managed"] is True
+        assert "columns" not in table_cfg
+
+        schema_data = load_yaml_file(
+            project_dir / "service-schemas" / "chat" / "public" / "e2e_custom_test.yaml"
+        )
+        cols = schema_data.get("columns", [])
+        assert isinstance(cols, list)
+        assert any(isinstance(c, dict) and c.get("name") == "id" for c in cols)
+        assert any(
+            isinstance(c, dict) and c.get("name") == "event_type" for c in cols
+        )
+
+    def test_from_uses_source_table_columns(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--from should load columns from source table schemas."""
+        source_dir = project_dir / "service-schemas" / "proxy" / "public"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "users.yaml").write_text(
+            "columns:\n"
+            "  - name: id\n"
+            "    type: uuid\n"
+            "    nullable: false\n"
+            "    primary_key: true\n"
+            "  - name: username\n"
+            "    type: text\n"
+            "    nullable: false\n"
+        )
+
+        args = _ns(
+            add_custom_sink_table="public.users_clone",
+            sink="sink_asma.chat",
+            column=None,
+            from_table="public.users",
+        )
+
+        with patch(
+            "cdc_generator.cli.service_handlers_sink_custom.SERVICE_SCHEMAS_DIR",
+            project_dir / "service-schemas",
+        ):
+            result = handle_sink_add_custom_table(args)
+
+        assert result == 0
+
+        data = load_yaml_file(service_with_sink)
+        tables = data["proxy"]["sinks"]["sink_asma.chat"]["tables"]
+        table_cfg = tables["public.users_clone"]
+        assert table_cfg["custom"] is True
+        assert table_cfg["managed"] is True
+        assert table_cfg["from"] == "public.users"
+        assert "columns" not in table_cfg
+
+        schema_data = load_yaml_file(
+            project_dir / "service-schemas" / "chat" / "public" / "users_clone.yaml"
+        )
+        cols = schema_data.get("columns", [])
+        assert isinstance(cols, list)
+        assert any(isinstance(c, dict) and c.get("name") == "id" for c in cols)
+        assert any(
+            isinstance(c, dict) and c.get("name") == "username" for c in cols
+        )
+
+    def test_from_fails_when_not_in_source_tables(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--from must reference a declared source.tables key."""
+        args = _ns(
+            add_custom_sink_table="public.invalid_clone",
+            sink="sink_asma.chat",
+            column=None,
+            from_table="public.nonexistent",
+        )
+
+        result = handle_sink_add_custom_table(args)
+
+        assert result == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════════

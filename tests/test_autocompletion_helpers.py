@@ -264,7 +264,7 @@ class TestCreateServiceCompletion:
         monkeypatch.chdir(temp_workspace)
 
         # Trigger value completion by putting incomplete value after the option
-        completions = self._complete("cdc manage-service --create-service c")
+        completions = self._complete("cdc manage-services config --create-service c")
 
         # Should show calendar (starts with 'c'), not chat (already exists)
         assert "calendar" in completions
@@ -277,7 +277,7 @@ class TestCreateServiceCompletion:
         monkeypatch.chdir(temp_workspace)
 
         # Check for notification (starts with 'n')
-        completions = self._complete("cdc manage-service --create-service n")
+        completions = self._complete("cdc manage-services config --create-service n")
 
         assert "notification" in completions
 
@@ -288,6 +288,170 @@ class TestCreateServiceCompletion:
         monkeypatch.chdir(temp_workspace)
 
         # Try 'd' - directory exists but shouldn't show
-        completions = self._complete("cdc manage-service --create-service d")
+        completions = self._complete("cdc manage-services config --create-service d")
 
         assert "directory" not in completions
+
+
+class TestCustomSinkTableCompletion:
+    """Tests for custom sink table related completions."""
+
+    @staticmethod
+    def _complete(partial_cmd: str) -> list[str]:
+        """Return completion values for *partial_cmd* via Click API."""
+        import shlex
+
+        from click.shell_completion import ShellComplete
+
+        from cdc_generator.cli.commands import _click_cli
+
+        cli = _click_cli
+        parts = shlex.split(partial_cmd)
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+        incomplete = parts.pop() if parts else ""
+        comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
+        return [c.value for c in comp.get_completions(parts, incomplete)]
+
+    def test_add_custom_sink_table_suggests_schema_custom_tables(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--add-custom-sink-table completes from target _schemas custom-tables."""
+        # Add sink + source setup for directory service
+        (temp_workspace / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  type: postgres\n"
+            "  sources:\n"
+            "    notification: {}\n"
+        )
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables: {}\n"
+            "  sinks:\n"
+            "    sink_asma.notification:\n"
+            "      tables: {}\n"
+        )
+
+        custom_dir = (
+            temp_workspace
+            / "services"
+            / "_schemas"
+            / "notification"
+            / "custom-tables"
+        )
+        custom_dir.mkdir(parents=True)
+        (custom_dir / "public.audit_log.yaml").write_text("columns: []\n")
+        (custom_dir / "public.event_log.yaml").write_text("columns: []\n")
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-custom-sink-table p"
+        )
+
+        assert "public.audit_log" in completions
+        assert "public.event_log" in completions
+
+    def test_from_completion_uses_source_tables_for_add_custom_mode(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """With --add-custom-sink-table active, --from suggests source tables."""
+        (temp_workspace / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  type: postgres\n"
+            "  sources:\n"
+            "    notification: {}\n"
+        )
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.notification:\n"
+            "      tables: {}\n"
+        )
+
+        custom_dir = (
+            temp_workspace
+            / "services"
+            / "_schemas"
+            / "notification"
+            / "custom-tables"
+        )
+        custom_dir.mkdir(parents=True)
+        (custom_dir / "public.audit_log.yaml").write_text("columns: []\n")
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-custom-sink-table public.clone "
+            + "--from p"
+        )
+
+        assert "public.users" in completions
+        assert "public.audit_log" not in completions
+
+    def test_from_completion_empty_when_source_tables_empty(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """--from returns no completions when source.tables is empty."""
+        (temp_workspace / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  type: postgres\n"
+            "  sources:\n"
+            "    notification: {}\n"
+        )
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables: {}\n"
+            "  sinks:\n"
+            "    sink_asma.notification:\n"
+            "      tables: {}\n"
+        )
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-custom-sink-table public.clone "
+            + "--from p"
+        )
+
+        assert completions == []
+
+    def test_from_completion_keeps_source_tables_for_add_sink_table(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without custom-table mode, --from still completes source tables."""
+        (temp_workspace / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  type: postgres\n"
+            "  sources:\n"
+            "    notification: {}\n"
+        )
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.users: {}\n"
+            "      public.user_groups: {}\n"
+            "  sinks:\n"
+            "    sink_asma.notification:\n"
+            "      tables: {}\n"
+        )
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-sink-table public.target "
+            + "--from public.u"
+        )
+
+        assert "public.users" in completions
+        assert "public.user_groups" in completions

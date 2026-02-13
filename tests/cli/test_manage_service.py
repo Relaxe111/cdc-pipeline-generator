@@ -7,7 +7,7 @@ Tests the full flow through a real **fish** shell for:
 - --list-sinks / --add-sink / --remove-sink
 - --add-sink-table / --remove-sink-table
 - --validate-config
-- --list-template-keys / --list-transform-rule-keys
+- manage-services schema column-templates / transforms
 - fish autocompletions for manage-service flags
 """
 
@@ -603,34 +603,38 @@ class TestCliGenerateValidation:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Template/Transform listing
+# Schema command listings
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestCliListTemplateKeys:
-    """CLI e2e: --list-template-keys."""
+class TestCliSchemaColumnTemplates:
+    """CLI e2e: manage-services schema column-templates."""
 
     def test_list_templates(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service",
-            "--list-template-keys",
+            "manage-services",
+            "schema",
+            "column-templates",
+            "--list",
         )
         assert result.returncode == 0
 
 
-class TestCliListTransformRuleKeys:
-    """CLI e2e: --list-transform-rule-keys."""
+class TestCliSchemaTransforms:
+    """CLI e2e: manage-services schema transforms."""
 
     def test_list_transform_rules(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service",
-            "--list-transform-rule-keys",
+            "manage-services",
+            "schema",
+            "transforms",
+            "--list-rules",
         )
         assert result.returncode == 0
 
@@ -686,7 +690,7 @@ class TestCliManageServiceCompletions:
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
         """Core flags show up in completions."""
-        result = run_cdc_completion("cdc manage-service -")
+        result = run_cdc_completion("cdc manage-services config -")
         out = result.stdout
         assert "--service" in out
         assert "--add-source-table" in out
@@ -698,7 +702,7 @@ class TestCliManageServiceCompletions:
     ) -> None:
         """Sink-related flags appear in completions (when installed)."""
         # Check --add-sink with broader prefix
-        result = run_cdc_completion("cdc manage-service --add-")
+        result = run_cdc_completion("cdc manage-services config --add-")
         out = result.stdout
         # At minimum --add-source-table should be there
         assert "--add-source-table" in out
@@ -707,7 +711,7 @@ class TestCliManageServiceCompletions:
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
         """Validate/generate flags appear in completions."""
-        result = run_cdc_completion("cdc manage-service --validate-")
+        result = run_cdc_completion("cdc manage-services config --validate-")
         out = result.stdout
         assert "--validate-config" in out or "--validate-hierarchy" in out
 
@@ -716,7 +720,7 @@ class TestCliManageServiceCompletions:
     ) -> None:
         """--map-column appears after --add-sink-table context."""
         result = run_cdc_completion(
-            "cdc manage-service --add-sink-table pub.Actor --map-"
+            "cdc manage-services config --add-sink-table pub.Actor --map-"
         )
         out = result.stdout
         assert "--map-column" in out
@@ -726,7 +730,7 @@ class TestCliManageServiceCompletions:
     ) -> None:
         """--sink-table visible with --sink + --add-column-template context."""
         result = run_cdc_completion(
-            "cdc manage-service --sink asma --add-column-template tmpl --sink-"
+            "cdc manage-services config --sink asma --add-column-template tmpl --sink-"
         )
         out = result.stdout
         assert "--sink-table" in out
@@ -736,7 +740,7 @@ class TestCliManageServiceCompletions:
     ) -> None:
         """--sink-schema visible with --add-sink-table context."""
         result = run_cdc_completion(
-            "cdc manage-service --add-sink-table pub.Actor --sink-"
+            "cdc manage-services config --add-sink-table pub.Actor --sink-"
         )
         out = result.stdout
         assert "--sink-schema" in out

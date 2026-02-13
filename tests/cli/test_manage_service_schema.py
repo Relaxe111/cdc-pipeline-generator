@@ -1,4 +1,4 @@
-"""End-to-end CLI tests for ``cdc manage-service-schema``."""
+"""End-to-end CLI tests for ``cdc manage-services schema custom-tables``."""
 
 from pathlib import Path
 
@@ -38,7 +38,9 @@ class TestCliListServices:
     def test_list_services_empty(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
-        result = run_cdc("manage-service-schema", "--list-services")
+        result = run_cdc(
+            "manage-services", "schema", "custom-tables", "--list-services",
+        )
         assert result.returncode == 0
         assert "No service schema directories found" in result.stdout + result.stderr
 
@@ -47,7 +49,9 @@ class TestCliListServices:
     ) -> None:
         _write_custom_table(isolated_project, "chat", "public.audit_log")
 
-        result = run_cdc("manage-service-schema", "--list-services")
+        result = run_cdc(
+            "manage-services", "schema", "custom-tables", "--list-services",
+        )
 
         assert result.returncode == 0
         assert "chat" in result.stdout
@@ -59,7 +63,9 @@ class TestCliListAndDispatchErrors:
     def test_list_requires_service(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
-        result = run_cdc("manage-service-schema", "--list")
+        result = run_cdc(
+            "manage-services", "schema", "custom-tables", "--list",
+        )
         assert result.returncode == 1
         assert "--list requires --service" in result.stdout + result.stderr
 
@@ -68,7 +74,9 @@ class TestCliListAndDispatchErrors:
     ) -> None:
         _write_custom_table(isolated_project, "chat", "public.audit_log")
 
-        result = run_cdc("manage-service-schema", "--service", "chat")
+        result = run_cdc(
+            "manage-services", "schema", "custom-tables", "--service", "chat",
+        )
 
         assert result.returncode == 0
         assert "public.audit_log" in result.stdout
@@ -77,7 +85,9 @@ class TestCliListAndDispatchErrors:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--show",
             "public.audit_log",
         )
@@ -89,7 +99,9 @@ class TestCliListAndDispatchErrors:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--remove-custom-table",
             "public.audit_log",
         )
@@ -101,7 +113,9 @@ class TestCliListAndDispatchErrors:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--list",
@@ -118,7 +132,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         add_result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--add-custom-table",
@@ -131,7 +147,9 @@ class TestCliCustomTableCrud:
         assert add_result.returncode == 0
 
         show_result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--show",
@@ -142,7 +160,9 @@ class TestCliCustomTableCrud:
         assert "event_type: text" in show_result.stdout
 
         remove_result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--remove-custom-table",
@@ -154,7 +174,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--add-custom-table",
@@ -167,7 +189,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--add-custom-table",
@@ -182,7 +206,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--show",
@@ -196,7 +222,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--remove-custom-table",
@@ -210,7 +238,9 @@ class TestCliCustomTableCrud:
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         result = run_cdc(
-            "manage-service-schema",
+            "manage-services",
+            "schema",
+            "custom-tables",
             "--service",
             "chat",
             "--add-custom-table",
@@ -230,12 +260,126 @@ class TestCliCompletions:
     def test_flag_completion(
         self, run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        result = run_cdc_completion("cdc manage-service-schema --")
+        result = run_cdc_completion("cdc manage-services schema --")
         assert result.returncode == 0
         output = result.stdout
         if not output.strip():
             pytest.skip(
-                "No fish flag completions registered for manage-service-schema",
+                "No fish flag completions registered for manage-services schema",
             )
-        assert "--list-services" in output
-        assert "--add-custom-table" in output
+        assert "custom-tables" in output
+        assert "column-templates" in output
+        assert "transforms" in output
+
+    def test_custom_tables_service_completion_uses_schema_services(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        """--service completes from schema dirs, not services/*.yaml."""
+        # Service config exists, but should NOT drive this completion.
+        services_dir = isolated_project / "services"
+        services_dir.mkdir(parents=True, exist_ok=True)
+        (services_dir / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables: {}\n"
+        )
+
+        # Schema services should drive completion values.
+        (services_dir / "_schemas" / "notification" / "custom-tables").mkdir(
+            parents=True, exist_ok=True,
+        )
+        (services_dir / "_schemas" / "calendar" / "custom-tables").mkdir(
+            parents=True, exist_ok=True,
+        )
+
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables --service n"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "notification" in output
+        assert "directory" not in output
+
+    def test_custom_tables_column_completion_suggests_types(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--column id: suggests PostgreSQL type candidates."""
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables "
+            + "--service notification "
+            + "--add-custom-table some_schema.test "
+            + "--column id:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "id:uuid" in output
+        assert "id:text" in output
+
+    def test_custom_tables_column_completion_suggests_modifiers(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--column id:uuid: suggests modifier candidates."""
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables "
+            + "--service notification "
+            + "--add-custom-table some_schema.test "
+            + "--column id:uuid:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "id:uuid:pk" in output
+        assert "id:uuid:not_null" in output
+        assert "id:uuid:default_uuid" in output
+        assert "id:uuid:default_now" not in output
+        assert "id:uuid:default_current_date" not in output
+
+    def test_custom_tables_column_completion_filters_incompatible_defaults(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """BIGINT should not suggest date/time/uuid default aliases."""
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables "
+            + "--service notification "
+            + "--add-custom-table some_schema.test "
+            + "--column id:bigint:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "id:bigint:pk" in output
+        assert "id:bigint:not_null" in output
+        assert "id:bigint:nullable" in output
+        assert "id:bigint:default_now" not in output
+        assert "id:bigint:default_current_timestamp" not in output
+        assert "id:bigint:default_current_date" not in output
+        assert "id:bigint:default_uuid" not in output
+
+    def test_custom_tables_column_completion_hides_conflicting_modifiers_after_nullable(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """After nullable, don't suggest pk or not_null."""
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables "
+            + "--service notification "
+            + "--add-custom-table some_schema.test "
+            + "--column user_id:bigint:nullable:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "user_id:bigint:nullable:pk" not in output
+        assert "user_id:bigint:nullable:not_null" not in output
+
+    def test_custom_tables_column_completion_hides_nullable_after_pk(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """After pk, don't suggest nullable."""
+        result = run_cdc_completion(
+            "cdc manage-services schema custom-tables "
+            + "--service notification "
+            + "--add-custom-table some_schema.test "
+            + "--column user_id:bigint:pk:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "user_id:bigint:pk:nullable" not in output

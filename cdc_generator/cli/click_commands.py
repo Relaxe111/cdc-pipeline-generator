@@ -20,26 +20,31 @@ The branching rules live in ``smart_command.py`` and are passed as
 
 from __future__ import annotations
 
+import argparse
 import sys
 
 import click
 
 from cdc_generator.cli.completions import (
+    complete_add_custom_sink_table,
     complete_add_sink_table,
     complete_available_envs,
     complete_available_services,
     complete_available_sink_keys,
     complete_available_tables,
     complete_column_templates,
+    complete_custom_table_column_spec,
     complete_columns,
     complete_custom_table_columns,
     complete_custom_tables,
     complete_existing_services,
+    complete_from_table,
     complete_include_sink_columns,
     complete_map_column,
     complete_non_inherited_sink_group_names,
     complete_pg_types,
     complete_remove_sink_table,
+    complete_schema_services,
     complete_schemas,
     complete_server_group_names,
     complete_server_names,
@@ -56,6 +61,9 @@ from cdc_generator.cli.completions import (
     complete_transforms_on_table,
 )
 from cdc_generator.cli.smart_command import (
+    MANAGE_SCHEMA_CUSTOM_TABLES_ALWAYS,
+    MANAGE_SCHEMA_CUSTOM_TABLES_GROUPS,
+    MANAGE_SCHEMA_CUSTOM_TABLES_REQUIRES,
     MANAGE_SERVICE_ALWAYS,
     MANAGE_SERVICE_GROUPS,
     MANAGE_SERVICE_REQUIRES,
@@ -73,6 +81,14 @@ _PASSTHROUGH_CTX: dict[str, object] = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
 }
+
+_MIN_GROUPED_ARGS = 3
+_GROUPED_COMMAND_INDEX = 1
+_GROUPED_SUBCOMMAND_INDEX = 2
+_GROUPED_EXTRA_ARGS_START = 3
+_MIN_NESTED_SCHEMA_ARGS = 4
+_NESTED_SCHEMA_SUBCOMMAND_INDEX = 3
+_NESTED_SCHEMA_EXTRA_ARGS_START = 4
 
 
 # ============================================================================
@@ -145,7 +161,7 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 @click.option("--target-exists",
               type=click.Choice(["true", "false"]),
               help="Table exists in target?")
-@click.option("--from", "from_table", shell_complete=complete_source_tables,
+@click.option("--from", "from_table", shell_complete=complete_from_table,
               help="Source table reference")
 @click.option("--replicate-structure", is_flag=True,
               help="Auto-generate sink table DDL from source schema")
@@ -181,12 +197,11 @@ _PASSTHROUGH_CTX: dict[str, object] = {
               help="Remove transform rule from sink table")
 @click.option("--list-transforms", is_flag=True,
               help="List transforms on sink table")
-@click.option("--list-transform-rules", is_flag=True,
-              help="List all available transform rules")
 @click.option("--skip-validation", is_flag=True,
               help="Skip database schema validation")
 # -- Custom sink table --
 @click.option("--add-custom-sink-table",
+              shell_complete=complete_add_custom_sink_table,
               help="Create custom table in sink (schema.table)")
 @click.option("--column", multiple=True,
               help="Column def: name:type[:pk][:not_null][:default_X]")
@@ -198,7 +213,16 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 @click.pass_context
 def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """Manage-service passthrough — forwards all args to argparse handler."""
-    from cdc_generator.cli.commands import execute_command
+    from cdc_generator.cli.commands import execute_command, execute_grouped_command
+
+    if (
+        len(sys.argv) >= _MIN_GROUPED_ARGS
+        and sys.argv[_GROUPED_COMMAND_INDEX] == "manage-services"
+        and sys.argv[_GROUPED_SUBCOMMAND_INDEX] == "config"
+    ):
+        return execute_grouped_command(
+            "manage-services", "config", sys.argv[_GROUPED_EXTRA_ARGS_START:]
+        )
 
     return execute_command("manage-service", sys.argv[2:])
 
@@ -383,16 +407,20 @@ def manage_sink_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 
 # ============================================================================
-# manage-service-schema
+# manage-services schema custom-tables
 # ============================================================================
 
 @click.command(
-    name="manage-service-schema",
+    name="custom-tables",
+    cls=SmartCommand,
+    smart_groups=MANAGE_SCHEMA_CUSTOM_TABLES_GROUPS,
+    smart_always=MANAGE_SCHEMA_CUSTOM_TABLES_ALWAYS,
+    smart_requires=MANAGE_SCHEMA_CUSTOM_TABLES_REQUIRES,
     help="Manage custom table schema definitions (services/_schemas/)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--service", shell_complete=complete_existing_services,
+@click.option("--service", shell_complete=complete_schema_services,
               help="Service name")
 @click.option("--list-services", is_flag=True,
               help="List all services with schema directories")
@@ -405,21 +433,100 @@ def manage_sink_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--remove-custom-table",
               help="Remove custom table schema")
 @click.option("--column", multiple=True,
+              shell_complete=complete_custom_table_column_spec,
               help="Column definition: name:type[:pk][:not_null]")
 @click.pass_context
-def manage_service_schema_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Manage-service-schema passthrough."""
-    from cdc_generator.cli.commands import execute_command
+def manage_services_schema_custom_tables_cmd(
+    _ctx: click.Context,
+    **_kwargs: object,
+) -> int:
+    """manage-services schema custom-tables passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_command("manage-service-schema", sys.argv[2:])
+    return execute_grouped_command(
+        "manage-services",
+        "schema",
+        sys.argv[_NESTED_SCHEMA_EXTRA_ARGS_START:],
+    )
+
+
+@click.command(
+    name="transforms",
+    help="Manage global transform rule catalog",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--list-rules", is_flag=True,
+              help="List all available transform rules")
+@click.option("--list-transform-rules", is_flag=True,
+              help="Alias for --list-rules")
+def manage_services_schema_transforms_cmd(
+    list_rules: bool,
+    list_transform_rules: bool,
+) -> int:
+    """manage-services schema transforms passthrough."""
+    from cdc_generator.cli.service_handlers_templates import (
+        handle_list_transform_rules,
+    )
+
+    if not list_rules and not list_transform_rules:
+        click.echo("❌ Missing action for manage-services schema transforms")
+        click.echo("   Try: cdc manage-services schema transforms --list-rules")
+        return 1
+
+    return handle_list_transform_rules(argparse.Namespace())
+
+
+@click.group(
+    name="schema",
+    help="Manage service schema resources",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+    invoke_without_command=True,
+)
+@click.pass_context
+def manage_services_schema_cmd(ctx: click.Context) -> int:
+    """manage-services schema command group."""
+    if ctx.invoked_subcommand is None:
+        click.echo("❌ Missing subcommand for manage-services schema")
+        click.echo("   Try: cdc manage-services schema custom-tables --list-services")
+        click.echo("        cdc manage-services schema column-templates --list")
+        click.echo("        cdc manage-services schema transforms --list-rules")
+        return 1
+
+    return 0
 
 
 # ============================================================================
-# manage-column-templates
+# manage-services
+# ============================================================================
+
+@click.group(
+    name="manage-services",
+    help="Manage service config and schema commands",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+    invoke_without_command=True,
+)
+@click.pass_context
+def manage_services_cmd(ctx: click.Context) -> int:
+    """Manage-services command group."""
+    if ctx.invoked_subcommand is None:
+        click.echo("❌ Missing subcommand for manage-services")
+        click.echo("   Try: cdc manage-services config --service directory --inspect --all")
+        return 1
+    return 0
+
+
+manage_services_cmd.add_command(manage_service_cmd, name="config")
+
+
+# ============================================================================
+# manage-services schema column-templates
 # ============================================================================
 
 @click.command(
-    name="manage-column-templates",
+    name="column-templates",
     help="Manage column template definitions (column-templates.yaml)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
@@ -447,10 +554,51 @@ def manage_service_schema_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 def manage_column_templates_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
-    """Manage-column-templates passthrough."""
-    from cdc_generator.cli.commands import execute_command
+    """manage-services schema column-templates passthrough."""
+    from cdc_generator.cli.commands import (
+        detect_environment,
+        get_script_paths,
+        run_generator_spec,
+    )
 
-    return execute_command("manage-column-templates", sys.argv[2:])
+    start_index = 2
+    if (
+        len(sys.argv) >= _MIN_NESTED_SCHEMA_ARGS
+        and sys.argv[_GROUPED_COMMAND_INDEX] == "manage-services"
+        and sys.argv[_GROUPED_SUBCOMMAND_INDEX] == "schema"
+        and sys.argv[_NESTED_SCHEMA_SUBCOMMAND_INDEX] == "column-templates"
+    ):
+        start_index = _NESTED_SCHEMA_EXTRA_ARGS_START
+
+    workspace_root, _implementation_name, is_dev_container = detect_environment()
+    paths = get_script_paths(workspace_root, is_dev_container)
+    cmd_info = {
+        "runner": "generator",
+        "module": "cdc_generator.cli.column_templates",
+        "script": "cli/column_templates.py",
+    }
+    return run_generator_spec(
+        "manage-services schema column-templates",
+        cmd_info,
+        paths,
+        sys.argv[start_index:],
+        workspace_root,
+    )
+
+
+manage_services_schema_cmd.add_command(
+    manage_services_schema_custom_tables_cmd,
+    name="custom-tables",
+)
+manage_services_schema_cmd.add_command(
+    manage_column_templates_cmd,
+    name="column-templates",
+)
+manage_services_schema_cmd.add_command(
+    manage_services_schema_transforms_cmd,
+    name="transforms",
+)
+manage_services_cmd.add_command(manage_services_schema_cmd, name="schema")
 
 
 # ============================================================================
@@ -771,11 +919,9 @@ def manage_migrations_schema_docs_cmd(
 # ============================================================================
 
 CLICK_COMMANDS: dict[str, click.Command] = {
-    "manage-service": manage_service_cmd,
+    "manage-services": manage_services_cmd,
     "manage-source-groups": manage_source_groups_cmd,
     "manage-sink-groups": manage_sink_groups_cmd,
-    "manage-service-schema": manage_service_schema_cmd,
-    "manage-column-templates": manage_column_templates_cmd,
     "manage-pipelines": manage_pipelines_cmd,
     "manage-migrations": manage_migrations_cmd,
     "scaffold": scaffold_cmd,

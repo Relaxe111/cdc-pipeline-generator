@@ -113,6 +113,19 @@ def complete_existing_services(
     return _filter(_safe_call(list_existing_services), incomplete)
 
 
+def complete_schema_services(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete services from schema directories (services/_schemas or legacy)."""
+    from cdc_generator.helpers.autocompletions.service_schemas import (
+        list_schema_services,
+    )
+
+    return _filter(_safe_call(list_schema_services), incomplete)
+
+
 def complete_available_services(
     _ctx: click.Context,
     _param: click.Parameter,
@@ -290,6 +303,88 @@ def complete_pg_types(
     return _filter(_safe_call(list_pg_column_types), incomplete)
 
 
+def complete_custom_table_column_spec(
+    _ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete ``--column`` specs for schema custom table CRUD.
+
+    Supported format: ``name:type[:modifier[:modifier...]]``.
+    """
+    parts = incomplete.split(":")
+
+    # No ':' yet -> keep quiet to avoid noisy/ambiguous suggestions.
+    if len(parts) == 1:
+        return []
+
+    col_name = parts[0].strip()
+    if not col_name:
+        return []
+
+    # name:<type>
+    if len(parts) == 2:
+        type_prefix = parts[1]
+        from cdc_generator.helpers.autocompletions.types import (
+            list_pg_column_types,
+        )
+
+        pg_types = _safe_call(list_pg_column_types)
+        candidates = [
+            f"{col_name}:{pg_type}"
+            for pg_type in pg_types
+            if pg_type.startswith(type_prefix)
+        ]
+        return _filter(candidates, incomplete)
+
+    # name:type:<modifier>
+    col_type = parts[1].strip().lower()
+    modifiers = parts[2:]
+    active_modifiers = {
+        mod.strip().lower() for mod in modifiers[:-1] if mod.strip()
+    }
+    modifier_prefix = modifiers[-1] if modifiers else ""
+
+    default_candidates: list[str] = []
+    if col_type == "uuid":
+        default_candidates = ["default_uuid"]
+    elif col_type == "date":
+        default_candidates = ["default_current_date"]
+    elif col_type in {"timestamp", "timestamptz"}:
+        default_candidates = [
+            "default_now",
+            "default_current_timestamp",
+        ]
+
+    structural_candidates: list[str] = []
+    has_pk = "pk" in active_modifiers
+    has_not_null = "not_null" in active_modifiers
+    has_nullable = "nullable" in active_modifiers
+
+    if not has_nullable:
+        if not has_pk:
+            structural_candidates.append("pk")
+        if not has_not_null and not has_pk:
+            structural_candidates.append("not_null")
+
+    if not has_pk and not has_not_null and not has_nullable:
+        structural_candidates.append("nullable")
+
+    modifier_candidates = [
+        *structural_candidates,
+        *default_candidates,
+    ]
+
+    base = ":".join(parts[:-1])
+    candidates = [
+        f"{base}:{candidate}"
+        for candidate in modifier_candidates
+        if candidate.startswith(modifier_prefix)
+        and candidate.lower() not in active_modifiers
+    ]
+    return _filter(candidates, incomplete)
+
+
 # ---------------------------------------------------------------------------
 # Service-context completions (need --service)
 # ---------------------------------------------------------------------------
@@ -330,6 +425,15 @@ def complete_source_tables(
         _safe_call(list_source_tables_for_service, service),
         incomplete,
     )
+
+
+def complete_from_table(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete --from from service ``source.tables`` keys only."""
+    return complete_source_tables(ctx, _param, incomplete)
 
 
 def complete_sink_keys(
@@ -449,6 +553,26 @@ def complete_add_sink_table(
 
     return _filter(
         _safe_call(list_tables_for_sink_target, sink_key),
+        incomplete,
+    )
+
+
+def complete_add_custom_sink_table(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete table refs for --add-custom-sink-table from schema resources."""
+    sink_key = _get_sink_key_with_default(ctx)
+    if not sink_key:
+        return []
+
+    from cdc_generator.helpers.autocompletions.sinks import (
+        list_custom_table_definitions_for_sink_target,
+    )
+
+    return _filter(
+        _safe_call(list_custom_table_definitions_for_sink_target, sink_key),
         incomplete,
     )
 

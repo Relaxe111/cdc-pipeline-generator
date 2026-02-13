@@ -178,19 +178,15 @@ class TestDispatchValidation:
 class TestDispatchExtraColumns:
     """Tests for _dispatch_extra_columns routing."""
 
-    def test_routes_list_template_keys(self) -> None:
-        """--list-template-keys works without --service."""
-        args = _full_ns(service=None, list_template_keys=True)
+    def test_returns_none_for_removed_global_template_rule_flags(self) -> None:
+        """Removed global listing flags no longer dispatch in manage-service."""
+        args = _full_ns(
+            service=None,
+            list_template_keys=True,
+            list_transform_rule_keys=True,
+        )
         result = _dispatch_extra_columns(args)
-        assert result is not None
-        assert result == 0
-
-    def test_routes_list_transform_rule_keys(self) -> None:
-        """--list-transform-rule-keys works without --service."""
-        args = _full_ns(service=None, list_transform_rule_keys=True)
-        result = _dispatch_extra_columns(args)
-        assert result is not None
-        assert result == 0
+        assert result is None
 
     def test_returns_none_no_flags(
         self, project_dir: Path,

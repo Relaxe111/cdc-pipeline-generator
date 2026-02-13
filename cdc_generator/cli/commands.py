@@ -9,10 +9,9 @@ Usage:
 Commands:
     scaffold              Scaffold a new CDC pipeline project with source group configuration
     validate              Validate all customer configurations
-    manage-service        Manage service definitions
+    manage-services      Manage service config/schema commands
     manage-source-groups Manage source groups configuration
     manage-sink-groups   Manage sink groups configuration
-    manage-service-schema Manage custom table schema definitions
     manage-pipelines     Manage pipeline lifecycle commands
     manage-migrations    Manage migration and DB lifecycle commands
     setup-local          Set up local development environment
@@ -138,11 +137,6 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "script": "cli/scaffold_command.py",
         "description": "Scaffold a new CDC pipeline project with source group configuration",
     },
-    "manage-service": {
-        "module": "cdc_generator.cli.service",
-        "script": "cli/service.py",
-        "description": "Manage CDC service definitions",
-    },
     "manage-source-groups": {
         "module": "cdc_generator.cli.source_group",
         "script": "cli/source_group.py",
@@ -153,22 +147,36 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "script": "cli/sink_group.py",
         "description": "Manage sink groups configuration (sink-groups.yaml)",
     },
-    "manage-service-schema": {
-        "module": "cdc_generator.cli.service_schema",
-        "script": "cli/service_schema.py",
-        "description": "Manage custom table schema definitions (services/_schemas/)",
-    },
-    "manage-column-templates": {
-        "module": "cdc_generator.cli.column_templates",
-        "script": "cli/column_templates.py",
-        "description": "Manage column template definitions (column-templates.yaml)",
-    },
     "setup-local": {
         "module": "cdc_generator.cli.setup_local",
         "script": "cli/setup_local.py",
         "description": "Set up local development environment with on-demand services",
     },
 }
+
+# manage-pipelines subcommands
+SERVICE_COMMANDS: dict[str, dict[str, str]] = {
+    "config": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.service",
+        "script": "cli/service.py",
+        "description": "Manage CDC service definitions",
+        "usage": "cdc manage-services config [service] [options]",
+    },
+    "schema": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.service_schema",
+        "script": "cli/service_schema.py",
+        "description": (
+            "Manage schema resources "
+            + "(custom-tables, column-templates, transforms)"
+        ),
+        "usage": (
+            "cdc manage-services schema <custom-tables|column-templates|transforms>"
+        ),
+    },
+}
+
 
 # manage-pipelines subcommands
 PIPELINE_COMMANDS: dict[str, dict[str, str]] = {
@@ -282,6 +290,14 @@ def print_help(
     print("\n📦 Top-level generator commands:")
     for cmd, info in GENERATOR_COMMANDS.items():
         print(f"  {cmd:20} - {info['description']}")
+
+    print("\n🧩 Service management:")
+    for cmd, info in SERVICE_COMMANDS.items():
+        desc = info["description"]
+        usage = info.get("usage")
+        if usage is not None:
+            desc += f"\n  {' ' * 20}   Usage: {usage}"
+        print(f"  {'manage-services ' + cmd:20} - {desc}")
 
     print("\n🔄 Pipeline management:")
     for cmd, info in PIPELINE_COMMANDS.items():
@@ -420,11 +436,13 @@ def execute_grouped_command(
     subcommand: str,
     extra_args: list[str],
 ) -> int:
-    """Execute a grouped command (manage-pipelines/manage-migrations)."""
+    """Execute a grouped command (service/pipeline/migration)."""
     workspace_root, _implementation_name, is_dev_container = detect_environment()
     paths = get_script_paths(workspace_root, is_dev_container)
 
-    if group == "manage-pipelines":
+    if group == "manage-services":
+        cmd_info = SERVICE_COMMANDS.get(subcommand)
+    elif group == "manage-pipelines":
         cmd_info = PIPELINE_COMMANDS.get(subcommand)
     elif group == "manage-migrations":
         cmd_info = MIGRATION_COMMANDS.get(subcommand)

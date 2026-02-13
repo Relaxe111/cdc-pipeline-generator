@@ -8,6 +8,7 @@ from cdc_generator.helpers.autocompletions.utils import (
     find_file_upward,
     find_service_schemas_dir_upward,
 )
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 try:
@@ -206,6 +207,34 @@ def list_tables_for_sink_target(sink_key: str) -> list[str]:
 
     target_service = parts[1]
     return list_tables_for_service(target_service)
+
+
+def list_custom_table_definitions_for_sink_target(sink_key: str) -> list[str]:
+    """List custom-table definitions for a sink target service.
+
+    Reads from ``services/_schemas/{target_service}/custom-tables/*.yaml``
+    with legacy fallback to ``service-schemas/{target_service}/custom-tables/*.yaml``.
+
+    Args:
+        sink_key: Sink key in format ``sink_group.target_service``.
+
+    Returns:
+        Sorted list of ``schema.table`` references.
+    """
+    parts = sink_key.split('.', 1)
+    if len(parts) != SCHEMA_TABLE_PARTS:
+        return []
+
+    target_service = parts[1]
+
+    from cdc_generator.validators.manage_service_schema.custom_table_ops import (
+        list_custom_tables,
+    )
+
+    try:
+        return list_custom_tables(target_service)
+    except Exception:
+        return []
 
 
 def get_default_sink_for_service(service_name: str) -> str:
@@ -421,11 +450,36 @@ def list_custom_table_columns_for_autocomplete(
         return []
 
     columns = tbl_cfg_dict.get('columns', {})
-    if not isinstance(columns, dict):
-        return []
-    columns_dict = cast(dict[str, Any], columns)
+    if isinstance(columns, dict):
+        columns_dict = cast(dict[str, Any], columns)
+        return sorted(str(k) for k in columns_dict)
 
-    return sorted(str(k) for k in columns_dict)
+    sink_parts = sink_key.split('.', 1)
+    if len(sink_parts) != 2:  # noqa: PLR2004
+        return []
+    target_service = sink_parts[1]
+
+    if "." not in table_key:
+        return []
+    schema_name, table_name = table_key.split(".", 1)
+
+    for service_dir in get_service_schema_read_dirs(target_service):
+        schema_file = service_dir / schema_name / f"{table_name}.yaml"
+        if not schema_file.exists():
+            continue
+        data = load_yaml_file(schema_file)
+        if not isinstance(data, dict):
+            continue
+        cols_raw = data.get("columns")
+        if not isinstance(cols_raw, list):
+            continue
+        col_names = [
+            str(col["name"]) for col in cols_raw
+            if isinstance(col, dict) and isinstance(col.get("name"), str)
+        ]
+        return sorted(col_names)
+
+    return []
 
 
 def list_source_columns_for_sink_table(

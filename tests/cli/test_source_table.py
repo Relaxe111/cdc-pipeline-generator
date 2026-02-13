@@ -205,7 +205,7 @@ class TestSourceTableCompletions:
         run_cdc_completion: RunCdcCompletion,
     ) -> None:
         """--source-table is offered as a completion for manage-service."""
-        result = run_cdc_completion("cdc manage-service --source-")
+        result = run_cdc_completion("cdc manage-services config --source-")
         assert "source-table" in result.stdout
 
     def test_track_columns_flag_appears_in_completions(
@@ -214,6 +214,6 @@ class TestSourceTableCompletions:
     ) -> None:
         """--track-columns appears with --source-table context."""
         result = run_cdc_completion(
-            "cdc manage-service --source-table Actor --track-"
+            "cdc manage-services config --source-table Actor --track-"
         )
         assert "track-columns" in result.stdout

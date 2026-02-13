@@ -382,3 +382,169 @@ def test_replicate_structure_false_omitted() -> None:
     result = _build_table_config(opts)
 
     assert "replicate_structure" not in result
+
+
+# ---------------------------------------------------------------------------
+# Add-time compatibility checks (target_exists=true)
+# ---------------------------------------------------------------------------
+
+
+def test_add_sink_table_allows_implicit_identity_when_types_match(
+    monkeypatch: Any,
+) -> None:
+    """Same-name compatible columns should not require --map-column."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+            {"name": "name", "type": "text", "nullable": True},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={"target_exists": True},
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_fails_on_incompatible_identity_columns(
+    monkeypatch: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Incompatible same-name columns should fail with mapping guidance."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "id", "type": "text", "nullable": False},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={"target_exists": True},
+    )
+
+    assert result is False
+    output = capsys.readouterr().out
+    assert "compatibility check failed" in output.lower()
+    assert "--map-column" in output
+
+
+def test_add_sink_table_accepts_explicit_mapping_for_required_sink_columns(
+    monkeypatch: Any,
+) -> None:
+    """Explicit mapping should satisfy required sink columns."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "user_id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "columns": {"user_id": "id"},
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_replicate_structure_skips_compatibility_check(
+    monkeypatch: Any,
+) -> None:
+    """replicate_structure should preserve old behavior and bypass checks."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+
+    def _unexpected_schema_load(*_args: object) -> object:
+        raise AssertionError("column loader should not be called")
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        _unexpected_schema_load,
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "replicate_structure": True,
+        },
+    )
+
+    assert result is True

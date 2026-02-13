@@ -3,6 +3,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from cdc_generator.validators.manage_service_schema.custom_table_ops import (
     create_custom_table,
     get_custom_table_columns,
@@ -114,6 +116,27 @@ def test_list_services_with_schemas_skips_special_dirs(tmp_path: Path) -> None:
         services = list_services_with_schemas()
 
     assert services == ["chat", "directory"]
+
+
+def test_create_custom_table_without_pk_emits_warning(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with patch(
+        "cdc_generator.validators.manage_service_schema.custom_table_ops.get_project_root",
+        return_value=tmp_path,
+    ):
+        created = create_custom_table(
+            "chat",
+            "public.audit_log",
+            ["event_type:text:not_null"],
+        )
+
+    assert created is True
+    out = capsys.readouterr().out.lower()
+    assert "without primary key" in out
+    assert "incomplete" in out
+    assert "--column id:uuid:pk" in out
 
 
 def test_show_custom_table_missing_returns_none(tmp_path: Path) -> None:

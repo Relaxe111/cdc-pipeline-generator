@@ -23,12 +23,12 @@ def test_parse_column_spec_default_alias_uuid() -> None:
     assert col["default"] == "gen_random_uuid()"
 
 
-def test_parse_column_spec_nullable_overrides_pk_order() -> None:
-    col = ops.parse_column_spec("id:uuid:pk:nullable")
+def test_parse_column_spec_pk_nullable_conflict_returns_none() -> None:
+    assert ops.parse_column_spec("id:uuid:pk:nullable") is None
 
-    assert col is not None
-    assert col["primary_key"] is True
-    assert col["nullable"] is True
+
+def test_parse_column_spec_not_null_nullable_conflict_returns_none() -> None:
+    assert ops.parse_column_spec("id:text:not_null:nullable") is None
 
 
 @patch("cdc_generator.validators.manage_service_schema.type_definitions.get_all_type_names")

@@ -245,7 +245,7 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     },
     # ── Add sink table (requires --sink) ───────────────────────
     "add_sink_table": {
-        "sink", "from_table", "target", "target_exists",
+        "sink", "from", "from_table", "target", "target_exists",
         "target_schema", "sink_schema", "replicate_structure",
         "map_column", "include_sink_columns",
     },
@@ -270,9 +270,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "add_transform": {"sink", "sink_table", "skip_validation"},
     "remove_transform": {"sink", "sink_table"},
     "list_transforms": {"sink", "sink_table"},
-    "list_transform_rules": set(),
     # ── Custom sink tables ─────────────────────────────────────
-    "add_custom_sink_table": {"sink", "column"},
+    "add_custom_sink_table": {"sink", "column", "from", "from_table"},
     # ── Modify custom table ────────────────────────────────────
     "modify_custom_table": {"sink", "add_column", "remove_column"},
     # ── Create service (standalone action) ─────────────────────
@@ -389,3 +388,26 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
 MANAGE_SINK_GROUPS_ALWAYS: set[str] = set()
 
 MANAGE_SINK_GROUPS_REQUIRES: dict[str, set[str]] = {}
+
+
+# manage-services schema custom-tables: context flag → sub-options
+MANAGE_SCHEMA_CUSTOM_TABLES_GROUPS: dict[str, set[str]] = {
+    "list_services": set(),
+    "list_custom_tables": set(),
+    "add_custom_table": {"column"},
+    "show_custom_table": set(),
+    "remove_custom_table": set(),
+}
+
+MANAGE_SCHEMA_CUSTOM_TABLES_ALWAYS: set[str] = {
+    "service",
+    "list_services",
+}
+
+MANAGE_SCHEMA_CUSTOM_TABLES_REQUIRES: dict[str, set[str]] = {
+    "list_custom_tables": {"service"},
+    "add_custom_table": {"service"},
+    "show_custom_table": {"service"},
+    "remove_custom_table": {"service"},
+    "column": {"add_custom_table"},
+}

@@ -32,6 +32,7 @@ from cdc_generator.cli.commands import (
     LOCAL_COMMANDS,
     MIGRATION_COMMANDS,
     PIPELINE_COMMANDS,
+    SERVICE_COMMANDS,
 )
 from cdc_generator.helpers.helpers_logging import Colors
 
@@ -73,6 +74,12 @@ def _discover_commands() -> list[tuple[str, str, bool]]:
     # Grouped pipeline subcommands
     for subcmd, info in PIPELINE_COMMANDS.items():
         composite = f"manage-pipelines-{subcmd}"
+        is_library = info.get("runner") == "generator"
+        commands.append((composite, info["description"], is_library))
+
+    # Grouped service subcommands
+    for subcmd, info in SERVICE_COMMANDS.items():
+        composite = f"manage-services-{subcmd}"
         is_library = info.get("runner") == "generator"
         commands.append((composite, info["description"], is_library))
 
@@ -143,7 +150,7 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("setup_local", "setup-local"),
     ("server_group", "manage-source-groups"),
     ("sink_group", "manage-sink-groups"),
-    ("service_schema", "manage-service-schema"),
+    ("service_schema", "manage-services-schema"),
     ("source_handler", "manage-service"),
     ("sink_handler", "manage-service"),
     ("sink_from", "manage-service"),
@@ -157,8 +164,8 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("custom_table", "manage-service"),
     ("pg_schema", "manage-service"),
     ("dispatch", "manage-service"),
-    ("column_template", "manage-column-templates"),
-    ("transform_rule", "manage-column-templates"),
+    ("column_template", "manage-services-schema"),
+    ("transform_rule", "manage-services-schema"),
     ("structure_replicator", "manage-service"),
 ]
 
@@ -266,7 +273,7 @@ _COMMAND_SOURCE_MODULES: dict[str, list[str]] = {
     "manage-pipelines-generate": [
         "core/pipeline_generator.py",
     ],
-    "manage-service": [
+    "manage-services-config": [
         "cli/service.py",
         "cli/service_handlers.py",
         "cli/service_handlers_bloblang.py",
@@ -312,17 +319,15 @@ _COMMAND_SOURCE_MODULES: dict[str, list[str]] = {
         "cli/sink_group.py",
         "validators/sink_group_validator.py",
     ],
-    "manage-service-schema": [
+    "manage-services-schema": [
         "cli/service_schema.py",
-        "validators/manage_service_schema/custom_table_ops.py",
-        "validators/manage_service_schema/type_definitions.py",
-    ],
-    "manage-column-templates": [
         "cli/column_templates.py",
         "core/column_template_definitions.py",
         "core/column_template_operations.py",
         "core/column_templates.py",
         "core/transform_rules.py",
+        "validators/manage_service_schema/custom_table_ops.py",
+        "validators/manage_service_schema/type_definitions.py",
     ],
     "setup-local": [
         "cli/setup_local.py",
@@ -396,6 +401,12 @@ def _resolve_command_source_modules(
             if pipeline_cmd is None or pipeline_cmd.get("runner") != "generator":
                 return []
             cmd_info = pipeline_cmd
+        elif command.startswith("manage-services-"):
+            subcmd = command.removeprefix("manage-services-")
+            service_cmd = SERVICE_COMMANDS.get(subcmd)
+            if service_cmd is None or service_cmd.get("runner") != "generator":
+                return []
+            cmd_info = service_cmd
         elif command.startswith(migration_prefix):
             subcmd = command.removeprefix(migration_prefix)
             migration_cmd = MIGRATION_COMMANDS.get(subcmd)

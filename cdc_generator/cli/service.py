@@ -26,7 +26,6 @@ from cdc_generator.cli.service_handlers import (
     handle_interactive,
     handle_list_column_templates,
     handle_list_source_tables,
-    handle_list_transform_rules,
     handle_list_transforms,
     handle_modify_custom_table,
     handle_no_service,
@@ -342,16 +341,6 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
         "--list-transforms",
         action="store_true",
         help="List transforms on a sink table (requires --sink-table)",
-    )
-    parser.add_argument(
-        "--list-template-keys",
-        action="store_true",
-        help="List all available column template keys",
-    )
-    parser.add_argument(
-        "--list-transform-rule-keys",
-        action="store_true",
-        help="List all available transform rule keys",
     )
     parser.add_argument(
         "--skip-validation",
@@ -743,12 +732,6 @@ def _dispatch_inspect(args: argparse.Namespace) -> int | None:
 
 def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
     """Handle extra column and transform commands. None = not handled."""
-    # Global listing commands (no --service required)
-    if args.list_template_keys:
-        return handle_list_column_templates(args)
-    if args.list_transform_rule_keys:
-        return handle_list_transform_rules(args)
-
     if not args.service:
         return None
 

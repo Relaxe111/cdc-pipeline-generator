@@ -16,8 +16,14 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.service_schema_paths import (
+    get_service_schema_read_dirs,
+)
 from cdc_generator.helpers.service_config import (
     load_service_config,
+)
+from cdc_generator.helpers.yaml_loader import (
+    load_yaml_file,
 )
 from cdc_generator.validators.manage_service.config import (
     SERVICE_SCHEMAS_DIR,
@@ -267,30 +273,21 @@ def _save_schema_file(
 
 
 def _build_custom_table_config(
-    columns: list[dict[str, object]],
+    from_table: str | None = None,
 ) -> dict[str, object]:
     """Build the per-table config dict for a custom table.
 
     Always sets target_exists=false, custom=true, managed=true.
+    Keeps only fields that are not deducible from schema resources.
     """
-    col_defs: dict[str, dict[str, object]] = {}
-    for col in columns:
-        name = str(col["name"])
-        col_cfg: dict[str, object] = {"type": col["type"]}
-        if col.get("primary_key"):
-            col_cfg["primary_key"] = True
-        if col.get("nullable") is not None and not col.get("nullable"):
-            col_cfg["nullable"] = False
-        if "default" in col:
-            col_cfg["default"] = col["default"]
-        col_defs[name] = col_cfg
-
-    return {
+    cfg: dict[str, object] = {
         "target_exists": False,
         "custom": True,
         "managed": True,
-        "columns": col_defs,
     }
+    if from_table is not None:
+        cfg["from"] = from_table
+    return cfg
 
 
 def _get_sinks_dict(config: dict[str, object]) -> dict[str, object]:
@@ -404,31 +401,33 @@ def add_custom_sink_table(
 
     Columns can come from:
     1. Inline ``--column`` specs (column_specs)
-    2. A pre-defined custom table (from_custom_table)
+    2. A source table in this service via ``--from`` (from_custom_table)
 
     Args:
         service: Service name.
         sink_key: Sink key (e.g., 'sink_asma.proxy').
         table_key: Table in format 'schema.table'.
         column_specs: Column specs (e.g., ['id:uuid:pk', 'name:text:not_null']).
-        from_custom_table: Optional custom table ref (schema.table) to
-            load columns from ``service-schemas/{target}/custom-tables/``.
+        from_custom_table: Optional source table ref (schema.table) to
+            load columns from source service schemas.
 
     Returns:
         True on success.
     """
-    # If --from references a custom table, load columns from it
+    # If --from references a source table, load columns from source schemas
     if from_custom_table:
-        target_service = _extract_target_service(sink_key)
-        if not target_service:
-            return False
-        columns = _load_columns_from_custom_table(
-            target_service, from_custom_table,
+        columns = _load_columns_from_source_table(
+            service,
+            from_custom_table,
         )
         if columns is None:
             return False
         return _add_custom_sink_table_with_columns(
-            service, sink_key, table_key, columns,
+            service,
+            sink_key,
+            table_key,
+            columns,
+            from_table=from_custom_table,
         )
 
     validated = _validate_custom_table_inputs(sink_key, table_key, column_specs)
@@ -441,43 +440,71 @@ def add_custom_sink_table(
     )
 
 
-def _load_columns_from_custom_table(
-    target_service: str,
+def _load_columns_from_source_table(
+    service: str,
     table_ref: str,
 ) -> list[dict[str, object]] | None:
-    """Load column definitions from a pre-defined custom table.
+    """Load column definitions from a source table schema.
 
-    Reads from ``service-schemas/{target}/custom-tables/{ref}.yaml``.
+    Validates that ``table_ref`` exists in ``source.tables`` of the service,
+    then reads from preferred/legacy schema paths for that same service.
 
     Returns:
         List of column defs, or None on error.
     """
-    from cdc_generator.validators.manage_service_schema.custom_table_ops import (
-        show_custom_table,
-    )
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError as exc:
+        print_error(f"Service not found: {exc}")
+        return None
 
-    data = show_custom_table(target_service, table_ref)
-    if data is None:
+    source = config.get("source")
+    tables = source.get("tables") if isinstance(source, dict) else None
+    if not isinstance(tables, dict) or table_ref not in tables:
         print_error(
-            f"Custom table '{table_ref}' not found for "
-            + f"service '{target_service}'"
+            f"Source table '{table_ref}' not found in service '{service}'"
+        )
+        table_keys = sorted(str(k) for k in tables) if isinstance(tables, dict) else []
+        if table_keys:
+            print_info("Available source tables: " + ", ".join(table_keys))
+        return None
+
+    if "." not in table_ref:
+        print_error(
+            f"Invalid source table reference '{table_ref}'. Expected schema.table"
+        )
+        return None
+
+    schema_name, table_name = table_ref.split(".", 1)
+
+    table_schema: dict[str, Any] | None = None
+    for service_dir in get_service_schema_read_dirs(service):
+        schema_file = service_dir / schema_name / f"{table_name}.yaml"
+        if not schema_file.exists():
+            continue
+        loaded = load_yaml_file(schema_file)
+        if isinstance(loaded, dict):
+            table_schema = loaded
+            break
+
+    if table_schema is None:
+        print_error(
+            f"Schema for source table '{table_ref}' not found in service-schemas"
         )
         print_info(
-            "Create it first: cdc manage-service-schema"
-            + f" --service {target_service}"
-            + f" --add-custom-table {table_ref}"
-            + " --column id:uuid:pk ..."
+            "Run: cdc manage-service --service "
+            + f"{service} --inspect --all --save"
         )
         return None
 
-    columns_raw: list[dict[str, Any]] = data.get("columns", [])
+    columns_raw: list[dict[str, Any]] = table_schema.get("columns", [])
     if not columns_raw:
         print_error(
-            f"Custom table '{table_ref}' has no columns"
+            f"Source table '{table_ref}' has no columns"
         )
         return None
 
-    # Convert to the format expected by _build_custom_table_config
+    # Convert to internal parsed-column format used by schema file generation
     columns: list[dict[str, object]] = []
     for col in columns_raw:
         col_def: dict[str, object] = {
@@ -501,6 +528,7 @@ def _add_custom_sink_table_with_columns(
     sink_key: str,
     table_key: str,
     columns: list[dict[str, object]],
+    from_table: str | None = None,
 ) -> bool:
     """Core logic for adding a custom sink table with parsed columns.
 
@@ -542,7 +570,7 @@ def _add_custom_sink_table_with_columns(
         return False
 
     # Build and save
-    tables[table_key] = _build_custom_table_config(columns)
+    tables[table_key] = _build_custom_table_config(from_table=from_table)
 
     if not save_service_config(service, config):
         return False
@@ -574,11 +602,11 @@ def _load_custom_table(
     service: str,
     sink_key: str,
     table_key: str,
-) -> tuple[dict[str, object], dict[str, object], dict[str, object]] | None:
+) -> tuple[dict[str, object], dict[str, object], dict[str, object], str] | None:
     """Load and validate a custom+managed table for modification.
 
     Returns:
-        (config, table_config, columns_dict) or None on error.
+        (config, table_config, columns_dict, target_service) or None on error.
     """
     try:
         config = load_service_config(service)
@@ -617,12 +645,69 @@ def _load_custom_table(
         print_info("Set 'managed: true' in the YAML to enable CLI edits")
         return None
 
-    cols_raw = tbl_cfg.get("columns")
-    if not isinstance(cols_raw, dict):
-        tbl_cfg["columns"] = {}
-        cols_raw = tbl_cfg["columns"]
+    target_service = _extract_target_service(sink_key)
+    if target_service is None:
+        return None
 
-    return config, tbl_cfg, cast(dict[str, object], cols_raw)
+    cols_raw = tbl_cfg.get("columns")
+    if isinstance(cols_raw, dict):
+        return config, tbl_cfg, cast(dict[str, object], cols_raw), target_service
+
+    schema_columns = _load_columns_map_from_schema(target_service, table_key)
+    if schema_columns is None:
+        print_error(f"No column definitions available for '{table_key}'")
+        print_info(
+            "Ensure schema exists under services/_schemas/<target>/<schema>/<table>.yaml"
+        )
+        return None
+
+    return config, tbl_cfg, schema_columns, target_service
+
+
+def _load_columns_map_from_schema(
+    target_service: str,
+    table_key: str,
+) -> dict[str, object] | None:
+    """Load column definitions from target schema file as mapping."""
+    if yaml is None:
+        return None
+
+    schema_name, table_name = _split_table_key(table_key)
+    schema_file = (
+        SERVICE_SCHEMAS_DIR / target_service / schema_name / f"{table_name}.yaml"
+    )
+    if not schema_file.exists():
+        return None
+
+    with schema_file.open(encoding="utf-8") as f:
+        data = yaml.load(f)
+
+    if not isinstance(data, dict):
+        return None
+
+    schema_data = cast(dict[str, Any], data)
+    columns_raw = schema_data.get("columns")
+    if not isinstance(columns_raw, list):
+        return None
+
+    cols: dict[str, object] = {}
+    for col in columns_raw:
+        if not isinstance(col, dict):
+            continue
+        name = col.get("name")
+        col_type = col.get("type")
+        if not isinstance(name, str) or not isinstance(col_type, str):
+            continue
+        col_cfg: dict[str, object] = {"type": col_type}
+        if col.get("primary_key"):
+            col_cfg["primary_key"] = True
+        if col.get("nullable") is not None and not col.get("nullable"):
+            col_cfg["nullable"] = False
+        if col.get("default") is not None:
+            col_cfg["default"] = col.get("default")
+        cols[name] = col_cfg
+
+    return cols
 
 
 def add_column_to_custom_table(
@@ -646,7 +731,7 @@ def add_column_to_custom_table(
     if result is None:
         return False
 
-    config, _tbl_cfg, columns = result
+    config, tbl_cfg, columns, target_service = result
 
     col = _parse_column_spec(column_spec)
     if col is None:
@@ -666,15 +751,14 @@ def add_column_to_custom_table(
     if "default" in col:
         col_entry["default"] = col["default"]
 
-    columns[col_name] = col_entry
+    cols_raw = tbl_cfg.get("columns")
+    if isinstance(cols_raw, dict):
+        columns[col_name] = col_entry
+        if not save_service_config(service, config):
+            return False
 
-    if not save_service_config(service, config):
-        return False
-
-    # Update schema file
-    target_service = _extract_target_service(sink_key)
-    if target_service:
-        _update_schema_file_add_column(target_service, table_key, col)
+    # Canonical definition lives in schema file
+    _update_schema_file_add_column(target_service, table_key, col)
 
     print_success(
         f"Added column '{col_name}' ({col['type']}) "
@@ -704,7 +788,7 @@ def remove_column_from_custom_table(
     if result is None:
         return False
 
-    config, _tbl_cfg, columns = result
+    config, tbl_cfg, columns, target_service = result
 
     if column_name not in columns:
         print_error(
@@ -723,17 +807,16 @@ def remove_column_from_custom_table(
         )
         return False
 
-    del columns[column_name]
+    cols_raw = tbl_cfg.get("columns")
+    if isinstance(cols_raw, dict):
+        del columns[column_name]
+        if not save_service_config(service, config):
+            return False
 
-    if not save_service_config(service, config):
-        return False
-
-    # Update schema file
-    target_service = _extract_target_service(sink_key)
-    if target_service:
-        _update_schema_file_remove_column(
-            target_service, table_key, column_name,
-        )
+    # Canonical definition lives in schema file
+    _update_schema_file_remove_column(
+        target_service, table_key, column_name,
+    )
 
     print_success(
         f"Removed column '{column_name}' from custom table '{table_key}'"
@@ -890,12 +973,19 @@ def list_custom_table_columns(
         return []
 
     cols_raw = tbl_cfg.get("columns")
-    if not isinstance(cols_raw, dict):
+    if isinstance(cols_raw, dict):
+        cols = cast(dict[str, object], cols_raw)
+        return sorted(str(k) for k in cols)
+
+    target_service = _extract_target_service(sink_key)
+    if target_service is None:
         return []
 
-    cols = cast(dict[str, object], cols_raw)
+    schema_cols = _load_columns_map_from_schema(target_service, table_key)
+    if schema_cols is None:
+        return []
 
-    return sorted(str(k) for k in cols)
+    return sorted(str(k) for k in schema_cols)
 
 
 def list_custom_tables_for_sink(

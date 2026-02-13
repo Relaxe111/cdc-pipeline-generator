@@ -554,6 +554,193 @@ def _save_custom_table_structure(
         print_warning(f"Failed to save custom table reference: {exc}")
 
 
+def _is_required_sink_column(column: dict[str, Any]) -> bool:
+    """Return True if sink column requires source input.
+
+    Required means either primary key or non-nullable without default value.
+    """
+    is_pk = bool(column.get("primary_key", False))
+    nullable = bool(column.get("nullable", True))
+    has_default = column.get("default") is not None
+    return (is_pk or not nullable) and not has_default
+
+
+def _collect_named_column_types(
+    columns: list[dict[str, Any]],
+) -> dict[str, str]:
+    """Return {column_name: type} for columns with both fields present."""
+    result: dict[str, str] = {}
+    for col in columns:
+        name = col.get("name")
+        col_type = col.get("type")
+        if isinstance(name, str) and isinstance(col_type, str):
+            result[name] = col_type
+    return result
+
+
+def _analyze_identity_coverage(
+    source_types: dict[str, str],
+    sink_types: dict[str, str],
+    mapped_sink_columns: set[str],
+) -> tuple[set[str], list[tuple[str, str, str]]]:
+    """Return identity-compatible and identity-incompatible sink columns."""
+    identity_covered: set[str] = set()
+    incompatible_identity: list[tuple[str, str, str]] = []
+
+    for sink_col, sink_type in sink_types.items():
+        if sink_col in mapped_sink_columns:
+            continue
+
+        source_type = source_types.get(sink_col)
+        if source_type is None:
+            continue
+
+        if _check_type_compatibility(source_type, sink_type):
+            identity_covered.add(sink_col)
+            continue
+
+        incompatible_identity.append((sink_col, source_type, sink_type))
+
+    return identity_covered, incompatible_identity
+
+
+def _find_required_unmapped_sink_columns(
+    sink_columns: list[dict[str, Any]],
+    covered: set[str],
+) -> list[str]:
+    """List required sink columns not covered by explicit/identity mapping."""
+    required_unmapped: list[str] = []
+    for sink_col in sink_columns:
+        col_name = sink_col.get("name")
+        if not isinstance(col_name, str):
+            continue
+        if col_name in covered:
+            continue
+        if _is_required_sink_column(sink_col):
+            required_unmapped.append(col_name)
+    return required_unmapped
+
+
+def _build_add_table_compatibility_guidance(
+    source_table: str,
+    sink_table: str,
+    incompatible_identity: list[tuple[str, str, str]],
+    required_unmapped: list[str],
+    source_names: list[str],
+) -> str:
+    """Build a user-friendly compatibility error with mapping suggestions."""
+    guidance_lines: list[str] = [
+        "Source/sink column compatibility check failed.",
+        f"Source table: {source_table}",
+        f"Sink table: {sink_table}",
+    ]
+
+    if incompatible_identity:
+        guidance_lines.append("Incompatible same-name columns:")
+        for col_name, src_type, sink_type in incompatible_identity:
+            guidance_lines.append(
+                f"  - {col_name}: source={src_type}, sink={sink_type}"
+            )
+            guidance_lines.append(
+                f"    Suggestion: --map-column {col_name} <sink_column>"
+            )
+
+    if required_unmapped:
+        guidance_lines.append(
+            "Required sink columns without compatible source mapping:"
+        )
+        for col_name in sorted(required_unmapped):
+            guidance_lines.append(f"  - {col_name}")
+            if source_names:
+                candidates = ", ".join(source_names[:5])
+                guidance_lines.append(
+                    "    Suggestion: add --map-column "
+                    + f"<source_column> {col_name} "
+                    + f"(available source columns: {candidates})"
+                )
+
+    guidance_lines.append(
+        "When columns match by name and type, mapping is applied implicitly."
+    )
+    return "\n".join(guidance_lines)
+
+
+def _validate_add_table_schema_compatibility(
+    service: str,
+    sink_key: str,
+    source_fallback_table: str,
+    sink_table_key: str,
+    opts: TableConfigOptions,
+) -> str | None:
+    """Validate source/sink column compatibility for add_sink_table flow.
+
+    Applies only when mapping to an existing target table
+    (target_exists=True) and replicate_structure=False.
+    """
+    if opts.replicate_structure or not opts.target_exists:
+        return None
+
+    source_table = opts.from_table if opts.from_table else source_fallback_table
+    sink_table = opts.target if opts.target else sink_table_key
+
+    target_service = _get_target_service_from_sink_key(sink_key)
+    if target_service is None:
+        return f"Invalid sink key format: '{sink_key}'"
+
+    source_columns = _load_table_columns(service, source_table)
+    sink_columns = _load_table_columns(target_service, sink_table)
+    if source_columns is None or sink_columns is None:
+        print_warning(
+            "Skipping add-time compatibility check because schema files are missing."
+        )
+        print_info(
+            "Run inspect/save to enable strict checks: "
+            + f"--inspect --all --save and --inspect-sink {sink_key} --all --save"
+        )
+        return None
+
+    explicit_mappings = opts.columns or {}
+    mapping_errors = _validate_column_mappings(
+        list(explicit_mappings.items()),
+        source_columns,
+        sink_columns,
+        source_table,
+        sink_table,
+    )
+    if mapping_errors:
+        details = "\n  - ".join(mapping_errors)
+        return (
+            "Invalid --map-column configuration:\n"
+            + f"  - {details}"
+        )
+
+    source_types = _collect_named_column_types(source_columns)
+    sink_types = _collect_named_column_types(sink_columns)
+    mapped_sink_columns = set(explicit_mappings.values())
+    identity_covered, incompatible_identity = _analyze_identity_coverage(
+        source_types,
+        sink_types,
+        mapped_sink_columns,
+    )
+    covered = mapped_sink_columns | identity_covered
+    required_unmapped = _find_required_unmapped_sink_columns(
+        sink_columns,
+        covered,
+    )
+
+    if not incompatible_identity and not required_unmapped:
+        return None
+
+    source_names = sorted(source_types.keys())
+    return _build_add_table_compatibility_guidance(
+        source_table,
+        sink_table,
+        incompatible_identity,
+        required_unmapped,
+        source_names,
+    )
+
+
 def add_sink_table(
     service: str,
     sink_key: str,
@@ -610,10 +797,9 @@ def add_sink_table(
         config, sink_key, final_table_key, opts, skip_schema_validation=sink_schema is not None
     )
 
-    if error:
-        print_error(error)
-        return False
-    if tables is None:
+    if error or tables is None:
+        if error:
+            print_error(error)
         return False
 
     target_exists = bool(opts.get("target_exists", False))
@@ -649,6 +835,17 @@ def add_sink_table(
         replicate_structure=replicate_structure,
         sink_schema=str(sink_schema) if sink_schema is not None else None,
     )
+
+    compatibility_error = _validate_add_table_schema_compatibility(
+        service,
+        sink_key,
+        table_key,
+        final_table_key,
+        config_opts,
+    )
+    if compatibility_error:
+        print_error(compatibility_error)
+        return False
 
     tables[final_table_key] = _build_table_config(config_opts)
 

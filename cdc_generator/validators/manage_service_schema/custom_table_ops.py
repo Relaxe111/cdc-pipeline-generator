@@ -152,15 +152,39 @@ def parse_column_spec(
     is_pk = False
     is_nullable = True
     default_expr: str | None = None
+    has_nullable_modifier = False
+    has_not_null_modifier = False
 
     for mod in parts[2:]:
         mod_lower = mod.strip().lower()
         if mod_lower == "pk":
+            if has_nullable_modifier:
+                print_error(
+                    "Invalid column spec: 'pk' cannot be combined with 'nullable'"
+                )
+                return None
             is_pk = True
             is_nullable = False
         elif mod_lower == "not_null":
+            if has_nullable_modifier:
+                print_error(
+                    "Invalid column spec: 'not_null' cannot be combined with 'nullable'"
+                )
+                return None
+            has_not_null_modifier = True
             is_nullable = False
         elif mod_lower == "nullable":
+            if is_pk:
+                print_error(
+                    "Invalid column spec: 'nullable' cannot be combined with 'pk'"
+                )
+                return None
+            if has_not_null_modifier:
+                print_error(
+                    "Invalid column spec: 'nullable' cannot be combined with 'not_null'"
+                )
+                return None
+            has_nullable_modifier = True
             is_nullable = True
         elif mod_lower.startswith("default_"):
             key = mod_lower.removeprefix("default_")
@@ -291,6 +315,19 @@ def create_custom_table(
         + f"/{schema}.{table}.yaml"
     )
     _print_table_summary(columns, primary_keys)
+
+    if not primary_keys:
+        print_warning(
+            "Table created without primary key. "
+            + "This table is incomplete and may not be usable in sinks."
+        )
+        print_info(
+            "Suggested fix: recreate with a PK column, e.g. "
+            + "--column id:uuid:pk"
+        )
+        print_info(
+            "Or edit the table file and add primary_key to one or more columns."
+        )
 
     return True
 
