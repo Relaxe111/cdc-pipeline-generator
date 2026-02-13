@@ -455,3 +455,99 @@ class TestCustomSinkTableCompletion:
 
         assert "public.users" in completions
         assert "public.user_groups" in completions
+
+
+class TestTrackColumnsCompletion:
+    """Tests for --track-columns value completion behavior."""
+
+    @staticmethod
+    def _complete(partial_cmd: str) -> list[str]:
+        """Return completion values for *partial_cmd* via Click API."""
+        import shlex
+
+        from click.shell_completion import ShellComplete
+
+        from cdc_generator.cli.commands import _click_cli
+
+        cli = _click_cli
+        parts = shlex.split(partial_cmd)
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+        incomplete = parts.pop() if parts else ""
+        comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
+        return [c.value for c in comp.get_completions(parts, incomplete)]
+
+    def test_excludes_columns_already_configured_on_source_table(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Configured include/ignore columns should not be suggested again."""
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.customer_user:\n"
+            "        include_columns:\n"
+            "          - user_id\n"
+        )
+
+        schema_dir = (
+            temp_workspace
+            / "services"
+            / "_schemas"
+            / "directory"
+            / "public"
+        )
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        (schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: user_id\n"
+            "  - name: customer_id\n"
+            "  - name: username\n"
+        )
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--source-table public.customer_user "
+            + "--track-columns public.customer_user."
+        )
+
+        assert "public.customer_user.user_id" not in completions
+        assert "public.customer_user.customer_id" in completions
+        assert "public.customer_user.username" in completions
+
+    def test_excludes_columns_already_selected_in_command(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When repeating --track-columns, previously selected values are filtered."""
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.customer_user: {}\n"
+        )
+
+        schema_dir = (
+            temp_workspace
+            / "services"
+            / "_schemas"
+            / "directory"
+            / "public"
+        )
+        schema_dir.mkdir(parents=True, exist_ok=True)
+        (schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: user_id\n"
+            "  - name: customer_id\n"
+        )
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--source-table public.customer_user "
+            + "--track-columns public.customer_user.user_id "
+            + "--track-columns public.customer_user."
+        )
+
+        assert "public.customer_user.user_id" not in completions
+        assert "public.customer_user.customer_id" in completions

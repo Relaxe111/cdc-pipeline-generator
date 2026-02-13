@@ -92,6 +92,7 @@ def get_scaffold_directories() -> list[str]:
     return [
         "services",
         "services/_schemas",
+        "services/_schemas/_definitions",
         "services/_schemas/adapters",
         "services/_schemas/_bloblang",
         "services/_schemas/_bloblang/examples",

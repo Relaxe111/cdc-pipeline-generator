@@ -1,0 +1,84 @@
+# Type translation map between MSSQL and PostgreSQL.
+#
+# Notes:
+# - This file is a starter template for manual tuning per project.
+# - Some mappings are lossy and require business decisions (for example money,
+#   sql_variant, xml, rowversion, geography, geometry).
+# - Keep both directions explicit to support future bi-directional tooling.
+
+metadata:
+  source_engine: mssql
+  target_engine: pgsql
+  version: 1
+
+mssql_to_pgsql:
+  bigint: bigint
+  int: integer
+  smallint: smallint
+  tinyint: smallint
+
+  bit: boolean
+
+  decimal: numeric
+  numeric: numeric
+  money: numeric
+  smallmoney: numeric
+  float: double precision
+  real: real
+
+  date: date
+  datetime: timestamp without time zone
+  datetime2: timestamp without time zone
+  smalldatetime: timestamp without time zone
+  datetimeoffset: timestamp with time zone
+  time: time without time zone
+
+  char: character
+  nchar: character
+  varchar: character varying
+  nvarchar: character varying
+  text: text
+  ntext: text
+
+  binary: bytea
+  varbinary: bytea
+  image: bytea
+  rowversion: bytea
+  timestamp: bytea
+
+  uniqueidentifier: uuid
+
+  xml: xml
+  json: jsonb
+  sql_variant: jsonb
+
+  geography: text
+  geometry: text
+
+pgsql_to_mssql:
+  bigint: bigint
+  integer: int
+  smallint: smallint
+
+  boolean: bit
+
+  numeric: decimal
+  real: real
+  double precision: float
+
+  date: date
+  timestamp without time zone: datetime2
+  timestamp with time zone: datetimeoffset
+  time without time zone: time
+
+  character: nchar
+  character varying: nvarchar
+  text: nvarchar
+
+  bytea: varbinary
+
+  uuid: uniqueidentifier
+
+  xml: xml
+  json: nvarchar
+  jsonb: nvarchar

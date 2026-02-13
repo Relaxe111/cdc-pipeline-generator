@@ -496,13 +496,15 @@ def _build_parser() -> ServiceArgumentParser:
     )
     parser.add_argument(
         "--ignore-columns",
+        nargs="+",
         action="append",
         help="Column to ignore (schema.table.column)",
     )
     parser.add_argument(
         "--track-columns",
+        nargs="+",
         action="append",
-        help="Column to track (schema.table.column)",
+        help="Column(s) to track (schema.table.column)",
     )
 
     # Sink management args

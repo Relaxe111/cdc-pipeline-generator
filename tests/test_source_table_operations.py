@@ -97,6 +97,25 @@ class TestAddTableToServiceUpdatePath:
         table_def = saved["proxy"]["source"]["tables"]["public.queries"]
         assert sorted(table_def["include_columns"]) == ["status", "title"]
 
+    def test_handler_accepts_multiple_track_columns_in_single_flag_group(
+        self, project_dir: Path, service_with_tables: Path,
+    ) -> None:
+        """Parser-style nested list for --track-columns is flattened correctly."""
+        args = argparse.Namespace(
+            service="proxy",
+            source_table="public.queries",
+            schema=None,
+            track_columns=[["public.queries.status", "public.queries.title"]],
+            ignore_columns=None,
+        )
+
+        result = handle_update_source_table(args)
+        assert result == 0
+
+        saved = load_yaml_file(service_with_tables)
+        table_def = saved["proxy"]["source"]["tables"]["public.queries"]
+        assert sorted(table_def["include_columns"]) == ["status", "title"]
+
     def test_update_adds_ignore_columns_to_existing_table(
         self, project_dir: Path, service_with_tables: Path,
     ) -> None:

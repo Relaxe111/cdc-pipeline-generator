@@ -48,6 +48,22 @@ class TestServiceParserHints:
         output = capsys.readouterr().out
         assert "invalid choice" in output
 
+    def test_track_columns_accepts_multiple_values_in_one_flag(self) -> None:
+        """--track-columns should parse space-separated list after single flag."""
+        parser = _build_parser()
+        args = parser.parse_args([
+            "--service", "proxy",
+            "--source-table", "public.customer_user",
+            "--track-columns",
+            "public.customer_user.user_id",
+            "public.customer_user.customer_id",
+        ])
+
+        assert args.track_columns == [[
+            "public.customer_user.user_id",
+            "public.customer_user.customer_id",
+        ]]
+
 
 class TestMainServiceAssignment:
     """main() precedence and assignment semantics."""

@@ -84,6 +84,7 @@ def _read_file(project_root: Path, file_path: str) -> str:
 EXPECTED_DIRECTORIES = [
     "services",
     "services/_schemas",
+    "services/_schemas/_definitions",
     "services/_schemas/adapters",
     "services/_schemas/_bloblang",
     "services/_schemas/_bloblang/examples",
@@ -102,6 +103,7 @@ EXPECTED_FILES = [
     "README.md",
     ".gitignore",
     ".vscode/settings.json",
+    "services/_schemas/_definitions/map-mssql-pgsql.yaml",
     "pipeline-templates/source-pipeline.yaml",
     "pipeline-templates/sink-pipeline.yaml",
 ]

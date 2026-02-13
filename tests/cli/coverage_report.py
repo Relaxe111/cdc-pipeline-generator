@@ -772,10 +772,11 @@ class CoverageReport:
         for cmd in local_commands:
             tests = self.cli_tests.get(cmd, [])
             count = len(tests)
-            if count:
-                status = f"{c.GREEN}✅ {count} tests{c.RESET}"
-            else:
-                status = f"{c.RED}❌ 0 tests{c.RESET}"
+            status = (
+                f"{c.GREEN}✅ {count} tests{c.RESET}"
+                if count
+                else f"{c.RED}❌ 0 tests{c.RESET}"
+            )
             print(
                 f"  {'cdc ' + cmd:<{command_col_width}}"
                 f" {count:>6}  {status}"

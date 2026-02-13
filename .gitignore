@@ -52,6 +52,8 @@ generated/
 # Note: Tests use pytest tmp_path for isolation, these are only created if tests fail
 source-groups.yaml
 service-schemas/
+!cdc_generator/templates/init/service-schemas/
+!cdc_generator/templates/init/service-schemas/**
 
 # Environment
 .env

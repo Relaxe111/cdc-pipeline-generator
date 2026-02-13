@@ -1,0 +1,24 @@
+# Priority Calculator
+# Calculates priority based on multiple conditions
+#
+# Usage in transform-rules.yaml:
+#   rules:
+#     calculate_priority:
+#       rule_type: calculated
+#       mapping: file://service-schemas/bloblang/examples/priority_calculator.blobl
+
+root = if this.is_urgent == true {
+  if this.severity > 8 {
+    "CRITICAL"
+  } else if this.severity > 5 {
+    "HIGH"
+  } else {
+    "MEDIUM"
+  }
+} else {
+  if this.severity > 5 {
+    "MEDIUM"
+  } else {
+    "LOW"
+  }
+}

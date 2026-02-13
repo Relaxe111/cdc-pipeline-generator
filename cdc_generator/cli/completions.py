@@ -193,6 +193,72 @@ def _get_table_spec(ctx: click.Context) -> str:
     return spec
 
 
+def _get_multi_param_values(ctx: click.Context, name: str) -> list[str]:
+    """Get values for multi-value params, flattening tuples/lists."""
+    raw: object = ctx.params.get(name)
+    if raw is None:
+        return []
+
+    if isinstance(raw, str):
+        return [raw]
+
+    if not isinstance(raw, tuple | list):
+        return [str(raw)]
+
+    values: list[str] = []
+    raw_items = cast(Iterable[object], raw)
+    for item in raw_items:
+        if isinstance(item, str):
+            values.append(item)
+        elif isinstance(item, tuple | list):
+            nested_values = cast(Iterable[object], item)
+            values.extend(str(nested) for nested in nested_values)
+        else:
+            values.append(str(item))
+    return values
+
+
+def _get_existing_source_column_refs(
+    service: str,
+    table_spec: str,
+) -> set[str]:
+    """Get fully-qualified column refs already configured on source table."""
+    from cdc_generator.helpers.service_config import load_service_config
+
+    existing: set[str] = set()
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError:
+        return existing
+
+    source_raw = config.get("source")
+    if not isinstance(source_raw, dict):
+        return existing
+
+    source_cfg = cast(dict[str, Any], source_raw)
+    tables_raw = source_cfg.get("tables")
+    if not isinstance(tables_raw, dict):
+        return existing
+    tables_cfg = cast(dict[str, Any], tables_raw)
+
+    table_raw = tables_cfg.get(table_spec)
+    if not isinstance(table_raw, dict):
+        return existing
+
+    table_cfg = cast(dict[str, Any], table_raw)
+    for key in ["include_columns", "ignore_columns"]:
+        cols_raw = table_cfg.get(key)
+        if not isinstance(cols_raw, list):
+            continue
+        cols = cast(list[object], cols_raw)
+        for col in cols:
+            if not isinstance(col, str):
+                continue
+            existing.add(col if "." in col else f"{table_spec}.{col}")
+
+    return existing
+
+
 # ---------------------------------------------------------------------------
 # No-arg completions (global lists)
 # ---------------------------------------------------------------------------
@@ -585,10 +651,14 @@ def complete_columns(
         list_columns_for_table,
     )
 
-    return _filter(
-        _safe_call(list_columns_for_table, service, parts[0], parts[1]),
-        incomplete,
-    )
+    candidates = _safe_call(list_columns_for_table, service, parts[0], parts[1])
+
+    excluded = set(_get_multi_param_values(ctx, "track_columns"))
+    excluded.update(_get_multi_param_values(ctx, "ignore_columns"))
+    excluded.update(_get_existing_source_column_refs(service, table_spec))
+
+    filtered = [col for col in candidates if col not in excluded]
+    return _filter(filtered, incomplete)
 
 
 # ---------------------------------------------------------------------------

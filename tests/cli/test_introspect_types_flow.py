@@ -13,6 +13,7 @@ This validates the integration between:
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -126,7 +127,7 @@ def _create_mock_type_definitions(root: Path, db_type: str) -> Path:
     return defs_file
 
 
-def _read_definitions_file(root: Path, db_type: str) -> dict | None:
+def _read_definitions_file(root: Path, db_type: str) -> dict[str, Any] | None:
     """Read type definitions file if it exists."""
     defs_file = root / "services" / "_schemas" / "_definitions" / f"{db_type}.yaml"
     if not defs_file.exists():

@@ -164,6 +164,29 @@ class TestCliRemoveTable:
         assert result.returncode == 1
 
 
+class TestCliUpdateSourceTableColumns:
+    """CLI e2e: --source-table with multiple --track-columns values."""
+
+    def test_track_columns_accepts_space_separated_list(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _create_project(isolated_project)
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--source-table", "public.queries",
+            "--track-columns",
+            "public.queries.status",
+            "public.queries.title",
+        )
+
+        assert result.returncode == 0
+        yaml_text = _read_yaml(isolated_project)
+        assert "include_columns" in yaml_text
+        assert "status" in yaml_text
+        assert "title" in yaml_text
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # List source tables
 # ═══════════════════════════════════════════════════════════════════════════

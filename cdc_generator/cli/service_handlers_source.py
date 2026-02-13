@@ -1,6 +1,7 @@
 """Source table CLI operations for manage-service."""
 
 import argparse
+from typing import Any
 
 from cdc_generator.helpers.helpers_logging import (
     print_info,
@@ -27,10 +28,24 @@ def _parse_column_specs(
     track_cols: list[str] | None = None
     table_prefix = f"{schema}.{table}."
 
+    def _flatten_columns(raw: Any) -> list[str]:
+        if not isinstance(raw, list):
+            return []
+
+        flattened: list[str] = []
+        for item in raw:
+            if isinstance(item, str):
+                flattened.append(item)
+            elif isinstance(item, list):
+                for nested in item:
+                    if isinstance(nested, str):
+                        flattened.append(nested)
+        return flattened
+
     if args.ignore_columns:
         cols = [
             col.replace(table_prefix, "")
-            for col in args.ignore_columns
+            for col in _flatten_columns(args.ignore_columns)
             if col.startswith(table_prefix)
         ]
         ignore_cols = cols or None
@@ -38,7 +53,7 @@ def _parse_column_specs(
     if args.track_columns:
         cols = [
             col.replace(table_prefix, "")
-            for col in args.track_columns
+            for col in _flatten_columns(args.track_columns)
             if col.startswith(table_prefix)
         ]
         track_cols = cols or None

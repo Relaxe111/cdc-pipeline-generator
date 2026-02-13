@@ -142,8 +142,10 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--env", help="Environment (nonprod/prod)")
 @click.option("--primary-key", help="Primary key column name")
 @click.option("--ignore-columns", shell_complete=complete_columns,
+              multiple=True,
               help="Column to ignore (schema.table.column)")
 @click.option("--track-columns", shell_complete=complete_columns,
+              multiple=True,
               help="Column to track (schema.table.column)")
 # -- Sink management --
 @click.option("--add-sink", shell_complete=complete_available_sink_keys,

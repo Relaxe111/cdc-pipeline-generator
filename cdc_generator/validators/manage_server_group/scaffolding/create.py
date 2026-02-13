@@ -15,6 +15,24 @@ from .templates import (
 from .vscode_settings import create_vscode_settings
 
 
+def _get_template_source_dirs(generator_root: Path) -> list[Path]:
+    """Return candidate template roots (new first, then legacy)."""
+    candidates = [
+        generator_root / "templates" / "init" / "services" / "_schemas",
+        generator_root / "templates" / "init" / "service-schemas",
+    ]
+    return [candidate for candidate in candidates if candidate.exists()]
+
+
+def _resolve_template_file(generator_root: Path, relative_path: Path) -> Path | None:
+    """Resolve a template file across supported template root locations."""
+    for source_dir in _get_template_source_dirs(generator_root):
+        candidate = source_dir / relative_path
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _copy_template_library_files(project_root: Path) -> None:
     """Copy template library files from generator to implementation.
 
@@ -29,8 +47,6 @@ def _copy_template_library_files(project_root: Path) -> None:
     import cdc_generator
 
     generator_root = Path(cdc_generator.__file__).parent
-    template_source_dir = generator_root / "templates" / "init" / "service-schemas"
-
     # Files to copy with examples and inline comments
     template_files = [
         "column-templates.yaml",
@@ -38,31 +54,70 @@ def _copy_template_library_files(project_root: Path) -> None:
     ]
 
     for filename in template_files:
-        source_file = template_source_dir / filename
         target_file = project_root / "services" / "_schemas" / filename
 
-        if source_file.exists():
-            if target_file.exists():
-                print(f"⊘ Skipped (exists): service-schemas/{filename}")
-            else:
-                shutil.copy2(source_file, target_file)
-                print(f"✓ Copied template library: services/_schemas/{filename}")
+        if target_file.exists():
+            print(f"⊘ Skipped (exists): services/_schemas/{filename}")
+            continue
+
+        source_file = _resolve_template_file(generator_root, Path(filename))
+
+        if source_file is not None:
+            shutil.copy2(source_file, target_file)
+            print(f"✓ Copied template library: services/_schemas/{filename}")
         else:
             print(f"⚠ Warning: Template not found in generator: {filename}")
 
     # Copy bloblang directory (examples and README)
-    bloblang_source = template_source_dir / "_bloblang"
     bloblang_target = project_root / "services" / "_schemas" / "_bloblang"
+    bloblang_source = _resolve_template_file(generator_root, Path("_bloblang"))
 
-    if bloblang_source.exists():
+    if bloblang_target.exists():
+        print("⊘ Skipped (exists): services/_schemas/_bloblang/")
+    elif bloblang_source is not None:
         # Copy entire bloblang directory recursively
-        if bloblang_target.exists():
-            print("⊘ Skipped (exists): services/_schemas/_bloblang/")
-        else:
-            shutil.copytree(bloblang_source, bloblang_target)
-            print("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
+        shutil.copytree(bloblang_source, bloblang_target)
+        print("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
     else:
         print("⚠ Warning: Bloblang templates not found in generator")
+
+    # Copy DB type mapping definitions
+    map_files = [
+        "map-mssql-pgsql.yaml",
+    ]
+
+    for filename in map_files:
+        target_file = (
+            project_root
+            / "services"
+            / "_schemas"
+            / "_definitions"
+            / filename
+        )
+
+        if target_file.exists():
+            print(
+                "⊘ Skipped (exists): "
+                + f"services/_schemas/_definitions/{filename}"
+            )
+            continue
+
+        source_file = _resolve_template_file(
+            generator_root,
+            Path("_definitions") / filename,
+        )
+
+        if source_file is not None:
+            shutil.copy2(source_file, target_file)
+            print(
+                "✓ Copied type mapping definition: "
+                + f"services/_schemas/_definitions/{filename}"
+            )
+        else:
+            print(
+                "⚠ Warning: Type mapping template not found in generator: "
+                + filename
+            )
 
 
 def scaffold_project_structure(
@@ -96,6 +151,7 @@ def scaffold_project_structure(
     directories = [
         "services",
         "services/_schemas",
+        "services/_schemas/_definitions",
         "services/_schemas/adapters",
         "services/_schemas/_bloblang",
         "services/_schemas/_bloblang/examples",

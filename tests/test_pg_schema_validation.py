@@ -229,6 +229,7 @@ class TestAddSinkTableSchemaValidation:
         """--sink-schema with hyphen is rejected."""
         args = _ns(
             add_sink_table="public.users",
+            from_table="public.users",
             sink_schema="directory-clone",
             target_exists="false",
             replicate_structure=True,
@@ -242,6 +243,7 @@ class TestAddSinkTableSchemaValidation:
         """--sink-schema with underscore is accepted."""
         args = _ns(
             add_sink_table="public.users",
+            from_table="public.users",
             sink_schema="directory_clone",
             target_exists="false",
             replicate_structure=True,
@@ -255,6 +257,7 @@ class TestAddSinkTableSchemaValidation:
         """--target-schema with hyphen is rejected."""
         args = _ns(
             add_sink_table="public.users",
+            from_table="public.users",
             target_exists="false",
             target_schema="my-bad-schema",
         )
