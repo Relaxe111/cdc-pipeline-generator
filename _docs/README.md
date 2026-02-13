@@ -6,27 +6,27 @@ This documentation covers the **CDC Pipeline Generator library** - a reusable to
 
 ### [Getting Started](./getting-started/)
 Quick setup guides and troubleshooting:
-- **TEST_SETUP.md** - Setting up development environment
-- **TROUBLESHOOTING.md** - Common issues and solutions
-- **MONITORING.md** - Web UIs and monitoring tools
-- **UI_ACCESS.md** - Accessing Redpanda Console, Adminer, etc.
+- **[TEST_SETUP.md](./getting-started/TEST_SETUP.md)** - Setting up development environment
+- **[TROUBLESHOOTING.md](./getting-started/TROUBLESHOOTING.md)** - Common issues and solutions
+- **[MONITORING.md](./getting-started/MONITORING.md)** - Web UIs and monitoring tools
+- **[UI_ACCESS.md](./getting-started/UI_ACCESS.md)** - Accessing Redpanda Console, Adminer, etc.
 
 ### [Architecture](./architecture/)
 Core CDC concepts and system design:
-- **PIPELINES.md** - Pipeline structure and flow
-- **TEMPLATES.md** - Template system and variables
-- **FIELD_MAPPING.md** - MSSQL → PostgreSQL field mapping
-- **EVENT_DRIVEN_MERGE_SYSTEM.md** - Merge/upsert strategy
-- **CDC_PRODUCTION_SAFEGUARDS.md** - Production deployment checklist
+- **[PIPELINES.md](./architecture/PIPELINES.md)** - Pipeline structure and flow
+- **[TEMPLATES.md](./architecture/TEMPLATES.md)** - Template system and variables
+- **[FIELD_MAPPING.md](./architecture/FIELD_MAPPING.md)** - MSSQL → PostgreSQL field mapping
+- **[EVENT_DRIVEN_MERGE_SYSTEM.md](./architecture/EVENT_DRIVEN_MERGE_SYSTEM.md)** - Merge/upsert strategy
+- **[CDC_PRODUCTION_SAFEGUARDS.md](./architecture/CDC_PRODUCTION_SAFEGUARDS.md)** - Production deployment checklist
 - **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bytewax & Materialize evaluation, potential use cases, and phased introduction plan
 - **[CDC_EVENT_TRACING.md](./architecture/CDC_EVENT_TRACING.md)** - End-to-end event latency tracing with embedded timestamps, sampling strategies (≤5% permanent + 100% debug mode), bottleneck detection queries, and performance mitigations
 
 ### [Development](./development/)
 Contributing and coding standards:
-- **CODING_STANDARDS.md** - Code style, patterns, best practices
-- **CLI_COLORS.md** - Terminal output formatting
-- **PIPELINE_TEST_MODES.md** - AI-friendly test mode definitions (`--fast-pipelines` vs `--full-pipelines`)
-- **GAP_ANALYSIS_COMMAND_GROUPING.md** - Pipeline/migration command grouping gaps and rollout plan
+- **[CODING_STANDARDS.md](./development/CODING_STANDARDS.md)** - Code style, patterns, best practices
+- **[CLI_COLORS.md](./development/CLI_COLORS.md)** - Terminal output formatting
+- **[PIPELINE_TEST_MODES.md](./development/PIPELINE_TEST_MODES.md)** - AI-friendly test mode definitions (`--fast-pipelines` vs `--full-pipelines`)
+- **[GAP_ANALYSIS_COMMAND_GROUPING.md](./development/GAP_ANALYSIS_COMMAND_GROUPING.md)** - Pipeline/migration command grouping gaps and rollout plan
 
 ### [CLI Reference](./cli/)
 Command-line tool documentation (coming soon):

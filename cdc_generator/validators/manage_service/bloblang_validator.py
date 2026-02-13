@@ -10,13 +10,13 @@ from typing import cast
 
 import yaml
 
+from cdc_generator.core.source_ref_resolver import is_source_ref
 from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
     print_success,
     print_warning,
 )
-from cdc_generator.core.source_ref_resolver import is_source_ref
 from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.service_schema_paths import (
     get_schema_roots,
