@@ -44,13 +44,19 @@ def _write_source_groups(root: Path) -> None:
 def _write_sink_groups(root: Path) -> None:
     """Write minimal sink-groups.yaml for testing."""
     (root / "sink-groups.yaml").write_text(
-        "test_sink:\n"
+        "sink_test:\n"
         "  source_group: test_group\n"
+        "  pattern: db-shared\n"
+        "  type: postgres\n"
+        "  environment_aware: false\n"
         "  servers:\n"
         "    default:\n"
-        "      envs:\n"
-        "        dev:\n"
-        "          connection_string: postgresql://sink:5432/db\n"
+        "      host: localhost\n"
+        "      port: 5432\n"
+        "      database: testdb\n"
+        "      user: testuser\n"
+        "      password: testpass\n"
+        "  sources: {}\n"
     )
 
 
@@ -82,10 +88,10 @@ def _create_custom_table_schema(
     root: Path, service: str, schema: str, table: str,
 ) -> Path:
     """Create custom table schema file."""
-    custom_dir = root / "services" / "_schemas" / service / "custom-tables"
+    custom_dir = root / "service-schemas" / service / schema
     custom_dir.mkdir(parents=True, exist_ok=True)
-    
-    schema_file = custom_dir / f"{schema}.{table}.yaml"
+
+    schema_file = custom_dir / f"{table}.yaml"
     schema_file.write_text(
         f"database: null\n"
         f"schema: {schema}\n"
@@ -106,9 +112,13 @@ def _create_custom_table_schema(
 
 
 def _read_service_yaml(root: Path, service: str) -> dict:
-    """Read and parse service YAML."""
+    """Read and parse service YAML, unwrapping service-name root key."""
     path = root / "services" / f"{service}.yaml"
-    return yaml.safe_load(path.read_text())
+    raw = yaml.safe_load(path.read_text())
+    # After save_service_config, YAML is wrapped: {service: {...}}
+    if isinstance(raw, dict) and service in raw:
+        return raw[service]
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -134,27 +144,35 @@ class TestSchemaToConfigFlowHappyPath:
         )
         assert custom_file.exists()
         
+        # Add custom table as source table first
+        run_cdc(
+            "manage-services", "config",
+            "--service", "myservice",
+            "--add-source-table", "custom.audit_log",
+        )
+        
         # Bind custom table to sink
         result = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "test_sink",
+            "--add-sink", "sink_test.myservice",
         )
         assert result.returncode == 0
         
         result = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "test_sink",
+            "--sink", "sink_test.myservice",
             "--add-custom-sink-table", "custom.audit_log",
+            "--from", "custom.audit_log",
         )
         assert result.returncode == 0
         
         # Verify it's in the service config
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "sinks" in config
-        assert "test_sink" in config["sinks"]
-        assert "custom.audit_log" in config["sinks"]["test_sink"]
+        assert "sink_test.myservice" in config["sinks"]
+        sink_tables = config["sinks"]["sink_test.myservice"]["tables"]
+        assert "custom.audit_log" in sink_tables
 
 
 class TestMultipleCustomTables:
@@ -175,6 +193,18 @@ class TestMultipleCustomTables:
         )
         _create_custom_table_schema(
             isolated_project, "myservice", "custom", "event_log",
+        )
+        
+        # Add custom tables as source tables
+        run_cdc(
+            "manage-services", "config",
+            "--service", "myservice",
+            "--add-source-table", "custom.audit_log",
+        )
+        run_cdc(
+            "manage-services", "config",
+            "--service", "myservice",
+            "--add-source-table", "custom.event_log",
         )
         
         # Add two sinks
@@ -210,8 +240,8 @@ class TestMultipleCustomTables:
         
         # Verify both are in the config
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.audit_log" in config["sinks"]["sink_test.service1"]
-        assert "custom.event_log" in config["sinks"]["sink_test.service2"]
+        assert "custom.audit_log" in config["sinks"]["sink_test.service1"]["tables"]
+        assert "custom.event_log" in config["sinks"]["sink_test.service2"]["tables"]
 
 
 class TestUnboundCustomTable:
@@ -241,7 +271,8 @@ class TestUnboundCustomTable:
         # Verify orphan table is NOT in sink config
         config = _read_service_yaml(isolated_project, "myservice")
         assert "sink_test.myservice" in config["sinks"]
-        assert "custom.orphan_table" not in config["sinks"]["sink_test.myservice"]
+        sink_tables = config["sinks"]["sink_test.myservice"]["tables"]
+        assert "custom.orphan_table" not in sink_tables
 
 
 class TestRemoveCustomTableBinding:
@@ -261,6 +292,13 @@ class TestRemoveCustomTableBinding:
             isolated_project, "myservice", "custom", "temp_log",
         )
         
+        # Add custom table as source table first
+        run_cdc(
+            "manage-services", "config",
+            "--service", "myservice",
+            "--add-source-table", "custom.temp_log",
+        )
+        
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
@@ -276,7 +314,8 @@ class TestRemoveCustomTableBinding:
         
         # Verify it's there
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.temp_log" in config["sinks"]["sink_test.myservice"]
+        sink_tables = config["sinks"]["sink_test.myservice"]["tables"]
+        assert "custom.temp_log" in sink_tables
         
         # Remove it
         result = run_cdc(
@@ -289,7 +328,8 @@ class TestRemoveCustomTableBinding:
         
         # Verify it's gone
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.temp_log" not in config["sinks"]["sink_test.myservice"]
+        sink_tables = config["sinks"]["sink_test.myservice"]["tables"]
+        assert "custom.temp_log" not in sink_tables
 
 
 class TestInvalidCustomTableReference:

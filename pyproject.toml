@@ -67,11 +67,11 @@ cdc_generator = [
 ]
 
 [tool.black]
-line-length = 100
+line-length = 150
 target-version = ['py311']
 
 [tool.ruff]
-line-length = 100
+line-length = 150
 target-version = "py311"
 
 [tool.ruff.lint]
@@ -99,6 +99,7 @@ select = [
 ignore = [
     "ISC003",  # allow explicit + concatenation (we prefer it over implicit)
     "PLC0415",  # allow imports inside functions (lazy loading)
+    "W293",  # allow blank line at end of file (some files have trailing comments)
 ]
 
 [tool.ruff.lint.pylint]
