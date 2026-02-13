@@ -119,6 +119,7 @@ def service_no_sinks(project_dir: Path) -> Path:
 def _ns(**kwargs: object) -> argparse.Namespace:
     defaults: dict[str, object] = {
         "service": "proxy",
+        "all": False,
         "sink": None,
         "add_sink": None,
         "remove_sink": None,
@@ -473,6 +474,61 @@ class TestHandleSinkAddTable:
         table_opts = call_kwargs["table_opts"]
         assert isinstance(table_opts, dict)
         assert table_opts["sink_schema"] == "custom_schema"
+
+    def test_all_mode_requires_replicate_structure(
+        self, project_dir: Path, service_multi_sink: Path,
+    ) -> None:
+        """--all add-sink-table is allowed only with --replicate-structure."""
+        args = _ns(
+            sink=None,
+            all=True,
+            add_sink_table=None,
+            from_table="public.users",
+            target_exists="false",
+            replicate_structure=False,
+            sink_schema="shared",
+        )
+        result = handle_sink_add_table(args)
+        assert result == 1
+
+    def test_all_mode_requires_omitted_table_name(
+        self, project_dir: Path, service_multi_sink: Path,
+    ) -> None:
+        """--all replicate mode requires bare --add-sink-table (no value)."""
+        args = _ns(
+            sink=None,
+            all=True,
+            add_sink_table="public.users",
+            from_table="public.users",
+            replicate_structure=True,
+            sink_schema="shared",
+        )
+        result = handle_sink_add_table(args)
+        assert result == 1
+
+    def test_all_mode_adds_to_each_sink(
+        self, project_dir: Path, service_multi_sink: Path,
+    ) -> None:
+        """--all replicate mode applies add-sink-table to all configured sinks."""
+        args = _ns(
+            sink=None,
+            all=True,
+            add_sink_table=None,
+            from_table="public.users",
+            replicate_structure=True,
+            sink_schema="shared",
+            target_exists=None,
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        assert add_mock.call_count == 2
+        called_sinks = {call.args[1] for call in add_mock.call_args_list}
+        assert called_sinks == {"sink_asma.calendar", "sink_asma.chat"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

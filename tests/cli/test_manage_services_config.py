@@ -309,6 +309,99 @@ class TestCliSinkAddTable:
         assert result.returncode == 0
         assert "public.queries" in _read_yaml(isolated_project)
 
+    def test_replicate_structure_accepts_custom_sink_schema(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """Replicate mode allows custom --sink-schema values."""
+        _create_project(isolated_project, with_sink=True)
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--add-sink-table",
+            "--from", "public.queries",
+            "--replicate-structure",
+            "--sink-schema", "custom_clone",
+        )
+
+        assert result.returncode == 0
+        yaml_text = _read_yaml(isolated_project)
+        assert "custom_clone.queries" in yaml_text
+        assert "from: public.queries" in yaml_text
+
+    def test_all_sinks_replicate_structure_adds_to_all_sinks(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """--all with replicate mode fans out add-sink-table to each configured sink."""
+        _create_project(isolated_project, with_sink=False)
+
+        service_file = isolated_project / "services" / "proxy.yaml"
+        service_file.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.queries: {}\n"
+            "      public.users: {}\n"
+            "  sinks:\n"
+            "    sink_asma.chat:\n"
+            "      tables: {}\n"
+            "    sink_asma.calendar:\n"
+            "      tables: {}\n"
+        )
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--all",
+            "--add-sink-table",
+            "--from", "public.queries",
+            "--replicate-structure",
+            "--sink-schema", "shared",
+        )
+
+        assert result.returncode == 0
+        yaml_text = _read_yaml(isolated_project)
+        assert "sink_asma.chat" in yaml_text
+        assert "sink_asma.calendar" in yaml_text
+        assert "shared.queries" in yaml_text
+        assert "from: public.queries" in yaml_text
+
+    def test_all_sinks_rejects_explicit_table_name(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """--all replicate mode rejects explicit --add-sink-table value."""
+        _create_project(isolated_project, with_sink=True)
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--all",
+            "--add-sink-table", "public.queries",
+            "--from", "public.queries",
+            "--replicate-structure",
+            "--sink-schema", "shared",
+        )
+
+        assert result.returncode == 1
+
+    def test_missing_sink_value_shows_all_hint_for_replicate_mode(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """Parser error for bare --sink includes --all guidance in replicate mode."""
+        _create_project(isolated_project, with_sink=True)
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink",
+            "--add-sink-table",
+            "--from", "public.queries",
+            "--replicate-structure",
+            "--sink-schema", "shared",
+        )
+
+        assert result.returncode == 1
+        output = result.stdout + result.stderr
+        assert "omit --sink and use --all" in output
+        assert "--all --add-sink-table --from" in output
+
 
 class TestCliSinkAddCustomTable:
     """CLI e2e: --add-custom-sink-table."""
@@ -845,6 +938,56 @@ class TestCliManageServiceCompletions:
         )
         out = result.stdout
         assert "--sink-schema" in out
+
+    def test_sink_schema_value_completion_suggests_available_schemas(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        """--sink-schema value completion suggests schemas for sink target service."""
+        (isolated_project / "docker-compose.yml").write_text(
+            "services:\n"
+            "  dev:\n"
+            "    image: busybox\n"
+        )
+        (isolated_project / "source-groups.yaml").write_text(
+            "asma:\n"
+            "  pattern: db-shared\n"
+            "  sources:\n"
+            "    activities:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "        - analytics\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc manage-services config directory "
+                + "--sink sink_asma.activities "
+                + "--add-sink-table "
+                + "--from public.customer_user "
+                + "--replicate-structure "
+                + "--sink-schema a"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "analytics" in out
+
+    def test_from_flag_visible_after_add_sink_table_without_value(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """Regression: --from should appear after bare --add-sink-table."""
+        result = run_cdc_completion(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-sink-table --fr"
+        )
+        out = result.stdout
+        assert "--from" in out
 
     def test_add_column_template_suggests_templates_from_services_schemas(
         self,

@@ -23,6 +23,22 @@ from cdc_generator.validators.manage_service.sink_operations import (
 )
 
 
+def _list_sink_keys_for_service(service: str) -> list[str]:
+    """Return configured sink keys for a service."""
+    from cdc_generator.helpers.service_config import load_service_config
+
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError:
+        return []
+
+    sinks_raw = config.get("sinks")
+    if not isinstance(sinks_raw, dict):
+        return []
+
+    return sorted(str(k) for k in sinks_raw.keys())
+
+
 def _resolve_sink_key(args: argparse.Namespace) -> str | None:
     """Resolve sink key from --sink or auto-default when only one sink.
 
@@ -118,12 +134,32 @@ def handle_sink_remove(args: argparse.Namespace) -> int:
 
 def handle_sink_add_table(args: argparse.Namespace) -> int:
     """Add table to sink (requires --sink or auto-defaults if only one sink)."""
-    sink_key = _resolve_sink_key(args)
-    if not sink_key:
-        return 1
+    all_sinks_mode = bool(getattr(args, "all", False)) or getattr(args, "sink", None) == "all"
+
+    sink_keys: list[str]
+    if all_sinks_mode:
+        sink_keys = _list_sink_keys_for_service(args.service)
+        if not sink_keys:
+            print_error(f"No sinks configured for service '{args.service}'")
+            return 1
+    else:
+        sink_key = _resolve_sink_key(args)
+        if not sink_key:
+            return 1
+        sink_keys = [sink_key]
 
     # Check if replicate_structure is set
     replicate_structure = hasattr(args, "replicate_structure") and args.replicate_structure
+
+    if all_sinks_mode and not replicate_structure:
+        print_error(
+            "--all with --add-sink-table is only supported with --replicate-structure"
+        )
+        print_info(
+            "Example: --all --add-sink-table --from public.customer_user "
+            + "--replicate-structure --sink-schema activities"
+        )
+        return 1
 
     # Validate sink_schema is provided when replicate_structure is set
     if replicate_structure and (not hasattr(args, "sink_schema") or args.sink_schema is None):
@@ -163,6 +199,15 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
     # Auto-name from --from if table name not provided
     table_name = args.add_sink_table
     from_table: str | None = getattr(args, "from_table", None)
+
+    if all_sinks_mode and table_name is not None:
+        print_error(
+            "When using --all with --replicate-structure, omit the value for --add-sink-table"
+        )
+        print_info(
+            "Use: --add-sink-table --from <schema.table> --replicate-structure --sink-schema <schema>"
+        )
+        return 1
 
     if from_table is None:
         print_error(
@@ -215,12 +260,21 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
     if args.include_sink_columns:
         table_opts["include_columns"] = args.include_sink_columns
 
-    if add_sink_table(
-        args.service,
-        sink_key,
-        table_name,
-        table_opts=table_opts if table_opts else None,
-    ):
+    success_count = 0
+    for sink_key in sink_keys:
+        if add_sink_table(
+            args.service,
+            sink_key,
+            table_name,
+            table_opts=table_opts if table_opts else None,
+        ):
+            success_count += 1
+
+    if success_count > 0:
+        if all_sinks_mode:
+            print_info(
+                f"Added sink table to {success_count}/{len(sink_keys)} sinks"
+            )
         print_info("Run 'cdc generate' to update pipelines")
         return 0
     return 1

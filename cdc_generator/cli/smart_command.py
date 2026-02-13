@@ -242,12 +242,13 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "sink": {
         "add_sink_table", "remove_sink_table", "sink_table",
         "update_schema", "add_custom_sink_table", "modify_custom_table",
+        "from", "from_table",
     },
     # ── Add sink table (requires --sink) ───────────────────────
     "add_sink_table": {
         "sink", "from", "from_table", "target", "target_exists",
         "target_schema", "sink_schema", "replicate_structure",
-        "map_column", "include_sink_columns",
+        "map_column", "include_sink_columns", "all",
     },
     # ── Remove sink table ──────────────────────────────────────
     "remove_sink_table": {"sink"},

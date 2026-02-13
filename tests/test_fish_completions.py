@@ -684,9 +684,19 @@ class TestSmartCompletion:
             "cdc manage-services config --service dir --add-sink-table pub.Actor --"
         )
         assert "--sink" in opts
+        assert "--all" in opts
         assert "--target" in opts
         assert "--map-column" in opts
         assert "--primary-key" not in opts
+
+    def test_add_sink_table_without_value_still_shows_from(self) -> None:
+        """Regression: --from must remain visible after bare --add-sink-table."""
+        opts = self._complete(
+            "cdc manage-services config directory "
+            + "--sink sink_asma.notification "
+            + "--add-sink-table --fr"
+        )
+        assert "--from" in opts
 
     def test_source_table_context(self) -> None:
         opts = self._complete(

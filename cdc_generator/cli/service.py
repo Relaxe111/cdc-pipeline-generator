@@ -207,6 +207,26 @@ class ServiceArgumentParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> NoReturn:
         """Override to show friendly errors with examples."""
+        # Context-aware guidance for replicate fanout mode
+        # If user typed --sink without a value while using replicate flags,
+        # suggest using --all instead of --sink.
+        if "--sink" in message and "expected" in message:
+            argv = sys.argv[1:]
+            has_add_sink_table = "--add-sink-table" in argv
+            has_from = "--from" in argv
+            has_replicate = "--replicate-structure" in argv
+            if has_add_sink_table and has_from and has_replicate:
+                print_error("--sink requires a value: Target sink for table operations")
+                print_info(
+                    "Tip: for replicate fanout, omit --sink and use --all"
+                )
+                print_info(
+                    "Example: cdc manage-service --service directory "
+                    + "--all --add-sink-table --from public.customer_user "
+                    + "--replicate-structure --sink-schema directory"
+                )
+                raise SystemExit(1)
+
         for flag, (desc, example) in _FLAG_HINTS.items():
             if flag in message and "expected" in message:
                 print_error(f"{flag} requires a value: {desc}")
@@ -786,7 +806,7 @@ def _dispatch_sink_conditional(args: argparse.Namespace) -> int | None:
     # --add-sink-table can be optional if --from is provided
     has_from = hasattr(args, "from_table") and args.from_table
     has_add_table = args.add_sink_table is not None or has_from
-    if has_add_table and args.sink:
+    if has_add_table and (args.sink or getattr(args, "all", False)):
         return handle_sink_add_table(args)
 
     # --map-column on existing sink table (requires --sink-table)
