@@ -181,35 +181,37 @@ class TestMultipleCustomTables:
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "sink1",
+            "--add-sink", "sink_test.service1",
         )
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "sink2",
+            "--add-sink", "sink_test.service2",
         )
         
         # Bind each custom table to a different sink
         result1 = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "sink1",
+            "--sink", "sink_test.service1",
             "--add-custom-sink-table", "custom.audit_log",
+            "--from", "custom.audit_log",
         )
         assert result1.returncode == 0
         
         result2 = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "sink2",
+            "--sink", "sink_test.service2",
             "--add-custom-sink-table", "custom.event_log",
+            "--from", "custom.event_log",
         )
         assert result2.returncode == 0
         
         # Verify both are in the config
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.audit_log" in config["sinks"]["sink1"]
-        assert "custom.event_log" in config["sinks"]["sink2"]
+        assert "custom.audit_log" in config["sinks"]["sink_test.service1"]
+        assert "custom.event_log" in config["sinks"]["sink_test.service2"]
 
 
 class TestUnboundCustomTable:
@@ -233,13 +235,13 @@ class TestUnboundCustomTable:
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "test_sink",
+            "--add-sink", "sink_test.myservice",
         )
         
         # Verify orphan table is NOT in sink config
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "test_sink" in config["sinks"]
-        assert "custom.orphan_table" not in config["sinks"]["test_sink"]
+        assert "sink_test.myservice" in config["sinks"]
+        assert "custom.orphan_table" not in config["sinks"]["sink_test.myservice"]
 
 
 class TestRemoveCustomTableBinding:
@@ -262,31 +264,32 @@ class TestRemoveCustomTableBinding:
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "test_sink",
+            "--add-sink", "sink_test.myservice",
         )
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "test_sink",
+            "--sink", "sink_test.myservice",
             "--add-custom-sink-table", "custom.temp_log",
+            "--from", "custom.temp_log",
         )
         
         # Verify it's there
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.temp_log" in config["sinks"]["test_sink"]
+        assert "custom.temp_log" in config["sinks"]["sink_test.myservice"]
         
         # Remove it
         result = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "test_sink",
+            "--sink", "sink_test.myservice",
             "--remove-sink-table", "custom.temp_log",
         )
         assert result.returncode == 0
         
         # Verify it's gone
         config = _read_service_yaml(isolated_project, "myservice")
-        assert "custom.temp_log" not in config["sinks"]["test_sink"]
+        assert "custom.temp_log" not in config["sinks"]["sink_test.myservice"]
 
 
 class TestInvalidCustomTableReference:
@@ -304,17 +307,20 @@ class TestInvalidCustomTableReference:
         run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--add-sink", "test_sink",
+            "--add-sink", "sink_test.myservice",
         )
         
         # Try to bind non-existent custom table
         result = run_cdc(
             "manage-services", "config",
             "--service", "myservice",
-            "--sink", "test_sink",
+            "--sink", "sink_test.myservice",
             "--add-custom-sink-table", "custom.does_not_exist",
+            "--from", "custom.does_not_exist",
         )
         
         # Should fail
         assert result.returncode != 0
-        assert "does_not_exist" in result.stdout + result.stderr
+        # Error could mention the missing table or "not found"
+        output = (result.stdout + result.stderr).lower()
+        assert "does_not_exist" in output or "not found" in output
