@@ -83,13 +83,16 @@ def _read_file(project_root: Path, file_path: str) -> str:
 
 EXPECTED_DIRECTORIES = [
     "services",
+    "services/_schemas",
+    "services/_schemas/adapters",
+    "services/_schemas/_bloblang",
+    "services/_schemas/_bloblang/examples",
     "pipeline-templates",
     "generated/pipelines",
     "generated/schemas",
     "generated/pg-migrations",
     "_docs",
     ".vscode",
-    "service-schemas",
 ]
 
 EXPECTED_FILES = [

@@ -17,10 +17,10 @@ Currently, managing custom sink table schemas requires manual YAML editing or us
 
 ### Phase 1: Type Definitions (auto-generated)
 
-Generate `service-schemas/definitions/{pgsql|mssql}.yaml` automatically during `--inspect --save` and `--inspect-sink --save`.
+Generate `services/_schemas/_definitions/{pgsql|mssql}.yaml` automatically during `--inspect --save` and `--inspect-sink --save`.
 
 ```yaml
-# service-schemas/definitions/pgsql.yaml
+# services/_schemas/_definitions/pgsql.yaml
 # Auto-generated from server introspection
 # Source: asma/default (nonprod)
 # Generated: 2026-02-10T12:00:00
@@ -72,7 +72,7 @@ cdc manage-service-schema --service calendar --remove-custom-table public.my_eve
 cdc manage-service-schema --list
 ```
 
-**File output:** `service-schemas/{service}/custom-tables/{schema}.{table}.yaml`
+**File output:** `services/_schemas/{service}/custom-tables/{schema}.{table}.yaml`
 
 **Schema format:** Identical to inspected schemas:
 ```yaml
@@ -121,17 +121,17 @@ cdc manage-service --service directory \
 ```
 
 **Autocomplete chain:**
-1. `--add-custom-sink-table` → list from `service-schemas/{target_service}/custom-tables/`
+1. `--add-custom-sink-table` → list from `services/_schemas/{target_service}/custom-tables/`
 2. `--from` → list from source service tables (existing `list_tables_for_service`)
 3. `--map-column` LEFT → columns from `--from` source table
 4. `--map-column` RIGHT → columns from the referenced custom table
 
 ### Phase 4 (Future): HTTP/GraphQL Type Sources
 
-Extend `service-schemas/definitions/` to support non-database sources:
+Extend `services/_schemas/_definitions/` to support non-database sources:
 
 ```yaml
-# service-schemas/definitions/openapi.yaml  (future)
+# services/_schemas/_definitions/openapi.yaml  (future)
 # Auto-generated from Swagger/OpenAPI spec
 # Source: https://api.example.com/swagger.json
 types:
@@ -139,7 +139,7 @@ types:
   integer: { category: numeric }
   # ...
 
-# service-schemas/definitions/graphql.yaml  (future)
+# services/_schemas/_definitions/graphql.yaml  (future)
 # Auto-generated from GraphQL introspection
 # Source: https://api.example.com/graphql
 types:
@@ -165,7 +165,7 @@ cdc_generator/
       type_definitions.py      # Generate/load type definitions
   helpers/
     autocompletions/
-      service_schemas.py       # NEW: autocomplete for service-schemas
+      service_schemas.py       # NEW: autocomplete for services/_schemas
 ```
 
 ### Implementation Order

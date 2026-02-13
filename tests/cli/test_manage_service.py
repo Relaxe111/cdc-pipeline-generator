@@ -1,4 +1,4 @@
-"""End-to-end CLI tests for manage-service beyond --source-table.
+"""End-to-end CLI tests for manage-services config beyond --source-table.
 
 Tests the full flow through a real **fish** shell for:
 - --add-source-table / --add-source-tables / --remove-table
@@ -8,7 +8,7 @@ Tests the full flow through a real **fish** shell for:
 - --add-sink-table / --remove-sink-table
 - --validate-config
 - manage-services schema column-templates / transforms
-- fish autocompletions for manage-service flags
+- fish autocompletions for manage-services config flags
 """
 
 from pathlib import Path
@@ -93,7 +93,7 @@ class TestCliAddSourceTable:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--add-source-table", "public.orders",
         )
         assert result.returncode == 0
@@ -104,7 +104,7 @@ class TestCliAddSourceTable:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--add-source-table", "Actor",
         )
         assert result.returncode == 0
@@ -115,7 +115,7 @@ class TestCliAddSourceTable:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--add-source-table", "public.queries",
         )
         assert result.returncode == 1
@@ -129,7 +129,7 @@ class TestCliAddSourceTables:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--add-source-tables", "public.orders", "public.items",
         )
         assert result.returncode == 0
@@ -146,7 +146,7 @@ class TestCliRemoveTable:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--remove-table", "public.queries",
         )
         assert result.returncode == 0
@@ -157,7 +157,7 @@ class TestCliRemoveTable:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--remove-table", "public.nonexistent",
         )
         assert result.returncode == 1
@@ -176,7 +176,7 @@ class TestCliListSourceTables:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--list-source-tables",
         )
         assert result.returncode == 0
@@ -187,7 +187,7 @@ class TestCliListSourceTables:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--list-source-tables",
+            "manage-services", "config", "--list-source-tables",
         )
         # Auto-detects single service → should still work
         assert result.returncode == 0
@@ -206,7 +206,7 @@ class TestCliSinkAdd:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--add-sink", "sink_asma.chat",
         )
         assert result.returncode == 0
@@ -221,7 +221,7 @@ class TestCliSinkRemove:
     ) -> None:
         _create_project(isolated_project, with_sink=True)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--remove-sink", "sink_asma.chat",
         )
         assert result.returncode == 0
@@ -235,7 +235,7 @@ class TestCliSinkList:
     ) -> None:
         _create_project(isolated_project, with_sink=True)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--list-sinks",
         )
         assert result.returncode == 0
@@ -253,7 +253,7 @@ class TestCliSinkAddTable:
         schemas_dir.mkdir(parents=True)
         (schemas_dir / "orders.yaml").write_text("columns: []\n")
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--sink", "sink_asma.chat",
             "--add-sink-table", "public.orders",
             "--target-exists", "false",
@@ -265,7 +265,7 @@ class TestCliSinkAddTable:
     ) -> None:
         _create_project(isolated_project, with_sink=True)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--sink", "sink_asma.chat",
             "--add-sink-table", "public.orders",
         )
@@ -281,7 +281,7 @@ class TestCliSinkAddTable:
         (schemas_dir / "queries.yaml").write_text("columns: []\n")
 
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--sink", "sink_asma.chat",
             "--add-sink-table",
             "--from", "public.queries",
@@ -299,7 +299,7 @@ class TestCliSinkRemoveTable:
     ) -> None:
         _create_project(isolated_project, with_sink=True)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--sink", "sink_asma.chat",
             "--remove-sink-table", "public.users",
         )
@@ -550,7 +550,7 @@ class TestCliValidateHierarchy:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--validate-hierarchy",
         )
         assert result.returncode == 0
@@ -590,7 +590,7 @@ class TestCliGenerateValidation:
         )
 
         result = run_cdc(
-            "manage-service", "--service", "proxy",
+            "manage-services", "config", "--service", "proxy",
             "--generate-validation", "--schema", "public",
         )
         assert result.returncode == 0
@@ -661,7 +661,7 @@ class TestCliCreateService:
             "        database: newservice_dev\n"
         )
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--create-service", "newservice",
         )
         assert result.returncode == 0
@@ -672,7 +672,7 @@ class TestCliCreateService:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--create-service", "proxy",
         )
         assert result.returncode == 1
@@ -684,7 +684,7 @@ class TestCliCreateService:
 
 
 class TestCliManageServiceCompletions:
-    """Fish autocompletion for manage-service flags."""
+    """Fish autocompletion for manage-services config flags."""
 
     def test_manage_service_flags_visible(
         self, run_cdc_completion: RunCdcCompletion,

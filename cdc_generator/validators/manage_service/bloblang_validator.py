@@ -15,6 +15,8 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import get_schema_write_root
 
 
 def check_rpk_available() -> bool:
@@ -284,12 +286,12 @@ def validate_service_bloblang(service: str) -> bool:
 
 
 def validate_bloblang_files() -> tuple[int, int]:
-    """Validate all .blobl files in service-schemas/bloblang/.
+    """Validate all .blobl files in services/_schemas/_bloblang/.
 
     Returns:
         tuple: (valid_count, error_count)
     """
-    blobl_dir = Path("service-schemas/bloblang")
+    blobl_dir = get_schema_write_root(get_project_root()) / "_bloblang"
 
     if not blobl_dir.exists():
         return 0, 0
@@ -315,14 +317,14 @@ def validate_bloblang_files() -> tuple[int, int]:
         # Validate by wrapping in a minimal pipeline (same as templates)
         is_valid, error_msg = validate_bloblang_expression(
             content,
-            str(blobl_file.relative_to("service-schemas/bloblang")),
+            str(blobl_file.relative_to(blobl_dir)),
         )
 
         if is_valid:
-            print_success(f"  ✓ {blobl_file.relative_to('service-schemas/bloblang')}")
+            print_success(f"  ✓ {blobl_file.relative_to(blobl_dir)}")
             valid_count += 1
         else:
-            relative_path = blobl_file.relative_to("service-schemas/bloblang")
+            relative_path = blobl_file.relative_to(blobl_dir)
             print_error(f"  ✗ {relative_path}")
             if error_msg:
                 # Parse line/column from rpk error (format: file.yaml(line,col) message)
@@ -336,7 +338,7 @@ def validate_bloblang_files() -> tuple[int, int]:
                     message = msg_match.group(1) if msg_match else error_msg
                     # Show clickable link with line:column
                     clickable_path = (
-                        f"service-schemas/bloblang/{relative_path}"
+                        f"services/_schemas/_bloblang/{relative_path}"
                         + f":{line_num}:{col_num}"
                     )
                     print_error(f"    {clickable_path}")

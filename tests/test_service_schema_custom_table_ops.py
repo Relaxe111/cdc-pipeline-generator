@@ -104,8 +104,8 @@ def test_list_services_with_schemas_skips_special_dirs(tmp_path: Path) -> None:
     schemas_root = tmp_path / "service-schemas"
     (schemas_root / "chat").mkdir(parents=True)
     (schemas_root / "directory").mkdir()
-    (schemas_root / "definitions").mkdir()
-    (schemas_root / "bloblang").mkdir()
+    (schemas_root / "_definitions").mkdir()
+    (schemas_root / "_bloblang").mkdir()
     (schemas_root / ".hidden").mkdir()
     (schemas_root / "_private").mkdir()
 

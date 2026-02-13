@@ -1,7 +1,7 @@
 """Type definitions management for service schemas.
 
 Generates and manages type definition files under
-``service-schemas/definitions/{pgsql|mssql}.yaml`` in the
+``services/_schemas/_definitions/{pgsql|mssql}.yaml`` in the
 implementation repo (project root).
 
 These definitions are used for:
@@ -26,6 +26,7 @@ from cdc_generator.helpers.psycopg2_loader import (
     has_psycopg2,
 )
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import get_schema_write_root
 
 try:
     from cdc_generator.helpers.yaml_loader import yaml
@@ -37,12 +38,12 @@ except ImportError:
 # Constants
 # -------------------------------------------------------------------
 
-_DEFINITIONS_DIR_NAME = "definitions"
+_DEFINITIONS_DIR_NAME = "_definitions"
 
 
 def _get_definitions_dir() -> Path:
-    """Return path to service-schemas/definitions/ in project root."""
-    return get_project_root() / "service-schemas" / _DEFINITIONS_DIR_NAME
+    """Return path to services/_schemas/_definitions/ in project root."""
+    return get_schema_write_root(get_project_root()) / _DEFINITIONS_DIR_NAME
 
 
 def _require_conn_param(conn_params: dict[str, Any], key: str) -> str | None:

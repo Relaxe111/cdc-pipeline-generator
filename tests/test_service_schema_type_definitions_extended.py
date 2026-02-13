@@ -17,7 +17,7 @@ def test_load_type_definitions_missing_file_returns_none(tmp_path: Path) -> None
 
 
 def test_load_type_definitions_malformed_yaml_returns_none(tmp_path: Path) -> None:
-    defs_dir = tmp_path / "service-schemas" / "definitions"
+    defs_dir = tmp_path / "services" / "_schemas" / "_definitions"
     defs_dir.mkdir(parents=True)
     (defs_dir / "pgsql.yaml").write_text("foo: bar\n")
 
@@ -63,7 +63,9 @@ def test_save_definitions_file_writes_header_and_file(tmp_path: Path) -> None:
         )
 
     assert ok is True
-    content = (tmp_path / "service-schemas" / "definitions" / "pgsql.yaml").read_text()
+    content = (
+        tmp_path / "services" / "_schemas" / "_definitions" / "pgsql.yaml"
+    ).read_text()
     assert "# Source: unit-test" in content
     assert "categories:" in content
 
@@ -90,7 +92,7 @@ def test_load_existing_missing_file_returns_none(tmp_path: Path) -> None:
 
 
 def test_load_existing_reads_file(tmp_path: Path) -> None:
-    defs_dir = tmp_path / "service-schemas" / "definitions"
+    defs_dir = tmp_path / "services" / "_schemas" / "_definitions"
     defs_dir.mkdir(parents=True)
     (defs_dir / "pgsql.yaml").write_text("categories:\n  text:\n    types:\n      - text\n")
 

@@ -65,6 +65,11 @@ _DEFAULT_EXPRESSIONS: dict[str, str] = {
     "current_date": "CURRENT_DATE",
     "gen_random_uuid": "gen_random_uuid()",
     "uuid": "gen_random_uuid()",
+    "default_gen_random_uuid": "gen_random_uuid()",
+    "default_0": "0",
+    "default_false": "false",
+    "default_true": "true",
+    "default_empty": "''",
 }
 
 # Minimum parts in a column spec (name:type)

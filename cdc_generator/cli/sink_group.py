@@ -714,7 +714,7 @@ def handle_introspect_types_command(args: argparse.Namespace) -> int:
 
 
 def handle_db_definitions_command(args: argparse.Namespace) -> int:
-    """Generate service-schemas/definitions type file once from sink server."""
+    """Generate services/_schemas/_definitions type file once from sink server."""
     from cdc_generator.validators.manage_service_schema.type_definitions import (
         generate_type_definitions,
     )
@@ -1519,7 +1519,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "--db-definitions",
         action="store_true",
         help=(
-            f"{Colors.CYAN}Generate service-schemas/definitions/{{pgsql|mssql}}.yaml"
+            f"{Colors.CYAN}Generate services/_schemas/_definitions/{{pgsql|mssql}}.yaml"
             f" once from sink DB metadata (requires --sink-group){Colors.RESET}"
         ),
     )

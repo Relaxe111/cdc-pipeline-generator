@@ -91,6 +91,10 @@ def get_scaffold_directories() -> list[str]:
     """
     return [
         "services",
+        "services/_schemas",
+        "services/_schemas/adapters",
+        "services/_schemas/_bloblang",
+        "services/_schemas/_bloblang/examples",
         "pipeline-templates",
         "generated/pipelines",
         "generated/schemas",
@@ -98,7 +102,6 @@ def get_scaffold_directories() -> list[str]:
         "generated/table-definitions",
         "_docs",
         ".vscode",
-        "service-schemas",
     ]
 
 

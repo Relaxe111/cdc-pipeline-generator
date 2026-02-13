@@ -1,4 +1,4 @@
-"""CLI tests for manage-service remove-service flow."""
+"""CLI tests for manage-services config remove-service flow."""
 
 from pathlib import Path
 
@@ -57,7 +57,7 @@ class TestCliRemoveService:
         (schemas_dir / "placeholder.yaml").write_text("x: 1\n")
 
         result = run_cdc(
-            "manage-service", "--remove-service", "proxy",
+            "manage-services", "config", "--remove-service", "proxy",
         )
         assert result.returncode == 0
 
@@ -76,7 +76,7 @@ class TestCliRemoveService:
         before = (isolated_project / "source-groups.yaml").read_text()
 
         result = run_cdc(
-            "manage-service", "--remove-service", "calendar",
+            "manage-services", "config", "--remove-service", "calendar",
         )
 
         assert result.returncode == 0
@@ -89,6 +89,6 @@ class TestCliRemoveService:
     ) -> None:
         _create_project(isolated_project)
         result = run_cdc(
-            "manage-service", "--remove-service", "ghost",
+            "manage-services", "config", "--remove-service", "ghost",
         )
         assert result.returncode == 1

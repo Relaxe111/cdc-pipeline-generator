@@ -44,7 +44,7 @@ def test_build_type_yaml_preserves_manual_sections() -> None:
 
 
 def test_load_type_definitions_and_flatten(tmp_path: Path) -> None:
-    defs_dir = tmp_path / "service-schemas" / "definitions"
+    defs_dir = tmp_path / "services" / "_schemas" / "_definitions"
     defs_dir.mkdir(parents=True)
     (defs_dir / "pgsql.yaml").write_text(
         "categories:\n"

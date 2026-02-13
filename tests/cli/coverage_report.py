@@ -141,7 +141,7 @@ COMMAND_PATTERNS: list[tuple[str, str]] = _build_command_patterns()
 # CLI test files whose names don't match any command pattern naturally.
 # Key = file stem (without .py), Value = cdc command.
 _CLI_FILE_OVERRIDES: dict[str, str] = {
-    "test_source_table": "manage-service",
+    "test_source_table": "manage-services-config",
 }
 
 # Unit-test mapping overrides for module names that don't naturally match
@@ -151,22 +151,22 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("server_group", "manage-source-groups"),
     ("sink_group", "manage-sink-groups"),
     ("service_schema", "manage-services-schema"),
-    ("source_handler", "manage-service"),
-    ("sink_handler", "manage-service"),
-    ("sink_from", "manage-service"),
-    ("sink_map", "manage-service"),
-    ("inspect_handler", "manage-service"),
-    ("list_create_misc", "manage-service"),
-    ("template_validation", "manage-service"),
-    ("service_parser", "manage-service"),
-    ("source_table", "manage-service"),
-    ("target_exists", "manage-service"),
-    ("custom_table", "manage-service"),
-    ("pg_schema", "manage-service"),
-    ("dispatch", "manage-service"),
+    ("source_handler", "manage-services-config"),
+    ("sink_handler", "manage-services-config"),
+    ("sink_from", "manage-services-config"),
+    ("sink_map", "manage-services-config"),
+    ("inspect_handler", "manage-services-config"),
+    ("list_create_misc", "manage-services-config"),
+    ("template_validation", "manage-services-config"),
+    ("service_parser", "manage-services-config"),
+    ("source_table", "manage-services-config"),
+    ("target_exists", "manage-services-config"),
+    ("custom_table", "manage-services-config"),
+    ("pg_schema", "manage-services-config"),
+    ("dispatch", "manage-services-config"),
     ("column_template", "manage-services-schema"),
     ("transform_rule", "manage-services-schema"),
-    ("structure_replicator", "manage-service"),
+    ("structure_replicator", "manage-services-config"),
 ]
 
 

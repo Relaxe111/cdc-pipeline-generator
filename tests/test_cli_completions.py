@@ -110,3 +110,11 @@ def test_complete_available_sink_keys_filters_same_source_service_target(
     )
 
     assert _values(items) == ["sink_asma.activities", "sink_asma.tracing"]
+
+
+def test_click_cli_registers_manage_services_command() -> None:
+    """Canonical top-level manage-services command is registered."""
+    from cdc_generator.cli.commands import _click_cli
+
+    assert "manage-services" in _click_cli.commands
+    assert "manage-service" not in _click_cli.commands

@@ -20,7 +20,7 @@ def _copy_template_library_files(project_root: Path) -> None:
 
     Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
     from the generator's templates/init/service-schemas/ directory to the
-    implementation's service-schemas/.
+    implementation's services/_schemas/.
 
     Args:
         project_root: Root directory of the implementation
@@ -39,28 +39,28 @@ def _copy_template_library_files(project_root: Path) -> None:
 
     for filename in template_files:
         source_file = template_source_dir / filename
-        target_file = project_root / "service-schemas" / filename
+        target_file = project_root / "services" / "_schemas" / filename
 
         if source_file.exists():
             if target_file.exists():
                 print(f"⊘ Skipped (exists): service-schemas/{filename}")
             else:
                 shutil.copy2(source_file, target_file)
-                print(f"✓ Copied template library: service-schemas/{filename}")
+                print(f"✓ Copied template library: services/_schemas/{filename}")
         else:
             print(f"⚠ Warning: Template not found in generator: {filename}")
 
     # Copy bloblang directory (examples and README)
-    bloblang_source = template_source_dir / "bloblang"
-    bloblang_target = project_root / "service-schemas" / "bloblang"
+    bloblang_source = template_source_dir / "_bloblang"
+    bloblang_target = project_root / "services" / "_schemas" / "_bloblang"
 
     if bloblang_source.exists():
         # Copy entire bloblang directory recursively
         if bloblang_target.exists():
-            print("⊘ Skipped (exists): service-schemas/bloblang/")
+            print("⊘ Skipped (exists): services/_schemas/_bloblang/")
         else:
             shutil.copytree(bloblang_source, bloblang_target)
-            print("✓ Copied Bloblang examples: service-schemas/bloblang/")
+            print("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
     else:
         print("⚠ Warning: Bloblang templates not found in generator")
 
@@ -95,16 +95,16 @@ def scaffold_project_structure(
     # Create directory structure
     directories = [
         "services",
+        "services/_schemas",
+        "services/_schemas/adapters",
+        "services/_schemas/_bloblang",
+        "services/_schemas/_bloblang/examples",
         "pipeline-templates",
         "generated/pipelines",
         "generated/schemas",
         "generated/pg-migrations",
         "_docs",
         ".vscode",
-        "service-schemas",
-        "service-schemas/adapters",
-        "service-schemas/bloblang",
-        "service-schemas/bloblang/examples",
     ]
 
     for directory in directories:

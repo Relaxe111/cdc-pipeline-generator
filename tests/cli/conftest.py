@@ -113,14 +113,14 @@ def run_cdc_completion() -> RunCdcCompletion:
     No fish shell required; works in CI and locally.
 
     The returned callable accepts a partial command string (e.g.
-    ``"cdc manage-service --ser"``) and returns a
+    ``"cdc manage-services config --ser"``) and returns a
     ``CompletedProcess``-like object whose ``.stdout`` contains one
     completion per line (``value\\thelp``), matching the fish format.
 
     Usage in tests::
 
         def test_completions(run_cdc_completion: RunCdcCompletion) -> None:
-            result = run_cdc_completion("cdc manage-service --ser")
+            result = run_cdc_completion("cdc manage-services config --ser")
             assert "--service" in result.stdout
 
     Returns:

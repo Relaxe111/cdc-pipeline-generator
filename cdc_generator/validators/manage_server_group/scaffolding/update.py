@@ -20,7 +20,7 @@ def _copy_template_library_files(project_root: Path) -> None:
 
     Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
     from the generator's templates/init/service-schemas/ directory to the
-    implementation's service-schemas/.
+    implementation's services/_schemas/.
 
     Args:
         project_root: Root directory of the implementation
@@ -39,28 +39,28 @@ def _copy_template_library_files(project_root: Path) -> None:
 
     for filename in template_files:
         source_file = template_source_dir / filename
-        target_file = project_root / "service-schemas" / filename
+        target_file = project_root / "services" / "_schemas" / filename
 
         if source_file.exists():
             if target_file.exists():
                 print_info(f"⊘ Skipped (exists): service-schemas/{filename}")
             else:
                 shutil.copy2(source_file, target_file)
-                print_success(f"✓ Copied template library: service-schemas/{filename}")
+                print_success(f"✓ Copied template library: services/_schemas/{filename}")
         else:
             print_warning(f"⚠️  Template not found in generator: {filename}")
 
     # Copy bloblang directory (examples and README)
-    bloblang_source = template_source_dir / "bloblang"
-    bloblang_target = project_root / "service-schemas" / "bloblang"
+    bloblang_source = template_source_dir / "_bloblang"
+    bloblang_target = project_root / "services" / "_schemas" / "_bloblang"
 
     if bloblang_source.exists():
         # Copy entire bloblang directory recursively if it doesn't exist
         if bloblang_target.exists():
-            print_info("⊘ Skipped (exists): service-schemas/bloblang/")
+            print_info("⊘ Skipped (exists): services/_schemas/_bloblang/")
         else:
             shutil.copytree(bloblang_source, bloblang_target)
-            print_success("✓ Copied Bloblang examples: service-schemas/bloblang/")
+            print_success("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
     else:
         print_warning("⚠️  Bloblang templates not found in generator")
 

@@ -201,7 +201,7 @@ Runtime validating column templates against sample data...
     ✓ sync_timestamp → "2024-01-15T10:30:00Z" (generated)
     ✓ row_hash → "a1b2c3d4..." (computed)
     ✗ extract_email → RuntimeError: variable 'thi' undefined
-        service-schemas/bloblang/json_extractor.blobl:15
+        services/_schemas/_bloblang/json_extractor.blobl:15
         Expected: this.metadata  Got: thi.metadata
 
   public.customer_user:

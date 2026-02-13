@@ -118,8 +118,8 @@ def _resolve_file_reference(value: str) -> tuple[str, str | None]:
 
     Example:
         "meta('table')" → ("meta('table')", None)
-        "file://service-schemas/bloblang/mapper.blobl"
-            → ("<file content>", "service-schemas/...")
+        "file://services/_schemas/_bloblang/mapper.blobl"
+            → ("<file content>", "services/_schemas/_bloblang/...")
     """
     if not value.startswith("file://"):
         return value, None

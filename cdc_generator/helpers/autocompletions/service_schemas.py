@@ -29,7 +29,7 @@ def list_schema_services() -> list[str]:
         if (
             d.is_dir()
             and not d.name.startswith((".", "_"))
-            and d.name not in ("definitions", "bloblang")
+            and d.name not in ("_definitions", "_bloblang")
         ):
             services.append(d.name)
 

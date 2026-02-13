@@ -63,6 +63,11 @@ _DEFAULT_EXPRESSIONS: dict[str, str] = {
     "current_date": "CURRENT_DATE",
     "gen_random_uuid": "gen_random_uuid()",
     "uuid": "gen_random_uuid()",
+    "default_gen_random_uuid": "gen_random_uuid()",
+    "default_0": "0",
+    "default_false": "false",
+    "default_true": "true",
+    "default_empty": "''",
 }
 
 
@@ -464,7 +469,7 @@ def list_services_with_schemas() -> list[str]:
             continue
         for service_dir in schemas_root.iterdir():
             if service_dir.is_dir() and not service_dir.name.startswith((".", "_")):
-                if service_dir.name in ("definitions", "bloblang", "adapters", "types"):
+                if service_dir.name in ("_definitions", "_bloblang", "adapters", "types"):
                     continue
                 service_names.add(service_dir.name)
 

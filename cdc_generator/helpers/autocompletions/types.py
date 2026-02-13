@@ -2,15 +2,57 @@
 
 from typing import Any, cast
 
-from cdc_generator.helpers.autocompletions.utils import find_directory_upward
+from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+
+def _load_types_from_definitions() -> list[str]:
+    """Load PG types from new schema definitions model only."""
+    definitions_file = (
+        get_project_root()
+        / "services"
+        / "_schemas"
+        / "_definitions"
+        / "pgsql.yaml"
+    )
+    if not definitions_file.is_file():
+        return []
+
+    try:
+        data = load_yaml_file(definitions_file)
+        if not isinstance(data, dict):
+            return []
+
+        data_dict = cast(dict[str, Any], data)
+        categories = data_dict.get("categories")
+        if not isinstance(categories, dict):
+            return []
+
+        all_types: list[str] = []
+        categories_dict = cast(dict[str, Any], categories)
+        for category_data in categories_dict.values():
+            if not isinstance(category_data, dict):
+                continue
+            category_dict = cast(dict[str, Any], category_data)
+            raw_types = category_dict.get("types", [])
+            if not isinstance(raw_types, list):
+                continue
+            all_types.extend(
+                str(type_name)
+                for type_name in raw_types
+                if isinstance(type_name, str)
+            )
+
+        return sorted(set(all_types))
+    except Exception:
+        return []
 
 
 def list_pg_column_types() -> list[str]:
     """List PostgreSQL column types for --column autocompletion.
 
-    Reads from service-schemas/types/pgsql.yaml if available,
-    otherwise returns hardcoded common types.
+    Reads only from the new schema declaration file:
+    - services/_schemas/_definitions/pgsql.yaml
 
     Returns:
         List of type names.
@@ -30,38 +72,5 @@ def list_pg_column_types() -> list[str]:
         >>> list_pg_column_types()
         ['bigint', 'boolean', 'integer', 'text', 'timestamp', 'uuid']
     """
-    # Try to load from service-schemas directory
-    schemas_dir = find_directory_upward('service-schemas')
-    types_file = schemas_dir / "types" / "pgsql.yaml" if schemas_dir else None
-
-    if types_file and types_file.is_file():
-        try:
-            data = load_yaml_file(types_file)
-            if data:
-                data_dict = cast(dict[str, Any], data)
-                all_types: list[str] = []
-                categories = data_dict.get('categories', {})
-                if isinstance(categories, dict):
-                    categories_dict = cast(dict[str, Any], categories)
-                    for cat_data in categories_dict.values():
-                        if isinstance(cat_data, dict):
-                            cat_dict = cast(dict[str, Any], cat_data)
-                            types = cat_dict.get('types', [])
-                            if isinstance(types, list):
-                                types_list = cast(list[Any], types)
-                                all_types.extend(
-                                    str(t) for t in types_list if isinstance(t, str)
-                                )
-                if all_types:
-                    return sorted(all_types)
-        except Exception:
-            pass
-
-    # Fallback: common PostgreSQL types
-    return [
-        "bigint", "boolean", "bytea", "char", "citext", "date",
-        "double precision", "integer", "interval", "json", "jsonb",
-        "numeric", "real", "serial", "bigserial", "smallint",
-        "text", "time", "timestamp", "timestamptz", "uuid", "varchar",
-    ]
+    return _load_types_from_definitions()
 

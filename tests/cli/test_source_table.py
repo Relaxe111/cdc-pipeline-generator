@@ -1,4 +1,4 @@
-"""End-to-end tests for ``cdc manage-service --source-table`` command.
+"""End-to-end tests for ``cdc manage-services config --source-table`` command.
 
 Tests the full flow through a real **fish** shell, exactly as
 a user would type in the dev container terminal.
@@ -94,7 +94,7 @@ class TestSourceTableTrackColumns:
         """Track columns are saved to service YAML."""
         _create_service_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--service", "proxy",
             "--source-table", "public.queries",
             "--track-columns", "public.queries.status",
@@ -115,7 +115,7 @@ class TestSourceTableTrackColumns:
         """Multiple --track-columns flags are merged."""
         _create_service_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--service", "proxy",
             "--source-table", "public.queries",
             "--track-columns", "public.queries.status",
@@ -139,7 +139,7 @@ class TestSourceTableIgnoreColumns:
         """Ignore columns are saved to service YAML."""
         _create_service_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--service", "proxy",
             "--source-table", "public.queries",
             "--ignore-columns", "public.queries.cache",
@@ -167,7 +167,7 @@ class TestSourceTableErrors:
         """Exit 1 when --source-table used without column flags."""
         _create_service_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--service", "proxy",
             "--source-table", "public.queries",
         )
@@ -183,7 +183,7 @@ class TestSourceTableErrors:
         """Exit 1 when service doesn't exist."""
         _create_service_project(isolated_project)
         result = run_cdc(
-            "manage-service",
+            "manage-services", "config",
             "--service", "nonexistent",
             "--source-table", "public.queries",
             "--track-columns", "public.queries.status",
@@ -204,7 +204,7 @@ class TestSourceTableCompletions:
         self,
         run_cdc_completion: RunCdcCompletion,
     ) -> None:
-        """--source-table is offered as a completion for manage-service."""
+        """--source-table is offered as a completion for manage-services config."""
         result = run_cdc_completion("cdc manage-services config --source-")
         assert "source-table" in result.stdout
 

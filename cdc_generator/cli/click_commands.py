@@ -212,8 +212,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="Remove column from custom table")
 @click.pass_context
 def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Manage-service passthrough — forwards all args to argparse handler."""
-    from cdc_generator.cli.commands import execute_command, execute_grouped_command
+    """Manage-service passthrough (legacy alias for manage-services config)."""
+    from cdc_generator.cli.commands import execute_grouped_command
 
     if (
         len(sys.argv) >= _MIN_GROUPED_ARGS
@@ -224,7 +224,7 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
             "manage-services", "config", sys.argv[_GROUPED_EXTRA_ARGS_START:]
         )
 
-    return execute_command("manage-service", sys.argv[2:])
+    return execute_grouped_command("manage-services", "config", sys.argv[2:])
 
 
 # ============================================================================
@@ -303,7 +303,7 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--introspect-types", is_flag=True,
               help="Introspect column types from source DB")
 @click.option("--db-definitions", is_flag=True,
-              help="Generate service-schemas/definitions type file once")
+              help="Generate services/_schemas/_definitions type file once")
 @click.option("--server", shell_complete=complete_server_names,
               help="Server for --introspect-types/--db-definitions")
 # -- Creation flags --
@@ -376,7 +376,7 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--introspect-types", is_flag=True,
               help="Introspect column types from database server")
 @click.option("--db-definitions", is_flag=True,
-              help="Generate service-schemas/definitions type file once")
+              help="Generate services/_schemas/_definitions type file once")
 @click.option("--validate", is_flag=True,
               help="Validate sink group configuration")
 # -- Server management --

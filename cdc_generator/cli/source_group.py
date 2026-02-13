@@ -137,7 +137,7 @@ def _handle_introspect_types(args: argparse.Namespace) -> int:
 
 
 def _handle_db_definitions(args: argparse.Namespace) -> int:
-    """Generate service-schemas/definitions type file once from source DB server."""
+    """Generate services/_schemas/_definitions type file once from source DB server."""
     from cdc_generator.validators.manage_server_group.config import (
         get_single_server_group,
         load_server_groups,
@@ -371,7 +371,7 @@ def main() -> int:
         "--db-definitions",
         action="store_true",
         help=(
-            "Generate service-schemas/definitions/{pgsql|mssql}.yaml once "
+            "Generate services/_schemas/_definitions/{pgsql|mssql}.yaml once "
             "from source database server metadata."
         ),
     )

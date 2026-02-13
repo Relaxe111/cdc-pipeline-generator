@@ -49,7 +49,7 @@ def _resolve_file_reference(value: str) -> tuple[str, str | None]:
 
     Example:
         'this.status == "A"' → ('this.status == "A"', None)
-        'file://service-schemas/bloblang/check.blobl' → ("<content>", "service-schemas/bloblang/check.blobl")
+        'file://services/_schemas/_bloblang/check.blobl' → ("<content>", "services/_schemas/_bloblang/check.blobl")
     """
     if not value.startswith("file://"):
         return value, None

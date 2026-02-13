@@ -32,6 +32,46 @@ def _write_custom_table(root: Path, service: str, table_ref: str) -> None:
     )
 
 
+def _write_pgsql_definitions(root: Path) -> None:
+    definitions_dir = root / "services" / "_schemas" / "_definitions"
+    definitions_dir.mkdir(parents=True, exist_ok=True)
+    (definitions_dir / "pgsql.yaml").write_text(
+        "categories:\n"
+        "  numeric:\n"
+        "    types:\n"
+        "      - bigint\n"
+        "      - integer\n"
+        "      - numeric\n"
+        "    defaults:\n"
+        "      - default_0\n"
+        "  text:\n"
+        "    types:\n"
+        "      - text\n"
+        "    defaults:\n"
+        "      - default_empty\n"
+        "  date_time:\n"
+        "    types:\n"
+        "      - date\n"
+        "      - timestamp\n"
+        "      - timestamptz\n"
+        "  uuid:\n"
+        "    types:\n"
+        "      - uuid\n"
+        "type_defaults:\n"
+        "  uuid:\n"
+        "    - default_uuid\n"
+        "    - default_gen_random_uuid\n"
+        "  date:\n"
+        "    - default_current_date\n"
+        "  timestamp:\n"
+        "    - default_now\n"
+        "    - default_current_timestamp\n"
+        "  timestamptz:\n"
+        "    - default_now\n"
+        "    - default_current_timestamp\n"
+    )
+
+
 class TestCliListServices:
     """CLI e2e: service listing."""
 
@@ -303,9 +343,24 @@ class TestCliCompletions:
         assert "directory" not in output
 
     def test_custom_tables_column_completion_suggests_types(
-        self, run_cdc_completion: RunCdcCompletion,
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
     ) -> None:
         """--column id: suggests PostgreSQL type candidates."""
+        definitions_dir = isolated_project / "services" / "_schemas" / "_definitions"
+        definitions_dir.mkdir(parents=True, exist_ok=True)
+        (definitions_dir / "pgsql.yaml").write_text(
+            "categories:\n"
+            "  text:\n"
+            "    types:\n"
+            "      - text\n"
+            "      - custom_text_type\n"
+            "  uuid:\n"
+            "    types:\n"
+            "      - uuid\n"
+        )
+
         result = run_cdc_completion(
             "cdc manage-services schema custom-tables "
             + "--service notification "
@@ -316,11 +371,17 @@ class TestCliCompletions:
         output = result.stdout
         assert "id:uuid" in output
         assert "id:text" in output
+        assert "id:custom_text_type" in output
+        assert "id:bytea" not in output
 
     def test_custom_tables_column_completion_suggests_modifiers(
-        self, run_cdc_completion: RunCdcCompletion,
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
     ) -> None:
         """--column id:uuid: suggests modifier candidates."""
+        _write_pgsql_definitions(isolated_project)
+
         result = run_cdc_completion(
             "cdc manage-services schema custom-tables "
             + "--service notification "
@@ -336,9 +397,13 @@ class TestCliCompletions:
         assert "id:uuid:default_current_date" not in output
 
     def test_custom_tables_column_completion_filters_incompatible_defaults(
-        self, run_cdc_completion: RunCdcCompletion,
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
     ) -> None:
-        """BIGINT should not suggest date/time/uuid default aliases."""
+        """BIGINT suggests numeric default alias and filters incompatible ones."""
+        _write_pgsql_definitions(isolated_project)
+
         result = run_cdc_completion(
             "cdc manage-services schema custom-tables "
             + "--service notification "
@@ -350,6 +415,7 @@ class TestCliCompletions:
         assert "id:bigint:pk" in output
         assert "id:bigint:not_null" in output
         assert "id:bigint:nullable" in output
+        assert "id:bigint:default_0" in output
         assert "id:bigint:default_now" not in output
         assert "id:bigint:default_current_timestamp" not in output
         assert "id:bigint:default_current_date" not in output

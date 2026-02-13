@@ -23,6 +23,13 @@ def test_parse_column_spec_default_alias_uuid() -> None:
     assert col["default"] == "gen_random_uuid()"
 
 
+def test_parse_column_spec_default_alias_numeric_zero() -> None:
+    col = ops.parse_column_spec("id:bigint:default_0")
+
+    assert col is not None
+    assert col["default"] == "0"
+
+
 def test_parse_column_spec_pk_nullable_conflict_returns_none() -> None:
     assert ops.parse_column_spec("id:uuid:pk:nullable") is None
 
