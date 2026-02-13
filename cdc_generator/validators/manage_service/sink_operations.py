@@ -21,6 +21,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.helpers.service_config import get_project_root, load_service_config
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 
 from .config import SERVICE_SCHEMAS_DIR, save_service_config
 
@@ -157,20 +158,20 @@ def _get_target_service_from_sink_key(sink_key: str) -> str | None:
 
 
 def _list_tables_in_service_schemas(target_service: str) -> list[str]:
-    """List all tables in service-schemas/{target_service}/{schema}/*.yaml.
+    """List all tables for sink target across preferred/legacy schema roots.
 
     Returns:
         List of 'schema.table' strings.
     """
-    service_dir = SERVICE_SCHEMAS_DIR / target_service
-    if not service_dir.is_dir():
-        return []
-
-    tables: list[str] = []
-    for schema_dir in service_dir.iterdir():
-        if schema_dir.is_dir():
+    tables: set[str] = set()
+    for service_dir in get_service_schema_read_dirs(target_service, get_project_root()):
+        if not service_dir.is_dir():
+            continue
+        for schema_dir in service_dir.iterdir():
+            if not schema_dir.is_dir():
+                continue
             for table_file in schema_dir.glob("*.yaml"):
-                tables.append(f"{schema_dir.name}.{table_file.stem}")
+                tables.add(f"{schema_dir.name}.{table_file.stem}")
     return sorted(tables)
 
 
@@ -189,8 +190,11 @@ def _validate_table_in_schemas(
     if not target_service:
         return False
 
-    service_dir = SERVICE_SCHEMAS_DIR / target_service
-    if not service_dir.is_dir():
+    has_service_dir = any(
+        service_dir.is_dir()
+        for service_dir in get_service_schema_read_dirs(target_service, get_project_root())
+    )
+    if not has_service_dir:
         print_error(f"No schemas found for sink target '{target_service}'")
         print_info(
             "To fetch schemas, run:\n"
@@ -199,7 +203,7 @@ def _validate_table_in_schemas(
         )
         print_info(
             "Or create manually: "
-            + f"service-schemas/{target_service}/<schema>/<Table>.yaml"
+            + f"services/_schemas/{target_service}/<schema>/<Table>.yaml"
         )
         return False
 
@@ -727,9 +731,9 @@ def _remove_custom_table_file(sink_key: str, table_key: str) -> None:
     if custom_file.is_file():
         custom_file.unlink()
         print_info(
-            f"Removed custom table file: "
-            f"service-schemas/{target_service}/custom-tables/"
-            f"{table_key.replace('/', '_')}.yaml"
+            "Removed custom table file: "
+            +f"service-schemas/{target_service}/custom-tables/"
+            +f"{table_key.replace('/', '_')}.yaml"
         )
 
 

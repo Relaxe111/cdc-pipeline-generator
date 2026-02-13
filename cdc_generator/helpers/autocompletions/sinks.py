@@ -6,6 +6,7 @@ from cdc_generator.helpers.autocompletions.tables import list_tables_for_service
 from cdc_generator.helpers.autocompletions.utils import (
     find_directory_upward,
     find_file_upward,
+    find_service_schemas_dir_upward,
 )
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
@@ -260,7 +261,7 @@ def list_target_columns_for_sink_table(
 
     target_service = parts[1]
     schema, table = table_parts
-    schemas_dir = find_directory_upward('service-schemas')
+    schemas_dir = find_service_schemas_dir_upward()
     table_file = schemas_dir / target_service / schema / f'{table}.yaml' if schemas_dir else None
     if not table_file or not table_file.is_file():
         return []
@@ -471,7 +472,7 @@ def list_source_columns_for_sink_table(
         return []
 
     schema, table = table_parts
-    schemas_dir = find_directory_upward('service-schemas')
+    schemas_dir = find_service_schemas_dir_upward()
     table_file = (
         schemas_dir / service_name / schema / f'{table}.yaml'
         if schemas_dir else None

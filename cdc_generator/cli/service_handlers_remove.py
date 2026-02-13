@@ -9,6 +9,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
 )
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 
 
 def handle_remove_service(args: argparse.Namespace) -> int:
@@ -34,13 +35,24 @@ def handle_remove_service(args: argparse.Namespace) -> int:
     # 2) Keep source-groups.yaml untouched by design.
     print_info("Keeping source-groups.yaml unchanged")
 
-    # 3) Remove service-schemas/<service>/
-    schemas_dir = project_root / "service-schemas" / service_name
-    if schemas_dir.exists():
+    # 3) Remove schema directories for the service (preferred + legacy)
+    removed_any = False
+    seen_paths: set[str] = set()
+    for schemas_dir in get_service_schema_read_dirs(service_name, project_root):
+        key = str(schemas_dir)
+        if key in seen_paths:
+            continue
+        seen_paths.add(key)
+
+        if not schemas_dir.exists():
+            continue
+
         shutil.rmtree(schemas_dir)
         print_success(f"✓ Removed {schemas_dir.relative_to(project_root)}/")
-    else:
-        print_info("No service-schemas directory found for service")
+        removed_any = True
+
+    if not removed_any:
+        print_info("No service schema directory found for service")
 
     print_info("\nNext steps:")
     print_info("  • Run 'cdc generate' to refresh generated artifacts")

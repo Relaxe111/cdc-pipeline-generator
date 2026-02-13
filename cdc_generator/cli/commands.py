@@ -156,7 +156,7 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
     "manage-service-schema": {
         "module": "cdc_generator.cli.service_schema",
         "script": "cli/service_schema.py",
-        "description": "Manage custom table schema definitions (service-schemas/)",
+        "description": "Manage custom table schema definitions (services/_schemas/)",
     },
     "manage-column-templates": {
         "module": "cdc_generator.cli.column_templates",

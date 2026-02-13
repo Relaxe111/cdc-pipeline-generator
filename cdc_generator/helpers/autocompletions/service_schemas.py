@@ -6,7 +6,7 @@ references.
 """
 
 from cdc_generator.helpers.autocompletions.utils import (
-    find_directory_upward,
+    find_service_schemas_dir_upward,
 )
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
@@ -20,7 +20,7 @@ def list_schema_services() -> list[str]:
     Returns:
         Sorted list of service directory names.
     """
-    schemas_dir = find_directory_upward("service-schemas")
+    schemas_dir = find_service_schemas_dir_upward()
     if not schemas_dir:
         return []
 
@@ -49,7 +49,7 @@ def list_custom_tables_for_schema_service(
     Returns:
         List of table references (schema.table).
     """
-    schemas_dir = find_directory_upward("service-schemas")
+    schemas_dir = find_service_schemas_dir_upward()
     if not schemas_dir:
         return []
 
@@ -81,7 +81,7 @@ def list_custom_table_columns_for_mapping(
     Returns:
         List of column names.
     """
-    schemas_dir = find_directory_upward("service-schemas")
+    schemas_dir = find_service_schemas_dir_upward()
     if not schemas_dir:
         return []
 

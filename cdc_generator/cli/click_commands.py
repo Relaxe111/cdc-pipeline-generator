@@ -388,7 +388,7 @@ def manage_sink_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 @click.command(
     name="manage-service-schema",
-    help="Manage custom table schema definitions (service-schemas/)",
+    help="Manage custom table schema definitions (services/_schemas/)",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )

@@ -17,6 +17,11 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import (
+    get_schema_roots,
+    get_service_schema_read_dirs,
+    get_service_schema_write_dir,
+)
 
 try:
     from cdc_generator.helpers.yaml_loader import yaml
@@ -67,13 +72,8 @@ _DEFAULT_EXPRESSIONS: dict[str, str] = {
 
 
 def _get_custom_tables_dir(service: str) -> Path:
-    """Return path to custom-tables/ dir for a service."""
-    return (
-        get_project_root()
-        / "service-schemas"
-        / service
-        / _CUSTOM_TABLES_DIR
-    )
+    """Return canonical custom-tables/ dir for a service."""
+    return get_service_schema_write_dir(service, get_project_root()) / _CUSTOM_TABLES_DIR
 
 
 def _custom_table_path(
@@ -83,6 +83,19 @@ def _custom_table_path(
 ) -> Path:
     """Return path to a custom table YAML file."""
     return _get_custom_tables_dir(service) / f"{schema}.{table}.yaml"
+
+
+def _custom_table_read_path(
+    service: str,
+    schema: str,
+    table: str,
+) -> Path | None:
+    """Return existing custom-table path from preferred/legacy roots."""
+    for service_dir in get_service_schema_read_dirs(service, get_project_root()):
+        candidate = service_dir / _CUSTOM_TABLES_DIR / f"{schema}.{table}.yaml"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 # -------------------------------------------------------------------
@@ -226,13 +239,14 @@ def create_custom_table(
     schema, table = parsed
 
     # Check if already exists
+    existing_file_path = _custom_table_read_path(service, schema, table)
     file_path = _custom_table_path(service, schema, table)
-    if file_path.exists():
+    if existing_file_path is not None:
         print_error(
             f"Custom table '{table_ref}' already exists "
             + f"for service '{service}'"
         )
-        print_info(f"File: {file_path}")
+        print_info(f"File: {existing_file_path}")
         return False
 
     # Parse all column specs
@@ -299,8 +313,8 @@ def remove_custom_table(
         return False
     schema, table = parsed
 
-    file_path = _custom_table_path(service, schema, table)
-    if not file_path.exists():
+    file_path = _custom_table_read_path(service, schema, table)
+    if file_path is None:
         print_error(
             f"Custom table '{table_ref}' not found "
             + f"for service '{service}'"
@@ -328,17 +342,15 @@ def list_custom_tables(service: str) -> list[str]:
     Returns:
         List of table references (schema.table).
     """
-    custom_dir = _get_custom_tables_dir(service)
-    if not custom_dir.exists():
-        return []
+    table_refs: set[str] = set()
+    for service_dir in get_service_schema_read_dirs(service, get_project_root()):
+        custom_dir = service_dir / _CUSTOM_TABLES_DIR
+        if not custom_dir.exists():
+            continue
+        for file_path in custom_dir.glob("*.yaml"):
+            table_refs.add(file_path.stem)
 
-    tables: list[str] = []
-    for f in sorted(custom_dir.glob("*.yaml")):
-        # Filename: schema.table.yaml → schema.table
-        ref = f.stem  # removes .yaml
-        tables.append(ref)
-
-    return tables
+    return sorted(table_refs)
 
 
 def show_custom_table(
@@ -363,8 +375,8 @@ def show_custom_table(
         return None
     schema, table = parsed
 
-    file_path = _custom_table_path(service, schema, table)
-    if not file_path.exists():
+    file_path = _custom_table_read_path(service, schema, table)
+    if file_path is None:
         print_error(
             f"Custom table '{table_ref}' not found "
             + f"for service '{service}'"
@@ -409,19 +421,17 @@ def list_services_with_schemas() -> list[str]:
     Returns:
         List of service directory names.
     """
-    schemas_root = get_project_root() / "service-schemas"
-    if not schemas_root.exists():
-        return []
+    service_names: set[str] = set()
+    for schemas_root in get_schema_roots(get_project_root()):
+        if not schemas_root.exists():
+            continue
+        for service_dir in schemas_root.iterdir():
+            if service_dir.is_dir() and not service_dir.name.startswith((".", "_")):
+                if service_dir.name in ("definitions", "bloblang", "adapters", "types"):
+                    continue
+                service_names.add(service_dir.name)
 
-    services: list[str] = []
-    for d in sorted(schemas_root.iterdir()):
-        if d.is_dir() and not d.name.startswith((".", "_")):
-            # Skip non-service dirs
-            if d.name in ("definitions", "bloblang"):
-                continue
-            services.append(d.name)
-
-    return services
+    return sorted(service_names)
 
 
 # -------------------------------------------------------------------

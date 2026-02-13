@@ -1,6 +1,9 @@
 """Table and column autocompletion functions."""
 
-from cdc_generator.helpers.autocompletions.utils import find_directory_upward
+from cdc_generator.helpers.autocompletions.utils import (
+    find_directory_upward,
+    find_service_schemas_dir_upward,
+)
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 
@@ -19,7 +22,7 @@ def list_tables_for_service(service_name: str) -> list[str]:
         >>> list_tables_for_service('chat')
         ['public.users', 'public.rooms', 'logs.activity']
     """
-    schemas_dir = find_directory_upward('service-schemas')
+    schemas_dir = find_service_schemas_dir_upward()
     if not schemas_dir:
         return []
 
@@ -61,7 +64,7 @@ def list_columns_for_table(service_name: str, schema: str, table: str) -> list[s
         >>> list_columns_for_table('chat', 'public', 'users')
         ['public.users.id', 'public.users.username', 'public.users.email']
     """
-    schemas_dir = find_directory_upward('service-schemas')
+    schemas_dir = find_service_schemas_dir_upward()
     if not schemas_dir:
         return []
 

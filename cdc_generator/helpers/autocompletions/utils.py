@@ -51,3 +51,26 @@ def find_directory_upward(dirname: str, max_depth: int = 3) -> Path | None:
             break
         current = current.parent
     return None
+
+
+def find_service_schemas_dir_upward(max_depth: int = 3) -> Path | None:
+    """Find service schema root with preferred/legacy compatibility.
+
+    Search order per directory level:
+    1) services/_schemas (preferred)
+    2) service-schemas (legacy)
+    """
+    current = Path.cwd()
+    for _ in range(max_depth):
+        preferred = current / "services" / "_schemas"
+        if preferred.is_dir():
+            return preferred
+
+        legacy = current / "service-schemas"
+        if legacy.is_dir():
+            return legacy
+
+        if current == current.parent:
+            break
+        current = current.parent
+    return None

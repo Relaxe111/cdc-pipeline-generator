@@ -3,11 +3,15 @@
 
 from cdc_generator.helpers.helpers_logging import print_error
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import (
+    get_schema_write_root,
+    get_service_schema_read_dirs,
+)
 from cdc_generator.helpers.yaml_loader import yaml
 
 PROJECT_ROOT = get_project_root()
 SERVICES_DIR = PROJECT_ROOT / "services"
-SERVICE_SCHEMAS_DIR = PROJECT_ROOT / "service-schemas"
+SERVICE_SCHEMAS_DIR = get_schema_write_root(PROJECT_ROOT)
 
 
 def get_available_services() -> list[str]:
@@ -18,20 +22,25 @@ def get_available_services() -> list[str]:
 
 
 def load_service_schema_tables(service: str, schema: str) -> list[str]:
-    """Load table names from service-schemas/{service}/{schema}/*.yaml"""
-    schema_dir = SERVICE_SCHEMAS_DIR / service / schema
-    if not schema_dir.exists():
-        return []
-    return sorted([f.stem for f in schema_dir.glob("*.yaml")])
+    """Load table names from service schemas under preferred/legacy paths."""
+    table_names: set[str] = set()
+    for service_dir in get_service_schema_read_dirs(service, PROJECT_ROOT):
+        schema_dir = service_dir / schema
+        if not schema_dir.exists():
+            continue
+        table_names.update(f.stem for f in schema_dir.glob("*.yaml"))
+    return sorted(table_names)
 
 
 def get_table_schema_definition(service: str, schema: str, table: str) -> dict[str, object] | None:
-    """Load table definition from service-schemas/{service}/{schema}/{table}.yaml"""
-    table_file = SERVICE_SCHEMAS_DIR / service / schema / f"{table}.yaml"
-    if not table_file.exists():
-        return None
-    with open(table_file) as f:
-        return yaml.load(f)  # type: ignore[return-value]
+    """Load table definition from preferred/legacy service schema paths."""
+    for service_dir in get_service_schema_read_dirs(service, PROJECT_ROOT):
+        table_file = service_dir / schema / f"{table}.yaml"
+        if not table_file.exists():
+            continue
+        with table_file.open(encoding="utf-8") as f:
+            return yaml.load(f)  # type: ignore[return-value]
+    return None
 
 
 def save_service_config(service: str, config: dict[str, object]) -> bool:
@@ -45,7 +54,7 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
         # Wrap in service name key
         wrapped_config = {service: config_to_save}
 
-        with open(service_file, 'w') as f:
+        with service_file.open('w', encoding='utf-8') as f:
             yaml.dump(wrapped_config, f)
         return True
     except Exception as e:
@@ -76,5 +85,5 @@ def detect_service_mode(service: str) -> str:
         # Fall back to legacy mode field
         mode = config.get('mode', 'db-per-tenant')
         return str(mode) if mode else 'db-per-tenant'
-    except:
+    except Exception:
         return 'db-per-tenant'

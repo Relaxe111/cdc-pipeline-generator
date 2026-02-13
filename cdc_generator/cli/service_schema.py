@@ -2,7 +2,8 @@
 """CLI for managing service schema definitions.
 
 Manages custom table schemas independently from service YAML,
-stored under ``service-schemas/{service}/custom-tables/``.
+stored under ``services/_schemas/{service}/custom-tables/``
+(legacy read compatibility: ``service-schemas/{service}/custom-tables/``).
 
 Usage:
     cdc manage-service-schema --service chat --list
@@ -34,7 +35,7 @@ from cdc_generator.helpers.helpers_logging import (
 
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--service": (
-        "Service name from service-schemas/",
+        "Service name from services/_schemas/",
         (
             "cdc manage-service-schema"
             " --service chat --list"
@@ -144,7 +145,7 @@ def _build_parser() -> SchemaArgumentParser:
 
     parser.add_argument(
         "--service",
-        help="Service name (directory under service-schemas/)",
+        help="Service name (directory under services/_schemas/)",
     )
 
     # List operations
@@ -205,7 +206,7 @@ def _build_parser() -> SchemaArgumentParser:
 
 
 def _handle_list_services() -> int:
-    """List all services with service-schemas directories."""
+    """List all services with schema directories."""
     from cdc_generator.validators.manage_service_schema.custom_table_ops import (
         list_services_with_schemas,
     )

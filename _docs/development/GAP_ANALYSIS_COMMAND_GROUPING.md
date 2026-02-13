@@ -129,3 +129,23 @@ Before finalizing each follow-up increment:
   - `manage-pipelines` group + subcommands
   - `manage-migrations` group + subcommands
 - Verify help output and command discoverability
+
+---
+
+## 5) Implementation status (started)
+
+Initial migration groundwork is now implemented:
+
+- Added centralized path resolver with preferred+legacy support:
+  - `services/_schemas` (preferred write path)
+  - `service-schemas` (legacy read compatibility)
+- Updated service-schema CRUD and schema-related autocompletions to use compatibility resolution.
+- Updated service removal to clean both preferred and legacy schema locations.
+- Updated CLI/help text for `manage-service-schema` to reference `services/_schemas`.
+
+Current scope is intentionally incremental (safe start):
+
+- ✅ New writes for custom-table schema management go to `services/_schemas`.
+- ✅ Reads support both new and legacy locations.
+- ✅ Full test suite passes after changes.
+- ⏳ Remaining modules that still assume `service-schemas/` will be migrated in follow-up phases.
