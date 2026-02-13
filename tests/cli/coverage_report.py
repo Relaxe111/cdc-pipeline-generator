@@ -700,11 +700,11 @@ class CoverageReport:
         print(f"  {c.BOLD}🔧 TESTS BY CDC COMMAND{c.RESET}")
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(
-            f"  {c.DIM}{'Command':<{command_col_width}} {'E2E':>5} {'Unit':>6}"
+            f"     {c.DIM}{'Command':<{command_col_width}} {'E2E':>5} {'Unit':>6}"
             f" {'Total':>6} {'Target':>7} {'Progress':>9}{c.RESET}"
         )
         print(
-            f"  {c.DIM}{'─' * command_col_width} {'─' * 5} {'─' * 6}"
+            f"     {c.DIM}{'─' * command_col_width} {'─' * 5} {'─' * 6}"
             f" {'─' * 6} {'─' * 7} {'─' * 9}{c.RESET}"
         )
 

@@ -645,6 +645,11 @@ class TestSmartCompletion:
         assert "--primary-key" not in opts  # sub-option of --add-source-table
         assert "--map-column" not in opts  # sub-option of --add-sink-table
 
+    def test_entry_point_partial_all_is_suggested(self) -> None:
+        """Regression: --al should suggest --all at config entry-point."""
+        opts = self._complete("cdc manage-services config directory --al")
+        assert "--all" in opts
+
     # -- manage-services config: context-filtered options ----------------------
 
     def test_inspect_context_shows_sub_options(self) -> None:
@@ -688,6 +693,23 @@ class TestSmartCompletion:
         assert "--target" in opts
         assert "--map-column" in opts
         assert "--primary-key" not in opts
+
+    def test_all_context_shows_add_sink_table_for_fanout(self) -> None:
+        """Regression: --all fanout flow should still offer --add-sink-table."""
+        opts = self._complete(
+            "cdc manage-services config directory --all --"
+        )
+        assert "--add-sink-table" in opts
+
+    def test_all_fanout_add_sink_table_shows_required_followups(self) -> None:
+        """Regression: fanout add-table flow exposes --from/--replicate-structure/--sink-schema."""
+        opts = self._complete(
+            "cdc manage-services config directory "
+            + "--all --add-sink-table --"
+        )
+        assert "--from" in opts
+        assert "--replicate-structure" in opts
+        assert "--sink-schema" in opts
 
     def test_add_sink_table_without_value_still_shows_from(self) -> None:
         """Regression: --from must remain visible after bare --add-sink-table."""

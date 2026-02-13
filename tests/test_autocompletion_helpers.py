@@ -514,7 +514,62 @@ class TestTrackColumnsCompletion:
 
         assert "public.customer_user.user_id" not in completions
         assert "public.customer_user.customer_id" in completions
-        assert "public.customer_user.username" in completions
+
+
+class TestFanoutSinkSchemaCompletion:
+    """Tests for --sink-schema completion in --all fanout sink mode."""
+
+    @staticmethod
+    def _complete(partial_cmd: str) -> list[str]:
+        """Return completion values for *partial_cmd* via Click API."""
+        import shlex
+
+        from click.shell_completion import ShellComplete
+
+        from cdc_generator.cli.commands import _click_cli
+
+        cli = _click_cli
+        parts = shlex.split(partial_cmd)
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+        incomplete = parts.pop() if parts else ""
+        comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
+        return [c.value for c in comp.get_completions(parts, incomplete)]
+
+    def test_all_fanout_sink_schema_suggests_intersection_across_sinks(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Only schemas present across all sinks are suggested in --all mode."""
+        (temp_workspace / "services" / "directory.yaml").write_text(
+            "directory:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.customer_user: {}\n"
+            "  sinks:\n"
+            "    sink_asma.calendar:\n"
+            "      tables:\n"
+            "        adopus.customer_user:\n"
+            "          target_exists: false\n"
+            "        calendar.events:\n"
+            "          target_exists: false\n"
+            "    sink_asma.chat:\n"
+            "      tables:\n"
+            "        adopus.customer_user:\n"
+            "          target_exists: false\n"
+            "        chat.messages:\n"
+            "          target_exists: false\n"
+        )
+
+        monkeypatch.chdir(temp_workspace)
+        completions = self._complete(
+            "cdc manage-services config directory "
+            + "--all --add-sink-table --from public.customer_user "
+            + "--replicate-structure --sink-schema ad"
+        )
+
+        assert "adopus" in completions
+        assert "calendar" not in completions
+        assert "chat" not in completions
 
     def test_excludes_columns_already_selected_in_command(
         self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch,

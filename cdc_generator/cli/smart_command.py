@@ -121,6 +121,13 @@ class SmartCommand(click.Command):
             # Flag is active if it's True (is_flag) or has a non-None value
             if val is True or (val is not None and val is not False and val != ()):
                 active.add(flag_name)
+                continue
+
+            # For passthrough commands, a bare option token may be present in
+            # ctx.args before Click binds a value. Treat it as active context.
+            option_token = f"--{flag_name.replace('_', '-')}"
+            if option_token in ctx.args:
+                active.add(flag_name)
         return active
 
     def _get_all_active_params(self, ctx: click.Context) -> set[str]:
@@ -139,9 +146,19 @@ class SmartCommand(click.Command):
             val = ctx.params.get(flag_name)
             if val is True or (val is not None and val is not False and val != ()):
                 active.add(flag_name)
+                continue
+
+            # Passthrough bare option token fallback (same rationale as above).
+            option_token = f"--{flag_name.replace('_', '-')}"
+            if option_token in ctx.args:
+                active.add(flag_name)
         # Alias: positional service counts as "service"
         if "service_positional" in active:
             active.add("service")
+        # Alias: sink-table actions can be reached via explicit --sink OR --all
+        # fanout mode for add-sink-table.
+        if "sink" in active or "all_flag" in active or "all" in active:
+            active.add("sink_or_all")
         return active
 
     def _build_allowed_set(
@@ -244,6 +261,15 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
         "update_schema", "add_custom_sink_table", "modify_custom_table",
         "from", "from_table",
     },
+    # ── Fanout qualifier (--all enables all-sinks add-table flow) ─────────
+    "all_flag": {
+        "add_sink_table",
+        "from",
+        "from_table",
+        "replicate_structure",
+        "sink_schema",
+        "target_exists",
+    },
     # ── Add sink table (requires --sink) ───────────────────────
     "add_sink_table": {
         "sink", "from", "from_table", "target", "target_exists",
@@ -283,7 +309,7 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
 
 # Options always shown for manage-service
 MANAGE_SERVICE_ALWAYS: set[str] = {
-    "service", "service_positional", "server",
+    "service", "service_positional", "server", "all",
 }
 
 # Hierarchical prerequisites for manage-service.
@@ -301,7 +327,7 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
     # this — see _check_prerequisites() which treats them as aliases.
     "sink": {"service"},
     # ── Sink actions require --sink ────────────────────────────
-    "add_sink_table": {"sink"},
+    "add_sink_table": {"sink_or_all"},
     "remove_sink_table": {"sink"},
     "sink_table": {"sink"},
     "update_schema": {"sink"},

@@ -259,6 +259,67 @@ def _get_existing_source_column_refs(
     return existing
 
 
+def _schemas_from_sink_tables(sink_cfg: dict[str, Any]) -> set[str]:
+    """Extract schema names from sink table keys (schema.table)."""
+    schemas: set[str] = set()
+    tables_raw = sink_cfg.get("tables")
+    if not isinstance(tables_raw, dict):
+        return schemas
+
+    tables = cast(dict[str, Any], tables_raw)
+    for table_key in tables:
+        if "." not in table_key:
+            continue
+        schema, _table = table_key.split(".", 1)
+        if schema:
+            schemas.add(schema)
+
+    return schemas
+
+
+def _common_sink_schemas_for_all_sinks(service: str) -> list[str]:
+    """List schema names available across all configured sinks for a service.
+
+    Used by --sink-schema completion when --all fanout mode is active.
+    Includes schemas from:
+    1) target service schema declarations
+    2) already-configured sink tables (including custom/not-yet-created tables)
+    """
+    from cdc_generator.helpers.autocompletions.schemas import list_schemas_for_service
+    from cdc_generator.helpers.service_config import load_service_config
+
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError:
+        return []
+
+    sinks_raw = config.get("sinks")
+    if not isinstance(sinks_raw, dict):
+        return []
+
+    sinks = cast(dict[str, Any], sinks_raw)
+    if not sinks:
+        return []
+
+    common: set[str] | None = None
+    for sink_key, sink_cfg_raw in sinks.items():
+        if "." not in sink_key:
+            continue
+
+        _sink_group, target_service = sink_key.split(".", 1)
+        sink_cfg = cast(dict[str, Any], sink_cfg_raw) if isinstance(sink_cfg_raw, dict) else {}
+
+        candidates: set[str] = set(_safe_call(list_schemas_for_service, target_service))
+        candidates.update(_schemas_from_sink_tables(sink_cfg))
+
+        if common is None:
+            common = candidates
+        else:
+            common &= candidates
+
+    return sorted(common) if common else []
+
+
 # ---------------------------------------------------------------------------
 # No-arg completions (global lists)
 # ---------------------------------------------------------------------------
@@ -784,8 +845,16 @@ def complete_target_schema(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete schemas for a sink's target service."""
+    service = _get_service(ctx)
     sink_key = _get_param(ctx, "sink")
+
     if not sink_key:
+        all_mode = bool(ctx.params.get("all_flag"))
+        if all_mode and service:
+            return _filter(
+                _common_sink_schemas_for_all_sinks(service),
+                incomplete,
+            )
         return []
 
     parts = sink_key.split(".")
