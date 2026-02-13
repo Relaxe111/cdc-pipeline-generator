@@ -23,6 +23,7 @@ Core CDC concepts and system design:
 Contributing and coding standards:
 - **CODING_STANDARDS.md** - Code style, patterns, best practices
 - **CLI_COLORS.md** - Terminal output formatting
+- **PIPELINE_TEST_MODES.md** - AI-friendly test mode definitions (`--fast-pipelines` vs `--full-pipelines`)
 
 ### [CLI Reference](./cli/)
 Command-line tool documentation (coming soon):

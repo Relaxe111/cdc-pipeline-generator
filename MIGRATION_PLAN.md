@@ -12,12 +12,19 @@
 - [ ] Start generator dev container
 - [ ] Enter dev container
 - [ ] Run generation from `/implementations/adopus`
+- [ ] After generation, run simple isolated pipeline scenario (mock source/http → generated source pipeline → MQ/connect → sink files → expected output assertions)
 - [ ] Verify output correctness against expected/generated artifacts
 - [ ] Verify local dev flow still works (pipeline execution + LSN behavior)
 
 ### 1.2 Sync behavior validation
 - [ ] Verify bidirectional sync between mounted host paths and container paths
 - [ ] Confirm edits in generator reflect immediately in implementation workflow
+
+### 1.3 Post-generate test modes for pipelines
+- [ ] Add fast pipeline test mode: `cdc test --fast-pipelines`
+- [ ] Add full pipeline test mode: `cdc test --full-pipelines`
+- [ ] Ensure both modes are runnable right after `cdc generate`
+- [ ] Document scope/differences between fast vs full pipeline validation (see `_docs/development/PIPELINE_TEST_MODES.md`)
 
 **Done when:** generation + local runtime checks pass with no regressions.
 
