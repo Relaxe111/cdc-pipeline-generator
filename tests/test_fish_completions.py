@@ -126,6 +126,16 @@ class TestClickCommandRegistration:
                 f"Special command {cmd_name!r} not registered"
             )
 
+    def test_management_groups_registered(self) -> None:
+        """Grouped management commands must be registered."""
+        cli = _get_click_cli()
+        registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
+
+        for cmd_name in ["manage-pipelines", "manage-migrations"]:
+            assert cmd_name in registered, (
+                f"Management group {cmd_name!r} not registered"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Tests: Typed command option declarations
@@ -301,6 +311,49 @@ class TestSetupLocalOptions:
         cmds = _get_typed_commands()
         opts = _get_command_option_names(cmds["setup-local"])
         for opt in ["--postgres", "--mssql", "--all", "--stop"]:
+            assert opt in opts, f"Missing option: {opt}"
+
+
+class TestManagePipelinesOptions:
+    """manage-pipelines subcommands must expose expected options."""
+
+    def test_generate_has_core_options(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        generate_cmd = group.commands["generate"]
+        opts = _get_command_option_names(generate_cmd)
+        for opt in ["--all", "--force"]:
+            assert opt in opts, f"Missing option: {opt}"
+
+    def test_verify_sync_has_filter_options(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        verify_sync_cmd = group.commands["verify-sync"]
+        opts = _get_command_option_names(verify_sync_cmd)
+        for opt in ["--customer", "--service", "--table", "--all"]:
+            assert opt in opts, f"Missing option: {opt}"
+
+
+class TestManageMigrationsOptions:
+    """manage-migrations subcommands must expose expected options."""
+
+    def test_apply_replica_has_env_option(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-migrations"]
+        assert isinstance(group, click.Group)
+        apply_cmd = group.commands["apply-replica"]
+        opts = _get_command_option_names(apply_cmd)
+        assert "--env" in opts
+
+    def test_clean_cdc_has_core_options(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-migrations"]
+        assert isinstance(group, click.Group)
+        clean_cmd = group.commands["clean-cdc"]
+        opts = _get_command_option_names(clean_cmd)
+        for opt in ["--env", "--table", "--all"]:
             assert opt in opts, f"Missing option: {opt}"
 
 
@@ -696,6 +749,6 @@ class TestSmartCompletion:
     # -- non-smart commands unaffected ----------------------------------------
 
     def test_non_smart_command_unchanged(self) -> None:
-        opts = self._complete("cdc generate --")
+        opts = self._complete("cdc manage-pipelines generate --")
         assert "--all" in opts
         assert "--force" in opts

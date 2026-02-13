@@ -10,21 +10,14 @@ Commands:
     scaffold              Scaffold a new CDC pipeline project with source group configuration
     validate              Validate all customer configurations
     manage-service        Manage service definitions
-    manage-source-groups   Manage source groups configuration
-    manage-sink-groups  Manage sink groups configuration
+    manage-source-groups Manage source groups configuration
+    manage-sink-groups   Manage sink groups configuration
     manage-service-schema Manage custom table schema definitions
-    generate [customer]   Generate pipelines
+    manage-pipelines     Manage pipeline lifecycle commands
+    manage-migrations    Manage migration and DB lifecycle commands
     setup-local          Set up local development environment
-    enable <customer> <env>      Enable CDC on MSSQL tables
-    migrate-replica      Apply PostgreSQL migrations to replica
-    verify <customer> <env>      Verify pipeline connections
-    verify-sync [options]        Verify CDC synchronization and detect gaps
-    stress-test [options]        CDC stress test with real-time monitoring
     reset-local          Reset local environment
     nuke-local           Complete cleanup of local environment
-    clean                Clean CDC change tracking tables
-    schema-docs          Generate database schema documentation
-    reload-pipelines     Regenerate and reload Redpanda Connect pipelines
     reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
     help                 Show this help message
     test                 Run project tests (unit and CLI e2e)
@@ -145,11 +138,6 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "script": "cli/scaffold_command.py",
         "description": "Scaffold a new CDC pipeline project with source group configuration",
     },
-    "generate": {
-        "module": "cdc_generator.core.pipeline_generator",
-        "script": "core/pipeline_generator.py",
-        "description": "Generate Redpanda Connect pipelines",
-    },
     "manage-service": {
         "module": "cdc_generator.cli.service",
         "script": "cli/service.py",
@@ -182,26 +170,80 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
     },
 }
 
-# Commands that use local scripts (implementation-specific)
+# manage-pipelines subcommands
+PIPELINE_COMMANDS: dict[str, dict[str, str]] = {
+    "generate": {
+        "runner": "generator",
+        "module": "cdc_generator.core.pipeline_generator",
+        "script": "core/pipeline_generator.py",
+        "description": "Generate Redpanda Connect pipelines",
+        "usage": "cdc manage-pipelines generate [customer] [--all] [--force]",
+    },
+    "reload": {
+        "runner": "local",
+        "script": "scripts/9-reload-pipelines.py",
+        "description": "Regenerate and reload Redpanda Connect pipelines",
+        "usage": "cdc manage-pipelines reload [customer...]",
+    },
+    "verify": {
+        "runner": "local",
+        "script": "scripts/6-verify-pipeline.py",
+        "description": "Verify pipeline connections",
+        "usage": "cdc manage-pipelines verify <customer> <env>",
+    },
+    "verify-sync": {
+        "runner": "local",
+        "script": "scripts/13-verify-cdc-sync.py",
+        "description": "Verify CDC synchronization and detect gaps",
+        "usage": (
+            "cdc manage-pipelines verify-sync "
+            + "[--customer <name>] [--env <env>] [--table <table>] [--fix]"
+        ),
+    },
+    "stress-test": {
+        "runner": "local",
+        "script": "scripts/7-stress-test.py",
+        "description": "CDC stress test with real-time monitoring",
+        "usage": (
+            "cdc manage-pipelines stress-test "
+            + "--env <env> [customer...] [--tables <table...>] [--records N]"
+        ),
+    },
+}
+
+# manage-migrations subcommands
+MIGRATION_COMMANDS: dict[str, dict[str, str]] = {
+    "enable-cdc": {
+        "runner": "local",
+        "script": "scripts/5-enable-cdc-mssql.py",
+        "description": "Enable CDC on MSSQL tables",
+        "usage": "cdc manage-migrations enable-cdc <customer> <env>",
+    },
+    "apply-replica": {
+        "runner": "local",
+        "script": "scripts/10-migrate-replica.py",
+        "description": "Apply PostgreSQL migrations to replica databases",
+        "usage": "cdc manage-migrations apply-replica <customer> --env <env>",
+    },
+    "clean-cdc": {
+        "runner": "local",
+        "script": "scripts/9-clean-cdc-tables.py",
+        "description": "Clean CDC change tracking tables",
+        "usage": "cdc manage-migrations clean-cdc --env <env> [--table <table>] [--all]",
+    },
+    "schema-docs": {
+        "runner": "local",
+        "script": "generate_schema_docs.py",
+        "description": "Generate database schema documentation YAML files",
+        "usage": "cdc manage-migrations schema-docs [--env <env>]",
+    },
+}
+
+# Commands that use local scripts (implementation-specific, top-level)
 LOCAL_COMMANDS: dict[str, dict[str, str]] = {
     "validate": {
         "script": "scripts/1-validate-customers.py",
         "description": "Validate all customer YAML configurations",
-    },
-    "enable": {
-        "script": "scripts/5-enable-cdc-mssql.py",
-        "description": "Enable CDC on MSSQL tables",
-        "usage": "cdc enable <customer> <env>",
-    },
-    "migrate-replica": {
-        "script": "scripts/10-migrate-replica.py",
-        "description": "Apply PostgreSQL migrations to replica databases",
-        "usage": "cdc migrate-replica <customer> --env <env>",
-    },
-    "verify": {
-        "script": "scripts/6-verify-pipeline.py",
-        "description": "Verify pipeline connections",
-        "usage": "cdc verify <customer> <env>",
     },
     "reset-local": {
         "script": "scripts/7-reset-local.py",
@@ -210,30 +252,6 @@ LOCAL_COMMANDS: dict[str, dict[str, str]] = {
     "nuke-local": {
         "script": "scripts/8-nuke-local.py",
         "description": "Complete cleanup of local environment",
-    },
-    "clean": {
-        "script": "scripts/9-clean-cdc-tables.py",
-        "description": "Clean CDC change tracking tables",
-        "usage": "cdc clean --env <env> [--table <table>] [--all]",
-    },
-    "verify-sync": {
-        "script": "scripts/13-verify-cdc-sync.py",
-        "description": "Verify CDC synchronization and detect gaps",
-        "usage": "cdc verify-sync [--customer <name>] [--env <env>] [--table <table>] [--fix]",
-    },
-    "stress-test": {
-        "script": "scripts/7-stress-test.py",
-        "description": "CDC stress test with real-time monitoring",
-        "usage": "cdc stress-test --env <env> [customer...] [--tables <table...>] [--records N]",
-    },
-    "schema-docs": {
-        "script": "generate_schema_docs.py",
-        "description": "Generate database schema documentation YAML files",
-    },
-    "reload-pipelines": {
-        "script": "scripts/9-reload-pipelines.py",
-        "description": "Regenerate and reload Redpanda Connect pipelines",
-        "usage": "cdc reload-pipelines [customer...]",
     },
     "reload-cdc-autocompletions": {
         "script": "scripts/reload-cdc-autocompletions.sh",
@@ -261,15 +279,31 @@ def print_help(
         if implementation_name:
             print(f"   Implementation: {implementation_name}")
 
-    print("\n📦 Commands using generator library:")
+    print("\n📦 Top-level generator commands:")
     for cmd, info in GENERATOR_COMMANDS.items():
         print(f"  {cmd:20} - {info['description']}")
+
+    print("\n🔄 Pipeline management:")
+    for cmd, info in PIPELINE_COMMANDS.items():
+        desc = info["description"]
+        usage = info.get("usage")
+        if usage is not None:
+            desc += f"\n  {' ' * 20}   Usage: {usage}"
+        print(f"  {'manage-pipelines ' + cmd:20} - {desc}")
+
+    print("\n🗄️ Migration management:")
+    for cmd, info in MIGRATION_COMMANDS.items():
+        desc = info["description"]
+        usage = info.get("usage")
+        if usage is not None:
+            desc += f"\n  {' ' * 20}   Usage: {usage}"
+        print(f"  {'manage-migrations ' + cmd:20} - {desc}")
 
     print("\n🧪 Testing:")
     print("  test                 - Run tests (--cli for e2e, --all for everything)")
     print("  test-coverage        - Show test coverage report by cdc command (-v for details)")
 
-    print("\n🔧 Commands using local scripts:")
+    print("\n🔧 Top-level local script commands:")
     for cmd, info in LOCAL_COMMANDS.items():
         desc = info["description"]
         if "usage" in info:
@@ -307,6 +341,18 @@ def run_generator_command(
     """
     cmd_info = GENERATOR_COMMANDS[command]
 
+    return run_generator_spec(command, cmd_info, paths, extra_args, workspace_root)
+
+
+def run_generator_spec(
+    command_name: str,
+    cmd_info: dict[str, str],
+    paths: ScriptPaths,
+    extra_args: list[str],
+    workspace_root: Path,
+) -> int:
+    """Run a generator-backed command from a command spec."""
+
     if paths["generator"] is None:
         cmd = ["python3", "-m", cmd_info["module"], *extra_args]
     else:
@@ -320,7 +366,7 @@ def run_generator_command(
     try:
         return _run_subprocess(cmd, cwd=workspace_root)
     except Exception as e:
-        print(f"❌ Error running {command}: {e}")
+        print(f"❌ Error running {command_name}: {e}")
         return 1
 
 
@@ -342,6 +388,17 @@ def run_local_command(
         Exit code
     """
     cmd_info = LOCAL_COMMANDS[command]
+
+    return run_local_spec(command, cmd_info, extra_args, workspace_root)
+
+
+def run_local_spec(
+    command_name: str,
+    cmd_info: dict[str, str],
+    extra_args: list[str],
+    workspace_root: Path,
+) -> int:
+    """Run a local-script command from a command spec."""
     script_path = workspace_root / cmd_info["script"]
 
     if not script_path.exists():
@@ -354,8 +411,36 @@ def run_local_command(
     try:
         return _run_subprocess(cmd, cwd=workspace_root)
     except Exception as e:
-        print(f"❌ Error running {command}: {e}")
+        print(f"❌ Error running {command_name}: {e}")
         return 1
+
+
+def execute_grouped_command(
+    group: str,
+    subcommand: str,
+    extra_args: list[str],
+) -> int:
+    """Execute a grouped command (manage-pipelines/manage-migrations)."""
+    workspace_root, _implementation_name, is_dev_container = detect_environment()
+    paths = get_script_paths(workspace_root, is_dev_container)
+
+    if group == "manage-pipelines":
+        cmd_info = PIPELINE_COMMANDS.get(subcommand)
+    elif group == "manage-migrations":
+        cmd_info = MIGRATION_COMMANDS.get(subcommand)
+    else:
+        cmd_info = None
+
+    if cmd_info is None:
+        print(f"❌ Unknown subcommand: {group} {subcommand}")
+        print("\nRun 'cdc help' to see available commands.")
+        return 1
+
+    command_name = f"{group} {subcommand}"
+    runner = cmd_info.get("runner")
+    if runner == "generator":
+        return run_generator_spec(command_name, cmd_info, paths, extra_args, workspace_root)
+    return run_local_spec(command_name, cmd_info, extra_args, workspace_root)
 
 
 def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:

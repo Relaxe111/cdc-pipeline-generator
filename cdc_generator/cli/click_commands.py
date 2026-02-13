@@ -520,10 +520,27 @@ def setup_local_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 
 # ============================================================================
-# generate
+# manage-pipelines
 # ============================================================================
 
-@click.command(
+@click.group(
+    name="manage-pipelines",
+    help="Manage pipeline lifecycle commands",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+    invoke_without_command=True,
+)
+@click.pass_context
+def manage_pipelines_cmd(ctx: click.Context) -> int:
+    """Manage-pipelines command group."""
+    if ctx.invoked_subcommand is None:
+        click.echo("❌ Missing subcommand for manage-pipelines")
+        click.echo("   Try: cdc manage-pipelines generate --all")
+        return 1
+    return 0
+
+
+@manage_pipelines_cmd.command(
     name="generate",
     help="Generate Redpanda Connect pipelines",
     context_settings=_PASSTHROUGH_CTX,
@@ -533,11 +550,39 @@ def setup_local_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Generate for all customers")
 @click.option("--force", is_flag=True, help="Force regeneration")
 @click.pass_context
-def generate_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Generate passthrough."""
-    from cdc_generator.cli.commands import execute_command
+def manage_pipelines_generate_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines generate passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_command("generate", sys.argv[2:])
+    return execute_grouped_command("manage-pipelines", "generate", sys.argv[3:])
+
+
+@manage_pipelines_cmd.command(
+    name="reload",
+    help="Regenerate and reload Redpanda Connect pipelines",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.pass_context
+def manage_pipelines_reload_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines reload passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-pipelines", "reload", sys.argv[3:])
+
+
+@manage_pipelines_cmd.command(
+    name="verify",
+    help="Verify pipeline connections",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.pass_context
+def manage_pipelines_verify_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines verify passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-pipelines", "verify", sys.argv[3:])
 
 
 # ============================================================================
@@ -586,10 +631,10 @@ def test_coverage_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 
 # ============================================================================
-# verify-sync
+# manage-pipelines verify-sync
 # ============================================================================
 
-@click.command(
+@manage_pipelines_cmd.command(
     name="verify-sync",
     help="Verify CDC synchronization and detect gaps",
     context_settings=_PASSTHROUGH_CTX,
@@ -600,18 +645,18 @@ def test_coverage_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--table", help="Specify table")
 @click.option("--all", "all_flag", is_flag=True, help="Check all tables")
 @click.pass_context
-def verify_sync_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Verify-sync passthrough."""
-    from cdc_generator.cli.commands import execute_command
+def manage_pipelines_verify_sync_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines verify-sync passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_command("verify-sync", sys.argv[2:])
+    return execute_grouped_command("manage-pipelines", "verify-sync", sys.argv[3:])
 
 
 # ============================================================================
-# stress-test
+# manage-pipelines stress-test
 # ============================================================================
 
-@click.command(
+@manage_pipelines_cmd.command(
     name="stress-test",
     help="CDC stress test with real-time monitoring",
     context_settings=_PASSTHROUGH_CTX,
@@ -622,11 +667,103 @@ def verify_sync_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--duration", help="Test duration in seconds")
 @click.option("--interval", help="Monitoring interval in seconds")
 @click.pass_context
-def stress_test_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Stress-test passthrough."""
-    from cdc_generator.cli.commands import execute_command
+def manage_pipelines_stress_test_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-pipelines stress-test passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_command("stress-test", sys.argv[2:])
+    return execute_grouped_command("manage-pipelines", "stress-test", sys.argv[3:])
+
+
+# ============================================================================
+# manage-migrations
+# ============================================================================
+
+@click.group(
+    name="manage-migrations",
+    help="Manage migration and DB lifecycle commands",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+    invoke_without_command=True,
+)
+@click.pass_context
+def manage_migrations_cmd(ctx: click.Context) -> int:
+    """Manage-migrations command group."""
+    if ctx.invoked_subcommand is None:
+        click.echo("❌ Missing subcommand for manage-migrations")
+        click.echo("   Try: cdc manage-migrations apply-replica CUSTOMER --env nonprod")
+        return 1
+    return 0
+
+
+@manage_migrations_cmd.command(
+    name="enable-cdc",
+    help="Enable CDC on MSSQL tables",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.pass_context
+def manage_migrations_enable_cdc_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations enable-cdc passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "enable-cdc", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="apply-replica",
+    help="Apply PostgreSQL migrations to replica databases",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", help="Environment")
+@click.pass_context
+def manage_migrations_apply_replica_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations apply-replica passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "apply-replica", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="clean-cdc",
+    help="Clean CDC change tracking tables",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", help="Environment")
+@click.option("--table", help="Table name")
+@click.option("--all", "all_flag", is_flag=True, help="Process all tables")
+@click.pass_context
+def manage_migrations_clean_cdc_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations clean-cdc passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "clean-cdc", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="schema-docs",
+    help="Generate database schema documentation YAML files",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", help="Environment")
+@click.pass_context
+def manage_migrations_schema_docs_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations schema-docs passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "schema-docs", sys.argv[3:])
 
 
 # ============================================================================
@@ -639,11 +776,10 @@ CLICK_COMMANDS: dict[str, click.Command] = {
     "manage-sink-groups": manage_sink_groups_cmd,
     "manage-service-schema": manage_service_schema_cmd,
     "manage-column-templates": manage_column_templates_cmd,
+    "manage-pipelines": manage_pipelines_cmd,
+    "manage-migrations": manage_migrations_cmd,
     "scaffold": scaffold_cmd,
     "setup-local": setup_local_cmd,
-    "generate": generate_cmd,
     "test": test_cmd,
     "test-coverage": test_coverage_cmd,
-    "verify-sync": verify_sync_cmd,
-    "stress-test": stress_test_cmd,
 }

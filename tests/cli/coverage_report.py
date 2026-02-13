@@ -27,7 +27,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-from cdc_generator.cli.commands import GENERATOR_COMMANDS, LOCAL_COMMANDS
+from cdc_generator.cli.commands import (
+    GENERATOR_COMMANDS,
+    LOCAL_COMMANDS,
+    MIGRATION_COMMANDS,
+    PIPELINE_COMMANDS,
+)
 from cdc_generator.helpers.helpers_logging import Colors
 
 # ---------------------------------------------------------------------------
@@ -64,6 +69,18 @@ def _discover_commands() -> list[tuple[str, str, bool]]:
     # Local/script commands from LOCAL_COMMANDS
     for cmd, info in LOCAL_COMMANDS.items():
         commands.append((cmd, info["description"], False))
+
+    # Grouped pipeline subcommands
+    for subcmd, info in PIPELINE_COMMANDS.items():
+        composite = f"manage-pipelines-{subcmd}"
+        is_library = info.get("runner") == "generator"
+        commands.append((composite, info["description"], is_library))
+
+    # Grouped migration subcommands
+    for subcmd, info in MIGRATION_COMMANDS.items():
+        composite = f"manage-migrations-{subcmd}"
+        is_library = info.get("runner") == "generator"
+        commands.append((composite, info["description"], is_library))
 
     return commands
 
@@ -246,7 +263,7 @@ _COMMAND_SOURCE_MODULES: dict[str, list[str]] = {
         "validators/manage_server_group/scaffolding/update.py",
         "validators/manage_server_group/scaffolding/vscode_settings.py",
     ],
-    "generate": [
+    "manage-pipelines-generate": [
         "core/pipeline_generator.py",
     ],
     "manage-service": [
@@ -371,7 +388,22 @@ def _resolve_command_source_modules(
 
     cmd_info = GENERATOR_COMMANDS.get(command)
     if cmd_info is None:
-        return []
+        pipeline_prefix = "manage-pipelines-"
+        migration_prefix = "manage-migrations-"
+        if command.startswith(pipeline_prefix):
+            subcmd = command.removeprefix(pipeline_prefix)
+            pipeline_cmd = PIPELINE_COMMANDS.get(subcmd)
+            if pipeline_cmd is None or pipeline_cmd.get("runner") != "generator":
+                return []
+            cmd_info = pipeline_cmd
+        elif command.startswith(migration_prefix):
+            subcmd = command.removeprefix(migration_prefix)
+            migration_cmd = MIGRATION_COMMANDS.get(subcmd)
+            if migration_cmd is None or migration_cmd.get("runner") != "generator":
+                return []
+            cmd_info = migration_cmd
+        else:
+            return []
 
     script_path = cmd_info.get("script")
     if not script_path:
