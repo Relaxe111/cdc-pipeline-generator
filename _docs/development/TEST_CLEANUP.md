@@ -180,7 +180,7 @@ rm -rf service-schemas/
 All existing tests already use proper isolation:
 - `tests/conftest.py` - `isolated_project` fixture
 - `tests/cli/test_scaffold.py` - E2E scaffold testing
-- `tests/cli/test_manage_service.py` - Service management
+- `tests/cli/test_manage_services_config.py` - Service management
 - `tests/test_server_group_*.py` - Server group tests (80 tests)
 
 ### Cleanup Completed ✅
@@ -207,7 +207,7 @@ cdc scaffold --implementation test --pattern db-shared
 
 # 3. Test commands
 cdc manage-source-groups --update
-cdc manage-service --service myservice --inspect
+cdc manage-services config --service myservice --inspect
 
 # 4. Clean up when done
 cd ../..

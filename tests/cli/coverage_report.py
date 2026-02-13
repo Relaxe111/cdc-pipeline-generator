@@ -142,6 +142,14 @@ COMMAND_PATTERNS: list[tuple[str, str]] = _build_command_patterns()
 # Key = file stem (without .py), Value = cdc command.
 _CLI_FILE_OVERRIDES: dict[str, str] = {
     "test_source_table": "manage-services-config",
+    # Legacy singular file names
+    "test_manage_service": "manage-services-config",
+    "test_manage_service_remove": "manage-services-config",
+    "test_manage_service_schema": "manage-services-schema",
+    # Canonical pluralized file names
+    "test_manage_services_config": "manage-services-config",
+    "test_manage_services_remove": "manage-services-config",
+    "test_manage_services_schema": "manage-services-schema",
 }
 
 # Unit-test mapping overrides for module names that don't naturally match
@@ -682,15 +690,21 @@ class CoverageReport:
     def _print_cli_section(self, verbose: bool) -> None:
         """Print tests grouped by library command."""
         c = Colors
+        lib_cmds = [cmd for cmd, _, is_lib in KNOWN_COMMANDS if is_lib]
+        command_col_width = max(
+            len("Command"),
+            *(len(f"cdc {cmd}") for cmd in lib_cmds),
+        )
+
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(f"  {c.BOLD}🔧 TESTS BY CDC COMMAND{c.RESET}")
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(
-            f"  {c.DIM}{'Command':<31} {'E2E':>5} {'Unit':>6}"
+            f"  {c.DIM}{'Command':<{command_col_width}} {'E2E':>5} {'Unit':>6}"
             f" {'Total':>6} {'Target':>7} {'Progress':>9}{c.RESET}"
         )
         print(
-            f"  {c.DIM}{'─' * 31} {'─' * 5} {'─' * 6}"
+            f"  {c.DIM}{'─' * command_col_width} {'─' * 5} {'─' * 6}"
             f" {'─' * 6} {'─' * 7} {'─' * 9}{c.RESET}"
         )
 
@@ -727,7 +741,8 @@ class CoverageReport:
             target_str = str(target) if target > 0 else "—"
             cmd_color = c.GREEN if total > 0 else c.RED
             print(
-                f"  {row_icon} {cmd_color}cdc {cmd:<24}{c.RESET} {len(e2e):>5}"
+                f"  {row_icon} {cmd_color}{('cdc ' + cmd):<{command_col_width}}{c.RESET}"
+                f" {len(e2e):>5}"
                 f" {len(unit):>6} {total_color}{total:>6}{c.RESET}"
                 f" {target_str:>7} {progress}"
             )

@@ -82,12 +82,12 @@ subcommand module → handler.
 |-------------|------------|---------------------|
 | `test_manage_source_groups.py` | `cdc manage-source-groups` | Add/remove/update server groups, multi-server support, validation |
 | `test_manage_sink_groups.py` | `cdc manage-sink-groups` | Add/remove sink groups, server registration |
-| `test_manage_service.py` | `cdc manage-service` | Full service lifecycle: create → add tables → add sinks → add sink tables → generate |
-| `test_manage_service_sinks.py` | `cdc manage-service --add-sink` | Sink operations: add/remove sinks, add/remove sink tables, column mapping |
-| `test_manage_service_extras.py` | `cdc manage-service --add-extra-column` | Extra columns and transforms via CLI |
+| `test_manage_services_config.py` | `cdc manage-services config` | Full service lifecycle: create → add tables → add sinks → add sink tables → generate |
+| `test_manage_service_sinks.py` | `cdc manage-services config --add-sink` | Sink operations: add/remove sinks, add/remove sink tables, column mapping |
+| `test_manage_service_extras.py` | `cdc manage-services config --add-extra-column` | Extra columns and transforms via CLI |
 | `test_generate.py` | `cdc generate` | Pipeline generation from configured services |
 | `test_scaffold_update.py` | `cdc scaffold --update` | Detailed update mode: merge settings, add new dirs, preserve existing |
-| `test_full_flow.py` | Multiple commands | Complete flow: scaffold → manage-source-groups → manage-service → generate |
+| `test_full_flow.py` | Multiple commands | Complete flow: scaffold → manage-source-groups → manage-services config → generate |
 | `test_completions.py` | Fish autocompletions | Verify all `cdc` subcommands and flags are offered by fish Tab-completion |
 
 ---
@@ -220,7 +220,7 @@ markers = ["cli: End-to-end CLI tests (run with cdc test --cli)"]
 | Integration | Full workflow flows | Not started |
 
 **Priority for next tests:**
-1. `test_manage_service.py` — most complex command, most user-facing
+1. `test_manage_services_config.py` — most complex command, most user-facing
 2. `test_manage_source_groups.py` — foundational for project setup
 3. `test_generate.py` — validates pipeline output
 4. `test_full_flow.py` — end-to-end confidence
