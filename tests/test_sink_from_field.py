@@ -192,7 +192,7 @@ def test_validate_from_field_lists_available_tables() -> None:
 
 
 def test_validate_from_field_omitted() -> None:
-    """Test validation passes when 'from' field is omitted."""
+    """Test validation fails when required 'from' field is omitted."""
     config = _create_test_service_config()
     table_opts: dict[str, Any] = {
         "target_exists": False,
@@ -205,10 +205,9 @@ def test_validate_from_field_omitted() -> None:
         table_opts,
     )
 
-    # Validation should pass (from is optional)
-    # Note: This test assumes table schema validation is mocked/disabled
-    # In real scenario, would need service-schemas/ directory
-    assert error is None or "service-schemas" in str(error)
+    assert _tables is None
+    assert error is not None
+    assert "required parameter 'from'" in error
 
 
 # ---------------------------------------------------------------------------
@@ -298,11 +297,11 @@ def test_add_sink_table_with_from_writes_yaml(
     assert table_config["target_exists"] is False
 
 
-def test_add_sink_table_without_from_omits_field(
+def test_add_sink_table_without_from_fails(
     temp_service_file: Path,
     monkeypatch: Any,
 ) -> None:
-    """Test that 'from' field is omitted when not provided."""
+    """Test that add_sink_table fails when --from is not provided."""
     # Mock get_project_root to use temp directory
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations.get_project_root",
@@ -342,19 +341,7 @@ def test_add_sink_table_without_from_omits_field(
         },
     )
 
-    assert result is True
-
-    # Verify YAML does NOT contain 'from' field
-    with temp_service_file.open(encoding="utf-8") as f:
-        updated_config = yaml.safe_load(f)
-
-    sinks = cast(dict[str, object], updated_config["sinks"])
-    sink_target = cast(dict[str, object], sinks["sink_test.target"])
-    tables = cast(dict[str, object], sink_target["tables"])
-    table_config = cast(dict[str, object], tables["public.customer_user"])
-
-    assert "from" not in table_config
-    assert table_config["target_exists"] is False
+    assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +406,10 @@ def test_add_sink_table_allows_implicit_identity_when_types_match(
         service="test_service",
         sink_key="sink_test.target",
         table_key="public.customer_user",
-        table_opts={"target_exists": True},
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+        },
     )
 
     assert result is True
@@ -459,7 +449,10 @@ def test_add_sink_table_fails_on_incompatible_identity_columns(
         service="test_service",
         sink_key="sink_test.target",
         table_key="public.customer_user",
-        table_opts={"target_exists": True},
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+        },
     )
 
     assert result is False
@@ -504,6 +497,7 @@ def test_add_sink_table_accepts_explicit_mapping_for_required_sink_columns(
         table_opts={
             "target_exists": True,
             "columns": {"user_id": "id"},
+            "from": "public.customer_user",
         },
     )
 
@@ -544,6 +538,7 @@ def test_add_sink_table_replicate_structure_skips_compatibility_check(
         table_opts={
             "target_exists": True,
             "replicate_structure": True,
+            "from": "public.customer_user",
         },
     )
 

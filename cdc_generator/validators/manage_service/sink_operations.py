@@ -435,6 +435,13 @@ def _validate_table_add(
 
     # Validate 'from' field references a valid source table
     from_table = table_opts.get("from")
+    if from_table is None:
+        return (
+            None,
+            "Missing required parameter 'from'. "
+            + "Specify --from <schema.table> to map sink table data source.",
+        )
+
     if from_table is not None:
         source_tables = _get_source_table_keys(config)
         if str(from_table) not in source_tables:

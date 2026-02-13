@@ -419,8 +419,15 @@ def add_custom_sink_table(
     Returns:
         True on success.
     """
-    # If --from references a source table, load columns from source schemas
-    if from_custom_table:
+    if from_custom_table is None:
+        print_error(
+            "--add-custom-sink-table requires --from <schema.table>"
+        )
+        return False
+
+    # If --from references a source table and no inline columns are supplied,
+    # load columns from source schemas.
+    if not column_specs:
         columns = _load_columns_from_source_table(
             service,
             from_custom_table,
@@ -441,7 +448,11 @@ def add_custom_sink_table(
 
     _target_service, _schema_name, _table_name, columns = validated
     return _add_custom_sink_table_with_columns(
-        service, sink_key, table_key, columns,
+        service,
+        sink_key,
+        table_key,
+        columns,
+        from_table=from_custom_table,
     )
 
 

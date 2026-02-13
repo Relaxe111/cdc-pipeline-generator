@@ -342,6 +342,51 @@ class TestValidationUsesSourceTableKey:
         assert result is True
         mock_save.assert_called_once()
 
+    def test_validates_using_services_schemas_preferred_layout(
+        self,
+        templates_file: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Validation loads source schema from services/_schemas in from flow."""
+        preferred_schema_dir = tmp_path / "services" / "_schemas" / "test_svc" / "public"
+        preferred_schema_dir.mkdir(parents=True)
+        (preferred_schema_dir / "customer_user.yaml").write_text(
+            "database: test_db\n"
+            "schema: public\n"
+            "service: test_svc\n"
+            "table: customer_user\n"
+            "columns:\n"
+            "- name: customer_id\n"
+            "  type: uuid\n"
+            "  nullable: false\n"
+            "  primary_key: true\n"
+            "- name: username\n"
+            "  type: text\n"
+            "  nullable: false\n"
+            "  primary_key: false\n"
+        )
+
+        config = _make_service_config(
+            target_exists=False,
+            table_key="adopus-replica.customer_user",
+            from_table="public.customer_user",
+        )
+        load_patch, save_patch = _patch_service_io(config)
+
+        monkeypatch.chdir(tmp_path)
+        with load_patch, save_patch as mock_save:
+            result = add_column_template_to_table(
+                "test_svc",
+                "sink_asma.proxy",
+                "adopus-replica.customer_user",
+                "tenant_id",
+                name_override="customer_id",
+            )
+
+        assert result is True
+        mock_save.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Tests — transform validation also resolves source table key

@@ -330,6 +330,7 @@ class TestHandleSinkAddTable:
             sink="sink_asma.chat",
             add_sink_table="public.orders",
             target_exists="true",
+            from_table="public.users",
         )
         result = handle_sink_add_table(args)
         assert result == 0
@@ -342,9 +343,23 @@ class TestHandleSinkAddTable:
             sink="sink_asma.chat",
             add_sink_table="public.orders",
             target_exists="false",
+            from_table="public.users",
         )
         result = handle_sink_add_table(args)
         assert result == 0
+
+    def test_requires_from_for_add_sink_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Returns 1 when --from is missing for --add-sink-table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="false",
+            from_table=None,
+        )
+        result = handle_sink_add_table(args)
+        assert result == 1
 
     def test_replicate_requires_sink_schema(
         self, project_dir: Path, service_with_sink: Path,
@@ -367,6 +382,7 @@ class TestHandleSinkAddTable:
             add_sink_table="public.orders",
             replicate_structure=True,
             sink_schema="chat",
+            from_table="public.users",
             target_exists=None,
         )
         with patch(
@@ -430,6 +446,7 @@ class TestHandleSinkAddTable:
             add_sink_table="public.attachments",
             target_exists="true",
             target="public.chat_attachments",
+            from_table="public.users",
         )
         result = handle_sink_add_table(args)
         assert result == 0
@@ -443,6 +460,7 @@ class TestHandleSinkAddTable:
             add_sink_table="public.orders",
             target_exists="true",
             sink_schema="custom_schema",
+            from_table="public.users",
         )
         with patch(
             "cdc_generator.cli.service_handlers_sink.add_sink_table",
@@ -596,14 +614,15 @@ class TestHandleSinkMapColumnOnTable:
 class TestHandleSinkAddCustomTable:
     """Tests for handle_sink_add_custom_table."""
 
-    def test_requires_columns_or_from(
+    def test_requires_from(
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
-        """Returns 1 when neither --column nor --from provided."""
+        """Returns 1 when --from is missing."""
         args = _ns(
             sink="sink_asma.chat",
             add_custom_sink_table="public.audit",
-            column=None,
+            column=["id:uuid:pk"],
+            from_table=None,
         )
         result = handle_sink_add_custom_table(args)
         assert result == 1
@@ -641,6 +660,31 @@ class TestHandleSinkAddCustomTable:
             "sink_asma.chat",
             "public.audit_copy",
             [],
+            from_custom_table="public.audit_template",
+        )
+
+    def test_inline_columns_with_from_success(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Allows inline custom columns when --from is also provided."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_custom_sink_table="public.audit_copy",
+            column=["id:uuid:pk"],
+            from_table="public.audit_template",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_custom_sink_table",
+            return_value=True,
+        ) as add_custom_mock:
+            result = handle_sink_add_custom_table(args)
+
+        assert result == 0
+        add_custom_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.audit_copy",
+            ["id:uuid:pk"],
             from_custom_table="public.audit_template",
         )
 
@@ -753,6 +797,7 @@ class TestHandleAddCustomSinkTableHappyPath:
             add_custom_sink_table="public.e2e_custom_test",
             sink="sink_asma.chat",
             column=["id:uuid:pk", "event_type:text:not_null"],
+            from_table="public.users",
         )
         with patch(
             "cdc_generator.cli.service_handlers_sink_custom.SERVICE_SCHEMAS_DIR",

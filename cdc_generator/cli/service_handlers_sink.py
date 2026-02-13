@@ -162,9 +162,21 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
 
     # Auto-name from --from if table name not provided
     table_name = args.add_sink_table
+    from_table: str | None = getattr(args, "from_table", None)
+
+    if from_table is None:
+        print_error(
+            "--add-sink-table requires --from <source_schema.source_table>"
+        )
+        print_info(
+            "Example: --add-sink-table public.customer_user "
+            + "--from public.customer_user --target-exists false"
+        )
+        return 1
+
     if table_name is None:
-        if hasattr(args, "from_table") and args.from_table is not None:
-            table_name = args.from_table
+        if from_table is not None:
+            table_name = from_table
             print_info(
                 f"Using source table name '{table_name}' for sink table"
             )
@@ -183,8 +195,8 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
     }
 
     # Handle 'from' field for source table reference
-    if hasattr(args, "from_table") and args.from_table is not None:
-        table_opts["from"] = args.from_table
+    if from_table is not None:
+        table_opts["from"] = from_table
 
     # Handle replicate_structure flag
     if replicate_structure:
@@ -324,20 +336,20 @@ def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
 
     from_table: str | None = getattr(args, "from_table", None)
 
-    if not args.column and not from_table:
+    if from_table is None:
         print_error(
-            "--add-custom-sink-table requires --column specs"
-            + " or --from <custom-table-ref>"
+            "--add-custom-sink-table requires --from <source_schema.source_table>"
         )
         print_info(
-            "Example (inline): cdc manage-service --service directory "
+            "Example (inline + source ref): cdc manage-service --service directory "
             + "--sink sink_asma.proxy "
             + "--add-custom-sink-table public.audit_log "
+            + "--from public.audit_log "
             + "--column id:uuid:pk "
             + "--column event_type:text:not_null"
         )
         print_info(
-            "Example (from custom): cdc manage-service --service directory "
+            "Example (from source schema): cdc manage-service --service directory "
             + "--sink sink_asma.proxy "
             + "--add-custom-sink-table public.audit_log "
             + "--from public.audit_log"

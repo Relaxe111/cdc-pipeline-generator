@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from cdc_generator.core import column_templates as column_templates_module
 
 from cdc_generator.core.column_templates import (
     _parse_single_template,
@@ -189,3 +190,47 @@ class TestGetTemplates:
         set_templates_path(file_path)
         templates = get_templates()
         assert templates == {}
+
+    def test_loads_from_services_schemas_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default loader reads services/_schemas/column-templates.yaml."""
+        set_templates_path(tmp_path / "nonexistent.yaml")
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        clear_cache()
+
+        schemas_dir = tmp_path / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True)
+        (schemas_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  source_table:\n"
+            "    name: _source_table\n"
+            "    type: text\n"
+            "    value: meta(\"table\")\n"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        keys = list_template_keys()
+        assert "source_table" in keys
+
+    def test_falls_back_to_legacy_service_schemas(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Loader falls back to service-schemas/column-templates.yaml."""
+        set_templates_path(tmp_path / "nonexistent.yaml")
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        clear_cache()
+
+        legacy_dir = tmp_path / "service-schemas"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  environment:\n"
+            "    name: _environment\n"
+            "    type: text\n"
+            "    value: \"${ENVIRONMENT}\"\n"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        keys = list_template_keys()
+        assert "environment" in keys

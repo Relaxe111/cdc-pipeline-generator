@@ -11,6 +11,7 @@ Tests the full flow through a real **fish** shell for:
 - fish autocompletions for manage-services config flags
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -256,9 +257,27 @@ class TestCliSinkAddTable:
             "manage-services", "config", "--service", "proxy",
             "--sink", "sink_asma.chat",
             "--add-sink-table", "public.orders",
+            "--from", "public.users",
             "--target-exists", "false",
         )
         assert result.returncode == 0
+
+    def test_add_table_requires_from(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """--add-sink-table fails when --from is not provided."""
+        _create_project(isolated_project, with_sink=True)
+        schemas_dir = isolated_project / "service-schemas" / "chat" / "public"
+        schemas_dir.mkdir(parents=True)
+        (schemas_dir / "orders.yaml").write_text("columns: []\n")
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--add-sink-table", "public.orders",
+            "--target-exists", "false",
+        )
+        assert result.returncode == 1
 
     def test_requires_target_exists(
         self, run_cdc: RunCdc, isolated_project: Path,
@@ -289,6 +308,88 @@ class TestCliSinkAddTable:
         )
         assert result.returncode == 0
         assert "public.queries" in _read_yaml(isolated_project)
+
+
+class TestCliSinkAddCustomTable:
+    """CLI e2e: --add-custom-sink-table."""
+
+    def test_add_custom_table_requires_from(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """--add-custom-sink-table fails when --from is not provided."""
+        _create_project(isolated_project, with_sink=True)
+        result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--add-custom-sink-table", "custom.audit_log",
+            "--column", "id:uuid:pk",
+        )
+        assert result.returncode == 1
+
+
+class TestCliColumnTemplateValidationFromSource:
+    """CLI e2e: column-template validation uses source table from --from."""
+
+    def test_add_column_template_uses_from_source_schema(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """Validation loads source schema from services/_schemas/<service>/<schema>."""
+        _create_project(isolated_project, with_sink=True)
+
+        schemas_root = isolated_project / "services" / "_schemas"
+        schemas_root.mkdir(parents=True, exist_ok=True)
+
+        # Template definitions (preferred shared location)
+        (schemas_root / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  source_table:\n"
+            "    name: _source_table\n"
+            "    type: text\n"
+            "    value: meta(\"table\")\n"
+        )
+
+        # Source schema used by --from public.customer_user
+        source_schema_dir = schemas_root / "proxy" / "public"
+        source_schema_dir.mkdir(parents=True, exist_ok=True)
+        (source_schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: customer_id\n"
+            "    type: uuid\n"
+            "  - name: username\n"
+            "    type: text\n"
+        )
+
+        # Sink target schema required by --add-sink-table validation
+        sink_schema_dir = schemas_root / "chat" / "adopus-replica"
+        sink_schema_dir.mkdir(parents=True, exist_ok=True)
+        (sink_schema_dir / "customer_user.yaml").write_text("columns: []\n")
+
+        add_source_result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--add-source-table", "public.customer_user",
+        )
+        assert add_source_result.returncode == 0
+
+        add_table_result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--add-sink-table", "adopus-replica.customer_user",
+            "--target-exists", "false",
+            "--from", "public.customer_user",
+        )
+        assert add_table_result.returncode == 0
+
+        add_template_result = run_cdc(
+            "manage-services", "config", "--service", "proxy",
+            "--sink", "sink_asma.chat",
+            "--sink-table", "adopus-replica.customer_user",
+            "--add-column-template", "source_table",
+        )
+        assert add_template_result.returncode == 0
+
+        yaml_text = _read_yaml(isolated_project)
+        assert "column_templates" in yaml_text
+        assert "template: source_table" in yaml_text
 
 
 class TestCliSinkRemoveTable:
@@ -744,3 +845,47 @@ class TestCliManageServiceCompletions:
         )
         out = result.stdout
         assert "--sink-schema" in out
+
+    def test_add_column_template_suggests_templates_from_services_schemas(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Template key completion reads services/_schemas/column-templates.yaml."""
+        from cdc_generator.core import column_templates as column_templates_module
+
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        column_templates_module.clear_cache()
+
+        _create_project(isolated_project, with_sink=True)
+        schemas_dir = isolated_project / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True, exist_ok=True)
+        (schemas_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  source_table:\n"
+            "    name: _source_table\n"
+            "    type: text\n"
+            "    value: meta(\"table\")\n"
+            "  sync_timestamp:\n"
+            "    name: _synced_at\n"
+            "    type: timestamptz\n"
+            "    value: now()\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc manage-services config "
+                + "--service proxy "
+                + "--sink sink_asma.chat "
+                + "--sink-table public.users "
+                + "--add-column-template s"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "source_table" in out
+        assert "sync_timestamp" in out

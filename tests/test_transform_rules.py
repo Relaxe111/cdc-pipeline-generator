@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest  # type: ignore[import-not-found]
+from cdc_generator.core import transform_rules as transform_rules_module
 
 from cdc_generator.core.transform_rules import (
     _parse_conditions,
@@ -258,6 +259,50 @@ class TestGetRules:
         error = validate_rule_reference("nonexistent")
         assert error is not None
         assert "nonexistent" in error
+
+    def test_loads_from_services_schemas_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Default loader reads services/_schemas/transform-rules.yaml."""
+        set_rules_path(tmp_path / "nonexistent.yaml")
+        monkeypatch.setattr(transform_rules_module, "_rules_file", None)
+        clear_cache()
+
+        schemas_dir = tmp_path / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True)
+        (schemas_dir / "transform-rules.yaml").write_text(
+            "rules:\n"
+            "  active_filter:\n"
+            "    type: filter\n"
+            "    conditions:\n"
+            "      - when: this.is_active == true\n"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        keys = list_rule_keys()
+        assert "active_filter" in keys
+
+    def test_falls_back_to_legacy_service_schemas(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Loader falls back to service-schemas/transform-rules.yaml."""
+        set_rules_path(tmp_path / "nonexistent.yaml")
+        monkeypatch.setattr(transform_rules_module, "_rules_file", None)
+        clear_cache()
+
+        legacy_dir = tmp_path / "service-schemas"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "transform-rules.yaml").write_text(
+            "rules:\n"
+            "  keep_all:\n"
+            "    type: filter\n"
+            "    conditions:\n"
+            "      - when: this.id != null\n"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        keys = list_rule_keys()
+        assert "keep_all" in keys
 
     def test_caching(self, rules_file: Path) -> None:
         r1 = get_rules()

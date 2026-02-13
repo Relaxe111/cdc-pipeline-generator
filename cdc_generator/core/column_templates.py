@@ -24,6 +24,10 @@ from pathlib import Path
 from typing import cast
 
 from cdc_generator.helpers.helpers_logging import print_error, print_warning
+from cdc_generator.helpers.service_schema_paths import (
+    get_schema_roots,
+    get_schema_write_root,
+)
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 # ---------------------------------------------------------------------------
@@ -78,7 +82,13 @@ def get_templates_path() -> Path:
         return _templates_file
     from cdc_generator.helpers.service_config import get_project_root
 
-    return get_project_root() / "service-schemas" / "column-templates.yaml"
+    project_root = get_project_root()
+    for schema_root in get_schema_roots(project_root):
+        candidate = schema_root / "column-templates.yaml"
+        if candidate.exists():
+            return candidate
+
+    return get_schema_write_root(project_root) / "column-templates.yaml"
 
 
 def set_templates_path(path: Path) -> None:

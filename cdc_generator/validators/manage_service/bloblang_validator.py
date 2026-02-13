@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import tempfile
+import os
 from pathlib import Path
 from typing import cast
 
@@ -15,8 +16,31 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.core.source_ref_resolver import is_source_ref
 from cdc_generator.helpers.service_config import get_project_root
-from cdc_generator.helpers.service_schema_paths import get_schema_write_root
+from cdc_generator.helpers.service_schema_paths import (
+    get_schema_roots,
+    get_schema_write_root,
+)
+from cdc_generator.validators.bloblang_parser import uses_environment_variables
+
+
+def _resolve_shared_schema_file(filename: str) -> Path | None:
+    """Resolve shared schema file across preferred and legacy schema roots."""
+    project_root = get_project_root()
+    for schema_root in get_schema_roots(project_root):
+        candidate = schema_root / filename
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _display_path(path: Path) -> str:
+    """Return project-relative display path when possible."""
+    try:
+        return str(path.relative_to(get_project_root()))
+    except ValueError:
+        return str(path)
 
 
 def check_rpk_available() -> bool:
@@ -46,7 +70,16 @@ def validate_bloblang_expression(
     Returns:
         tuple: (is_valid, error_message)
     """
+    tmp_path: str | None = None
+    saved_env: dict[str, str | None] = {}
+
     try:
+        # Set dummy env vars so lint can parse ${VAR} expressions.
+        for var in uses_environment_variables(expression):
+            saved_env[var] = os.environ.get(var)
+            if var not in os.environ:
+                os.environ[var] = "__LINT_PLACEHOLDER__"
+
         # Create pipeline with literal block scalar to preserve line numbers
         # The | in YAML preserves newlines exactly
         pipeline_yaml = f"""input:
@@ -73,8 +106,6 @@ output:
             text=True,
             check=False,
         )
-
-        Path(tmp_path).unlink()
 
         if result.returncode == 0:
             return True, None
@@ -115,6 +146,14 @@ output:
 
     except Exception as e:
         return False, f"Validation error: {e}"
+    finally:
+        if tmp_path is not None:
+            Path(tmp_path).unlink(missing_ok=True)
+        for var, original in saved_env.items():
+            if original is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = original
 
 
 def validate_column_templates_bloblang(
@@ -128,9 +167,9 @@ def validate_column_templates_bloblang(
     Returns:
         tuple: (valid_count, error_count)
     """
-    templates_file = Path("service-schemas") / "column-templates.yaml"
+    templates_file = _resolve_shared_schema_file("column-templates.yaml")
 
-    if not templates_file.exists():
+    if templates_file is None:
         print_warning(f"No column-templates.yaml found for service {service}")
         return 0, 0
 
@@ -161,6 +200,13 @@ def validate_column_templates_bloblang(
                 continue
 
             value = str(raw_value)
+
+            # Source refs are resolved later (not Bloblang), e.g. {asma.sources.*.key}
+            if is_source_ref(value):
+                print_success(f"  ✓ {key}: {value[:50]}... (source-ref)")
+                valid_count += 1
+                continue
+
             context = f"column_template: {key}"
             is_valid, error_msg = validate_bloblang_expression(value, context)
 
@@ -171,7 +217,7 @@ def validate_column_templates_bloblang(
                 print_error(f"  ✗ {key}: {value[:50]}...")
                 if error_msg:
                     # Show clickable link to the file
-                    print_error("    service-schemas/column-templates.yaml")
+                    print_error(f"    {_display_path(templates_file)}")
                     print_error(f"    {error_msg}")
                 error_count += 1
 
@@ -193,9 +239,9 @@ def validate_transform_rules_bloblang(
     Returns:
         tuple: (valid_count, error_count)
     """
-    transform_file = Path("service-schemas") / "transform-rules.yaml"
+    transform_file = _resolve_shared_schema_file("transform-rules.yaml")
 
-    if not transform_file.exists():
+    if transform_file is None:
         print_warning(f"No transform-rules.yaml found for service {service}")
         return 0, 0
 
@@ -233,7 +279,7 @@ def validate_transform_rules_bloblang(
                 print_error(f"  ✗ {key}: {mapping[:50]}...")
                 if error_msg:
                     # Show clickable link to the file
-                    print_error("    service-schemas/transform-rules.yaml")
+                    print_error(f"    {_display_path(transform_file)}")
                     print_error(f"    {error_msg}")
                 error_count += 1
 

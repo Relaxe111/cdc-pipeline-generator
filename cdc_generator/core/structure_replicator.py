@@ -1,6 +1,8 @@
 """Replicate source table structure to sink with type mapping.
 
-Reads source schema definitions from service-schemas/{service}/{schema}/{table}.yaml
+Reads source schema definitions from:
+    - services/_schemas/{service}/{schema}/{table}.yaml (preferred)
+    - service-schemas/{service}/{schema}/{table}.yaml (legacy)
 and generates CREATE TABLE DDL for the sink database, applying type conversion
 via adapter mapping files.
 
@@ -92,18 +94,24 @@ class ReplicationConfig:
 
 
 def _find_schema_dir() -> Path | None:
-    """Find the service-schemas directory by searching upward from CWD.
+    """Find schema root by searching upward from CWD.
 
-    Looks for service-schemas/ in current directory and parent directories.
+    Priority per directory level:
+    1) services/_schemas (preferred)
+    2) service-schemas (legacy)
 
     Returns:
-        Path to service-schemas directory, or None if not found.
+        Path to schema root, or None if not found.
     """
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        candidate = parent / "service-schemas"
-        if candidate.is_dir():
-            return candidate
+        preferred = parent / "services" / "_schemas"
+        if preferred.is_dir():
+            return preferred
+
+        legacy = parent / "service-schemas"
+        if legacy.is_dir():
+            return legacy
     return None
 
 
