@@ -1,4 +1,4 @@
-# Streaming Alternatives: Bytewax & Materialize
+# Streaming Alternatives: Bytewax, Materialize & Vector
 
 > **Status:** Research & evaluation phase — neither technology is currently in use.
 > **Last updated:** February 2025
@@ -7,7 +7,7 @@
 
 ## Table of Contents
 
-- [Streaming Alternatives: Bytewax \& Materialize](#streaming-alternatives-bytewax--materialize)
+- [Streaming Alternatives: Bytewax, Materialize \& Vector](#streaming-alternatives-bytewax-materialize--vector)
   - [Table of Contents](#table-of-contents)
   - [Current Architecture](#current-architecture)
   - [Bytewax](#bytewax)
@@ -31,6 +31,13 @@
     - [What Materialize Replaces](#what-materialize-replaces)
     - [What Materialize Does NOT Replace](#what-materialize-does-not-replace)
     - [When to Introduce Materialize](#when-to-introduce-materialize)
+  - [Vector](#vector)
+    - [What Is Vector](#what-is-vector)
+    - [Vector Strengths](#vector-strengths)
+    - [Vector Potential Use Cases](#vector-potential-use-cases)
+    - [What Vector Replaces](#what-vector-replaces)
+    - [What Vector Does NOT Replace](#what-vector-does-not-replace)
+    - [When to Introduce Vector](#when-to-introduce-vector)
   - [Comparison Matrix](#comparison-matrix)
   - [Phased Introduction Plan](#phased-introduction-plan)
     - [Phase 0 — Current State (Now)](#phase-0--current-state-now)
@@ -42,6 +49,7 @@
     - [Must-Have Before Adopting](#must-have-before-adopting)
     - [Bytewax Adoption Checklist](#bytewax-adoption-checklist)
     - [Materialize Adoption Checklist](#materialize-adoption-checklist)
+    - [Vector Adoption Checklist](#vector-adoption-checklist)
   - [References](#references)
 
 ---
@@ -269,21 +277,91 @@ Issues appear in real time as bad data flows through.
 
 ---
 
+## Vector
+
+### What Is Vector
+
+[Vector](https://vector.dev/) is a **high-performance observability data pipeline** written in Rust. It is designed for collecting, transforming, and routing logs/metrics/traces with low overhead.
+
+In our context, Vector is not a replacement for CDC itself; it is a strong candidate for **pipeline telemetry and event diagnostics transport**.
+
+**Key characteristics:**
+- Rust-based, low CPU and memory footprint
+- Very high throughput, backpressure-aware buffering
+- Enrichment/transforms via VRL (Vector Remap Language)
+- Many sources/sinks: Kafka, HTTP, files, OpenTelemetry, Elasticsearch, S3, ClickHouse, etc.
+- Built-in delivery guarantees, retries, disk buffers
+
+### Vector Strengths
+
+| Strength | Why It Matters for Us |
+|----------|----------------------|
+| **Low overhead** | Good fit for always-on telemetry pipelines in production |
+| **Excellent routing** | Can fan out pipeline diagnostics to multiple backends (Kafka, S3, Elastic, etc.) |
+| **Strong reliability** | Backpressure + buffering + retries reduce observability data loss |
+| **VRL transforms** | Can normalize/shape tracing events before storage |
+| **Operational maturity** | Widely used for log/metric forwarding at scale |
+
+### Vector Potential Use Cases
+
+1. **CDC tracing transport layer**
+  - Ship sampled trace events (from source/sink pipelines) to a dedicated observability stream.
+  - Route same data to PostgreSQL + object storage (cold retention) + alerting sink.
+
+2. **Unified operational telemetry**
+  - Centralize Redpanda Connect logs, health metrics, and pipeline events.
+  - Build one ingestion path for dashboards and alerts.
+
+3. **Cost control for observability**
+  - Apply filtering/sampling at ingestion time.
+  - Keep high-value events hot; archive full raw events cheaply.
+
+### What Vector Replaces
+
+- **Ad-hoc telemetry forwarders** (custom scripts/sidecars for logs and diagnostics)
+- **Part of hook-dispatch plumbing** for pure routing/filtering use cases
+
+### What Vector Does NOT Replace
+
+- **CDC source capture** from MSSQL/PG (keep Redpanda Connect/Debezium)
+- **Business sink replication** into target DB (Vector is not a CDC merge engine)
+- **Streaming SQL analytics layer** (Materialize still fills that role)
+
+### When to Introduce Vector
+
+**Introduce when ANY of these triggers occur:**
+
+| Trigger | Signal |
+|---------|--------|
+| **Telemetry sprawl** | Multiple custom scripts are forwarding logs/traces inconsistently |
+| **Observability cost pressure** | Need ingestion filtering/sampling/routing to control storage cost |
+| **Reliability issues in monitoring path** | Lost diagnostics during incidents due to weak buffering/retry |
+| **Need multi-sink diagnostics** | Same trace event must go to DB + object storage + alert stream |
+
+**Do NOT introduce for:**
+- Replacing CDC replication logic
+- Replacing Kafka broker
+- Solving SQL analytics/query needs
+
+**Estimated effort to prototype:** 3-5 days for telemetry routing PoC (Kafka source → Vector transform → multi-sink output).
+
+---
+
 ## Comparison Matrix
 
-| Dimension | Redpanda Connect (current) | Bytewax | Materialize |
-|-----------|---------------------------|---------|-------------|
-| **Primary role** | CDC source + sink connector | Stream processor (sink-side) | Streaming SQL query engine |
-| **Language** | YAML + Bloblang | Python | SQL |
-| **CDC source capture** | ✅ Built-in (MSSQL, PG) | ❌ No CDC connectors | ⚠️ PG CDC only (no MSSQL) |
-| **Sink to PostgreSQL** | ✅ Row-level INSERT | ✅ Binary COPY (10-50× faster) | ❌ Read-only views |
-| **Complex transforms** | ⚠️ Limited (Bloblang) | ✅ Full Python | ✅ Full SQL |
-| **Joins / aggregations** | ❌ Not supported | ✅ Stateful dataflows | ✅ Materialized views |
-| **Cache invalidation** | ❌ Not built-in | ✅ Custom Python hooks | ✅ SUBSCRIBE |
-| **Deployment** | Docker container | Docker / Python process | Managed cloud / Docker |
-| **Operational complexity** | Low | Medium | Medium-High |
-| **Learning curve for us** | Already known | Low (Python) | Medium (streaming SQL concepts) |
-| **Maturity** | Production-proven | Growing (v0.x → v1.x) | Production-ready (cloud) |
+| Dimension | Redpanda Connect (current) | Bytewax | Materialize | Vector |
+|-----------|---------------------------|---------|-------------|--------|
+| **Primary role** | CDC source + sink connector | Stream processor (sink-side) | Streaming SQL query engine | Telemetry/log routing pipeline |
+| **Language** | YAML + Bloblang | Python | SQL | TOML + VRL |
+| **CDC source capture** | ✅ Built-in (MSSQL, PG) | ❌ No CDC connectors | ⚠️ PG CDC only (no MSSQL) | ❌ Not a CDC capture tool |
+| **Sink to PostgreSQL** | ✅ Row-level INSERT | ✅ Binary COPY (10-50× faster) | ❌ Read-only views | ⚠️ Can write events, not CDC merge semantics |
+| **Complex transforms** | ⚠️ Limited (Bloblang) | ✅ Full Python | ✅ Full SQL | ✅ Strong event transforms (VRL) |
+| **Joins / aggregations** | ❌ Not supported | ✅ Stateful dataflows | ✅ Materialized views | ❌ Not a stream compute engine |
+| **Cache invalidation** | ❌ Not built-in | ✅ Custom Python hooks | ✅ SUBSCRIBE | ⚠️ Routing possible, logic limited |
+| **Deployment** | Docker container | Docker / Python process | Managed cloud / Docker | Docker / binary agent |
+| **Operational complexity** | Low | Medium | Medium-High | Low-Medium |
+| **Learning curve for us** | Already known | Low (Python) | Medium (streaming SQL concepts) | Low-Medium (VRL) |
+| **Maturity** | Production-proven | Growing (v0.x → v1.x) | Production-ready (cloud) | Production-proven |
 
 ---
 
@@ -346,6 +424,7 @@ Kafka → Bytewax Sink → PostgreSQL (operational replica)
 ```
 Source DBs → CDC → Kafka → Bytewax (sink + hooks)
                          → Materialize (analytics)
+                         → Vector (telemetry routing)
                          → Other consumers (search index, data lake, etc.)
 ```
 
@@ -380,6 +459,14 @@ Before introducing either technology, evaluate against these criteria:
 - [ ] Validated Kafka source connector configuration
 - [ ] Assessed operational overhead of running another stateful service
 
+### Vector Adoption Checklist
+
+- [ ] Identified telemetry flows currently handled by custom scripts/sidecars
+- [ ] Defined required sinks (DB, object storage, alerts, search)
+- [ ] Designed sampling and retention policy for diagnostics data
+- [ ] Validated buffering/retry behavior under broker outage tests
+- [ ] Confirmed observability schema/versioning for long-term compatibility
+
 ---
 
 ## References
@@ -388,5 +475,7 @@ Before introducing either technology, evaluate against these criteria:
 - [Bytewax GitHub](https://github.com/bytewax/bytewax)
 - [Materialize Documentation](https://materialize.com/docs/)
 - [Materialize GitHub](https://github.com/MaterializeInc/materialize)
+- [Vector Documentation](https://vector.dev/docs/)
+- [Vector GitHub](https://github.com/vectordotdev/vector)
 - [PostgreSQL Binary COPY Protocol](https://www.postgresql.org/docs/current/sql-copy.html)
 - [Redpanda Connect Documentation](https://docs.redpanda.com/redpanda-connect/)
