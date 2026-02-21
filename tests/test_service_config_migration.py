@@ -164,41 +164,41 @@ adopus:
 
 
 def test_get_all_customers_reads_derived_customers(
-        monkeypatch: MonkeyPatch,
-        tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-        services_dir = tmp_path / "services"
-        services_dir.mkdir(parents=True)
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
 
-        _write_yaml(
-                services_dir / "adopus.yaml",
-                """
+    _write_yaml(
+        services_dir / "adopus.yaml",
+        """
 adopus:
-    server_group: adopus
-    shared:
-        source_tables: []
+  server_group: adopus
+  shared:
+    source_tables: []
 """.strip()
-                + "\n",
-        )
+        + "\n",
+    )
 
-        _write_yaml(
-                tmp_path / "source-groups.yaml",
-                """
+    _write_yaml(
+        tmp_path / "source-groups.yaml",
+        """
 adopus:
-    server_group_type: db-per-tenant
-    sources:
-        AVProd:
-            default:
-                server: default
-                database: AdOpusAVProd
-        Avansas:
-            default:
-                server: default
-                database: AdOpusTest
+  server_group_type: db-per-tenant
+  sources:
+    AVProd:
+      default:
+        server: default
+        database: AdOpusAVProd
+    Avansas:
+      default:
+        server: default
+        database: AdOpusTest
 """.strip()
-                + "\n",
-        )
+        + "\n",
+    )
 
-        monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(tmp_path)
 
-        assert get_all_customers() == ["avansas", "avprod"]
+    assert get_all_customers() == ["avansas", "avprod"]
