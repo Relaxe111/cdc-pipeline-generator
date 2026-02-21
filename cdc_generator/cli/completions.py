@@ -148,6 +148,11 @@ def _get_param(ctx: click.Context, name: str) -> str:
     val = ctx.params.get(name)
     if val is None:
         return ""
+    if isinstance(val, tuple | list):
+        values = [str(item) for item in val if str(item)]
+        if not values:
+            return ""
+        return values[0]
     return str(val)
 
 
@@ -167,7 +172,23 @@ def _get_service(ctx: click.Context) -> str:
         for arg in ctx.args:
             if not arg.startswith("-"):
                 return arg
-    return svc
+
+    if svc:
+        return svc
+
+    return _autodetect_single_service_name()
+
+
+def _autodetect_single_service_name() -> str:
+    """Return the only existing service name when exactly one is present."""
+    from cdc_generator.helpers.autocompletions.services import (
+        list_existing_services,
+    )
+
+    existing_services = _safe_call(list_existing_services)
+    if len(existing_services) == 1:
+        return existing_services[0]
+    return ""
 
 
 def _get_sink_key_with_default(ctx: click.Context) -> str:
@@ -336,6 +357,24 @@ def complete_existing_services(
     )
 
     return _filter(_safe_call(list_existing_services), incomplete)
+
+
+def complete_service_positional(
+    ctx: click.Context,
+    param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete positional service context-aware for manage-services config.
+
+    Click treats extra values after options as positional completions, but
+    argparse may still consume them as option values (e.g. --add-source-tables).
+    In that case, keep completing source tables instead of service names.
+    """
+    add_source_table_value = ctx.params.get("add_source_table")
+    if add_source_table_value:
+        return complete_available_tables(ctx, param, incomplete)
+
+    return complete_existing_services(ctx, param, incomplete)
 
 
 def complete_schema_services(
@@ -637,10 +676,33 @@ def complete_available_tables(
         return []
 
     from cdc_generator.helpers.autocompletions.tables import (
+        list_source_tables_for_service,
         list_tables_for_service,
     )
 
-    return _filter(_safe_call(list_tables_for_service, service), incomplete)
+    candidates = _safe_call(list_tables_for_service, service)
+
+    selected_tables = {
+        table.casefold()
+        for table in _get_multi_param_values(ctx, "add_source_table")
+        if table.strip()
+    }
+
+    existing_source_tables = {
+        table.casefold()
+        for table in _safe_call(list_source_tables_for_service, service)
+        if table.strip()
+    }
+
+    excluded_tables = selected_tables.union(existing_source_tables)
+
+    filtered_candidates = [
+        table_name
+        for table_name in candidates
+        if table_name.casefold() not in excluded_tables
+    ]
+
+    return _filter(filtered_candidates, incomplete)
 
 
 def complete_source_tables(

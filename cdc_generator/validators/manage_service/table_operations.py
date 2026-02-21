@@ -13,6 +13,20 @@ from cdc_generator.helpers.service_config import get_project_root, load_service_
 from .config import save_service_config
 
 
+def _sort_source_tables_in_config(config: dict[str, object]) -> None:
+    """Sort source.tables keys alphabetically in-place."""
+    source_raw = config.get('source')
+    if not isinstance(source_raw, dict):
+        return
+
+    tables_raw = source_raw.get('tables')
+    if not isinstance(tables_raw, dict):
+        return
+
+    sorted_tables = dict(sorted(tables_raw.items(), key=lambda entry: str(entry[0]).casefold()))
+    source_raw['tables'] = sorted_tables
+
+
 def get_primary_key_from_schema(service: str, schema: str, table: str) -> str | None:
     """Auto-detect primary key from table schema file."""
     try:
@@ -77,6 +91,7 @@ def add_table_to_service(service: str, schema: str, table: str, primary_key: str
                     table_def['include_columns'] = sorted(set(existing_include + track_columns))
 
                 config['source']['tables'][qualified_name] = table_def
+                _sort_source_tables_in_config(config)
 
                 if save_service_config(service, config):
                     print_success(f"Updated columns for table {qualified_name} in {service}.yaml")
@@ -96,6 +111,7 @@ def add_table_to_service(service: str, schema: str, table: str, primary_key: str
             table_def['include_columns'] = track_columns
 
         config['source']['tables'][qualified_name] = table_def
+        _sort_source_tables_in_config(config)
 
         # Save config
         if save_service_config(service, config):

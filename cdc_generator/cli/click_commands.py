@@ -39,6 +39,7 @@ from cdc_generator.cli.completions import (
     complete_custom_table_columns,
     complete_custom_tables,
     complete_existing_services,
+    complete_service_positional,
     complete_from_table,
     complete_include_sink_columns,
     complete_map_column,
@@ -106,7 +107,7 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 )
 # -- Core --
 @click.argument("service_positional", required=False, default=None,
-                shell_complete=complete_existing_services)
+                shell_complete=complete_service_positional)
 @click.option("--service", shell_complete=complete_existing_services,
               help="Existing service name")
 @click.option("--create-service", shell_complete=complete_available_services,
@@ -121,8 +122,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--list-source-tables", is_flag=True,
               help="List all source tables in service")
 @click.option("--add-source-table", shell_complete=complete_available_tables,
+              multiple=True,
               help="Add single table (schema.table)")
-@click.option("--add-source-tables", help="Add multiple tables (space-separated)")
 @click.option("--remove-table", shell_complete=complete_source_tables,
               help="Remove table from service")
 @click.option("--source-table", shell_complete=complete_source_tables,

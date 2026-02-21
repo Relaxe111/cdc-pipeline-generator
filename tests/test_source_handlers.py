@@ -123,6 +123,26 @@ class TestAddNewTable:
         result = add_table_to_service("missing", "public", "t", None, None, None)
         assert result is False
 
+    def test_add_new_table_sorts_source_tables_keys(
+        self, project_dir: Path,
+    ) -> None:
+        """Adding a table keeps source.tables sorted alphabetically."""
+        service_file = project_dir / "services" / "proxy.yaml"
+        service_file.write_text(
+            "proxy:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      public.zeta: {}\n"
+            "      public.beta: {}\n"
+        )
+
+        result = add_table_to_service("proxy", "public", "alpha", None, None, None)
+
+        assert result is True
+        saved = load_yaml_file(service_file)
+        table_keys = list(saved["proxy"]["source"]["tables"].keys())
+        assert table_keys == ["public.alpha", "public.beta", "public.zeta"]
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # table_operations: remove_table_from_service

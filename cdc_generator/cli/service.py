@@ -74,7 +74,7 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "cdc manage-service --remove-service myservice",
     ),
     "--add-source-table": (
-        "Table name to add (format: schema.table)",
+        "Table name to add (format: schema.table, repeat flag for multiple)",
         "cdc manage-service --service adopus --add-source-table dbo.Actor",
     ),
     "--remove-table": (
@@ -256,7 +256,7 @@ Examples:
   # Add tables to service
   cdc manage-service --service adopus --add-source-table dbo.Actor
   cdc manage-service --service adopus \\
-      --add-source-tables dbo.Actor dbo.Fraver
+      --add-source-table dbo.Actor --add-source-table dbo.Fraver
 
   # Remove table from service
   cdc manage-service --service adopus --remove-table dbo.Actor
@@ -423,12 +423,14 @@ def _build_parser() -> ServiceArgumentParser:
     )
     parser.add_argument(
         "--add-source-table",
-        help="Add single table (format: schema.table)",
+        action="append",
+        metavar="TABLE",
+        help="Add source table (repeatable, format: schema.table)",
     )
     parser.add_argument(
         "--add-source-tables",
         nargs="+",
-        help="Add multiple tables (space-separated)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--remove-table",
@@ -857,11 +859,13 @@ def _dispatch_source(args: argparse.Namespace) -> int | None:
             return handle_sink_add_table(args)
         return handle_update_source_table(args)
 
+    if args.add_source_table:
+        if args.add_source_tables:
+            args.add_source_table.extend(args.add_source_tables)
+        return handle_add_source_table(args)
+
     if args.add_source_tables:
         return handle_add_source_tables(args)
-
-    if args.add_source_table:
-        return handle_add_source_table(args)
 
     if args.remove_table:
         return handle_remove_table(args)

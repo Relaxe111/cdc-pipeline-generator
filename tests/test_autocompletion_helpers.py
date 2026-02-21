@@ -736,3 +736,177 @@ class TestFanoutSinkSchemaCompletion:
 
         assert "public.customer_user.user_id" not in completions
         assert "public.customer_user.customer_id" in completions
+
+
+class TestSingleServiceAutoDetectCompletion:
+    """Completions should infer service when only one exists."""
+
+    @staticmethod
+    def _complete(partial_cmd: str) -> list[str]:
+        """Return completion values for *partial_cmd* via Click API."""
+        import shlex
+
+        from click.shell_completion import ShellComplete
+
+        from cdc_generator.cli.commands import _click_cli
+
+        cli = _click_cli
+        parts = shlex.split(partial_cmd)
+        if parts and parts[0] == "cdc":
+            parts = parts[1:]
+        incomplete = parts.pop() if parts else ""
+        comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
+        return [c.value for c in comp.get_completions(parts, incomplete)]
+
+    def test_add_source_table_completes_without_explicit_service(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When only one service exists, --add-source-table completion works standalone."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+            schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+            schema_dir.mkdir(parents=True)
+            (schema_dir / "Actor.yaml").write_text("columns:\n  - name: actno\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --add-source-table dbo."
+            )
+
+            assert "dbo.Actor" in completions
+
+    def test_add_source_table_repeatable_completes_without_explicit_service(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When only one service exists, repeatable --add-source-table completion works."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+            schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+            schema_dir.mkdir(parents=True)
+            (schema_dir / "Actor.yaml").write_text("columns:\n  - name: actno\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --add-source-table dbo."
+            )
+
+            assert "dbo.Actor" in completions
+
+    def test_add_source_table_second_repeat_keeps_table_completion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Second repeated --add-source-table completion should suggest tables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+            schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+            schema_dir.mkdir(parents=True)
+            (schema_dir / "Address.yaml").write_text("columns:\n  - name: id\n")
+            (schema_dir / "Actor.yaml").write_text("columns:\n  - name: actno\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --add-source-table dbo.Address --add-source-table dbo."
+            )
+
+            assert "dbo.Actor" in completions
+            assert "adopus" not in completions
+
+    def test_add_source_table_excludes_already_selected_tables(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Repeated --add-source-table completion excludes already selected tables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+            schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+            schema_dir.mkdir(parents=True)
+            (schema_dir / "Actor.yaml").write_text("columns:\n  - name: actno\n")
+            (schema_dir / "Address.yaml").write_text("columns:\n  - name: id\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config "
+                + "--add-source-table dbo.Actor "
+                + "--add-source-table dbo."
+            )
+
+            assert "dbo.Actor" not in completions
+            assert "dbo.Address" in completions
+
+    def test_add_source_table_excludes_already_configured_source_table(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--add-source-table completion excludes tables already in source.tables."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text(
+                "adopus:\n"
+                "  source:\n"
+                "    tables:\n"
+                "      dbo.Actor: {}\n"
+            )
+
+            schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+            schema_dir.mkdir(parents=True)
+            (schema_dir / "Actor.yaml").write_text("columns:\n  - name: actno\n")
+            (schema_dir / "Address.yaml").write_text("columns:\n  - name: id\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --add-source-table dbo."
+            )
+
+            assert "dbo.Actor" not in completions
+            assert "dbo.Address" in completions
+
+    def test_add_sink_table_completes_without_explicit_service(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When only one service exists, --add-sink-table completion resolves default sink."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+
+            (services_dir / "adopus.yaml").write_text(
+                "adopus:\n"
+                "  source:\n"
+                "    tables: {}\n"
+                "  sinks:\n"
+                "    sink_asma.directory:\n"
+                "      tables: {}\n"
+            )
+
+            target_schema_dir = services_dir / "_schemas" / "directory" / "public"
+            target_schema_dir.mkdir(parents=True)
+            (target_schema_dir / "users.yaml").write_text("columns:\n  - name: id\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --add-sink-table public."
+            )
+
+            assert "public.users" in completions
