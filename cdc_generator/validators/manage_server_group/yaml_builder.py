@@ -35,12 +35,25 @@ def build_db_shared_structure(
 
         # Store database for this environment
         if env:
+            env_entry: dict[str, Any] = {
+                'server': server_name,
+                'database': db['name'],
+                'table_count': db.get('table_count', 0)
+            }
+            custom_values = db.get('source_custom_values')
+            if isinstance(custom_values, dict):
+                for key_raw, value_raw in custom_values.items():
+                    key = str(key_raw).strip()
+                    if not key:
+                        continue
+                    if value_raw is None:
+                        env_entry[key] = None
+                        continue
+                    value = str(value_raw).strip()
+                    env_entry[key] = value if value else None
+
             if env not in source_data[service]['environments']:
-                source_data[service]['environments'][env] = {
-                    'server': server_name,
-                    'database': db['name'],
-                    'table_count': db.get('table_count', 0)
-                }
+                source_data[service]['environments'][env] = env_entry
             else:
                 # Multiple databases for same source+env
                 existing = source_data[service]['environments'][env]
@@ -73,15 +86,27 @@ def build_db_per_tenant_structure(
     for db in databases:
         customer = db.get('customer', db['name'])
         server_name = db.get('server', 'default')
+        env_entry: dict[str, Any] = {
+            'server': server_name,
+            'database': db['name'],
+            'table_count': db.get('table_count', 0)
+        }
+        custom_values = db.get('source_custom_values')
+        if isinstance(custom_values, dict):
+            for key_raw, value_raw in custom_values.items():
+                key = str(key_raw).strip()
+                if not key:
+                    continue
+                if value_raw is None:
+                    env_entry[key] = None
+                    continue
+                value = str(value_raw).strip()
+                env_entry[key] = value if value else None
 
         if customer not in source_data:
             source_data[customer] = {
                 'schemas': set(db.get('schemas', [])),
-                'default': {
-                    'server': server_name,
-                    'database': db['name'],
-                    'table_count': db.get('table_count', 0)
-                }
+                'default': env_entry
             }
         else:
             # Merge schemas

@@ -203,6 +203,88 @@ def _handle_db_definitions(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def _handle_add_source_custom_key(args: argparse.Namespace) -> int:
+    """Add or update SQL-based source custom key definition."""
+    from cdc_generator.validators.manage_server_group.config import (
+        get_single_server_group,
+        load_server_groups,
+    )
+    from cdc_generator.validators.manage_server_group.yaml_io import (
+        write_server_group_yaml,
+    )
+
+    key_name = str(args.add_source_custom_key or "").strip()
+    key_value = str(args.custom_key_value or "").strip()
+    exec_type = str(args.custom_key_exec_type or "sql").strip().lower()
+
+    if not key_name:
+        print_error("--add-source-custom-key requires a key name")
+        return 1
+    if not key_value:
+        print_error("--custom-key-value is required with --add-source-custom-key")
+        return 1
+    if exec_type != "sql":
+        print_error("Only --custom-key-exec-type sql is supported")
+        return 1
+
+    try:
+        config = load_server_groups()
+        server_group = get_single_server_group(config)
+    except Exception as exc:
+        print_error(f"Failed to load source groups: {exc}")
+        return 1
+
+    if not server_group:
+        print_error("No source group found in configuration")
+        return 1
+
+    server_group_name = str(server_group.get('name', '')).strip()
+    if not server_group_name:
+        print_error("Failed to determine source group name")
+        return 1
+
+    source_custom_keys_raw = server_group.get("source_custom_keys")
+    source_custom_keys: dict[str, dict[str, str]] = {}
+    if isinstance(source_custom_keys_raw, dict):
+        for existing_key_raw, existing_value_raw in cast(dict[str, object], source_custom_keys_raw).items():
+            existing_key = str(existing_key_raw).strip()
+            if not existing_key:
+                continue
+            if isinstance(existing_value_raw, dict):
+                value_dict = cast(dict[str, object], existing_value_raw)
+                existing_exec = str(value_dict.get("exec_type", "sql")).strip().lower() or "sql"
+                existing_value = str(value_dict.get("value", "")).strip()
+                if existing_value:
+                    source_custom_keys[existing_key] = {
+                        "exec_type": existing_exec,
+                        "value": existing_value,
+                    }
+            elif isinstance(existing_value_raw, str):
+                existing_value = existing_value_raw.strip()
+                if existing_value:
+                    source_custom_keys[existing_key] = {
+                        "exec_type": "sql",
+                        "value": existing_value,
+                    }
+
+    source_custom_keys[key_name] = {
+        "exec_type": exec_type,
+        "value": key_value,
+    }
+    server_group["source_custom_keys"] = source_custom_keys
+
+    try:
+        write_server_group_yaml(server_group_name, server_group)
+    except Exception as exc:
+        print_error(f"Failed to save source-groups.yaml: {exc}")
+        return 1
+
+    print_info(
+        f"Saved source custom key '{key_name}' with exec_type '{exec_type}'"
+    )
+    return 0
+
+
 def main() -> int:
     # Note: .env loading handled by implementations, not generator library
 
@@ -260,6 +342,22 @@ def main() -> int:
     )
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
+    parser.add_argument(
+        "--add-source-custom-key",
+        metavar="KEY",
+        help="Add/update source custom key name used during --update.",
+    )
+    parser.add_argument(
+        "--custom-key-value",
+        metavar="SQL",
+        help="SQL expression/query used to resolve the custom key value.",
+    )
+    parser.add_argument(
+        "--custom-key-exec-type",
+        choices=["sql"],
+        default="sql",
+        help="Execution type for source custom key resolution (currently: sql).",
+    )
 
     # Multi-server management
     parser.add_argument("--add-server", metavar="NAME",
@@ -433,6 +531,9 @@ def main() -> int:
     # Handle add to schema excludes
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
+
+    if args.add_source_custom_key:
+        return _handle_add_source_custom_key(args)
 
     # Handle multi-server management
     if args.add_server:

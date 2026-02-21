@@ -30,6 +30,7 @@ from cdc_generator.cli.completions import (
     complete_add_sink_table,
     complete_available_envs,
     complete_available_services,
+    complete_available_validation_databases,
     complete_available_sink_keys,
     complete_available_tables,
     complete_column_templates,
@@ -110,6 +111,9 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="Existing service name")
 @click.option("--create-service", shell_complete=complete_available_services,
               help="Create service from source-groups.yaml")
+@click.option("--add-validation-database",
+              shell_complete=complete_available_validation_databases,
+              help="Override validation database for create-service")
 @click.option("--remove-service", shell_complete=complete_existing_services,
               help="Remove service and related local configuration")
 @click.option("--server", help="Server name for multi-server setups")
@@ -261,6 +265,13 @@ def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="List current database exclude patterns")
 @click.option("--add-to-schema-excludes",
               help="Add pattern to schema exclude list")
+@click.option("--add-source-custom-key",
+              help="Add/update source custom key name")
+@click.option("--custom-key-value",
+              help="SQL value/query for source custom key")
+@click.option("--custom-key-exec-type",
+              type=click.Choice(["sql"]),
+              help="Execution type for source custom key")
 @click.option("--list-schema-excludes", is_flag=True,
               help="List current schema exclude patterns")
 # -- Environment mappings --
@@ -401,6 +412,13 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Add pattern to database exclude list")
 @click.option("--add-to-schema-excludes",
               help="Add pattern to schema exclude list")
+@click.option("--add-source-custom-key",
+              help="Add/update source custom key name")
+@click.option("--custom-key-value",
+              help="SQL value/query for source custom key")
+@click.option("--custom-key-exec-type",
+              type=click.Choice(["sql"]),
+              help="Execution type for source custom key")
 # -- Server management --
 @click.option("--sink-group",
               shell_complete=complete_sink_group_context_aware,

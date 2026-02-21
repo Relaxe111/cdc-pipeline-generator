@@ -16,6 +16,7 @@ class TestServiceParserHints:
         "flag",
         [
             "--service",
+            "--add-validation-database",
             "--add-source-table",
             "--sink",
             "--from",
@@ -102,6 +103,30 @@ class TestMainServiceAssignment:
         assert result == 0
         dispatched_args = dispatch_mock.call_args.args[0]
         assert dispatched_args.service == "newservice"
+
+    def test_add_validation_database_is_parsed(self) -> None:
+        """--add-validation-database value is available to dispatch."""
+        with patch(
+            "sys.argv",
+            [
+                "manage-service",
+                "--create-service",
+                "adopus",
+                "--add-validation-database",
+                "AdOpusTest",
+            ],
+        ), patch(
+            "cdc_generator.cli.service._auto_detect_service",
+            side_effect=lambda args: args,
+        ), patch(
+            "cdc_generator.cli.service._dispatch",
+            return_value=0,
+        ) as dispatch_mock:
+            result = main()
+
+        assert result == 0
+        dispatched_args = dispatch_mock.call_args.args[0]
+        assert dispatched_args.add_validation_database == "AdOpusTest"
 
     def test_auto_detect_failure_returns_1(self) -> None:
         """main() returns 1 when _auto_detect_service returns None."""

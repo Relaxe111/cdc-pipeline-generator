@@ -6,6 +6,7 @@ handle_no_service, and _auto_detect_service.
 
 import argparse
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -65,6 +66,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "env": "nonprod",
         "save": False,
         "server": None,
+        "add_validation_database": None,
         "create_service": None,
         "validate_config": False,
         "inspect": False,
@@ -189,6 +191,113 @@ class TestHandleCreateService:
         args = _ns(service="newservice", create_service="newservice")
         result = handle_create_service(args)
         assert result == 1
+
+    def test_db_per_tenant_allows_only_server_group_name(
+        self, project_dir: Path,
+    ) -> None:
+        """db-per-tenant service creation allows only server-group level service."""
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  sources:\n"
+            "    AVProd:\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusAVProd\n"
+        )
+
+        args = _ns(service="adopus", create_service="adopus")
+        with patch(
+            "cdc_generator.cli.service_handlers_create.create_service"
+        ) as mock_create:
+            result = handle_create_service(args)
+
+        assert result == 0
+        mock_create.assert_called_once_with("adopus", "adopus", "default", None)
+
+    def test_db_per_tenant_rejects_source_name_as_service(
+        self, project_dir: Path,
+    ) -> None:
+        """db-per-tenant service creation rejects per-source names."""
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  sources:\n"
+            "    AVProd:\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusAVProd\n"
+        )
+
+        args = _ns(service="AVProd", create_service="AVProd")
+        with patch(
+            "cdc_generator.cli.service_handlers_create.create_service"
+        ) as mock_create:
+            result = handle_create_service(args)
+
+        assert result == 1
+        mock_create.assert_not_called()
+
+    def test_create_passes_validation_database_override(
+        self, project_dir: Path,
+    ) -> None:
+        """Forwards --add-validation-database to create_service."""
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  sources:\n"
+            "    AVProd:\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusAVProd\n"
+        )
+
+        args = _ns(
+            service="adopus",
+            create_service="adopus",
+            add_validation_database="AdOpusAVProd",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_create.create_service"
+        ) as mock_create:
+            result = handle_create_service(args)
+
+        assert result == 0
+        mock_create.assert_called_once_with(
+            "adopus",
+            "adopus",
+            "default",
+            "AdOpusAVProd",
+        )
+
+    def test_db_per_tenant_create_does_not_scaffold_customers_block(
+        self, project_dir: Path,
+    ) -> None:
+        """Created db-per-tenant service relies on source-groups for customers."""
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  database_ref: Test\n"
+            "  sources:\n"
+            "    Test:\n"
+            "      schemas:\n"
+            "      - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusTest\n"
+        )
+
+        args = _ns(service="adopus", create_service="adopus")
+        result = handle_create_service(args)
+        assert result == 0
+
+        service_path = project_dir / "services" / "adopus.yaml"
+        content = service_path.read_text(encoding="utf-8")
+        assert "customers:" not in content
 
 
 # ═══════════════════════════════════════════════════════════════════════════

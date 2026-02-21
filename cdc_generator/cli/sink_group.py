@@ -98,6 +98,10 @@ from cdc_generator.helpers.helpers_sink_groups import (
     validate_sink_group_structure,
 )
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.source_custom_keys import (
+    execute_source_custom_keys,
+    normalize_source_custom_keys,
+)
 from cdc_generator.helpers.yaml_loader import ConfigDict, load_yaml_file
 from cdc_generator.validators.manage_server_group.patterns import (
     build_extraction_pattern_config,
@@ -187,6 +191,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--add-to-schema-excludes": (
         "Add schema exclude pattern(s) to sink group",
         "cdc manage-sink-groups --add-to-schema-excludes hdb_catalog",
+    ),
+    "--add-source-custom-key": (
+        "Add or update SQL-based custom key",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma "
+            "--add-source-custom-key customer_id "
+            "--custom-key-value 'SELECT ...' --custom-key-exec-type sql"
+        ),
     ),
 }
 
@@ -754,11 +766,23 @@ def _build_sink_sources_from_databases(
             if schema_name not in existing_schemas:
                 existing_schemas.append(schema_name)
         source_entry["schemas"] = existing_schemas
-        source_entry[env] = {
+        env_entry: dict[str, Any] = {
             "server": server_name,
             "database": database_name,
             "table_count": table_count,
         }
+        custom_values = db.get("source_custom_values")
+        if isinstance(custom_values, dict):
+            for key_raw, value_raw in cast(dict[str, object], custom_values).items():
+                key = str(key_raw).strip()
+                if not key:
+                    continue
+                if value_raw is None:
+                    env_entry[key] = None
+                    continue
+                value = str(value_raw).strip()
+                env_entry[key] = value if value else None
+        source_entry[env] = env_entry
 
     return sources
 
@@ -901,6 +925,19 @@ def handle_update_command(args: argparse.Namespace) -> int:
     except Exception as e:
         print_error(f"Failed to inspect databases for update: {e}")
         return 1
+
+    source_custom_keys = normalize_source_custom_keys(
+        sink_group.get("source_custom_keys", {})
+    )
+    if source_custom_keys:
+        execute_source_custom_keys(
+            databases,
+            db_type=str(sink_type),
+            server_name=server_name,
+            server_config=cast(Any, server_config),
+            source_custom_keys=source_custom_keys,
+            context_label=f"sink-group '{sink_group_name}'",
+        )
 
     updated_sources = _build_sink_sources_from_databases(databases, server_name)
     sink_group_entry = cast(dict[str, Any], sink_groups[sink_group_name])
@@ -1853,16 +1890,77 @@ def _resolve_sink_group_for_pattern_update(
     if sink_group.get("inherits", False):
         source_name = sink_group_name.removeprefix("sink_")
         print_error(
-            f"Cannot modify excludes for '{sink_group_name}'"
+            f"Cannot apply {action_flag} for '{sink_group_name}'"
             + f" — it inherits from source group '{source_name}'"
         )
-        print_info(
-            "Use 'cdc manage-source-groups --add-to-ignore-list'"
-            + " or '--add-to-schema-excludes' on the source group instead."
-        )
+        print_info("Apply this configuration on the source group instead.")
         return 1
 
     return sink_groups, sink_group_name, sink_group, sink_file
+
+
+def handle_add_source_custom_key_command(args: argparse.Namespace) -> int:
+    """Add or update SQL-based source custom key for a sink group."""
+    key_name = str(args.add_source_custom_key or "").strip()
+    key_value = str(args.custom_key_value or "").strip()
+    exec_type = str(args.custom_key_exec_type or "sql").strip().lower()
+
+    if not key_name:
+        print_error("--add-source-custom-key requires a key name")
+        return 1
+    if not key_value:
+        print_error("--custom-key-value is required with --add-source-custom-key")
+        return 1
+    if exec_type != "sql":
+        print_error("Only --custom-key-exec-type sql is supported")
+        return 1
+
+    result = _resolve_sink_group_for_pattern_update(
+        args,
+        action_flag="--add-source-custom-key",
+    )
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group_name, sink_group, sink_file = result
+    sink_group_map = cast(dict[str, Any], sink_group)
+
+    source_custom_keys_raw = sink_group_map.get("source_custom_keys")
+    source_custom_keys: dict[str, dict[str, str]] = {}
+    if isinstance(source_custom_keys_raw, dict):
+        for existing_key_raw, existing_value_raw in cast(dict[str, object], source_custom_keys_raw).items():
+            existing_key = str(existing_key_raw).strip()
+            if not existing_key:
+                continue
+            if isinstance(existing_value_raw, dict):
+                value_dict = cast(dict[str, object], existing_value_raw)
+                existing_exec = str(value_dict.get("exec_type", "sql")).strip().lower() or "sql"
+                existing_value = str(value_dict.get("value", "")).strip()
+                if existing_value:
+                    source_custom_keys[existing_key] = {
+                        "exec_type": existing_exec,
+                        "value": existing_value,
+                    }
+            elif isinstance(existing_value_raw, str):
+                existing_value = existing_value_raw.strip()
+                if existing_value:
+                    source_custom_keys[existing_key] = {
+                        "exec_type": "sql",
+                        "value": existing_value,
+                    }
+
+    source_custom_keys[key_name] = {
+        "exec_type": exec_type,
+        "value": key_value,
+    }
+    sink_group_map["source_custom_keys"] = source_custom_keys
+    sink_groups[sink_group_name] = cast(SinkGroupConfig, sink_group_map)
+    save_sink_groups(sink_groups, sink_file)
+
+    print_success(
+        f"Saved source custom key '{key_name}' for sink group '{sink_group_name}'"
+    )
+    return 0
 
 
 def _parse_csv_patterns(raw_value: str) -> list[str]:
@@ -2181,6 +2279,31 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
             f" (comma-separated supported){Colors.RESET}"
         ),
     )
+    parser.add_argument(
+        "--add-source-custom-key",
+        metavar="KEY",
+        help=(
+            f"{Colors.YELLOW}Add/update source custom key resolved during --update"
+            f"{Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--custom-key-value",
+        metavar="SQL",
+        help=(
+            f"{Colors.YELLOW}SQL expression/query used to resolve custom key value"
+            f"{Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--custom-key-exec-type",
+        choices=["sql"],
+        default="sql",
+        help=(
+            f"{Colors.YELLOW}Execution type for custom key (currently: sql)"
+            f"{Colors.RESET}"
+        ),
+    )
 
     # Server management
     parser.add_argument(
@@ -2309,6 +2432,10 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "add_to_schema_excludes": (
             args.add_to_schema_excludes,
             lambda: handle_add_to_schema_excludes_command(args),
+        ),
+        "add_source_custom_key": (
+            args.add_source_custom_key,
+            lambda: handle_add_source_custom_key_command(args),
         ),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "update_server_extraction_patterns": (

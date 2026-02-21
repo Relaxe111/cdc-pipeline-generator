@@ -236,6 +236,123 @@ beta:
 
             assert result == ["directory", "proxy", "tracing"]
 
+    @staticmethod
+    def test_db_per_tenant_returns_server_group_name(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """db-per-tenant completion proposes server-group name, not source names."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "source-groups.yaml").write_text(
+                """
+adopus:
+  pattern: db-per-tenant
+  sources:
+    AVProd:
+      database_name: AdOpusAVProd
+    Brukerforum:
+      database_name: AdOpusBrukerforum
+"""
+            )
+
+            services_dir = workspace / "services"
+            services_dir.mkdir()
+
+            monkeypatch.chdir(workspace)
+
+            from cdc_generator.helpers.autocompletions.services import (
+                list_available_services_from_server_group,
+            )
+
+            result = list_available_services_from_server_group()
+
+            assert result == ["adopus"]
+
+    @staticmethod
+    def test_db_per_tenant_hides_existing_server_group_service(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """db-per-tenant completion returns empty when group service already exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "source-groups.yaml").write_text(
+                """
+adopus:
+  pattern: db-per-tenant
+  sources:
+    AVProd:
+      database_name: AdOpusAVProd
+"""
+            )
+
+            services_dir = workspace / "services"
+            services_dir.mkdir()
+            (services_dir / "adopus.yaml").write_text("adopus: {}\n")
+
+            monkeypatch.chdir(workspace)
+
+            from cdc_generator.helpers.autocompletions.services import (
+                list_available_services_from_server_group,
+            )
+
+            result = list_available_services_from_server_group()
+
+            assert result == []
+
+
+class TestListAvailableValidationDatabases:
+    """Tests for list_available_validation_databases()."""
+
+    def test_db_shared_collects_database_names(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Collects flat database_name values from db-shared source entries."""
+        monkeypatch.chdir(temp_workspace)
+
+        from cdc_generator.helpers.autocompletions.services import (
+            list_available_validation_databases,
+        )
+
+        result = list_available_validation_databases("calendar")
+        assert result == ["asma_calendar"]
+
+    @staticmethod
+    def test_db_per_tenant_collects_env_databases(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Collects environment database values for db-per-tenant group service."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            (workspace / "source-groups.yaml").write_text(
+                """
+adopus:
+  pattern: db-per-tenant
+  sources:
+    Test:
+      schemas:
+      - dbo
+      default:
+        server: default
+        database: AdOpusTest
+    AVProd:
+      schemas:
+      - dbo
+      default:
+        server: default
+        database: AdOpusAVProd
+"""
+            )
+            (workspace / "services").mkdir()
+
+            monkeypatch.chdir(workspace)
+
+            from cdc_generator.helpers.autocompletions.services import (
+                list_available_validation_databases,
+            )
+
+            result = list_available_validation_databases("adopus")
+            assert result == ["AdOpusAVProd", "AdOpusTest"]
+
 
 class TestCreateServiceCompletion:
     """Tests for --create-service flag completion."""
@@ -291,6 +408,19 @@ class TestCreateServiceCompletion:
         completions = self._complete("cdc manage-services config --create-service d")
 
         assert "directory" not in completions
+
+    def test_add_validation_database_completion_uses_available_databases(
+        self, temp_workspace: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--add-validation-database completion suggests known source databases."""
+        monkeypatch.chdir(temp_workspace)
+
+        completions = self._complete(
+            "cdc manage-services config --create-service directory "
+            + "--add-validation-database asma_"
+        )
+
+        assert "asma_directory" in completions
 
 
 class TestCustomSinkTableCompletion:

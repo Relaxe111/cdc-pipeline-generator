@@ -245,6 +245,7 @@ class ServerGroupConfig(TypedDict, total=False):
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]
     env_mappings: dict[str, str]           # e.g., {"production": "prod", "staging": "stage"}
+    source_custom_keys: dict[str, dict[str, str]]
 
     # Unified source storage
     # For db-shared: source name = service name

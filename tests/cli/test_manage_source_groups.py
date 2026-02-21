@@ -394,6 +394,45 @@ class TestCliSchemaExcludes:
         assert "pg_catalog" in output
 
 
+class TestCliSourceCustomKeys:
+    """CLI e2e: source custom key management."""
+
+    def test_add_source_custom_key_persists_in_yaml(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-source-custom-key",
+            "customer_id",
+            "--custom-key-value",
+            "SELECT 'cust-001'",
+            "--custom-key-exec-type",
+            "sql",
+        )
+        assert result.returncode == 0
+        yaml_content = _read_source_groups(isolated_project)
+        assert "source_custom_keys" in yaml_content
+        assert "customer_id" in yaml_content
+        assert "SELECT 'cust-001'" in yaml_content
+
+    def test_add_source_custom_key_requires_custom_key_value(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-source-custom-key",
+            "customer_id",
+        )
+        assert result.returncode == 1
+        assert "custom-key-value" in (result.stdout + result.stderr)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # --set-extraction-pattern
 # ═══════════════════════════════════════════════════════════════════════════

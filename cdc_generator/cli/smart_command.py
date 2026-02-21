@@ -302,7 +302,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     # ── Modify custom table ────────────────────────────────────
     "modify_custom_table": {"sink", "add_column", "remove_column"},
     # ── Create service (standalone action) ─────────────────────
-    "create_service": set(),
+    "create_service": {"add_validation_database"},
+    "add_validation_database": set(),
     # ── Remove service (standalone action) ─────────────────────
     "remove_service": set(),
 }
@@ -343,6 +344,7 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
     # ── Column template details require --add-column-template ──
     "column_name": {"add_column_template"},
     "value": {"add_column_template"},
+    "add_validation_database": {"create_service"},
 }
 
 
@@ -354,6 +356,7 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "add_to_ignore_list": set(),
     "list_ignore_patterns": set(),
     "add_to_schema_excludes": set(),
+    "add_source_custom_key": {"custom_key_value", "custom_key_exec_type"},
     "list_schema_excludes": set(),
     "add_env_mapping": set(),
     "list_env_mappings": set(),
@@ -404,12 +407,16 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "validate": set(),
     "add_to_ignore_list": {"sink_group"},
     "add_to_schema_excludes": {"sink_group"},
+    "add_source_custom_key": {
+        "sink_group", "custom_key_value", "custom_key_exec_type",
+    },
     "sink_group": {
         "add_server", "remove_server", "server",
         "list_server_extraction_patterns",
-        "add_to_ignore_list", "add_to_schema_excludes",
+        "add_to_ignore_list", "add_to_schema_excludes", "add_source_custom_key",
         "host", "port", "user", "password", "extraction_patterns",
         "env", "strip_patterns", "env_mapping", "description",
+        "custom_key_value", "custom_key_exec_type",
     },
     "add_server": {
         "sink_group", "host", "port", "user", "password",

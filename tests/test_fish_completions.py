@@ -257,6 +257,17 @@ class TestManageSourceGroupsOptions:
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
+    def test_has_source_custom_key_options(self) -> None:
+        """Source custom key options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-source-groups"])
+        for opt in [
+            "--add-source-custom-key",
+            "--custom-key-value",
+            "--custom-key-exec-type",
+        ]:
+            assert opt in opts, f"Missing option: {opt}"
+
 
 class TestManageSinkGroupsOptions:
     """manage-sink-groups must have typed Click option declarations."""
@@ -280,6 +291,17 @@ class TestManageSinkGroupsOptions:
         cmds = _get_typed_commands()
         opts = _get_command_option_names(cmds["manage-sink-groups"])
         for opt in ["--add-to-ignore-list", "--add-to-schema-excludes"]:
+            assert opt in opts, f"Missing option: {opt}"
+
+    def test_has_source_custom_key_options(self) -> None:
+        """Sink custom key options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-sink-groups"])
+        for opt in [
+            "--add-source-custom-key",
+            "--custom-key-value",
+            "--custom-key-exec-type",
+        ]:
             assert opt in opts, f"Missing option: {opt}"
 
 

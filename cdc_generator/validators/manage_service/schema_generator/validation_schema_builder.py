@@ -182,7 +182,8 @@ def update_service_yaml_header(
 #
 # 💡 HIERARCHICAL CONFIGURATION
 # Properties set at higher levels are inherited by lower levels unless overridden.
-# Inheritance chain: environments (root) → environments.<env> → customers[].environments.<env>
+# Environment mapping is resolved from source-groups.yaml (sources.<customer>.<env>).
+# Optional customer-level environments blocks are still accepted as overrides.
 # To validate hierarchical configuration:
 #   cdc manage-tables --service {service} --validate-hierarchy
 # To validate complete configuration for pipeline generation:

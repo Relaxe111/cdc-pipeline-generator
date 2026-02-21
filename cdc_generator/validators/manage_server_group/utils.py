@@ -9,16 +9,22 @@ from cdc_generator.helpers.helpers_logging import (
     print_header,
     print_info,
     print_success,
-    print_warning,
 )
+from cdc_generator.helpers.service_config import get_project_root
 
 from .types import DatabaseInfo
 
-# Constants
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-SERVICES_DIR = PROJECT_ROOT / "services"
-SERVICE_SCHEMA_FILE = PROJECT_ROOT / ".vscode" / "service-schema.json"
-COMPLETIONS_SCRIPT = PROJECT_ROOT / "scripts" / "generate-completions.sh"
+
+def _services_dir() -> Path:
+    return get_project_root() / "services"
+
+
+def _service_schema_file() -> Path:
+    return get_project_root() / ".vscode" / "service-schema.json"
+
+
+def _completions_script() -> Path:
+    return get_project_root() / "scripts" / "generate-completions.sh"
 
 
 def regenerate_all_validation_schemas(server_group_names: list[str] | None = None) -> None:
@@ -27,18 +33,16 @@ def regenerate_all_validation_schemas(server_group_names: list[str] | None = Non
     Args:
         server_group_names: List of server group names to filter by. If None, regenerates all.
     """
-    print_header("Regenerating Validation Schemas")
-
-    if not SERVICES_DIR.exists():
-        print_warning(f"Services directory not found: {SERVICES_DIR}")
+    services_dir = _services_dir()
+    if not services_dir.exists():
         return
 
     # Find all service YAML files
-    service_files = list(SERVICES_DIR.glob("*.yaml"))
-
+    service_files = list(services_dir.glob("*.yaml"))
     if not service_files:
-        print_warning("No services found to regenerate validation schemas")
         return
+
+    print_header("Regenerating Validation Schemas")
 
     for service_file in service_files:
         service_name = service_file.stem
@@ -50,13 +54,13 @@ def regenerate_all_validation_schemas(server_group_names: list[str] | None = Non
                 import yaml  # type: ignore[import-not-found]
             except ImportError:
                 yaml = None  # type: ignore[assignment]
-            with open(service_file) as f:
+            with service_file.open() as f:
                 service_config = yaml.safe_load(f)  # type: ignore[misc]
 
             # Get server group name to determine type
             server_group_name = service_config.get('server_group')
             if not server_group_name:
-                print_warning(f"  ⊘ Skipped {service_name} (no server_group defined)")
+                print_info(f"  ⊘ Skipped {service_name} (no server_group defined)")
                 continue
 
             # Filter by server group if specified
@@ -69,19 +73,19 @@ def regenerate_all_validation_schemas(server_group_names: list[str] | None = Non
             server_group = get_single_server_group(server_groups_config)
 
             if not server_group:
-                print_warning(f"  ⊘ Skipped {service_name} (no server group found in configuration)")
+                print_info(f"  ⊘ Skipped {service_name} (no server group found in configuration)")
                 continue
 
             # Verify the server group name matches
             if server_group.get('name') != server_group_name:
-                print_warning(f"  ⊘ Skipped {service_name} (server group mismatch: expected '{server_group_name}', found '{server_group.get('name')}')")
+                print_info(f"  ⊘ Skipped {service_name} (server group mismatch: expected '{server_group_name}', found '{server_group.get('name')}')")
                 continue
 
             pattern = server_group.get('pattern')
 
             # Only db-per-tenant services need a reference customer
             if pattern == 'db-per-tenant' and 'reference' not in service_config:
-                print_warning(f"  ⊘ Skipped {service_name} (db-per-tenant requires reference customer)")
+                print_info(f"  ⊘ Skipped {service_name} (db-per-tenant requires reference customer)")
                 continue
 
             # Generate with --all to include all schemas
@@ -97,10 +101,10 @@ def regenerate_all_validation_schemas(server_group_names: list[str] | None = Non
             if success:
                 print_success(f"  ✓ {service_name} validation schema updated")
             else:
-                print_warning(f"  ⚠ {service_name} schema generation returned False")
+                print_info(f"  ⚠ {service_name} schema generation returned False")
 
         except Exception as e:
-            print_warning(f"  ⚠ Failed to regenerate schema for {service_name}: {e}")
+            print_info(f"  ⚠ Failed to regenerate schema for {service_name}: {e}")
 
     print_success("\n✓ Validation schema regeneration complete")
 
@@ -108,11 +112,11 @@ def regenerate_all_validation_schemas(server_group_names: list[str] | None = Non
 def update_vscode_schema(databases: list[DatabaseInfo]) -> bool:
     """Update .vscode/service-schema.json with database names."""
     try:
-        if not SERVICE_SCHEMA_FILE.exists():
-            print_warning(f"Service schema file not found: {SERVICE_SCHEMA_FILE}")
-            return False
+        service_schema_file = _service_schema_file()
+        if not service_schema_file.exists():
+            return True
 
-        with open(SERVICE_SCHEMA_FILE) as f:
+        with service_schema_file.open() as f:
             schema = json.load(f)
 
         # Update database enum
@@ -123,7 +127,7 @@ def update_vscode_schema(databases: list[DatabaseInfo]) -> bool:
         if 'definitions' in schema and 'database' in schema['definitions']:
             schema['definitions']['database']['enum'] = db_names
 
-        with open(SERVICE_SCHEMA_FILE, 'w') as f:
+        with service_schema_file.open('w') as f:
             json.dump(schema, f, indent=2)
 
         print_success(f"✓ Updated VS Code schema with {len(db_names)} databases")
@@ -137,11 +141,11 @@ def update_vscode_schema(databases: list[DatabaseInfo]) -> bool:
 def update_completions() -> bool:
     """Regenerate Fish shell completions."""
     try:
-        if not COMPLETIONS_SCRIPT.exists():
-            print_warning(f"Completions script not found: {COMPLETIONS_SCRIPT}")
-            return False
+        completions_script = _completions_script()
+        if not completions_script.exists():
+            return True
 
-        result = subprocess.run(['bash', str(COMPLETIONS_SCRIPT)], capture_output=True, text=True)
+        result = subprocess.run(['bash', str(completions_script)], capture_output=True, text=True)
 
         if result.returncode == 0:
             print_success("✓ Regenerated Fish shell completions")
@@ -162,7 +166,7 @@ def update_completions() -> bool:
                 print_info("  (Run 'complete -c cdc -e; and source ~/.config/fish/completions/cdc.fish' to reload)")
 
             return True
-        print_warning(f"Completions generation returned: {result.returncode}")
+        print_info(f"Completions generation returned: {result.returncode}")
         return False
 
     except Exception as e:

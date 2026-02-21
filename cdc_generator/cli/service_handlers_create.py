@@ -66,6 +66,18 @@ def _extract_server_group(
         if not isinstance(sg_data_val, dict):
             continue
         sg_dict = cast(dict[str, object], sg_data_val)
+        group_pattern = _normalize_group_pattern(sg_dict)
+
+        if group_pattern == "db-per-tenant":
+            defined_services.add(sg_name_key)
+            if sg_name_key == service_name:
+                server_group = sg_name_key
+                print_info(
+                    "Auto-detected db-per-tenant server group: "
+                    + f"{server_group}"
+                )
+            continue
+
         sources_val = sg_dict.get("sources")
         if not isinstance(sources_val, dict):
             continue
@@ -80,6 +92,12 @@ def _extract_server_group(
                 )
 
     return server_group, defined_services
+
+
+def _normalize_group_pattern(sg_dict: dict[str, object]) -> str:
+    """Resolve group pattern from supported keys."""
+    raw_pattern = sg_dict.get("server_group_type", sg_dict.get("pattern", ""))
+    return str(raw_pattern).strip().lower()
 
 
 def _fallback_single_server_group(
@@ -170,5 +188,10 @@ def handle_create_service(args: argparse.Namespace) -> int:
         return 1
 
     server_name = getattr(args, "server", None) or "default"
-    create_service(args.service, server_group, server_name)
+    create_service(
+        args.service,
+        server_group,
+        server_name,
+        getattr(args, "add_validation_database", None),
+    )
     return 0

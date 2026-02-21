@@ -65,6 +65,10 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "Name for the new service to create",
         "cdc manage-service --create-service myservice",
     ),
+    "--add-validation-database": (
+        "Validation database override used during --create-service",
+        "cdc manage-service --create-service adopus --add-validation-database AdOpusTest",
+    ),
     "--remove-service": (
         "Name of the service to remove",
         "cdc manage-service --remove-service myservice",
@@ -395,6 +399,11 @@ def _build_parser() -> ServiceArgumentParser:
         "--create-service",
         metavar="SERVICE_NAME",
         help="Create a new service configuration file",
+    )
+    parser.add_argument(
+        "--add-validation-database",
+        metavar="DATABASE_NAME",
+        help="Override validation database for create-service",
     )
     parser.add_argument(
         "--remove-service",

@@ -1,7 +1,7 @@
 """CLI handler for updating server group from database inspection."""
 
 from argparse import Namespace
-from typing import cast
+from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import (
     print_error,
@@ -9,6 +9,10 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
     print_success,
     print_warning,
+)
+from cdc_generator.helpers.source_custom_keys import (
+    execute_source_custom_keys,
+    normalize_source_custom_keys,
 )
 
 from .config import (
@@ -429,6 +433,9 @@ def handle_update(args: Namespace) -> int:
             scanned_databases: list[DatabaseInfo] = []
             updated_server_names: set[str] = set()
             scan_failed = False
+            source_custom_keys = normalize_source_custom_keys(
+                server_group.get('source_custom_keys', {})
+            )
 
             for server_name, server_config in servers_to_update.items():
                 databases = _inspect_server_databases(
@@ -443,6 +450,15 @@ def handle_update(args: Namespace) -> int:
                 if databases is None:
                     scan_failed = True
                     break
+                if source_custom_keys:
+                    execute_source_custom_keys(
+                        cast(list[dict[str, Any]], databases),
+                        db_type=sg_type,
+                        server_name=server_name,
+                        server_config=server_config,
+                        source_custom_keys=source_custom_keys,
+                        context_label=f"source-group '{sg_name}'",
+                    )
                 scanned_databases.extend(databases)
                 updated_server_names.add(server_name)
 

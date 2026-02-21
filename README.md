@@ -519,6 +519,50 @@ server:
   password: ${MSSQL_PASSWORD}
 ```
 
+### SQL-Based Source Custom Keys (Source + Sink)
+
+Use custom keys to compute per-database values during `--update` and write them
+into each source environment entry (for example `customer_id`).
+
+```bash
+# Source groups: persist SQL custom key definition
+cdc manage-source-groups \
+  --add-source-custom-key customer_id \
+  --custom-key-value "SELECT customer_id FROM dbo.settings" \
+  --custom-key-exec-type sql
+
+# Run update to execute the SQL per discovered database
+cdc manage-source-groups --update
+```
+
+```bash
+# Sink groups: same custom key model
+cdc manage-sink-groups \
+  --sink-group sink_analytics \
+  --add-source-custom-key customer_id \
+  --custom-key-value "SELECT customer_id FROM public.settings" \
+  --custom-key-exec-type sql
+
+# Run sink update to execute SQL per discovered sink database
+cdc manage-sink-groups --update --sink-group sink_analytics
+```
+
+Generated shape (simplified):
+
+```yaml
+sources:
+  directory:
+    schemas: [public]
+    nonprod:
+      server: default
+      database: directory_db
+      table_count: 42
+      customer_id: cust-001
+```
+
+If a key returns no value for a specific server/database, the update continues and
+prints a warning with that server/database context.
+
 ---
 
 ## 🤝 Contributing

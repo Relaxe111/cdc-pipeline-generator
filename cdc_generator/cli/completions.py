@@ -367,6 +367,26 @@ def complete_available_services(
     )
 
 
+def complete_available_validation_databases(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete validation database names from source-groups.yaml."""
+    from cdc_generator.helpers.autocompletions.services import (
+        list_available_validation_databases,
+    )
+
+    service_name = _get_param(ctx, "create_service")
+    if not service_name:
+        service_name = _get_service(ctx)
+
+    return _filter(
+        _safe_call(list_available_validation_databases, service_name),
+        incomplete,
+    )
+
+
 def complete_server_names(
     _ctx: click.Context,
     _param: click.Parameter,

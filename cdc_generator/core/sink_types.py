@@ -112,6 +112,7 @@ class SinkGroupInherited(TypedDict, total=False):
     # Sources available for sinking (from source group)
     inherited_sources: list[str]  # source names from source group
     sources: dict[str, SinkSource]  # service_name → sink source config
+    source_custom_keys: dict[str, dict[str, str]]
 
 
 class SinkGroupStandalone(TypedDict, total=False):
@@ -136,6 +137,7 @@ class SinkGroupStandalone(TypedDict, total=False):
     # Required:
     servers: dict[str, SinkServerConfig]
     sources: dict[str, SinkSource]
+    source_custom_keys: dict[str, dict[str, str]]
 
 
 SinkGroupConfig = SinkGroupInherited | SinkGroupStandalone

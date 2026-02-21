@@ -4,24 +4,22 @@ from __future__ import annotations
 
 import os
 import re
-from typing import TYPE_CHECKING, Any
-
-from .types import DatabaseInfo, ExtractedIdentifiers, ServerConfig, ServerGroupConfig
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from cdc_generator.helpers.pymssql_stub import MSSQLConnection
     from cdc_generator.helpers.psycopg2_stub import PgConnection
+    from cdc_generator.helpers.pymssql_stub import MSSQLConnection
 
+from cdc_generator.helpers.helpers_logging import print_info, print_warning
+from cdc_generator.helpers.helpers_mssql import create_mssql_connection
 from cdc_generator.helpers.mssql_loader import has_pymssql
 from cdc_generator.helpers.psycopg2_loader import (
     ensure_psycopg2,
     has_psycopg2,
 )
 
-from cdc_generator.helpers.helpers_logging import print_info, print_warning
-from cdc_generator.helpers.helpers_mssql import create_mssql_connection
-
 from .filters import should_exclude_schema, should_ignore_database, should_include_database
+from .types import DatabaseInfo, ExtractedIdentifiers, ServerConfig, ServerGroupConfig
 
 
 class MissingEnvironmentVariableError(ValueError):
@@ -31,11 +29,35 @@ class MissingEnvironmentVariableError(ValueError):
 class PostgresConnectionError(Exception):
     """Raised when PostgreSQL connection fails with user-friendly context."""
 
-    def __init__(self, message: str, host: str, port: int, hint: str = ""):
+    def __init__(self, message: str, host: str, port: int, hint: str = "") -> None:
         self.host = host
         self.port = port
         self.hint = hint
         super().__init__(message)
+
+
+def _extract_scalar_count(row: object) -> int:
+    """Extract integer scalar from a DB cursor ``fetchone`` result."""
+    value: object
+    if isinstance(row, (list, tuple)) and row:
+        sequence = cast(list[object] | tuple[object, ...], row)
+        value = sequence[0]
+    elif isinstance(row, dict):
+        row_dict = cast(dict[str, object], row)
+        values = list(row_dict.values())
+        if not values:
+            return 0
+        value = values[0]
+    else:
+        return 0
+
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return 0
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 _INTERESTING_ENV_KEYWORDS = (
@@ -244,7 +266,10 @@ def _resolve_env_value(value: str | int | None, field_name: str) -> str:
     return expanded
 
 
-def get_mssql_connection(server_config: ServerConfig) -> MSSQLConnection:
+def get_mssql_connection(
+    server_config: ServerConfig,
+    database: str = '',
+) -> MSSQLConnection:
     """Get MSSQL connection from server config.
 
     Returns:
@@ -264,7 +289,7 @@ def get_mssql_connection(server_config: ServerConfig) -> MSSQLConnection:
     return create_mssql_connection(
         host=host,
         port=port,
-        database='',  # No database for server-level inspection
+        database=database,
         user=user,
         password=password
     )
@@ -467,7 +492,7 @@ def list_mssql_databases(
                 USE [{db_name}];
                 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'
             """)
-            table_count = cursor.fetchone()[0]
+            table_count = _extract_scalar_count(cursor.fetchone())
 
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
@@ -495,7 +520,12 @@ def list_mssql_databases(
     if ignored_schema_count > 0:
         schema_patterns = schema_exclude_patterns or []
         patterns_text = ', '.join(schema_patterns)
-        print_info(f"📊 Ignored {ignored_schema_count} schema(s) from {databases_with_ignored_schemas} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
+        print_info(
+            "📊 Ignored "
+            + f"{ignored_schema_count} schema(s) from "
+            + f"{databases_with_ignored_schemas} database(s) matching patterns: "
+            + f"\033[31m{patterns_text}\033[0m"
+        )
 
     conn.close()
     return databases
@@ -594,7 +624,7 @@ def list_postgres_databases(
                 AND table_schema NOT LIKE 'pg_toast_temp_%'
                 AND table_type = 'BASE TABLE'
             """)
-            table_count = db_cursor.fetchone()[0]
+            table_count = _extract_scalar_count(db_cursor.fetchone())
 
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
@@ -616,6 +646,11 @@ def list_postgres_databases(
     if ignored_schema_count > 0:
         schema_patterns = schema_exclude_patterns or []
         patterns_text = ', '.join(schema_patterns)
-        print_info(f"📊 Ignored {ignored_schema_count} schema(s) from {databases_with_ignored_schemas} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
+        print_info(
+            "📊 Ignored "
+            + f"{ignored_schema_count} schema(s) from "
+            + f"{databases_with_ignored_schemas} database(s) matching patterns: "
+            + f"\033[31m{patterns_text}\033[0m"
+        )
 
     return databases

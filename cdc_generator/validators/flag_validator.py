@@ -45,6 +45,7 @@ class ManageServerGroupFlagValidator:
         'set_kafka_topology',
         'add_to_ignore_list', 'list_ignore_patterns',
         'add_to_schema_excludes', 'list_schema_excludes',
+        'add_source_custom_key',
         'add_env_mapping', 'list_env_mappings',
     })
 
@@ -103,6 +104,8 @@ class ManageServerGroupFlagValidator:
             result = self._validate_remove_server(args)
         elif action == 'set_kafka_topology':
             result = self._validate_set_kafka_topology(args)
+        elif action == 'add_source_custom_key':
+            result = self._validate_add_source_custom_key(args)
         elif action in self.OK_ACTIONS:
             result = ValidationResult(valid=True, level='ok')
         else:
@@ -245,6 +248,43 @@ class ManageServerGroupFlagValidator:
                 level='error',
                 message=f"❌ Invalid topology: {topology}",
                 suggestion="💡 Valid values: shared, per-server"
+            )
+
+        return ValidationResult(valid=True, level='ok')
+
+    def _validate_add_source_custom_key(
+        self,
+        args: argparse.Namespace,
+    ) -> ValidationResult:
+        """Validate source custom key creation flags."""
+        key_name = getattr(args, 'add_source_custom_key', None)
+        key_value = getattr(args, 'custom_key_value', None)
+        exec_type = getattr(args, 'custom_key_exec_type', 'sql')
+
+        if not key_name:
+            return ValidationResult(
+                valid=False,
+                level='error',
+                message="❌ --add-source-custom-key requires a key name",
+                suggestion=(
+                    "💡 Example:\n"
+                    "   cdc manage-source-groups --add-source-custom-key customer_id "
+                    + "--custom-key-value \"SELECT ...\" --custom-key-exec-type sql"
+                ),
+            )
+
+        if not key_value:
+            return ValidationResult(
+                valid=False,
+                level='error',
+                message="❌ --custom-key-value is required with --add-source-custom-key",
+            )
+
+        if exec_type != 'sql':
+            return ValidationResult(
+                valid=False,
+                level='error',
+                message="❌ --custom-key-exec-type must be 'sql'",
             )
 
         return ValidationResult(valid=True, level='ok')

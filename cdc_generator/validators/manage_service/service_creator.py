@@ -9,13 +9,19 @@ from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.validators.manage_server_group.config import load_server_groups
 
 
-def create_service(service_name: str, server_group: str, _server: str = "default") -> None:
+def create_service(
+    service_name: str,
+    server_group: str,
+    _server: str = "default",
+    validation_database_override: str | None = None,
+) -> None:
     """Create a new service configuration file.
 
     Args:
         service_name: Name of the service to create
         server_group: Server group name (e.g., 'adopus', 'asma')
         _server: Server name for multi-server setups (default: 'default')
+        validation_database_override: Explicit validation database override
     """
     project_root = get_project_root()
     services_dir = project_root / 'services'
@@ -45,29 +51,20 @@ def create_service(service_name: str, server_group: str, _server: str = "default
         sources = group.get('sources', {})
 
         if pattern == 'db-per-tenant':
-            # Use database_ref for validation
             database_ref = group.get('database_ref')
-            if database_ref and database_ref in sources:
-                source_config = sources[database_ref]
-                schemas = source_config.get('schemas', ['dbo'])
-                # Get actual database name from first environment with server='default'
-                # or fall back to first available environment
-                for env_name, env_config in source_config.items():
-                    if env_name == 'schemas':
-                        continue
-                    env_config_dict = cast(dict[str, Any], env_config)
-                    if isinstance(env_config, dict) and env_config_dict.get('server') == 'default':
-                        validation_database = str(env_config_dict.get('database', ''))
-                        break
-                # Fallback: use first available environment
-                if not validation_database:
-                    for env_name, env_config in source_config.items():
-                        if env_name == 'schemas':
-                            continue
-                        env_config_dict = cast(dict[str, Any], env_config)
-                        if isinstance(env_config, dict) and env_config_dict.get('database'):
-                            validation_database = str(env_config_dict.get('database', ''))
-                            break
+            if validation_database_override:
+                validation_database = validation_database_override
+                source_for_database = _find_source_by_database(sources, validation_database)
+                if source_for_database is not None:
+                    schemas = _extract_schemas_from_source(source_for_database)
+                else:
+                    schemas = ['dbo']
+            else:
+                # Use database_ref for validation
+                if database_ref and database_ref in sources:
+                    source_config = cast(dict[str, Any], sources[database_ref])
+                    schemas = _extract_schemas_from_source(source_config)
+                    validation_database = _extract_database_from_source(source_config)
 
             if not validation_database:
                 raise ValueError(
@@ -78,26 +75,9 @@ def create_service(service_name: str, server_group: str, _server: str = "default
         elif pattern == 'db-shared':
             # Find the source that matches this service name
             if service_name in sources:
-                source_config = sources[service_name]
-                schemas = source_config.get('schemas', ['public'])
-                # Get actual database name from first environment with server='default'
-                # or fall back to first available environment
-                for env_name, env_config in source_config.items():
-                    if env_name == 'schemas':
-                        continue
-                    env_config_dict = cast(dict[str, Any], env_config)
-                    if isinstance(env_config, dict) and env_config_dict.get('server') == 'default':
-                        validation_database = str(env_config_dict.get('database', ''))
-                        break
-                # Fallback: use first available environment
-                if not validation_database:
-                    for env_name, env_config in source_config.items():
-                        if env_name == 'schemas':
-                            continue
-                        env_config_dict = cast(dict[str, Any], env_config)
-                        if isinstance(env_config, dict) and env_config_dict.get('database'):
-                            validation_database = str(env_config_dict.get('database', ''))
-                            break
+                source_config = cast(dict[str, Any], sources[service_name])
+                schemas = _extract_schemas_from_source(source_config, default_schema='public')
+                validation_database = validation_database_override or _extract_database_from_source(source_config)
 
             if not validation_database:
                 raise ValueError(
@@ -133,25 +113,7 @@ def create_service(service_name: str, server_group: str, _server: str = "default
                     # 'dbo.Actor': {primary_key: 'actno', ignore_columns: []}
                     # 'dbo.User': {primary_key: 'userid'}
                 }
-            },
-            'customers': [
-                {
-                    'name': 'customer1',
-                    'customer_id': 1,
-                    'schema': 'customer1',
-                    'environments': {
-                        'local': {
-                            'database_name': 'customer1'
-                        },
-                        'nonprod': {
-                            'database_name': 'Customer1Test'
-                        },
-                        'prod': {
-                            'database_name': 'Customer1Prod'
-                        }
-                    }
-                }
-            ]
+            }
         }
 
     else:  # db-shared
@@ -249,8 +211,8 @@ def create_service(service_name: str, server_group: str, _server: str = "default
         print_success("\nNext steps:")
         if pattern == 'db-per-tenant':
             print_success(
-                f"  1. Edit {service_file} to configure "
-                + "customers and environments"
+                "  1. Configure customers/environments in source-groups.yaml "
+                + "(sources.<customer>.<env>)"
             )
             print_success(
                 "  2. Add CDC tables: cdc manage-service "
@@ -273,3 +235,59 @@ def create_service(service_name: str, server_group: str, _server: str = "default
                 + f"--service {service_name} --validate-config"
             )
             print_success("  3. Generate pipelines: cdc generate")
+
+
+def _extract_schemas_from_source(
+    source_config: dict[str, Any],
+    default_schema: str = 'dbo',
+) -> list[str]:
+    """Extract schema list from a source entry."""
+    schemas_raw = source_config.get('schemas')
+    if isinstance(schemas_raw, list):
+        schemas = [str(schema).strip() for schema in schemas_raw if str(schema).strip()]
+        if schemas:
+            return schemas
+    return [default_schema]
+
+
+def _extract_database_from_source(source_config: dict[str, Any]) -> str | None:
+    """Extract preferred database from source entry environments."""
+    for env_name, env_config in source_config.items():
+        if env_name == 'schemas' or not isinstance(env_config, dict):
+            continue
+        env_config_dict = cast(dict[str, Any], env_config)
+        if env_config_dict.get('server') == 'default' and env_config_dict.get('database'):
+            return str(env_config_dict.get('database', '')).strip() or None
+
+    for env_name, env_config in source_config.items():
+        if env_name == 'schemas' or not isinstance(env_config, dict):
+            continue
+        env_config_dict = cast(dict[str, Any], env_config)
+        if env_config_dict.get('database'):
+            return str(env_config_dict.get('database', '')).strip() or None
+
+    return None
+
+
+def _find_source_by_database(
+    sources: dict[str, Any],
+    database_name: str,
+) -> dict[str, Any] | None:
+    """Find source entry containing the given database in any env."""
+    target = database_name.strip()
+    if not target:
+        return None
+
+    for source_cfg in sources.values():
+        if not isinstance(source_cfg, dict):
+            continue
+        source_dict = cast(dict[str, Any], source_cfg)
+        for env_name, env_config in source_dict.items():
+            if env_name == 'schemas' or not isinstance(env_config, dict):
+                continue
+            env_dict = cast(dict[str, Any], env_config)
+            database_value = env_dict.get('database')
+            if database_value is not None and str(database_value).strip() == target:
+                return source_dict
+
+    return None

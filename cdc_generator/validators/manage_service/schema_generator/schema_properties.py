@@ -147,7 +147,7 @@ def build_customers_schema() -> dict[str, Any]:
 
     return {
         "type": "array",
-        "description": "Customer-specific configurations (db-per-tenant only). Inherits from environments root and specific environments.",
+        "description": "Customer-specific configurations (db-per-tenant only).",
         "items": {
             "type": "object",
             "required": ["name", "customer_id", "schema"],
@@ -157,7 +157,7 @@ def build_customers_schema() -> dict[str, Any]:
                 "schema": {"type": "string"},
                 "environments": {
                     "type": "object",
-                    "description": "Customer-specific environment overrides (inherits from global environments)",
+                    "description": "Customer-specific environment overrides",
                     "additionalProperties": False,
                     "properties": {
                         "local": env_override_schema,
@@ -188,7 +188,7 @@ def build_conditional_requirements() -> list[dict[str, Any]]:
                 ]
             },
             "then": {
-                "required": ["environments", "customers", "source", "reference"]
+                "required": ["source", "reference"]
             }
         },
         {
@@ -205,10 +205,9 @@ def build_conditional_requirements() -> list[dict[str, Any]]:
                 ]
             },
             "then": {
-                "required": ["environments", "source"],
+                "required": ["source"],
                 "not": {
                     "anyOf": [
-                        {"required": ["customers"]},
                         {"required": ["reference"]}
                     ]
                 }

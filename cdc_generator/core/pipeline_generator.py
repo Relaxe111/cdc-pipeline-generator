@@ -17,7 +17,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from cdc_generator.helpers.helpers_batch import build_staging_case
-from cdc_generator.helpers.service_config import get_all_customers, load_customer_config
+from cdc_generator.helpers.service_config import (
+    get_all_customers,
+    load_customer_config,
+    load_service_config,
+)
 from cdc_generator.helpers.yaml_loader import ConfigValue, load_yaml_file
 
 # Import validation functions
@@ -35,10 +39,12 @@ def get_services_for_customers(customers: list[str]) -> set[str]:
     if not services_dir.exists():
         return services
 
+    target_customers = {customer.casefold() for customer in customers}
+
     # Check each service file to see if it contains any of our customers
     for service_file in services_dir.glob("*.yaml"):
         try:
-            service_config = load_yaml_file(service_file)
+            service_config = load_service_config(service_file.stem)
             service_customers = service_config.get('customers', [])
             if not isinstance(service_customers, list):
                 continue
@@ -50,10 +56,10 @@ def get_services_for_customers(customers: list[str]) -> set[str]:
                     continue
                 name = c.get('name')
                 if isinstance(name, str):
-                    customer_names.add(name)
+                    customer_names.add(name.casefold())
 
             # If any of our target customers are in this service, include it
-            if any(customer in customer_names for customer in customers):
+            if target_customers.intersection(customer_names):
                 services.add(service_file.stem)
         except Exception:
             continue

@@ -33,6 +33,7 @@ Command-line tool documentation (coming soon):
 - `cdc generate` - Generate pipelines from config
 - `cdc manage-service` - Add/remove tables, inspect schemas
 - `cdc manage-source-groups` - Manage server group configs
+- **[SOURCE_CUSTOM_KEYS.md](./cli/SOURCE_CUSTOM_KEYS.md)** - SQL-based computed keys for source/sink updates
 
 ## 🏗️ Architecture Patterns
 

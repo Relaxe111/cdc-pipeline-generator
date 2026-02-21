@@ -34,6 +34,9 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "add_to_ignore_list": None,
         "list_ignore_patterns": False,
         "add_to_schema_excludes": None,
+        "add_source_custom_key": None,
+        "custom_key_value": None,
+        "custom_key_exec_type": "sql",
         "list_schema_excludes": False,
         "add_server": None,
         "list_servers": False,
@@ -142,6 +145,25 @@ class TestFlagValidator:
     def test_set_topology_valid_per_server(self) -> None:
         """--set-kafka-topology per-server → ok."""
         args = _ns(set_kafka_topology="per-server")
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is True
+
+    def test_add_source_custom_key_without_value_returns_error(self) -> None:
+        """--add-source-custom-key without --custom-key-value should fail."""
+        args = _ns(add_source_custom_key="customer_id")
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is False
+        assert result.message and "custom-key-value" in result.message
+
+    def test_add_source_custom_key_with_value_is_valid(self) -> None:
+        """--add-source-custom-key with SQL value should be valid."""
+        args = _ns(
+            add_source_custom_key="customer_id",
+            custom_key_value="SELECT 1",
+            custom_key_exec_type="sql",
+        )
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is True

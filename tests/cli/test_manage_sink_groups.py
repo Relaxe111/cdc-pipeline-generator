@@ -804,3 +804,52 @@ class TestCliCompletions:
 
         assert result.returncode == 0
         assert "--server" in result.stdout
+
+
+class TestCliSourceCustomKeys:
+    """CLI e2e: sink source custom key management."""
+
+    def test_add_source_custom_key_persists_in_sink_groups(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--add-source-custom-key",
+            "customer_id",
+            "--custom-key-value",
+            "SELECT 'cust-001'",
+            "--custom-key-exec-type",
+            "sql",
+        )
+
+        assert result.returncode == 0
+        content = _read_sink_groups(isolated_project)
+        assert "source_custom_keys" in content
+        assert "customer_id" in content
+        assert "SELECT 'cust-001'" in content
+
+    def test_add_source_custom_key_requires_custom_key_value(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--add-source-custom-key",
+            "customer_id",
+        )
+
+        assert result.returncode == 1
+        assert "custom-key-value" in (result.stdout + result.stderr)
