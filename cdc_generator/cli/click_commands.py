@@ -33,8 +33,8 @@ from cdc_generator.cli.completions import (
     complete_available_sink_keys,
     complete_available_tables,
     complete_column_templates,
-    complete_custom_table_column_spec,
     complete_columns,
+    complete_custom_table_column_spec,
     complete_custom_table_columns,
     complete_custom_tables,
     complete_existing_services,
@@ -352,7 +352,10 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--source-group", shell_complete=complete_server_group_names,
               help="Source group to inherit from")
 @click.option("--add-new-sink-group",
-              help="Add new standalone sink group")
+              help=(
+                  "Add new standalone sink group "
+                  "(auto-prefix sink_; defaults: type=postgres, pattern=db-shared)"
+              ))
 @click.option("--type",
               type=click.Choice(["postgres", "mssql", "http_client", "http_server"]),
               help="Type of sink")
@@ -364,7 +367,10 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--no-environment-aware", is_flag=True,
               help="Disable environment-aware grouping")
 @click.option("--for-source-group", shell_complete=complete_server_group_names,
-              help="Source group this standalone sink consumes from")
+              help=(
+                  "Source group this standalone sink consumes from "
+                  "(if omitted, first source group from source-groups.yaml is used)"
+              ))
 # -- List / Info --
 @click.option("--list", "list_flag", is_flag=True,
               help="List all sink groups")
@@ -373,7 +379,11 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 # -- Inspect / Validate --
 @click.option("--inspect", is_flag=True,
               help="Inspect databases on sink server")
-@click.option("--server", help="Server name to inspect")
+@click.option("--update", is_flag=True,
+              help="Inspect and update sink group sources")
+@click.option("--server",
+              shell_complete=complete_sink_group_servers,
+              help="Server name to inspect or update with --extraction-patterns")
 @click.option("--include-pattern",
               help="Only include databases matching regex")
 @click.option("--introspect-types", is_flag=True,
@@ -396,7 +406,21 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.option("--user", help="Server user")
 @click.option("--password", help="Server password")
 @click.option("--extraction-patterns",
-              help="Regex extraction patterns for server")
+              help="Regex extraction patterns for server (with --add-server or --server update)")
+@click.option("--env",
+              help="Fixed environment for extraction patterns")
+@click.option("--strip-patterns",
+              help="Comma-separated regex patterns to strip from service name")
+@click.option("--env-mapping",
+              multiple=True,
+              help="Environment mapping from:to (repeatable)")
+@click.option("--description",
+              help="Description for extraction pattern entries")
+@click.option("--list-server-extraction-patterns",
+              shell_complete=complete_sink_group_servers,
+              flag_value="",
+              default=None,
+              help="List sink server extraction patterns (optional server filter)")
 # -- Removal --
 @click.option("--remove",
               shell_complete=complete_non_inherited_sink_group_names,

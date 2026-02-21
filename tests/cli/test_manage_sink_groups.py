@@ -57,6 +57,33 @@ _STANDALONE_SINK_GROUPS = (
     "  sources: {}\n"
 )
 
+_MULTI_STANDALONE_SINK_GROUPS = (
+    "sink_analytics:\n"
+    "  source_group: asma\n"
+    "  pattern: db-shared\n"
+    "  type: postgres\n"
+    "  environment_aware: true\n"
+    "  servers:\n"
+    "    default:\n"
+    "      host: localhost\n"
+    "      port: '5432'\n"
+    "      user: postgres\n"
+    "      password: secret\n"
+    "  sources: {}\n"
+    "sink_reporting:\n"
+    "  source_group: asma\n"
+    "  pattern: db-shared\n"
+    "  type: postgres\n"
+    "  environment_aware: true\n"
+    "  servers:\n"
+    "    default:\n"
+    "      host: localhost\n"
+    "      port: '5432'\n"
+    "      user: postgres\n"
+    "      password: secret\n"
+    "  sources: {}\n"
+)
+
 _INHERITED_SINK_GROUPS = (
     "sink_asma:\n"
     "  inherits: true\n"
@@ -248,6 +275,35 @@ class TestCliInspectAndIntrospect:
         assert result.returncode == 1
         assert "--inspect requires --sink-group" in result.stdout + result.stderr
 
+    def test_update_auto_resolves_single_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--update",
+            "--server",
+            "ghost",
+        )
+
+        assert result.returncode == 1
+        output = result.stdout + result.stderr
+        assert "using only available sink group" in output
+        assert "Server 'ghost' not found" in output
+
+    def test_update_without_sink_group_fails_for_multiple_groups(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _MULTI_STANDALONE_SINK_GROUPS)
+
+        result = run_cdc("manage-sink-groups", "--update")
+
+        assert result.returncode == 1
+        assert "More than one sink group found" in result.stdout + result.stderr
+
     def test_inspect_rejects_inherited_sink_group(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
@@ -416,6 +472,155 @@ class TestCliServerManagement:
         assert result.returncode == 1
         assert "not found" in result.stdout + result.stderr
 
+    def test_update_server_extraction_patterns_with_metadata(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>\\w+)_db_(?P<env>\\w+)$",
+            "--env",
+            "prod_adcuris",
+            "--strip-patterns",
+            "_db",
+            "--env-mapping",
+            "prod_adcuris:prod-adcuris",
+            "--description",
+            "Matching pattern: {service}_db_{env}",
+        )
+
+        assert result.returncode == 0
+        content = _read_sink_groups(isolated_project)
+        assert "extraction_patterns:" in content
+        assert "pattern: ^(?P<service>\\w+)_db_(?P<env>\\w+)$" in content
+        assert "env: prod_adcuris" in content
+        assert "strip_patterns:" in content
+        assert "- _db" in content
+        assert "env_mapping:" in content
+        assert "prod_adcuris: prod-adcuris" in content
+
+    def test_list_server_extraction_patterns(self, run_cdc: RunCdc, isolated_project: Path) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        update_result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>\\w+)_db_(?P<env>\\w+)$",
+            "--strip-patterns",
+            "_db",
+        )
+        assert update_result.returncode == 0
+
+        list_result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--list-server-extraction-patterns",
+        )
+
+        assert list_result.returncode == 0
+        output = list_result.stdout + list_result.stderr
+        assert "Sink Server Extraction Patterns: sink_analytics" in output
+        assert "Server: default" in output
+        assert "Pattern:" in output
+
+    def test_list_server_extraction_patterns_requires_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--list-server-extraction-patterns",
+        )
+
+        assert result.returncode == 1
+        assert "requires --sink-group" in result.stdout + result.stderr
+
+    def test_update_server_extraction_patterns_appends_entries(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        first = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>legacy)_(?P<env>prod)$",
+        )
+        assert first.returncode == 0
+
+        second = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>\\w+)_db_(?P<env>\\w+)$",
+            "--strip-patterns",
+            "_db",
+        )
+        assert second.returncode == 0
+
+        content = _read_sink_groups(isolated_project)
+        assert content.count("pattern:") >= 2
+        assert "pattern: ^(?P<service>legacy)_(?P<env>prod)$" in content
+        assert "pattern: ^(?P<service>\\w+)_db_(?P<env>\\w+)$" in content
+
+    def test_update_server_extraction_patterns_upserts_same_pattern(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        first = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>legacy)_(?P<env>prod)$",
+            "--description",
+            "old",
+        )
+        assert first.returncode == 0
+
+        second = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "default",
+            "--extraction-patterns",
+            "^(?P<service>legacy)_(?P<env>prod)$",
+            "--description",
+            "new",
+        )
+        assert second.returncode == 0
+
+        content = _read_sink_groups(isolated_project)
+        assert content.count("pattern: ^(?P<service>legacy)_(?P<env>prod)$") == 1
+        assert "description: new" in content
+
 
 class TestCliRemoveSinkGroup:
     """CLI e2e: remove sink group behavior."""
@@ -455,4 +660,5 @@ class TestCliCompletions:
         output = result.stdout
         assert "--create" in output
         assert "--add-new-sink-group" in output
+        assert "--update" in output
         assert "--validate" in output

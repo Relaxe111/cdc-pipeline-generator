@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from cdc_generator.cli.sink_group import (
+    _build_sink_sources_from_databases,
     _build_server_config,
     _check_server_references,
     _load_sink_group_for_server_op,
@@ -15,6 +16,7 @@ from cdc_generator.cli.sink_group import (
     handle_add_server_command,
     handle_remove_server_command,
     handle_remove_sink_group_command,
+    handle_update_server_extraction_patterns_command,
 )
 
 
@@ -54,6 +56,7 @@ def inherited_sink_group() -> dict[str, Any]:
 def _ns(**kwargs: Any) -> Namespace:
     defaults: dict[str, Any] = {
         "sink_group": None,
+        "server": None,
         "add_server": None,
         "remove_server": None,
         "host": None,
@@ -61,10 +64,66 @@ def _ns(**kwargs: Any) -> Namespace:
         "user": None,
         "password": None,
         "extraction_patterns": None,
+        "env": None,
+        "strip_patterns": None,
+        "env_mapping": None,
+        "description": None,
         "remove": None,
     }
     defaults.update(kwargs)
     return Namespace(**defaults)
+
+
+class TestBuildSinkSourcesFromDatabases:
+    """Tests for ``_build_sink_sources_from_databases``."""
+
+    def test_normalizes_and_merges_sources(self) -> None:
+        databases: list[dict[str, Any]] = [
+            {
+                "service": " directory ",
+                "name": "directory_db_nonprod",
+                "environment": " nonprod ",
+                "schemas": [" public ", "audit", "public"],
+                "table_count": "12",
+            },
+            {
+                "service": "directory",
+                "name": "directory_db_prod",
+                "environment": "",
+                "schemas": ["analytics", "public"],
+                "table_count": None,
+            },
+            {
+                "service": "",
+                "name": "ignored_no_service",
+                "environment": "nonprod",
+                "schemas": ["public"],
+                "table_count": 1,
+            },
+            {
+                "service": "chat",
+                "name": "",
+                "environment": "prod",
+                "schemas": ["public"],
+                "table_count": 3,
+            },
+        ]
+
+        result = _build_sink_sources_from_databases(databases, "default")
+
+        assert sorted(result.keys()) == ["directory"]
+        directory = result["directory"]
+        assert directory["schemas"] == ["public", "audit", "analytics"]
+        assert directory["nonprod"] == {
+            "server": "default",
+            "database": "directory_db_nonprod",
+            "table_count": 12,
+        }
+        assert directory["default"] == {
+            "server": "default",
+            "database": "directory_db_prod",
+            "table_count": 0,
+        }
 
 
 class TestBuildServerConfig:
@@ -98,6 +157,31 @@ class TestBuildServerConfig:
 
         assert str(config["host"]).startswith("${POSTGRES_SINK_HOST_ASMA_NONPROD")
         assert str(config["port"]).startswith("${POSTGRES_SINK_PORT_ASMA_NONPROD")
+
+    def test_build_server_config_structured_extraction_patterns(
+        self, standalone_sink_group: dict[str, Any],
+    ) -> None:
+        args = _ns(
+            sink_group="sink_asma",
+            add_server="default",
+            extraction_patterns=["^(?P<service>\\w+)_db_(?P<env>\\w+)$"],
+            env="prod_adcuris",
+            strip_patterns="_db",
+            env_mapping=["prod_adcuris:prod-adcuris"],
+            description="Matching pattern: {service}_db_{env}",
+        )
+
+        config = _build_server_config(args, standalone_sink_group)
+        entries = config.get("extraction_patterns")
+
+        assert isinstance(entries, list)
+        assert len(entries) == 1
+        first = entries[0]
+        assert first["pattern"] == "^(?P<service>\\w+)_db_(?P<env>\\w+)$"
+        assert first["env"] == "prod_adcuris"
+        assert first["strip_patterns"] == ["_db"]
+        assert first["env_mapping"] == {"prod_adcuris": "prod-adcuris"}
+        assert first["description"] == "Matching pattern: {service}_db_{env}"
 
 
 class TestCheckServerReferences:
@@ -264,6 +348,126 @@ class TestHandleRemoveServerCommand:
             _ns(sink_group=None, remove_server=None),
         )
         assert result == 1
+
+
+class TestHandleUpdateServerExtractionPatternsCommand:
+    """Tests for ``handle_update_server_extraction_patterns_command``."""
+
+    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    def test_update_server_extraction_patterns_success(
+        self,
+        mock_save: Mock,
+        mock_load: Mock,
+        standalone_sink_group: dict[str, Any],
+    ) -> None:
+        mock_load.return_value = (
+            {"sink_analytics": standalone_sink_group},
+            standalone_sink_group,
+            "sink_analytics",
+            Path("/tmp/sink-groups.yaml"),
+        )
+
+        result = handle_update_server_extraction_patterns_command(
+            _ns(
+                sink_group="sink_analytics",
+                server="default",
+                extraction_patterns=["^(?P<service>\\w+)_db_(?P<env>\\w+)$"],
+                strip_patterns="_db",
+                description="Matching pattern: {service}_db_{env}",
+            )
+        )
+
+        assert result == 0
+        updated = dict(standalone_sink_group["servers"]["default"])
+        assert "extraction_patterns" in updated
+        assert isinstance(updated["extraction_patterns"], list)
+        assert updated["extraction_patterns"][0]["strip_patterns"] == ["_db"]
+        assert mock_save.called
+
+    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    def test_update_server_extraction_patterns_appends(
+        self,
+        mock_save: Mock,
+        mock_load: Mock,
+        standalone_sink_group: dict[str, Any],
+    ) -> None:
+        existing_server = dict(standalone_sink_group["servers"]["default"])
+        standalone_sink_group["servers"]["default"] = existing_server
+        existing_server["extraction_patterns"] = [
+            {
+                "pattern": "^(?P<service>legacy)_(?P<env>prod)$",
+                "description": "legacy",
+            }
+        ]
+
+        mock_load.return_value = (
+            {"sink_analytics": standalone_sink_group},
+            standalone_sink_group,
+            "sink_analytics",
+            Path("/tmp/sink-groups.yaml"),
+        )
+
+        result = handle_update_server_extraction_patterns_command(
+            _ns(
+                sink_group="sink_analytics",
+                server="default",
+                extraction_patterns=["^(?P<service>\\w+)_db_(?P<env>\\w+)$"],
+                strip_patterns="_db",
+            )
+        )
+
+        assert result == 0
+        updated = dict(standalone_sink_group["servers"]["default"])
+        patterns = updated["extraction_patterns"]
+        assert isinstance(patterns, list)
+        assert len(patterns) == 2
+        assert patterns[0]["pattern"] == "^(?P<service>legacy)_(?P<env>prod)$"
+        assert patterns[1]["pattern"] == "^(?P<service>\\w+)_db_(?P<env>\\w+)$"
+        assert mock_save.called
+
+    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    def test_update_server_extraction_patterns_upserts_same_pattern(
+        self,
+        mock_save: Mock,
+        mock_load: Mock,
+        standalone_sink_group: dict[str, Any],
+    ) -> None:
+        existing_server = dict(standalone_sink_group["servers"]["default"])
+        standalone_sink_group["servers"]["default"] = existing_server
+        existing_server["extraction_patterns"] = [
+            {
+                "pattern": "^(?P<service>legacy)_(?P<env>prod)$",
+                "description": "old-description",
+            }
+        ]
+
+        mock_load.return_value = (
+            {"sink_analytics": standalone_sink_group},
+            standalone_sink_group,
+            "sink_analytics",
+            Path("/tmp/sink-groups.yaml"),
+        )
+
+        result = handle_update_server_extraction_patterns_command(
+            _ns(
+                sink_group="sink_analytics",
+                server="default",
+                extraction_patterns=["^(?P<service>legacy)_(?P<env>prod)$"],
+                description="new-description",
+            )
+        )
+
+        assert result == 0
+        updated = dict(standalone_sink_group["servers"]["default"])
+        patterns = updated["extraction_patterns"]
+        assert isinstance(patterns, list)
+        assert len(patterns) == 1
+        assert patterns[0]["pattern"] == "^(?P<service>legacy)_(?P<env>prod)$"
+        assert patterns[0]["description"] == "new-description"
+        assert mock_save.called
 
     @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
     def test_server_not_found_returns_error(

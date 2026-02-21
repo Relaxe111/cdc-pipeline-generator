@@ -44,6 +44,12 @@ Examples:
     # 📊 Add new standalone analytics warehouse (creates 'sink_analytics')
     cdc manage-sink-groups --add-new-sink-group analytics --type postgres
 
+Standalone defaults (when using --add-new-sink-group):
+    - source_group: if --for-source-group is omitted, first source group from source-groups.yaml is used
+    - type: defaults to 'postgres'
+    - pattern: defaults to 'db-shared'
+    - environment_aware: enabled by default (use --no-environment-aware to disable)
+
     # 🌍 Add production server to sink_analytics
     cdc manage-sink-groups --sink-group sink_analytics --add-server prod \\
         --host analytics.example.com --port 5432 --user analytics_user
@@ -93,6 +99,9 @@ from cdc_generator.helpers.helpers_sink_groups import (
 )
 from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.yaml_loader import ConfigDict, load_yaml_file
+from cdc_generator.validators.manage_server_group.patterns import (
+    build_extraction_pattern_config,
+)
 
 # Mapping from flag name to (description, example)
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
@@ -115,6 +124,20 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         (
             "cdc manage-sink-groups --sink-group sink_asma"
             " --add-server nonprod"
+        ),
+    ),
+    "--server": (
+        "Existing server name in sink group",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --server default --extraction-patterns '^AdOpus(?P<customer>.+)$'"
+        ),
+    ),
+    "--list-server-extraction-patterns": (
+        "List extraction patterns for sink-group servers",
+        (
+            "cdc manage-sink-groups --sink-group sink_asma"
+            " --list-server-extraction-patterns default"
         ),
     ),
     "--add-new-sink-group": (
@@ -144,6 +167,13 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         (
             "cdc manage-sink-groups --sink-group sink_asma"
             " --db-definitions"
+        ),
+    ),
+    "--update": (
+        "Inspect sink databases and update sources",
+        (
+            "cdc manage-sink-groups --update --sink-group sink_asma"
+            " --server default"
         ),
     ),
     "--remove": (
@@ -465,16 +495,6 @@ def _validate_inspect_args(
     """
     sink_file = get_sink_file_path()
 
-    if not args.sink_group:
-        print_error(
-            f"Error: {action_flag} requires --sink-group <name>"
-        )
-        print_info(
-            "Usage: cdc manage-sink-groups "
-            + f"{action_flag} --sink-group <name>"
-        )
-        return 1
-
     try:
         sink_groups = load_sink_groups(sink_file)
     except FileNotFoundError:
@@ -487,6 +507,35 @@ def _validate_inspect_args(
         return 1
 
     sink_group_name = args.sink_group
+    if not sink_group_name:
+        if action_flag == "--update":
+            if len(sink_groups) == 1:
+                sink_group_name = next(iter(sink_groups.keys()))
+                print_info(
+                    "No --sink-group specified; using only available sink group: "
+                    + f"{sink_group_name}"
+                )
+                args.sink_group = sink_group_name
+            else:
+                print_error(
+                    "More than one sink group found. Please pick one sink group with --sink-group."
+                )
+                print_info(f"Available sink groups: {list(sink_groups.keys())}")
+                print_info(
+                    "Usage: cdc manage-sink-groups "
+                    + f"{action_flag} --sink-group <name>"
+                )
+                return 1
+        else:
+            print_error(
+                f"Error: {action_flag} requires --sink-group <name>"
+            )
+            print_info(
+                "Usage: cdc manage-sink-groups "
+                + f"{action_flag} --sink-group <name>"
+            )
+            return 1
+
     if sink_group_name not in sink_groups:
         print_error(f"Sink group '{sink_group_name}' not found.")
         print_info(f"Available sink groups: {list(sink_groups.keys())}")
@@ -650,6 +699,123 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
 
     return _run_inspection(resolved, sink_group_name, args)
+
+
+def _build_sink_sources_from_databases(
+    databases: list[dict[str, Any]],
+    server_name: str,
+) -> dict[str, Any]:
+    """Build sink-group ``sources`` mapping from inspected databases."""
+    sources: dict[str, Any] = {}
+
+    for db in databases:
+        service = str(db.get("service", "")).strip()
+        database_name = str(db.get("name", "")).strip()
+        if not service or not database_name:
+            continue
+
+        env_raw = str(db.get("environment", "")).strip()
+        env = env_raw if env_raw else "default"
+
+        schemas_raw = db.get("schemas", [])
+        schemas: list[str] = []
+        if isinstance(schemas_raw, list):
+            for schema_value in cast(list[object], schemas_raw):
+                schema_name = str(schema_value).strip()
+                if schema_name and schema_name not in schemas:
+                    schemas.append(schema_name)
+
+        table_count_raw = db.get("table_count", 0)
+        try:
+            table_count = int(table_count_raw)
+        except (TypeError, ValueError):
+            table_count = 0
+
+        source_entry = cast(
+            dict[str, Any],
+            sources.setdefault(service, {"schemas": []}),
+        )
+        existing_schemas_raw = source_entry.get("schemas", [])
+        existing_schemas: list[str] = []
+        if isinstance(existing_schemas_raw, list):
+            for existing_schema in cast(list[object], existing_schemas_raw):
+                existing_schema_name = str(existing_schema).strip()
+                if existing_schema_name and existing_schema_name not in existing_schemas:
+                    existing_schemas.append(existing_schema_name)
+        for schema_name in schemas:
+            if schema_name not in existing_schemas:
+                existing_schemas.append(schema_name)
+        source_entry["schemas"] = existing_schemas
+        source_entry[env] = {
+            "server": server_name,
+            "database": database_name,
+            "table_count": table_count,
+        }
+
+    return sources
+
+
+def handle_update_command(args: argparse.Namespace) -> int:
+    """Inspect sink DBs and update sink-group sources section."""
+    source_file = get_source_group_file_path()
+
+    result = _validate_inspect_args(args, action_flag="--update")
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group, sink_group_name = result
+    source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
+    resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
+
+    servers = resolved.get("servers", {})
+    if not servers:
+        print_error(f"No servers in sink group '{sink_group_name}'")
+        return 1
+
+    server_name = args.server or "default"
+    if server_name not in servers:
+        print_error(
+            f"Server '{server_name}' not found"
+            + f" in sink group '{sink_group_name}'"
+        )
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    sink_type = resolved.get("type", "postgres")
+
+    print_header(f"Updating Sink Group: {sink_group_name}")
+    print_info(f"Inspecting server '{server_name}' ({sink_type})")
+
+    try:
+        databases = _fetch_databases(
+            sink_type,
+            server_config,
+            resolved,
+            args,
+            server_name,
+        )
+    except ValueError as e:
+        print_error(str(e))
+        print_info("Only 'postgres' and 'mssql' sink types support update.")
+        return 1
+    except ImportError as e:
+        print_error(f"Database driver not installed: {e}")
+        return 1
+    except Exception as e:
+        print_error(f"Failed to inspect databases for update: {e}")
+        return 1
+
+    updated_sources = _build_sink_sources_from_databases(databases, server_name)
+    cast(dict[str, Any], sink_groups[sink_group_name])["sources"] = updated_sources
+
+    save_sink_groups(sink_groups, get_sink_file_path())
+
+    print_success(
+        f"Updated '{sink_group_name}' sources from {len(databases)} discovered database(s)"
+    )
+    print_info(f"Services updated: {len(updated_sources)}")
+    return 0
 
 
 def handle_introspect_types_command(args: argparse.Namespace) -> int:
@@ -1073,11 +1239,10 @@ def _build_server_config(args: argparse.Namespace, sink_group: dict[str, Any]) -
         args.password if args.password else placeholders["password"]
     )
 
-    # Add extraction patterns if provided
-    if getattr(args, 'extraction_patterns', None):
-        # Parse patterns from command line (expecting JSON-like format or simple patterns)
-        # For now, store as-is - validation/parsing happens elsewhere
-        server_config["extraction_patterns"] = args.extraction_patterns
+    # Add extraction patterns if provided (reuse source-group parsing logic)
+    extraction_patterns = _build_extraction_pattern_entries(args)
+    if extraction_patterns:
+        server_config["extraction_patterns"] = extraction_patterns
 
     return server_config
 
@@ -1181,7 +1346,7 @@ def handle_add_server_command(args: argparse.Namespace) -> int:
         return 1
 
     servers[server_name] = cast(SinkServerConfig, server_config)
-    sink_group["servers"] = servers  # type: ignore[typeddict-item]
+    cast(dict[str, Any], sink_group)["servers"] = servers
 
     save_sink_groups(sink_groups, sink_file)
 
@@ -1233,6 +1398,185 @@ def _check_server_references(
                     if env_dict.get("server") == server_name:
                         references.append(f"{service_name}.{env_name}")
     return references
+
+
+def _build_extraction_pattern_entries(args: argparse.Namespace) -> list[dict[str, Any]]:
+    """Build structured extraction pattern entries from CLI args.
+
+    Reuses source-group pattern parsing so sink-group and source-group keep
+    consistent keys and semantics.
+    """
+    raw_patterns_value = getattr(args, "extraction_patterns", None)
+    if not raw_patterns_value:
+        return []
+
+    raw_patterns: list[str]
+    if isinstance(raw_patterns_value, list):
+        raw_patterns = [
+            str(pattern_value).strip()
+            for pattern_value in cast(list[object], raw_patterns_value)
+            if str(pattern_value).strip()
+        ]
+    else:
+        pattern_value = str(raw_patterns_value).strip()
+        raw_patterns = [pattern_value] if pattern_value else []
+
+    entries: list[dict[str, Any]] = []
+    for raw_pattern in raw_patterns:
+        entries.append(build_extraction_pattern_config(args, raw_pattern))
+    return entries
+
+
+def _merge_extraction_patterns(
+    existing_patterns_raw: object,
+    incoming_patterns: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Merge extraction patterns by ``pattern`` key.
+
+    Existing entry with same ``pattern`` is updated in place; otherwise incoming
+    entry is appended.
+    """
+    existing_patterns: list[dict[str, Any]] = []
+    if isinstance(existing_patterns_raw, list):
+        for item in cast(list[object], existing_patterns_raw):
+            if isinstance(item, dict):
+                existing_patterns.append(dict(cast(dict[str, Any], item)))
+
+    index_by_pattern: dict[str, int] = {}
+    for index, item in enumerate(existing_patterns):
+        pattern_value = item.get("pattern")
+        if isinstance(pattern_value, str) and pattern_value and pattern_value not in index_by_pattern:
+            index_by_pattern[pattern_value] = index
+
+    updated_count = 0
+    added_count = 0
+    for incoming in incoming_patterns:
+        pattern_value = incoming.get("pattern")
+        if not isinstance(pattern_value, str) or not pattern_value:
+            existing_patterns.append(incoming)
+            added_count += 1
+            continue
+
+        existing_index = index_by_pattern.get(pattern_value)
+        if existing_index is not None:
+            existing_patterns[existing_index] = incoming
+            updated_count += 1
+            continue
+
+        index_by_pattern[pattern_value] = len(existing_patterns)
+        existing_patterns.append(incoming)
+        added_count += 1
+
+    return existing_patterns, added_count, updated_count
+
+
+def handle_update_server_extraction_patterns_command(args: argparse.Namespace) -> int:
+    """Update extraction patterns for an existing server in a sink group."""
+    if not args.sink_group or not args.server:
+        print_error("--server update requires --sink-group and --server")
+        return 1
+    if not args.extraction_patterns:
+        print_error("--server update requires --extraction-patterns")
+        return 1
+
+    result = _load_sink_group_for_server_op(args, "--server")
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group, sink_group_name, sink_file = result
+    server_name = args.server
+    servers = sink_group.get("servers", {})
+
+    if server_name not in servers:
+        print_error(
+            f"Server '{server_name}' not found in sink group '{sink_group_name}'"
+        )
+        print_info(
+            "Use --add-server to create it first, or --remove-server to delete"
+        )
+        return 1
+
+    extraction_patterns = _build_extraction_pattern_entries(args)
+    if not extraction_patterns:
+        print_error("No valid extraction patterns provided")
+        return 1
+
+    server_config = cast(dict[str, Any], servers[server_name])
+    merged_patterns, added_count, updated_count = _merge_extraction_patterns(
+        server_config.get("extraction_patterns", []),
+        extraction_patterns,
+    )
+    server_config["extraction_patterns"] = merged_patterns
+    servers[server_name] = cast(SinkServerConfig, server_config)
+    cast(dict[str, Any], sink_group)["servers"] = servers
+
+    save_sink_groups(sink_groups, sink_file)
+    print_success(
+        f"Updated extraction_patterns for server '{server_name}'"
+        + f" in sink group '{sink_group_name}'"
+    )
+    print_info(
+        f"Patterns: +{added_count} added, {updated_count} updated"
+        + f" (total: {len(server_config['extraction_patterns'])})"
+    )
+    return 0
+
+
+def handle_list_server_extraction_patterns_command(args: argparse.Namespace) -> int:
+    """List extraction patterns for servers in a sink group.
+
+    Use optional --list-server-extraction-patterns SERVER to filter to one server.
+    """
+    if not args.sink_group:
+        print_error("--list-server-extraction-patterns requires --sink-group")
+        return 1
+
+    result = _load_sink_group_for_server_op(args, "--list-server-extraction-patterns")
+    if isinstance(result, int):
+        return result
+
+    _sink_groups, sink_group, sink_group_name, _sink_file = result
+    servers = sink_group.get("servers", {})
+
+    if not servers:
+        print_warning(f"Sink group '{sink_group_name}' has no servers configured")
+        return 1
+
+    from cdc_generator.validators.manage_server_group.patterns import (
+        display_server_patterns,
+    )
+
+    server_filter = args.list_server_extraction_patterns
+    selected_servers: dict[str, Any]
+    if server_filter:
+        if server_filter not in servers:
+            print_error(
+                f"Server '{server_filter}' not found in sink group '{sink_group_name}'"
+            )
+            print_info(f"Available servers: {list(servers.keys())}")
+            return 1
+        selected_servers = {server_filter: servers[server_filter]}
+    else:
+        selected_servers = dict(servers)
+
+    print_header(f"Sink Server Extraction Patterns: {sink_group_name}")
+
+    has_any = False
+    for server_name in sorted(selected_servers.keys()):
+        server_config = cast(dict[str, Any], selected_servers[server_name])
+        if display_server_patterns(server_name, server_config):
+            has_any = True
+
+    if not has_any:
+        print()
+        print_info("💡 Add extraction patterns with:")
+        print_info(
+            "   cdc manage-sink-groups --sink-group "
+            + f"{sink_group_name} --server default --extraction-patterns "
+            + "'^(?P<service>\\w+)_db_(?P<env>\\w+)$'"
+        )
+
+    return 0
 
 
 def handle_remove_server_command(args: argparse.Namespace) -> int:
@@ -1426,7 +1770,8 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         metavar="NAME",
         help=(
             f"{Colors.GREEN}+ Add new standalone sink group"
-            f" (auto-prefixes with 'sink_'){Colors.RESET}"
+            f" (auto-prefixes with 'sink_'; default source_group is first"
+            f" entry in source-groups.yaml if --for-source-group is omitted){Colors.RESET}"
         ),
     )
     parser.add_argument(
@@ -1468,7 +1813,10 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--for-source-group",
         metavar="NAME",
-        help=f"{Colors.CYAN}📡 Source group this standalone sink consumes from{Colors.RESET}",
+        help=(
+            f"{Colors.CYAN}📡 Source group this standalone sink consumes from"
+            f" (recommended to set explicitly){Colors.RESET}"
+        ),
     )
 
     # List/Info actions
@@ -1496,9 +1844,20 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         ),
     )
     parser.add_argument(
+        "--update",
+        action="store_true",
+        help=(
+            f"{Colors.CYAN}Inspect sink server and update sink-group sources"
+            f" (standalone sink groups only){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
         "--server",
         metavar="NAME",
-        help=f"{Colors.BLUE}🖥️  Server name to inspect (default: 'default'){Colors.RESET}",
+        help=(
+            f"{Colors.BLUE}🖥️  Server name to inspect"
+            f" or update with --extraction-patterns (default inspect/update: 'default'){Colors.RESET}"
+        ),
     )
     parser.add_argument(
         "--include-pattern",
@@ -1537,7 +1896,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         metavar="NAME",
         help=(
             f"{Colors.CYAN}Sink group to operate on"
-            f" (for --add-server, --remove-server){Colors.RESET}"
+            f" (for --add-server, --remove-server, --server updates){Colors.RESET}"
         ),
     )
     parser.add_argument(
@@ -1579,7 +1938,48 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         metavar="PATTERN",
         help=(
             f"{Colors.CYAN}Regex extraction patterns for server"
-            f" (space-separated, use quotes){Colors.RESET}"
+            f" (space-separated, use quotes). Supports --env, --strip-patterns,"
+            f" --env-mapping, --description metadata.{Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--env",
+        type=str,
+        help=(
+            f"{Colors.CYAN}Fixed environment for extraction patterns"
+            f" (overrides captured (?P<env>) group){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--strip-patterns",
+        type=str,
+        help=(
+            f"{Colors.CYAN}Comma-separated regex patterns to remove from"
+            f" extracted service name (e.g., '_db,_legacy$'){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--env-mapping",
+        type=str,
+        action="append",
+        help=(
+            f"{Colors.CYAN}Environment mapping in format from:to"
+            f" (can be repeated){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--description",
+        type=str,
+        help=f"{Colors.CYAN}Description for extraction pattern entries{Colors.RESET}",
+    )
+    parser.add_argument(
+        "--list-server-extraction-patterns",
+        nargs="?",
+        const="",
+        metavar="SERVER",
+        help=(
+            f"{Colors.CYAN}List extraction patterns for sink-group servers"
+            f" (optionally filter by server){Colors.RESET}"
         ),
     )
 
@@ -1599,10 +1999,26 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "list": (args.list, lambda: handle_list(args)),
         "info": (args.info, lambda: handle_info_command(args)),
         "inspect": (args.inspect, lambda: handle_inspect_command(args)),
+        "update": (args.update, lambda: handle_update_command(args)),
         "introspect_types": (args.introspect_types, lambda: handle_introspect_types_command(args)),
         "db_definitions": (args.db_definitions, lambda: handle_db_definitions_command(args)),
         "validate": (args.validate, lambda: handle_validate_command(args)),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
+        "update_server_extraction_patterns": (
+            bool(
+                args.server
+                and args.sink_group
+                and args.extraction_patterns
+                and not args.inspect
+                and not args.add_server
+                and not args.remove_server
+            ),
+            lambda: handle_update_server_extraction_patterns_command(args),
+        ),
+        "list_server_extraction_patterns": (
+            args.list_server_extraction_patterns is not None,
+            lambda: handle_list_server_extraction_patterns_command(args),
+        ),
         "remove_server": (args.remove_server, lambda: handle_remove_server_command(args)),
         "remove": (args.remove, lambda: handle_remove_sink_group_command(args)),
     }

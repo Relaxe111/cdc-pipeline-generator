@@ -398,16 +398,25 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "list_flag": set(),
     "info": set(),
     "inspect": {"server", "include_pattern"},
+    "update": {"sink_group", "server", "include_pattern"},
     "introspect_types": {"sink_group"},
     "db_definitions": {"sink_group"},
     "validate": set(),
     "sink_group": {
-        "add_server", "remove_server",
+        "add_server", "remove_server", "server",
+        "list_server_extraction_patterns",
         "host", "port", "user", "password", "extraction_patterns",
+        "env", "strip_patterns", "env_mapping", "description",
     },
     "add_server": {
         "sink_group", "host", "port", "user", "password",
+        "extraction_patterns", "env", "strip_patterns", "env_mapping", "description",
     },
+    "server": {
+        "sink_group", "extraction_patterns", "env", "strip_patterns",
+        "env_mapping", "description",
+    },
+    "list_server_extraction_patterns": {"sink_group", "server"},
     "remove_server": {"sink_group"},
     "remove": set(),
 }
