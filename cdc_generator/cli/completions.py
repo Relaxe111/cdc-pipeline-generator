@@ -1067,6 +1067,19 @@ def complete_sink_group_servers(
     """Complete servers for a sink group."""
     sink_group = _get_param(ctx, "sink_group")
     if not sink_group:
+        sink_group = _get_param(ctx, "sink_group_positional")
+    if not sink_group and ctx.args:
+        args_list = list(ctx.args)
+        for index, token in enumerate(args_list):
+            if token != "--update":
+                continue
+            next_index = index + 1
+            if next_index < len(args_list):
+                candidate = args_list[next_index]
+                if candidate and not candidate.startswith("-"):
+                    sink_group = candidate
+                    break
+    if not sink_group:
         return []
 
     from cdc_generator.helpers.autocompletions.server_groups import (

@@ -346,6 +346,11 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
+@click.argument(
+    "sink_group_positional",
+    required=False,
+    shell_complete=complete_sink_group_names,
+)
 # -- Create --
 @click.option("--create", is_flag=True,
               help="Create sink groups")
@@ -392,6 +397,10 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Generate services/_schemas/_definitions type file once")
 @click.option("--validate", is_flag=True,
               help="Validate sink group configuration")
+@click.option("--add-to-ignore-list",
+              help="Add pattern to database exclude list")
+@click.option("--add-to-schema-excludes",
+              help="Add pattern to schema exclude list")
 # -- Server management --
 @click.option("--sink-group",
               shell_complete=complete_sink_group_context_aware,

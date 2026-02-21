@@ -275,6 +275,13 @@ class TestManageSinkGroupsOptions:
         for opt in ["--sink-group", "--add-server", "--remove-server"]:
             assert opt in opts, f"Missing option: {opt}"
 
+    def test_has_exclude_pattern_options(self) -> None:
+        """Exclude-pattern options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-sink-groups"])
+        for opt in ["--add-to-ignore-list", "--add-to-schema-excludes"]:
+            assert opt in opts, f"Missing option: {opt}"
+
 
 class TestManageServicesSchemaColumnTemplatesOptions:
     """manage-services schema column-templates options must be declared."""

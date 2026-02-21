@@ -180,6 +180,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "Sink group name to remove",
         "cdc manage-sink-groups --remove sink_test",
     ),
+    "--add-to-ignore-list": (
+        "Add database exclude pattern(s) to sink group",
+        "cdc manage-sink-groups --add-to-ignore-list temp_%",
+    ),
+    "--add-to-schema-excludes": (
+        "Add schema exclude pattern(s) to sink group",
+        "cdc manage-sink-groups --add-to-schema-excludes hdb_catalog",
+    ),
 }
 
 
@@ -755,6 +763,94 @@ def _build_sink_sources_from_databases(
     return sources
 
 
+def _merge_server_sources_update(
+    existing_sources_raw: object,
+    updated_sources: dict[str, Any],
+    server_name: str,
+) -> dict[str, Any]:
+    """Merge updated sources for one server, preserving other server entries.
+
+    Strategy:
+    1. Remove existing env entries that belong to ``server_name``.
+    2. Keep entries from other servers unchanged.
+    3. Merge in newly discovered entries for ``server_name``.
+    4. Union ``schemas`` lists per service.
+    """
+    merged = _copy_existing_sources_without_server(
+        existing_sources_raw,
+        server_name,
+    )
+
+    for service_name_raw, source_raw in updated_sources.items():
+        service_name = str(service_name_raw).strip()
+        if not service_name or not isinstance(source_raw, dict):
+            continue
+
+        incoming_source = cast(dict[str, Any], source_raw)
+        target_source = cast(dict[str, Any], merged.setdefault(service_name, {}))
+
+        merged_schemas = _merge_schema_lists(
+            target_source.get("schemas", []),
+            incoming_source.get("schemas", []),
+        )
+        if merged_schemas:
+            target_source["schemas"] = merged_schemas
+
+        for env_name_raw, env_cfg_raw in incoming_source.items():
+            if env_name_raw == "schemas" or not isinstance(env_cfg_raw, dict):
+                continue
+            target_source[str(env_name_raw)] = dict(cast(dict[str, Any], env_cfg_raw))
+
+    return merged
+
+
+def _merge_schema_lists(primary_raw: object, secondary_raw: object) -> list[str]:
+    """Merge two schema lists into a unique, ordered list."""
+    merged: list[str] = []
+    for raw in [primary_raw, secondary_raw]:
+        if not isinstance(raw, list):
+            continue
+        for schema_value in cast(list[object], raw):
+            schema_name = str(schema_value).strip()
+            if schema_name and schema_name not in merged:
+                merged.append(schema_name)
+    return merged
+
+
+def _copy_existing_sources_without_server(
+    existing_sources_raw: object,
+    server_name: str,
+) -> dict[str, Any]:
+    """Copy existing sources while removing env entries for target server."""
+    copied: dict[str, Any] = {}
+    if not isinstance(existing_sources_raw, dict):
+        return copied
+
+    for service_name_raw, source_raw in cast(dict[str, object], existing_sources_raw).items():
+        service_name = str(service_name_raw).strip()
+        if not service_name or not isinstance(source_raw, dict):
+            continue
+
+        source_map = cast(dict[str, Any], source_raw)
+        service_copy: dict[str, Any] = {}
+
+        schemas = _merge_schema_lists(source_map.get("schemas", []), [])
+        if schemas:
+            service_copy["schemas"] = schemas
+
+        for env_name_raw, env_cfg_raw in source_map.items():
+            if env_name_raw == "schemas" or not isinstance(env_cfg_raw, dict):
+                continue
+            env_cfg = cast(dict[str, Any], env_cfg_raw)
+            if str(env_cfg.get("server", "")).strip() == server_name:
+                continue
+            service_copy[str(env_name_raw)] = dict(env_cfg)
+
+        copied[service_name] = service_copy
+
+    return copied
+
+
 def handle_update_command(args: argparse.Namespace) -> int:
     """Inspect sink DBs and update sink-group sources section."""
     source_file = get_source_group_file_path()
@@ -772,7 +868,7 @@ def handle_update_command(args: argparse.Namespace) -> int:
         print_error(f"No servers in sink group '{sink_group_name}'")
         return 1
 
-    server_name = args.server or "default"
+    server_name = args.server or next(iter(servers))
     if server_name not in servers:
         print_error(
             f"Server '{server_name}' not found"
@@ -807,7 +903,13 @@ def handle_update_command(args: argparse.Namespace) -> int:
         return 1
 
     updated_sources = _build_sink_sources_from_databases(databases, server_name)
-    cast(dict[str, Any], sink_groups[sink_group_name])["sources"] = updated_sources
+    sink_group_entry = cast(dict[str, Any], sink_groups[sink_group_name])
+    merged_sources = _merge_server_sources_update(
+        sink_group_entry.get("sources", {}),
+        updated_sources,
+        server_name,
+    )
+    sink_group_entry["sources"] = merged_sources
 
     save_sink_groups(sink_groups, get_sink_file_path())
 
@@ -1698,6 +1800,178 @@ def handle_remove_sink_group_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resolve_sink_group_for_pattern_update(
+    args: argparse.Namespace,
+    *,
+    action_flag: str,
+) -> tuple[dict[str, SinkGroupConfig], str, SinkGroupConfig, Path] | int:
+    """Resolve target sink group for pattern update operations.
+
+    Behavior:
+    - If ``--sink-group`` is provided: validate and use it.
+    - If omitted and exactly one sink group exists: auto-select it.
+    - If omitted and multiple sink groups exist: fail with a friendly message.
+    """
+    sink_file = get_sink_file_path()
+
+    try:
+        sink_groups = load_sink_groups(sink_file)
+    except FileNotFoundError:
+        print_error(f"Sink groups file not found: {sink_file}")
+        return 1
+
+    if not sink_groups:
+        print_error("No sink groups found in sink-groups.yaml")
+        return 1
+
+    sink_group_name = args.sink_group
+    if not sink_group_name:
+        if len(sink_groups) == 1:
+            sink_group_name = next(iter(sink_groups.keys()))
+            print_info(
+                "No --sink-group specified; using only available sink group: "
+                + f"{sink_group_name}"
+            )
+            args.sink_group = sink_group_name
+        else:
+            print_error(
+                "More than one sink group found. Please pick one sink group with --sink-group."
+            )
+            print_info(f"Available sink groups: {list(sink_groups.keys())}")
+            print_info(
+                "Usage: cdc manage-sink-groups "
+                + f"{action_flag} <pattern> --sink-group <name>"
+            )
+            return 1
+
+    if sink_group_name not in sink_groups:
+        print_error(f"Sink group '{sink_group_name}' not found")
+        print_info(f"Available sink groups: {list(sink_groups.keys())}")
+        return 1
+
+    sink_group = sink_groups[sink_group_name]
+    if sink_group.get("inherits", False):
+        source_name = sink_group_name.removeprefix("sink_")
+        print_error(
+            f"Cannot modify excludes for '{sink_group_name}'"
+            + f" — it inherits from source group '{source_name}'"
+        )
+        print_info(
+            "Use 'cdc manage-source-groups --add-to-ignore-list'"
+            + " or '--add-to-schema-excludes' on the source group instead."
+        )
+        return 1
+
+    return sink_groups, sink_group_name, sink_group, sink_file
+
+
+def _parse_csv_patterns(raw_value: str) -> list[str]:
+    """Parse comma-separated pattern input and return cleaned entries."""
+    return [
+        item.strip()
+        for item in raw_value.split(",")
+        if item.strip()
+    ]
+
+
+def _append_unique_patterns(
+    existing_values: object,
+    incoming_values: list[str],
+) -> tuple[list[str], int]:
+    """Append unique string patterns preserving order.
+
+    Returns the merged list and number of newly added patterns.
+    """
+    merged: list[str] = []
+    if isinstance(existing_values, list):
+        for item in cast(list[object], existing_values):
+            value = str(item).strip()
+            if value and value not in merged:
+                merged.append(value)
+
+    added_count = 0
+    for value in incoming_values:
+        if value not in merged:
+            merged.append(value)
+            added_count += 1
+
+    return merged, added_count
+
+
+def handle_add_to_ignore_list_command(args: argparse.Namespace) -> int:
+    """Add database exclude pattern(s) to sink group configuration."""
+    if not args.add_to_ignore_list:
+        print_error("--add-to-ignore-list requires a pattern")
+        return 1
+
+    parsed_patterns = _parse_csv_patterns(str(args.add_to_ignore_list))
+    if not parsed_patterns:
+        print_error("No valid patterns provided for --add-to-ignore-list")
+        return 1
+
+    result = _resolve_sink_group_for_pattern_update(
+        args,
+        action_flag="--add-to-ignore-list",
+    )
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group_name, sink_group, sink_file = result
+    merged_patterns, added_count = _append_unique_patterns(
+        sink_group.get("database_exclude_patterns", []),
+        parsed_patterns,
+    )
+    cast(dict[str, Any], sink_group)["database_exclude_patterns"] = merged_patterns
+    sink_groups[sink_group_name] = sink_group
+    save_sink_groups(sink_groups, sink_file)
+
+    print_success(
+        f"Updated database_exclude_patterns for sink group '{sink_group_name}'"
+    )
+    print_info(
+        f"Patterns: +{added_count} added"
+        + f" (total: {len(merged_patterns)})"
+    )
+    return 0
+
+
+def handle_add_to_schema_excludes_command(args: argparse.Namespace) -> int:
+    """Add schema exclude pattern(s) to sink group configuration."""
+    if not args.add_to_schema_excludes:
+        print_error("--add-to-schema-excludes requires a pattern")
+        return 1
+
+    parsed_patterns = _parse_csv_patterns(str(args.add_to_schema_excludes))
+    if not parsed_patterns:
+        print_error("No valid patterns provided for --add-to-schema-excludes")
+        return 1
+
+    result = _resolve_sink_group_for_pattern_update(
+        args,
+        action_flag="--add-to-schema-excludes",
+    )
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group_name, sink_group, sink_file = result
+    merged_patterns, added_count = _append_unique_patterns(
+        sink_group.get("schema_exclude_patterns", []),
+        parsed_patterns,
+    )
+    cast(dict[str, Any], sink_group)["schema_exclude_patterns"] = merged_patterns
+    sink_groups[sink_group_name] = sink_group
+    save_sink_groups(sink_groups, sink_file)
+
+    print_success(
+        f"Updated schema_exclude_patterns for sink group '{sink_group_name}'"
+    )
+    print_info(
+        f"Patterns: +{added_count} added"
+        + f" (total: {len(merged_patterns)})"
+    )
+    return 0
+
+
 def main() -> int:
     """CLI entry point for manage-sink-groups command."""
     # Build colorized description
@@ -1845,10 +2119,12 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     )
     parser.add_argument(
         "--update",
-        action="store_true",
+        nargs="?",
+        const="__AUTO__",
+        metavar="SINK_GROUP",
         help=(
             f"{Colors.CYAN}Inspect sink server and update sink-group sources"
-            f" (standalone sink groups only){Colors.RESET}"
+            f" (optionally pass sink group name){Colors.RESET}"
         ),
     )
     parser.add_argument(
@@ -1888,6 +2164,22 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "--validate",
         action="store_true",
         help=f"{Colors.GREEN}✅ Validate sink group configuration{Colors.RESET}",
+    )
+    parser.add_argument(
+        "--add-to-ignore-list",
+        metavar="PATTERN",
+        help=(
+            f"{Colors.YELLOW}Add pattern(s) to database_exclude_patterns"
+            f" (comma-separated supported){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--add-to-schema-excludes",
+        metavar="PATTERN",
+        help=(
+            f"{Colors.YELLOW}Add pattern(s) to schema_exclude_patterns"
+            f" (comma-separated supported){Colors.RESET}"
+        ),
     )
 
     # Server management
@@ -1992,6 +2284,13 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
 
     args = parser.parse_args()
 
+    if (
+        isinstance(args.update, str)
+        and args.update not in {"", "__AUTO__"}
+        and not args.sink_group
+    ):
+        args.sink_group = args.update
+
     # Route to appropriate handler
     handlers = {
         "create": (args.create, lambda: handle_create(args)),
@@ -1999,10 +2298,18 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "list": (args.list, lambda: handle_list(args)),
         "info": (args.info, lambda: handle_info_command(args)),
         "inspect": (args.inspect, lambda: handle_inspect_command(args)),
-        "update": (args.update, lambda: handle_update_command(args)),
+        "update": (args.update is not None, lambda: handle_update_command(args)),
         "introspect_types": (args.introspect_types, lambda: handle_introspect_types_command(args)),
         "db_definitions": (args.db_definitions, lambda: handle_db_definitions_command(args)),
         "validate": (args.validate, lambda: handle_validate_command(args)),
+        "add_to_ignore_list": (
+            args.add_to_ignore_list,
+            lambda: handle_add_to_ignore_list_command(args),
+        ),
+        "add_to_schema_excludes": (
+            args.add_to_schema_excludes,
+            lambda: handle_add_to_schema_excludes_command(args),
+        ),
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "update_server_extraction_patterns": (
             bool(

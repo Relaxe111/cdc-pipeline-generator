@@ -12,8 +12,10 @@ from cdc_generator.cli.sink_group import (
     _build_server_config,
     _check_server_references,
     _load_sink_group_for_server_op,
+    _merge_server_sources_update,
     _validate_single_sink_group,
     handle_add_server_command,
+    handle_update_command,
     handle_remove_server_command,
     handle_remove_sink_group_command,
     handle_update_server_extraction_patterns_command,
@@ -124,6 +126,145 @@ class TestBuildSinkSourcesFromDatabases:
             "database": "directory_db_prod",
             "table_count": 0,
         }
+
+
+class TestMergeServerSourcesUpdate:
+    """Tests for ``_merge_server_sources_update``."""
+
+    def test_preserves_other_servers_and_updates_target_server(self) -> None:
+        existing_sources: dict[str, Any] = {
+            "chat": {
+                "schemas": ["public", "logs"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "chat_dev_old",
+                    "table_count": 10,
+                },
+                "prod": {
+                    "server": "prod",
+                    "database": "chat_prod",
+                    "table_count": 20,
+                },
+            },
+            "directory": {
+                "schemas": ["public"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "directory_dev_old",
+                    "table_count": 30,
+                },
+            },
+        }
+
+        updated_sources: dict[str, Any] = {
+            "chat": {
+                "schemas": ["public", "monitoring"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "chat_dev_new",
+                    "table_count": 11,
+                },
+            },
+            "notification": {
+                "schemas": ["public"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "notification_dev",
+                    "table_count": 9,
+                },
+            },
+        }
+
+        merged = _merge_server_sources_update(
+            existing_sources,
+            updated_sources,
+            "nonprod",
+        )
+
+        chat = merged["chat"]
+        assert chat["prod"]["server"] == "prod"
+        assert chat["dev"]["database"] == "chat_dev_new"
+        assert chat["schemas"] == ["public", "logs", "monitoring"]
+
+        directory = merged["directory"]
+        assert "dev" not in directory
+        assert directory["schemas"] == ["public"]
+
+        notification = merged["notification"]
+        assert notification["dev"]["database"] == "notification_dev"
+
+
+class TestHandleUpdateCommandMerge:
+    """Regression tests for sequential per-server sink updates."""
+
+    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group.resolve_sink_group")
+    @patch("cdc_generator.cli.sink_group.load_yaml_file")
+    @patch("cdc_generator.cli.sink_group._fetch_databases")
+    @patch("cdc_generator.cli.sink_group._validate_inspect_args")
+    @patch("cdc_generator.cli.sink_group.get_source_group_file_path")
+    def test_sequential_server_updates_preserve_other_server_entries(
+        self,
+        _mock_source_file: Mock,
+        mock_validate: Mock,
+        mock_fetch: Mock,
+        mock_load_yaml: Mock,
+        mock_resolve: Mock,
+        _mock_save: Mock,
+    ) -> None:
+        sink_group_name = "sink_asma"
+        sink_group: dict[str, Any] = {
+            "source_group": "adopus",
+            "pattern": "db-shared",
+            "type": "postgres",
+            "servers": {
+                "nonprod": {"host": "np", "port": "5432", "user": "u", "password": "p"},
+                "prod": {"host": "pp", "port": "5432", "user": "u", "password": "p"},
+            },
+            "sources": {},
+        }
+        sink_groups: dict[str, Any] = {sink_group_name: sink_group}
+
+        mock_validate.return_value = (
+            sink_groups,
+            sink_group,
+            sink_group_name,
+        )
+        mock_load_yaml.return_value = {"adopus": {}}
+        mock_resolve.return_value = sink_group
+        mock_fetch.side_effect = [
+            [
+                {
+                    "service": "chat",
+                    "name": "chat_dev",
+                    "environment": "dev",
+                    "schemas": ["public"],
+                    "table_count": 10,
+                },
+            ],
+            [
+                {
+                    "service": "chat",
+                    "name": "chat_prod",
+                    "environment": "prod",
+                    "schemas": ["public"],
+                    "table_count": 12,
+                },
+            ],
+        ]
+
+        first_result = handle_update_command(_ns(sink_group="sink_asma", server="nonprod"))
+        second_result = handle_update_command(_ns(sink_group="sink_asma", server="prod"))
+
+        assert first_result == 0
+        assert second_result == 0
+
+        sources = sink_groups[sink_group_name]["sources"]
+        assert "chat" in sources
+        assert sources["chat"]["dev"]["server"] == "nonprod"
+        assert sources["chat"]["prod"]["server"] == "prod"
+        assert sources["chat"]["dev"]["database"] == "chat_dev"
+        assert sources["chat"]["prod"]["database"] == "chat_prod"
 
 
 class TestBuildServerConfig:

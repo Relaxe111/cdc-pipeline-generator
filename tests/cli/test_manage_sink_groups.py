@@ -84,6 +84,21 @@ _MULTI_STANDALONE_SINK_GROUPS = (
     "  sources: {}\n"
 )
 
+_SINGLE_SINK_GROUP_NON_DEFAULT_SERVER = (
+    "sink_asma:\n"
+    "  source_group: asma\n"
+    "  pattern: db-shared\n"
+    "  type: postgres\n"
+    "  environment_aware: true\n"
+    "  servers:\n"
+    "    reporting:\n"
+    "      host: localhost\n"
+    "      port: '5432'\n"
+    "      user: postgres\n"
+    "      password: secret\n"
+    "  sources: {}\n"
+)
+
 _INHERITED_SINK_GROUPS = (
     "sink_asma:\n"
     "  inherits: true\n"
@@ -303,6 +318,35 @@ class TestCliInspectAndIntrospect:
 
         assert result.returncode == 1
         assert "More than one sink group found" in result.stdout + result.stderr
+
+    def test_update_without_server_uses_first_available_server(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _SINGLE_SINK_GROUP_NON_DEFAULT_SERVER)
+
+        result = run_cdc("manage-sink-groups", "--update", "--sink-group", "sink_asma")
+
+        assert result.returncode == 1
+        output = result.stdout + result.stderr
+        assert "Inspecting server 'reporting'" in output
+
+    def test_update_accepts_sink_group_as_optional_value(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--update",
+            "sink_analytics",
+            "--server",
+            "ghost",
+        )
+
+        assert result.returncode == 1
+        assert "Server 'ghost' not found" in result.stdout + result.stderr
 
     def test_inspect_rejects_inherited_sink_group(
         self, run_cdc: RunCdc, isolated_project: Path,
@@ -622,6 +666,80 @@ class TestCliServerManagement:
         assert "description: new" in content
 
 
+class TestCliExcludePatterns:
+    """CLI e2e: sink-group exclude pattern management."""
+
+    def test_add_to_ignore_list_auto_resolves_single_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--add-to-ignore-list",
+            "temp_%,backup_%",
+        )
+
+        assert result.returncode == 0
+        output = result.stdout + result.stderr
+        assert "using only available sink group" in output
+        content = _read_sink_groups(isolated_project)
+        assert "database_exclude_patterns:" in content
+        assert "- temp_%" in content
+        assert "- backup_%" in content
+
+    def test_add_to_ignore_list_fails_for_multiple_groups_without_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _MULTI_STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--add-to-ignore-list",
+            "temp_%",
+        )
+
+        assert result.returncode == 1
+        assert "More than one sink group found" in result.stdout + result.stderr
+
+    def test_add_to_schema_excludes_updates_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--add-to-schema-excludes",
+            "hdb_catalog,sys",
+        )
+
+        assert result.returncode == 0
+        content = _read_sink_groups(isolated_project)
+        assert "schema_exclude_patterns:" in content
+        assert "- hdb_catalog" in content
+        assert "- sys" in content
+
+    def test_add_to_schema_excludes_fails_for_multiple_groups_without_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _MULTI_STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--add-to-schema-excludes",
+            "hdb_catalog",
+        )
+
+        assert result.returncode == 1
+        assert "More than one sink group found" in result.stdout + result.stderr
+
+
 class TestCliRemoveSinkGroup:
     """CLI e2e: remove sink group behavior."""
 
@@ -661,4 +779,28 @@ class TestCliCompletions:
         assert "--create" in output
         assert "--add-new-sink-group" in output
         assert "--update" in output
+        assert "--add-to-ignore-list" in output
+        assert "--add-to-schema-excludes" in output
         assert "--validate" in output
+
+    def test_update_value_completion_suggests_sink_group_names(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc_completion("cdc manage-sink-groups --update sink_")
+
+        assert result.returncode == 0
+        assert "sink_analytics" in result.stdout
+
+    def test_update_context_shows_server_option_without_sink_group(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        result = run_cdc_completion("cdc manage-sink-groups --update --")
+
+        assert result.returncode == 0
+        assert "--server" in result.stdout

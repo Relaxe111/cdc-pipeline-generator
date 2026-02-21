@@ -402,9 +402,12 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "introspect_types": {"sink_group"},
     "db_definitions": {"sink_group"},
     "validate": set(),
+    "add_to_ignore_list": {"sink_group"},
+    "add_to_schema_excludes": {"sink_group"},
     "sink_group": {
         "add_server", "remove_server", "server",
         "list_server_extraction_patterns",
+        "add_to_ignore_list", "add_to_schema_excludes",
         "host", "port", "user", "password", "extraction_patterns",
         "env", "strip_patterns", "env_mapping", "description",
     },

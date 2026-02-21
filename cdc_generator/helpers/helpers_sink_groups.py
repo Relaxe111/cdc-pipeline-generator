@@ -8,6 +8,8 @@ Handles:
 """
 
 from pathlib import Path
+from datetime import UTC, datetime
+from io import StringIO
 from typing import Any, TypedDict, cast
 
 from cdc_generator.core.sink_types import (
@@ -16,7 +18,7 @@ from cdc_generator.core.sink_types import (
     SinkGroupConfig,
     SinkServerConfig,
 )
-from cdc_generator.helpers.yaml_loader import load_yaml_file, save_yaml_file
+from cdc_generator.helpers.yaml_loader import load_yaml_file, yaml
 
 
 class StandaloneSinkGroupOptions(TypedDict, total=False):
@@ -187,7 +189,113 @@ def save_sink_groups(
         sink_groups: Dictionary of sink group configurations
         sink_file_path: Path to sink-groups.yaml
     """
-    save_yaml_file(cast(dict[str, Any], sink_groups), sink_file_path)
+    sink_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    output_lines: list[str] = _build_sink_file_header_comments()
+    output_lines.append(
+        "# Updated at: "
+        + datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+    )
+
+    for sink_group_name, sink_group in sink_groups.items():
+        output_lines.append("")
+        output_lines.extend(
+            _build_sink_group_metadata_comments(sink_group_name, sink_group)
+        )
+
+        sink_group_buffer = StringIO()
+        yaml.dump({sink_group_name: sink_group}, sink_group_buffer)
+        sink_group_yaml = sink_group_buffer.getvalue().rstrip()
+        output_lines.extend(sink_group_yaml.splitlines())
+
+    with sink_file_path.open("w", encoding="utf-8") as sink_file:
+        sink_file.write("\n".join(output_lines).rstrip() + "\n")
+
+
+def _build_sink_file_header_comments() -> list[str]:
+    """Build the standard header comments for sink-groups.yaml."""
+    return [
+        "# ============================================================================",
+        "# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY",
+        "# Use 'cdc manage-sink-groups' commands to modify this file",
+        "# ============================================================================",
+        "# ",
+        "# This file contains the sink group configuration for CDC pipelines.",
+        "# Changes made directly to this file may be overwritten by CLI commands.",
+        "# ",
+        "# Common commands:",
+        "#   - cdc manage-sink-groups --update                    # Refresh sink databases into sources",
+        "#   - cdc manage-sink-groups --info <sink-group>         # Show sink-group details",
+        "#   - cdc manage-sink-groups --add-to-ignore-list        # Add database exclude patterns",
+        "#   - cdc manage-sink-groups --add-to-schema-excludes    # Add schema exclude patterns",
+        "# ",
+        "# For detailed documentation, see:",
+        "#   - CDC_CLI.md in the implementation repository",
+        "#   - cdc-pipeline-generator/_docs/ for generator documentation",
+        "# ============================================================================",
+    ]
+
+
+def _build_sink_group_metadata_comments(
+    sink_group_name: str,
+    sink_group: SinkGroupConfig,
+) -> list[str]:
+    """Build metadata comment block for a single sink group."""
+    services = _extract_sink_group_services(sink_group)
+    warnings = get_sink_group_warnings(sink_group_name, sink_group)
+
+    pattern = str(sink_group.get("pattern", "unknown"))
+    sink_type = str(sink_group.get("type", "unknown"))
+    servers = sink_group.get("servers", {})
+    server_count = len(servers) if isinstance(servers, dict) else 0
+
+    lines = [
+        "# ----------------------------------------------------------------------------",
+        f"# Sink Group: {sink_group_name}",
+        (
+            f"# Type: {sink_type} | Pattern: {pattern}"
+            + f" | Servers: {server_count} | Services: {len(services)}"
+        ),
+    ]
+
+    if services:
+        services_preview = ", ".join(services[:20])
+        if len(services) > 20:
+            services_preview += f", ... (+{len(services) - 20} more)"
+        lines.append(f"# Services ({len(services)}): {services_preview}")
+
+    if warnings:
+        for warning in warnings:
+            lines.append(f"# ! Warning: {warning}")
+    else:
+        lines.append("# * Warnings: none")
+
+    lines.append("# ----------------------------------------------------------------------------")
+    return lines
+
+
+def _extract_sink_group_services(sink_group: SinkGroupConfig) -> list[str]:
+    """Extract service names from sink group configuration for metadata."""
+    inherited_services = sink_group.get("inherited_sources", [])
+    if isinstance(inherited_services, list):
+        inherited = [
+            str(service).strip()
+            for service in cast(list[object], inherited_services)
+            if str(service).strip()
+        ]
+        if inherited:
+            return sorted(set(inherited))
+
+    sources = sink_group.get("sources", {})
+    if isinstance(sources, dict):
+        service_names = [
+            str(service_name).strip()
+            for service_name in cast(dict[str, object], sources).keys()
+            if str(service_name).strip()
+        ]
+        return sorted(set(service_names))
+
+    return []
 
 
 def resolve_source_ref(
