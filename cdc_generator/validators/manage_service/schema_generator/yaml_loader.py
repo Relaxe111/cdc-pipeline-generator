@@ -1,16 +1,15 @@
-"""YAML-based schema loading from service-schemas/ directory."""
+"""YAML-based schema loading from service schema directories."""
 
-from pathlib import Path
-from typing import Any
-
-import yaml  # type: ignore
+from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import print_error
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
+from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 
 def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> dict[str, Any]:
-    """Load table schemas from service-schemas/{service}/ YAML files.
+    """Load table schemas from preferred/legacy service schema paths.
 
     Args:
         service: Service name (e.g., 'adopus', 'directory')
@@ -20,50 +19,64 @@ def load_schemas_from_yaml(service: str, schema_filter: str | None = None) -> di
         Dict[schema_name, Dict[table_name, table_metadata]]
         where table_metadata = {'columns': [...], 'primary_key': ...}
     """
-    project_root = get_project_root()
-    service_schemas_dir = project_root / 'service-schemas' / service
-
-    if not service_schemas_dir.exists():
-        return {}
-
     schemas_data: dict[str, Any] = {}
 
-    # Iterate through schema directories
-    for schema_dir in service_schemas_dir.iterdir():
-        if not schema_dir.is_dir():
+    project_root = get_project_root()
+    for service_schemas_dir in get_service_schema_read_dirs(service, project_root):
+        if not service_schemas_dir.exists() or not service_schemas_dir.is_dir():
             continue
 
-        schema_name = schema_dir.name
+        # Iterate through schema directories
+        for schema_dir in service_schemas_dir.iterdir():
+            if not schema_dir.is_dir():
+                continue
 
-        # Apply schema filter if provided
-        if schema_filter and schema_name != schema_filter:
-            continue
+            schema_name = schema_dir.name
 
-        schemas_data[schema_name] = {}
+            # Apply schema filter if provided
+            if schema_filter and schema_name != schema_filter:
+                continue
 
-        # Load all table YAML files in this schema
-        for table_file in schema_dir.glob('*.yaml'):
-            try:
-                with open(table_file) as f:
-                    table_data = yaml.safe_load(f)
+            if schema_name not in schemas_data:
+                schemas_data[schema_name] = {}
 
-                table_name = table_data.get('table')
-                if not table_name:
-                    continue
+            # Load all table YAML files in this schema
+            for table_file in schema_dir.glob('*.yaml'):
+                try:
+                    loaded = load_yaml_file(table_file)
+                    table_data = loaded
 
-                columns = table_data.get('columns', [])
+                    table_name = table_data.get('table')
+                    if not isinstance(table_name, str) or not table_name:
+                        continue
 
-                # Extract primary key(s) from columns
-                primary_keys = [col['name'] for col in columns if col.get('primary_key')]
-                primary_key = primary_keys[0] if len(primary_keys) == 1 else primary_keys if primary_keys else None
+                    columns_raw = table_data.get('columns', [])
+                    if not isinstance(columns_raw, list):
+                        columns_raw = []
 
-                # Store in schema data structure (matches database query format)
-                schemas_data[schema_name][table_name] = {
-                    'columns': columns,
-                    'primary_key': primary_key
-                }
-            except Exception as e:
-                print_error(f"Failed to load {table_file}: {e}")
+                    # Extract primary key(s) from columns
+                    primary_keys = [
+                        col.get('name')
+                        for col in columns_raw
+                        if isinstance(col, dict)
+                        and col.get('primary_key')
+                        and isinstance(col.get('name'), str)
+                    ]
+                    primary_key = (
+                        primary_keys[0]
+                        if len(primary_keys) == 1
+                        else primary_keys
+                        if primary_keys
+                        else None
+                    )
+
+                    # Store in schema data structure (matches database query format)
+                    schemas_data[schema_name][table_name] = {
+                        'columns': columns_raw,
+                        'primary_key': primary_key,
+                    }
+                except Exception as e:
+                    print_error(f"Failed to load {table_file}: {e}")
 
     return schemas_data
 
@@ -78,9 +91,7 @@ def load_server_groups_config() -> dict[str, Any]:
     server_groups_file = project_root / 'source-groups.yaml'
     if not server_groups_file.exists():
         return {}
-
-    with open(server_groups_file) as f:
-        return yaml.safe_load(f)
+    return load_yaml_file(server_groups_file)
 
 
 def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[str, set[str]]:
@@ -104,9 +115,10 @@ def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[
                 if isinstance(db, str):
                     db_names.add(db)
                 elif isinstance(db, dict):
-                    db_name = db.get('name')  # type: ignore[misc]
-                    if db_name:
-                        db_names.add(db_name)  # type: ignore[arg-type]
+                    db_dict = cast(dict[str, object], db)
+                    db_name = db_dict.get('name')
+                    if isinstance(db_name, str) and db_name:
+                        db_names.add(db_name)
         all_database_names_by_group[group_name] = db_names
 
     return all_database_names_by_group

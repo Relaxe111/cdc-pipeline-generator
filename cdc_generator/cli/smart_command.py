@@ -155,11 +155,76 @@ class SmartCommand(click.Command):
         # Alias: positional service counts as "service"
         if "service_positional" in active:
             active.add("service")
+
+        inferred_service = self._infer_unique_service_name(active)
+        if inferred_service:
+            active.add("service")
+
+        inferred_sink = self._infer_unique_sink_key(ctx, active)
+        if inferred_sink:
+            active.add("sink")
+
         # Alias: sink-table actions can be reached via explicit --sink OR --all
         # fanout mode for add-sink-table.
         if "sink" in active or "all_flag" in active or "all" in active:
             active.add("sink_or_all")
         return active
+
+    def _infer_unique_service_name(self, active: set[str]) -> str:
+        """Infer service when exactly one service exists and none selected."""
+        if "service" in active:
+            return ""
+
+        try:
+            from cdc_generator.helpers.autocompletions.services import (
+                list_existing_services,
+            )
+
+            services = list_existing_services()
+            if len(services) == 1:
+                return services[0]
+        except Exception:
+            return ""
+
+        return ""
+
+    def _infer_unique_sink_key(
+        self,
+        ctx: click.Context,
+        active: set[str],
+    ) -> str:
+        """Infer sink when the resolved service has exactly one configured sink."""
+        if "sink" in active:
+            return ""
+
+        service_name = ""
+        service_raw = ctx.params.get("service")
+        if isinstance(service_raw, str) and service_raw:
+            service_name = service_raw
+
+        if not service_name:
+            positional_raw = ctx.params.get("service_positional")
+            if isinstance(positional_raw, str) and positional_raw:
+                service_name = positional_raw
+
+        if not service_name:
+            service_name = self._infer_unique_service_name(set())
+
+        if not service_name:
+            return ""
+
+        try:
+            from cdc_generator.helpers.autocompletions.sinks import (
+                list_sink_keys_for_service,
+            )
+
+            sink_keys = list_sink_keys_for_service(service_name)
+            if len(sink_keys) == 1:
+                return sink_keys[0]
+        except Exception:
+            return ""
+
+        return ""
 
     def _build_allowed_set(
         self,
@@ -243,6 +308,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "source_table": {"track_columns", "ignore_columns"},
     # ── Remove source table (standalone) ───────────────────────
     "remove_table": set(),
+    # ── List services (standalone) ──────────────────────────────
+    "list_services": set(),
     # ── List source tables (standalone) ────────────────────────
     "list_source_tables": set(),
     # ── Validation (standalone) ────────────────────────────────

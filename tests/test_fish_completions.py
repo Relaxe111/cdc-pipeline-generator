@@ -156,6 +156,28 @@ class TestClickCommandRegistration:
                 f"Management group {cmd_name!r} not registered"
             )
 
+    def test_management_aliases_registered(self) -> None:
+        """Short aliases for management commands must be registered."""
+        cli = _get_click_cli()
+        registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
+
+        for alias in ["ms", "msog", "msig", "mp", "mm"]:
+            assert alias in registered, (
+                f"Management alias {alias!r} not registered"
+            )
+
+    def test_management_aliases_share_canonical_objects(self) -> None:
+        """Aliases should resolve to the same Click command objects."""
+        cli = _get_click_cli()
+        assert hasattr(cli, "commands")
+        commands = cli.commands
+
+        assert commands["ms"] is commands["manage-services"]
+        assert commands["msog"] is commands["manage-source-groups"]
+        assert commands["msig"] is commands["manage-sink-groups"]
+        assert commands["mp"] is commands["manage-pipelines"]
+        assert commands["mm"] is commands["manage-migrations"]
+
 
 # ---------------------------------------------------------------------------
 # Tests: Typed command option declarations
@@ -169,6 +191,7 @@ class TestManageServicesConfigOptions:
         """--service must be declared with shell_complete."""
         opts = _get_command_option_names(_get_manage_services_config_command())
         assert "--service" in opts
+        assert "--list-services" in opts
 
     def test_has_sink_management_options(self) -> None:
         """Sink management options must be declared."""
@@ -746,6 +769,13 @@ class TestSmartCompletion:
             "cdc manage-services config directory "
             + "--sink sink_asma.notification "
             + "--add-sink-table --fr"
+        )
+        assert "--from" in opts
+
+    def test_add_sink_table_without_value_still_shows_from_no_context(self) -> None:
+        """Regression: bare --add-sink-table still unlocks --from completion."""
+        opts = self._complete(
+            "cdc manage-services config --add-sink-table --fr"
         )
         assert "--from" in opts
 

@@ -14,6 +14,8 @@ from .vscode_settings import (
     get_scaffold_directories,
 )
 
+_CONFLICT_PREVIEW_LIMIT = 5
+
 
 def _get_template_source_dirs(generator_root: Path) -> list[Path]:
     """Return candidate template roots (new first, then legacy)."""
@@ -120,6 +122,64 @@ def _copy_template_library_files(project_root: Path) -> None:
             )
 
 
+def _merge_legacy_schema_tree(project_root: Path) -> None:
+    """Merge legacy ``service-schemas/`` into ``services/_schemas/``.
+
+    Keeps existing destination files as source of truth and only moves missing
+    files/directories from legacy layout. Leaves legacy directory in place if
+    unresolved conflicts remain.
+    """
+    legacy_root = project_root / "service-schemas"
+    target_root = project_root / "services" / "_schemas"
+
+    if not legacy_root.exists() or not legacy_root.is_dir():
+        return
+
+    target_root.mkdir(parents=True, exist_ok=True)
+
+    conflicts: list[Path] = []
+
+    def _merge_dir(src: Path, dst: Path) -> None:
+        dst.mkdir(parents=True, exist_ok=True)
+        for child in src.iterdir():
+            dst_child = dst / child.name
+            if child.is_dir():
+                if dst_child.exists() and not dst_child.is_dir():
+                    conflicts.append(child)
+                    continue
+                _merge_dir(child, dst_child)
+                if not any(child.iterdir()):
+                    child.rmdir()
+                continue
+
+            if dst_child.exists():
+                conflicts.append(child)
+                continue
+            shutil.move(str(child), str(dst_child))
+
+    _merge_dir(legacy_root, target_root)
+
+    # Remove legacy root only when fully migrated.
+    if not any(legacy_root.iterdir()):
+        legacy_root.rmdir()
+        print_success("✓ Migrated legacy service-schemas/ to services/_schemas/")
+        return
+
+    print_warning(
+        "⚠️  Legacy service-schemas/ still contains unresolved entries; "
+        + "manual review recommended"
+    )
+    if conflicts:
+        print_info(
+            "Conflicts kept in legacy path: "
+            + ", ".join(
+                str(path.relative_to(project_root))
+                for path in conflicts[:_CONFLICT_PREVIEW_LIMIT]
+            )
+            + (" ..." if len(conflicts) > _CONFLICT_PREVIEW_LIMIT else "")
+        )
+
+
 def update_scaffold(project_root: Path) -> bool:
     """Update existing project scaffold with latest structure and configurations.
 
@@ -150,6 +210,9 @@ def update_scaffold(project_root: Path) -> bool:
         if not dir_path.exists():
             dir_path.mkdir(parents=True, exist_ok=True)
             print_success(f"✓ Created directory: {directory}")
+
+    # 1b. Migrate legacy schema tree into canonical location
+    _merge_legacy_schema_tree(project_root)
 
     # 2. Update .gitkeep files in generated directories
     for gen_dir in get_generated_subdirs():

@@ -25,6 +25,7 @@ from cdc_generator.cli.service_handlers import (
     handle_inspect_sink,
     handle_interactive,
     handle_list_column_templates,
+    handle_list_services,
     handle_list_source_tables,
     handle_list_transforms,
     handle_modify_custom_table,
@@ -57,6 +58,10 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
 
 # flag → (description, example)
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
+    "--list-services": (
+        "List all services from services/*.yaml",
+        "cdc manage-service --list-services",
+    ),
     "--service": (
         "Service name from services/*.yaml",
         "cdc manage-service --service adopus --inspect --all",
@@ -414,6 +419,11 @@ def _build_parser() -> ServiceArgumentParser:
         "--server",
         help="Server name for multi-server setups",
     )
+    parser.add_argument(
+        "--list-services",
+        action="store_true",
+        help="List all services from services/*.yaml",
+    )
 
     # Source table args
     parser.add_argument(
@@ -672,7 +682,7 @@ def _auto_detect_service(
     Returns:
         Updated args, or None if error should cause exit(1).
     """
-    if args.service:
+    if args.service or getattr(args, "list_services", False):
         return args
 
     from cdc_generator.helpers.service_config import (
@@ -689,7 +699,7 @@ def _auto_detect_service(
         print_info(f"Auto-detected service: {args.service}")
     elif len(service_files) > 1 and not args.create_service:
         # Allow these commands to run on all services
-        if args.validate_config or args.inspect:
+        if args.validate_config or args.inspect or getattr(args, "list_services", False):
             return args
 
         available = ", ".join(
@@ -709,18 +719,19 @@ def _auto_detect_service(
 
 def _dispatch_validation(args: argparse.Namespace) -> int | None:
     """Handle validation-related commands. None = not handled."""
-    if getattr(args, "list_source_tables", False):
-        return handle_list_source_tables(args)
-
-    if getattr(args, "create_service", False):
-        return handle_create_service(args)
-
-    if getattr(args, "remove_service", False):
-        return handle_remove_service(args)
-
-    # Special case: --validate-config can run without --service (validates all)
-    if getattr(args, "validate_config", False):
-        return handle_validate_config(args)
+    early_handlers: tuple[tuple[str, Callable[[argparse.Namespace], int] | Callable[[], int]], ...] = (
+        ("list_services", handle_list_services),
+        ("list_source_tables", handle_list_source_tables),
+        ("create_service", handle_create_service),
+        ("remove_service", handle_remove_service),
+        ("validate_config", handle_validate_config),
+    )
+    for attr, handler in early_handlers:
+        if not getattr(args, attr, False):
+            continue
+        if attr == "list_services":
+            return handler()
+        return handler(args)
 
     # Special case: --inspect can run without --service (inspects all)
     # Check this BEFORE the service requirement check
@@ -730,19 +741,14 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     if not getattr(args, "service", None):
         return None
 
-    validators: dict[str, bool] = {
-        "validate_hierarchy": getattr(args, "validate_hierarchy", False),
-        "validate_bloblang": getattr(args, "validate_bloblang", False),
-        "generate_validation": getattr(args, "generate_validation", False),
-    }
-    handlers = {
-        "validate_hierarchy": handle_validate_hierarchy,
-        "validate_bloblang": handle_validate_bloblang,
-        "generate_validation": handle_generate_validation,
-    }
-    for key, active in validators.items():
-        if active:
-            return handlers[key](args)
+    validators: tuple[tuple[str, Callable[[argparse.Namespace], int]], ...] = (
+        ("validate_hierarchy", handle_validate_hierarchy),
+        ("validate_bloblang", handle_validate_bloblang),
+        ("generate_validation", handle_generate_validation),
+    )
+    for attr, handler in validators:
+        if getattr(args, attr, False):
+            return handler(args)
 
     return None
 

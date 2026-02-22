@@ -21,6 +21,7 @@ from cdc_generator.cli.service_handlers_list_source import (
 )
 from cdc_generator.cli.service_handlers_misc import (
     handle_interactive,
+    handle_list_services,
     handle_no_service,
 )
 from cdc_generator.cli.service_handlers_remove import (
@@ -71,6 +72,7 @@ __all__ = [
     "handle_inspect_sink",
     "handle_interactive",
     "handle_list_column_templates",
+    "handle_list_services",
     "handle_list_source_tables",
     "handle_list_transform_rules",
     "handle_list_transforms",

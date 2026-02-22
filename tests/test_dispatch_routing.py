@@ -28,7 +28,6 @@ from cdc_generator.cli.service import (
     main,
 )
 
-
 # project_dir fixture is provided by tests/conftest.py
 
 
@@ -135,6 +134,7 @@ def _full_ns(**kwargs: object) -> argparse.Namespace:
         "remove_table": None,
         "source_table": None,
         "list_source_tables": False,
+        "list_services": False,
         "primary_key": None,
         "schema": None,
         "ignore_columns": None,
@@ -256,9 +256,20 @@ class TestDispatchValidationE2E:
             "cdc_generator.cli.service.handle_inspect_sink",
             return_value=0,
         ) as mock_handler:
-            result = _dispatch_validation(args)
+            _dispatch_validation(args)
         mock_handler.assert_called_once_with(args)
-        assert result == 0
+
+    def test_routes_list_services_without_service(
+        self, project_dir: Path,
+    ) -> None:
+        """--list-services routes via validation dispatcher without --service."""
+        args = _full_ns(service=None, list_services=True)
+        with patch(
+            "cdc_generator.cli.service.handle_list_services",
+            return_value=0,
+        ) as mock_handler:
+            _dispatch_validation(args)
+        mock_handler.assert_called_once_with()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -653,5 +664,17 @@ class TestMainPositionalService:
             ["manage-service", "ignored", "--service", "proxy",
              "--list-source-tables"],
         ):
+            result = main()
+        assert result == 0
+
+    def test_list_services_works_without_service_selection(
+        self, project_dir: Path,
+    ) -> None:
+        """--list-services works when multiple services exist and no --service."""
+        services_dir = project_dir / "services"
+        (services_dir / "adopus.yaml").write_text("adopus: {}\n")
+        (services_dir / "proxy.yaml").write_text("proxy: {}\n")
+
+        with patch("sys.argv", ["manage-service", "--list-services"]):
             result = main()
         assert result == 0

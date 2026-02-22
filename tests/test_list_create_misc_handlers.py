@@ -20,6 +20,7 @@ from cdc_generator.cli.service_handlers_list_source import (
     handle_list_source_tables,
 )
 from cdc_generator.cli.service_handlers_misc import (
+    handle_list_services,
     handle_no_service,
 )
 
@@ -141,6 +142,29 @@ class TestHandleCreateService:
         assert result == 0
         sf = project_dir / "services" / "proxy.yaml"
         assert sf.exists()
+
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # handle_list_services
+    # ═══════════════════════════════════════════════════════════════════════════
+
+
+    class TestHandleListServices:
+        """Tests for handle_list_services handler."""
+
+        def test_lists_services_from_yaml_files(self, project_dir: Path) -> None:
+            """Returns 0 and lists service names from services/*.yaml."""
+            services_dir = project_dir / "services"
+            (services_dir / "adopus.yaml").write_text("adopus: {}\n")
+            (services_dir / "chat.yaml").write_text("chat: {}\n")
+
+            result = handle_list_services()
+            assert result == 0
+
+        def test_returns_0_when_services_dir_empty(self, project_dir: Path) -> None:
+            """Returns 0 when no service files exist."""
+            result = handle_list_services()
+            assert result == 0
 
     def test_create_already_exists_returns_1(
         self, project_dir: Path,

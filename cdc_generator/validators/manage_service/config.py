@@ -66,24 +66,43 @@ def detect_service_mode(service: str) -> str:
     """Detect service mode (db-per-tenant or shared-db).
 
     Supports both:
-    - New: server_group field (adopus=db-per-tenant, asma=db-shared)
+    - New: server_group field resolved via source-groups server_group_type/pattern
     - Legacy: mode field (direct value)
     """
     from cdc_generator.helpers.service_config import load_service_config
+    from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+    def _normalize_mode(raw_mode: object) -> str | None:
+        normalized = str(raw_mode).strip().lower()
+        if normalized in {"db-per-tenant", "db_shared", "db-shared"}:
+            return "db-shared" if normalized in {"db_shared", "db-shared"} else "db-per-tenant"
+        if normalized in {"shared-db", "shared_db"}:
+            return "db-shared"
+        return None
+
     try:
         config = load_service_config(service)
 
-        # Try new server_group field first
+        # Resolve via source-groups using server_group key when available.
         server_group = config.get('server_group')
-        if server_group:
-            # Map server_group to mode
-            if server_group == 'adopus':
-                return 'db-per-tenant'
-            if server_group == 'asma':
-                return 'db-shared'
+        if isinstance(server_group, str) and server_group:
+            source_groups_file = get_project_root() / 'source-groups.yaml'
+            source_groups_data = load_yaml_file(source_groups_file)
+            if isinstance(source_groups_data, dict):
+                groups = source_groups_data.get('server_group')
+                if isinstance(groups, dict):
+                    group_cfg = groups.get(server_group)
+                    if isinstance(group_cfg, dict):
+                        resolved = _normalize_mode(
+                            group_cfg.get('server_group_type', group_cfg.get('pattern', ''))
+                        )
+                        if resolved is not None:
+                            return resolved
 
         # Fall back to legacy mode field
-        mode = config.get('mode', 'db-per-tenant')
-        return str(mode) if mode else 'db-per-tenant'
+        resolved_mode = _normalize_mode(config.get('mode', 'db-per-tenant'))
+        if resolved_mode is not None:
+            return resolved_mode
+        return 'db-per-tenant'
     except Exception:
         return 'db-per-tenant'

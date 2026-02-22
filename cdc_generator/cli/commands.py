@@ -268,6 +268,16 @@ LOCAL_COMMANDS: dict[str, dict[str, str]] = {
     },
 }
 
+# Top-level aliases that must defer to canonical command objects.
+# This keeps behavior, options, and SmartCommand hierarchies in one place.
+COMMAND_ALIASES: dict[str, str] = {
+    "ms": "manage-services",
+    "msog": "manage-source-groups",
+    "msig": "manage-sink-groups",
+    "mp": "manage-pipelines",
+    "mm": "manage-migrations",
+}
+
 
 def print_help(
     workspace_root: Path,
@@ -298,6 +308,13 @@ def print_help(
         if usage is not None:
             desc += f"\n  {' ' * 20}   Usage: {usage}"
         print(f"  {'manage-services ' + cmd:20} - {desc}")
+
+    print("\n⚡ Aliases:")
+    print("  ms                   - alias for manage-services")
+    print("  msog                 - alias for manage-source-groups")
+    print("  msig                 - alias for manage-sink-groups")
+    print("  mp                   - alias for manage-pipelines")
+    print("  mm                   - alias for manage-migrations")
 
     print("\n🔄 Pipeline management:")
     for cmd, info in PIPELINE_COMMANDS.items():
@@ -580,6 +597,13 @@ def _register_commands() -> None:
     # Register typed commands (have full Click option declarations)
     for _name, cmd_obj in CLICK_COMMANDS.items():
         _click_cli.add_command(cmd_obj)
+
+    # Register aliases as additional names for the same typed command objects.
+    # No wrapper commands: aliases defer to canonical implementations.
+    for alias, canonical in COMMAND_ALIASES.items():
+        cmd_obj = CLICK_COMMANDS.get(canonical)
+        if cmd_obj is not None:
+            _click_cli.add_command(cmd_obj, name=alias)
 
     # Register remaining commands as generic passthrough
     typed_names = set(CLICK_COMMANDS.keys())

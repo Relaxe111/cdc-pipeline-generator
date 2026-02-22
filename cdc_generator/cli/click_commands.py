@@ -30,16 +30,15 @@ from cdc_generator.cli.completions import (
     complete_add_sink_table,
     complete_available_envs,
     complete_available_services,
-    complete_available_validation_databases,
     complete_available_sink_keys,
     complete_available_tables,
+    complete_available_validation_databases,
     complete_column_templates,
     complete_columns,
     complete_custom_table_column_spec,
     complete_custom_table_columns,
     complete_custom_tables,
     complete_existing_services,
-    complete_service_positional,
     complete_from_table,
     complete_include_sink_columns,
     complete_map_column,
@@ -50,6 +49,7 @@ from cdc_generator.cli.completions import (
     complete_schemas,
     complete_server_group_names,
     complete_server_names,
+    complete_service_positional,
     complete_sink_group_context_aware,
     complete_sink_group_names,
     complete_sink_group_servers,
@@ -118,6 +118,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--remove-service", shell_complete=complete_existing_services,
               help="Remove service and related local configuration")
 @click.option("--server", help="Server name for multi-server setups")
+@click.option("--list-services", is_flag=True,
+              help="List all services from services/*.yaml")
 # -- Source table management --
 @click.option("--list-source-tables", is_flag=True,
               help="List all source tables in service")
@@ -160,6 +162,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--sink", shell_complete=complete_sink_keys,
               help="Target sink for table operations")
 @click.option("--add-sink-table", shell_complete=complete_add_sink_table,
+              is_flag=False,
+              flag_value="",
               help="Add table to sink (schema.table)")
 @click.option("--remove-sink-table", shell_complete=complete_remove_sink_table,
               help="Remove table from sink")

@@ -217,6 +217,24 @@ class TestCliListSourceTables:
         assert result.returncode == 0
 
 
+class TestCliListServices:
+    """CLI e2e: --list-services."""
+
+    def test_lists_services_without_service_flag(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _create_project(isolated_project, service="proxy")
+        services_dir = isolated_project / "services"
+        (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+        result = run_cdc(
+            "manage-services", "config", "--list-services",
+        )
+        assert result.returncode == 0
+        assert "proxy" in result.stdout
+        assert "adopus" in result.stdout
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Sink operations
 # ═══════════════════════════════════════════════════════════════════════════
@@ -566,7 +584,7 @@ class TestCliValidateConfig:
         
         # Change to project dir
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
             from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -595,7 +613,7 @@ class TestCliValidateConfig:
         )
         
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
             from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -626,7 +644,7 @@ class TestCliValidateConfig:
         )
         
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
             from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -665,7 +683,7 @@ class TestCliValidateConfig:
         )
         
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
             from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -707,11 +725,12 @@ class TestCliValidateConfig:
         )
         
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
-            from cdc_generator.cli.service_handlers_validation import handle_validate_config
             import argparse
+
+            from cdc_generator.cli.service_handlers_validation import handle_validate_config
             args = argparse.Namespace(service=None, all=False, schema=None, env='dev')
             result = handle_validate_config(args)
             # Both services are valid
@@ -745,11 +764,12 @@ class TestCliInspect:
         (tmp_path / "services" / "service2.yaml").write_text("service2:\n  source:\n    tables: {}\n")
         
         import os
-        original_cwd = os.getcwd()
+        original_cwd = Path.cwd()
         try:
             os.chdir(tmp_path)
-            from cdc_generator.cli.service_handlers_inspect import handle_inspect
             import argparse
+
+            from cdc_generator.cli.service_handlers_inspect import handle_inspect
             args = argparse.Namespace(service=None, all=True, schema=None, env='dev', save=False, inspect=True)
             # Will fail (no DB) but should attempt to inspect both services
             result = handle_inspect(args)

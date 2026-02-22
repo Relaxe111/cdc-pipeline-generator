@@ -179,7 +179,7 @@ def _validate_table_in_schemas(
     sink_key: str,
     table_key: str,
 ) -> bool:
-    """Validate that table_key exists in service-schemas for the sink target.
+    """Validate that table_key exists in schema files for the sink target.
 
     Prints friendly errors if schemas are missing or table not found.
 
@@ -221,8 +221,8 @@ def _validate_table_in_schemas(
 
     if table_key not in available:
         print_error(
-            f"Table '{table_key}' not found in "
-            + f"service-schemas/{target_service}/"
+            f"Table '{table_key}' not found in schemas for "
+            + f"target service '{target_service}'"
         )
         print_info(
             "Available tables:\n  "
@@ -492,17 +492,20 @@ def _save_custom_table_structure(
     source_schema, source_table = from_table.split(".", 1)
     target_schema, target_table = table_key.split(".", 1)
 
-    # Verify source schema exists
-    source_file = (
-        SERVICE_SCHEMAS_DIR
-        / source_service
-        / source_schema
-        / f"{source_table}.yaml"
-    )
+    source_file = None
+    for source_service_dir in get_service_schema_read_dirs(
+        source_service,
+        get_project_root(),
+    ):
+        candidate = source_service_dir / source_schema / f"{source_table}.yaml"
+        if candidate.exists():
+            source_file = candidate
+            break
 
-    if not source_file.exists():
+    if source_file is None:
         print_warning(
-            f"Source table schema not found: {source_file}\n"
+            "Source table schema not found for "
+            + f"{source_service}.{source_schema}.{source_table}\n"
             + "Custom table reference will not be saved. "
             + "Run inspect on source service first."
         )
@@ -915,8 +918,6 @@ def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:
 def _remove_custom_table_file(sink_key: str, table_key: str) -> None:
     """Remove the custom-table YAML reference file if it exists.
 
-    Looks for ``service-schemas/{target_service}/custom-tables/{table_key}.yaml``.
-
     Args:
         sink_key: Sink key (e.g., 'sink_asma.proxy').
         table_key: Table key (e.g., 'directory-clone.customers').
@@ -925,19 +926,17 @@ def _remove_custom_table_file(sink_key: str, table_key: str) -> None:
     if not target_service:
         return
 
-    custom_file = (
-        SERVICE_SCHEMAS_DIR
-        / target_service
-        / "custom-tables"
-        / f"{table_key.replace('/', '_')}.yaml"
-    )
+    filename = f"{table_key.replace('/', '_')}.yaml"
+    removed_paths: list[str] = []
+    for service_dir in get_service_schema_read_dirs(target_service, get_project_root()):
+        custom_file = service_dir / "custom-tables" / filename
+        if custom_file.is_file():
+            custom_file.unlink()
+            removed_paths.append(str(custom_file.relative_to(get_project_root())))
 
-    if custom_file.is_file():
-        custom_file.unlink()
+    if removed_paths:
         print_info(
-            "Removed custom table file: "
-            +f"service-schemas/{target_service}/custom-tables/"
-            +f"{table_key.replace('/', '_')}.yaml"
+            "Removed custom table file(s): " + ", ".join(removed_paths)
         )
 
 

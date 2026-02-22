@@ -910,3 +910,96 @@ class TestSingleServiceAutoDetectCompletion:
             )
 
             assert "public.users" in completions
+
+    def test_sink_option_appears_when_single_service_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When one service exists, --sink should be offered without --service."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text(
+                "adopus:\n"
+                "  source:\n"
+                "    tables: {}\n"
+                "  sinks:\n"
+                "    sink_asma.directory:\n"
+                "      tables: {}\n"
+            )
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --"
+            )
+
+            assert "--sink" in completions
+
+    def test_list_services_option_appears_at_entrypoint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--list-services should be offered at top-level command context."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text("adopus:\n  source:\n    tables: {}\n")
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --"
+            )
+
+            assert "--list-services" in completions
+
+    def test_list_services_not_shown_in_sink_scoped_context(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--list-services should be hidden when sink context is already active."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text(
+                "adopus:\n"
+                "  source:\n"
+                "    tables: {}\n"
+                "  sinks:\n"
+                "    sink_asma.directory:\n"
+                "      tables: {}\n"
+            )
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --sink sink_asma.directory --"
+            )
+
+            assert "--list-services" not in completions
+
+    def test_add_sink_table_option_appears_when_single_sink_exists(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When one service and one sink exist, --add-sink-table appears directly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+            services_dir = workspace / "services"
+            services_dir.mkdir(parents=True)
+            (services_dir / "adopus.yaml").write_text(
+                "adopus:\n"
+                "  source:\n"
+                "    tables: {}\n"
+                "  sinks:\n"
+                "    sink_asma.directory:\n"
+                "      tables: {}\n"
+            )
+
+            monkeypatch.chdir(workspace)
+
+            completions = self._complete(
+                "cdc manage-services config --"
+            )
+
+            assert "--add-sink-table" in completions

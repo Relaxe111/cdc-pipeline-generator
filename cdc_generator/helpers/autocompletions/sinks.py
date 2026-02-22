@@ -6,7 +6,6 @@ from cdc_generator.helpers.autocompletions.tables import list_tables_for_service
 from cdc_generator.helpers.autocompletions.utils import (
     find_directory_upward,
     find_file_upward,
-    find_service_schemas_dir_upward,
 )
 from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 from cdc_generator.helpers.yaml_loader import load_yaml_file
@@ -262,7 +261,7 @@ def list_target_columns_for_sink_table(
     sink_key: str,
     target_table: str,
 ) -> list[str]:
-    """List columns for a target table from service-schemas.
+    """List columns for a target table from schema files.
 
     Args:
         sink_key: Sink key (e.g., 'sink_asma.chat').
@@ -271,7 +270,7 @@ def list_target_columns_for_sink_table(
     Returns:
         List of column names.
 
-    Expected YAML structure (service-schemas/{target_service}/{schema}/{table}.yaml):
+    Expected YAML structure (services/_schemas/{target_service}/{schema}/{table}.yaml):
         columns:
           - name: col1
           - name: col2
@@ -290,29 +289,28 @@ def list_target_columns_for_sink_table(
 
     target_service = parts[1]
     schema, table = table_parts
-    schemas_dir = find_service_schemas_dir_upward()
-    table_file = schemas_dir / target_service / schema / f'{table}.yaml' if schemas_dir else None
-    if not table_file or not table_file.is_file():
-        return []
+    for service_dir in get_service_schema_read_dirs(target_service):
+        table_file = service_dir / schema / f"{table}.yaml"
+        if not table_file.is_file():
+            continue
 
-    try:
-        table_schema = load_yaml_file(table_file)
-        if not table_schema or not table_schema:
-            return []
+        try:
+            table_schema = load_yaml_file(table_file)
 
-        columns = table_schema.get('columns', [])
-        return (
-            sorted(
-                str(col.get('name', ''))
-                for col in columns
-                if isinstance(col, dict) and col.get('name')
+            columns = table_schema.get("columns", [])
+            return (
+                sorted(
+                    str(col.get("name", ""))
+                    for col in columns
+                    if isinstance(col, dict) and col.get("name")
+                )
+                if isinstance(columns, list)
+                else []
             )
-            if isinstance(columns, list)
-            else []
-        )
+        except Exception:
+            continue
 
-    except Exception:
-        return []
+    return []
 
 
 def load_sink_tables_for_autocomplete(
@@ -468,8 +466,6 @@ def list_custom_table_columns_for_autocomplete(
         if not schema_file.exists():
             continue
         data = load_yaml_file(schema_file)
-        if not isinstance(data, dict):
-            continue
         cols_raw = data.get("columns")
         if not isinstance(cols_raw, list):
             continue
@@ -490,7 +486,7 @@ def list_source_columns_for_sink_table(
     """List source columns for a sink table (from the sink table's 'from' field).
 
     Resolves the source table from the sink table's 'from' field, then loads
-    columns from service-schemas/{source_service}/{schema}/{table}.yaml.
+    columns from services/_schemas/{source_service}/{schema}/{table}.yaml.
 
     Args:
         service_name: Source service name.
@@ -526,29 +522,25 @@ def list_source_columns_for_sink_table(
         return []
 
     schema, table = table_parts
-    schemas_dir = find_service_schemas_dir_upward()
-    table_file = (
-        schemas_dir / service_name / schema / f'{table}.yaml'
-        if schemas_dir else None
-    )
-    if not table_file or not table_file.is_file():
-        return []
+    for service_dir in get_service_schema_read_dirs(service_name):
+        table_file = service_dir / schema / f"{table}.yaml"
+        if not table_file.is_file():
+            continue
 
-    try:
-        table_schema = load_yaml_file(table_file)
-        if not table_schema:
-            return []
+        try:
+            table_schema = load_yaml_file(table_file)
 
-        columns = table_schema.get('columns', [])
-        return (
-            sorted(
-                str(col.get('name', ''))
-                for col in columns
-                if isinstance(col, dict) and col.get('name')
+            columns = table_schema.get("columns", [])
+            return (
+                sorted(
+                    str(col.get("name", ""))
+                    for col in columns
+                    if isinstance(col, dict) and col.get("name")
+                )
+                if isinstance(columns, list)
+                else []
             )
-            if isinstance(columns, list)
-            else []
-        )
+        except Exception:
+            continue
 
-    except Exception:
-        return []
+    return []
