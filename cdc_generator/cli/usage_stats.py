@@ -34,6 +34,13 @@ def _stats_dir(workspace_root: Path) -> Path:
     return workspace_root / _STATS_DIR_PARTS[0] / _STATS_DIR_PARTS[1]
 
 
+def _flag_name(token: str) -> str:
+    """Return canonical flag name (drop any assigned value)."""
+    if "=" in token:
+        return token.split("=", 1)[0]
+    return token
+
+
 def _sanitize_user_name(raw_name: str) -> str:
     """Convert git user name/email into safe stats filename stem."""
     lowered = raw_name.strip().lower()
@@ -106,8 +113,8 @@ def _normalize_usage_key(argv_tokens: list[str]) -> str | None:
             continue
 
         if token.startswith("-"):
+            flags.append(_flag_name(token))
             if "=" in token:
-                flags.append(token)
                 cursor += 1
                 continue
 
@@ -115,11 +122,9 @@ def _normalize_usage_key(argv_tokens: list[str]) -> str | None:
             if next_index < len(parsed_tokens):
                 next_token = parsed_tokens[next_index]
                 if not next_token.startswith("-") and next_token not in {"", "\\"}:
-                    flags.append(token + "=" + next_token)
                     cursor += 2
                     continue
 
-            flags.append(token)
             cursor += 1
             continue
 
@@ -130,7 +135,38 @@ def _normalize_usage_key(argv_tokens: list[str]) -> str | None:
     if positional_args:
         normalized += " | args: " + ", ".join(sorted(positional_args))
     if flags:
-        normalized += " | flags: " + ", ".join(sorted(flags))
+        normalized += " | flags: " + ", ".join(sorted(set(flags)))
+    return normalized
+
+
+def _canonicalize_stored_key(command: str) -> str:
+    """Canonicalize persisted command key to current normalization rules."""
+    if " | " not in command:
+        return command
+
+    parts = command.split(" | ")
+    base = parts[0]
+    args_part = ""
+    flags_part = ""
+
+    for part in parts[1:]:
+        if part.startswith("args: "):
+            args_part = part.removeprefix("args: ")
+        elif part.startswith("flags: "):
+            flags_part = part.removeprefix("flags: ")
+
+    normalized = base
+    if args_part:
+        args_tokens = [token.strip() for token in args_part.split(",") if token.strip()]
+        if args_tokens:
+            normalized += " | args: " + ", ".join(sorted(args_tokens))
+
+    if flags_part:
+        flags_tokens = [token.strip() for token in flags_part.split(",") if token.strip()]
+        normalized_flags = sorted({_flag_name(token) for token in flags_tokens})
+        if normalized_flags:
+            normalized += " | flags: " + ", ".join(normalized_flags)
+
     return normalized
 
 
@@ -153,7 +189,8 @@ def _read_usage_file(file_path: Path) -> dict[str, int]:
             continue
         if count <= 0:
             continue
-        results[command] = count
+        canonical_command = _canonicalize_stored_key(command)
+        results[canonical_command] = results.get(canonical_command, 0) + count
     return results
 
 
@@ -186,7 +223,11 @@ def track_usage(workspace_root: Path, argv_tokens: list[str]) -> None:
     _write_usage_file(file_path, counts)
 
 
-def _load_all_user_counts(stats_dir: Path) -> dict[str, dict[str, int]]:
+def _load_all_user_counts(
+    stats_dir: Path,
+    *,
+    rewrite_canonical: bool = False,
+) -> dict[str, dict[str, int]]:
     """Load command counts from all user stats files."""
     users: dict[str, dict[str, int]] = {}
     if not stats_dir.exists():
@@ -194,7 +235,10 @@ def _load_all_user_counts(stats_dir: Path) -> dict[str, dict[str, int]]:
 
     for file_path in sorted(stats_dir.glob("*" + _STATS_FILE_EXT)):
         user_name = file_path.stem
-        users[user_name] = _read_usage_file(file_path)
+        counts = _read_usage_file(file_path)
+        users[user_name] = counts
+        if rewrite_canonical and counts:
+            _write_usage_file(file_path, counts)
 
     return users
 
@@ -281,7 +325,10 @@ def _render_stats_markdown(users: dict[str, dict[str, int]]) -> str:
 def generate_usage_stats(workspace_root: Path) -> Path:
     """Generate stats markdown from per-user usage files."""
     stats_dir = _stats_dir(workspace_root)
-    users = _load_all_user_counts(stats_dir)
+    users = _load_all_user_counts(
+        stats_dir,
+        rewrite_canonical=True,
+    )
     report = _render_stats_markdown(users)
 
     output_file = stats_dir / _STATS_REPORT_NAME

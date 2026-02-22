@@ -103,6 +103,8 @@ EXPECTED_FILES = [
     "README.md",
     ".gitignore",
     ".vscode/settings.json",
+    "services/_schemas/column-templates.yaml",
+    "services/_schemas/transform-rules.yaml",
     "services/_schemas/_definitions/map-mssql-pgsql.yaml",
     "pipeline-templates/source-pipeline.yaml",
     "pipeline-templates/sink-pipeline.yaml",

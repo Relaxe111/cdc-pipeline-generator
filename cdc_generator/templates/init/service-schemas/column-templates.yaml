@@ -1,0 +1,6 @@
+# Column template definitions for reusable sink columns.
+#
+# Add templates via:
+#   cdc mss column-templates --add <key> --type <pg_type> --value <expr>
+#
+templates: {}

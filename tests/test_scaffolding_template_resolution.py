@@ -39,6 +39,14 @@ def _write_templates(base: Path) -> None:
     (base / "transform-rules.yaml").write_text("rules: {}\n")
 
 
+def _write_bloblang_templates(base: Path) -> None:
+    """Write bloblang template tree under a given template root path."""
+    examples_dir = base / "_bloblang" / "examples"
+    examples_dir.mkdir(parents=True, exist_ok=True)
+    (base / "_bloblang" / "README.md").write_text("# Bloblang examples\n")
+    (examples_dir / "json_extractor.blobl").write_text("this.value = this\n")
+
+
 class TestScaffoldTemplatePathResolution:
     """Scaffold should work with both new and legacy template locations."""
 
@@ -94,3 +102,61 @@ class TestScaffoldTemplatePathResolution:
         output = capsys.readouterr().out
         assert "Template not found in generator: column-templates.yaml" not in output
         assert "Template not found in generator: transform-rules.yaml" not in output
+
+    def test_create_merges_bloblang_templates_when_target_dirs_exist(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """create copy merges bloblang files even when target dirs already exist."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        template_root = generator_root / "templates" / "init" / "service-schemas"
+        _write_templates(template_root)
+        _write_bloblang_templates(template_root)
+
+        project_root = _prepare_project_root(tmp_path)
+        (project_root / "services" / "_schemas" / "_bloblang" / "examples").mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        create._copy_template_library_files(project_root)
+
+        assert (project_root / "services" / "_schemas" / "_bloblang" / "README.md").exists()
+        assert (
+            project_root
+            / "services"
+            / "_schemas"
+            / "_bloblang"
+            / "examples"
+            / "json_extractor.blobl"
+        ).exists()
+
+    def test_update_merges_bloblang_templates_when_target_dirs_exist(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """update copy merges bloblang files even when target dirs already exist."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        template_root = generator_root / "templates" / "init" / "services" / "_schemas"
+        _write_templates(template_root)
+        _write_bloblang_templates(template_root)
+
+        project_root = _prepare_project_root(tmp_path)
+        (project_root / "services" / "_schemas" / "_bloblang" / "examples").mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        update._copy_template_library_files(project_root)
+
+        assert (project_root / "services" / "_schemas" / "_bloblang" / "README.md").exists()
+        assert (
+            project_root
+            / "services"
+            / "_schemas"
+            / "_bloblang"
+            / "examples"
+            / "json_extractor.blobl"
+        ).exists()

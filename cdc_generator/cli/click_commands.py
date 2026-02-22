@@ -504,10 +504,15 @@ def manage_services_schema_custom_tables_cmd(
     """manage-services schema custom-tables passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
 
+    try:
+        subcommand_index = sys.argv.index("custom-tables")
+    except ValueError:
+        subcommand_index = _NESTED_SCHEMA_SUBCOMMAND_INDEX
+
     return execute_grouped_command(
         "manage-services",
         "schema",
-        sys.argv[_NESTED_SCHEMA_EXTRA_ARGS_START:],
+        sys.argv[subcommand_index + 1:],
     )
 
 
@@ -622,14 +627,10 @@ def manage_column_templates_cmd(
         run_generator_spec,
     )
 
-    start_index = 2
-    if (
-        len(sys.argv) >= _MIN_NESTED_SCHEMA_ARGS
-        and sys.argv[_GROUPED_COMMAND_INDEX] == "manage-services"
-        and sys.argv[_GROUPED_SUBCOMMAND_INDEX] == "schema"
-        and sys.argv[_NESTED_SCHEMA_SUBCOMMAND_INDEX] == "column-templates"
-    ):
-        start_index = _NESTED_SCHEMA_EXTRA_ARGS_START
+    try:
+        start_index = sys.argv.index("column-templates") + 1
+    except ValueError:
+        start_index = 2
 
     workspace_root, _implementation_name, is_dev_container = detect_environment()
     paths = get_script_paths(workspace_root, is_dev_container)

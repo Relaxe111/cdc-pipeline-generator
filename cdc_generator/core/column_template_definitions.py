@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import re
 from typing import Any, cast
 
 from cdc_generator.core.column_templates import (
@@ -64,6 +65,105 @@ _VALID_TYPES = frozenset({
     "real", "double precision", "varchar", "char",
     "inet", "cidr", "macaddr",
 })
+
+_VALID_VALUE_SOURCES = frozenset({"bloblang", "source_ref", "sql"})
+_VALUE_SOURCE_ALIASES: dict[str, str] = {
+    "source-ref": "source_ref",
+    "source_ref": "source_ref",
+    "bloblang": "bloblang",
+    "sql": "sql",
+}
+
+_SQL_EXPR_ALLOWED_RE = re.compile(
+    r"^[a-zA-Z0-9_\s().,'\"+\-*/%:<>=!?|&\[\]{}$]+$"
+)
+
+
+def _normalize_value_source(raw_source: str) -> str | None:
+    """Normalize value source aliases to canonical names."""
+    normalized = raw_source.strip().lower()
+    return _VALUE_SOURCE_ALIASES.get(normalized)
+
+
+def _infer_value_source(value: str) -> str:
+    """Infer value source for backward compatibility when unspecified."""
+    from cdc_generator.core.source_ref_resolver import is_source_ref
+
+    if is_source_ref(value):
+        return "source_ref"
+    return "bloblang"
+
+
+def validate_value_source(value_source: str) -> str | None:
+    """Validate value_source option for template value semantics."""
+    normalized = _normalize_value_source(value_source)
+    if normalized is not None:
+        return None
+
+    allowed = ", ".join(sorted(_VALID_VALUE_SOURCES))
+    return (
+        f"Unsupported value source '{value_source}'. "
+        + f"Allowed values: {allowed}"
+    )
+
+
+def validate_template_value(value: str, value_source: str) -> str | None:
+    """Validate template value according to its declared value_source."""
+    from cdc_generator.core.source_ref_resolver import (
+        parse_source_ref,
+    )
+    from cdc_generator.validators.manage_service.bloblang_validator import (
+        check_rpk_available,
+        validate_bloblang_expression,
+    )
+
+    normalized_source = _normalize_value_source(value_source)
+    if normalized_source is None:
+        return validate_value_source(value_source)
+
+    stripped_value = value.strip()
+    if not stripped_value:
+        return "Template value cannot be empty"
+
+    if normalized_source == "source_ref":
+        ref = parse_source_ref(stripped_value)
+        if ref is None:
+            return (
+                "Invalid source reference format. "
+                + "Expected: {group.sources.*.key}"
+            )
+        return None
+
+    if normalized_source == "sql":
+        lowered = stripped_value.lower()
+        if stripped_value.startswith("{") and stripped_value.endswith("}"):
+            return "SQL value cannot use source-ref syntax"
+        if "this." in lowered or "meta(" in lowered:
+            return (
+                "SQL value cannot contain Bloblang tokens "
+                + "(this., meta(...))"
+            )
+        if not _SQL_EXPR_ALLOWED_RE.fullmatch(stripped_value):
+            return (
+                "SQL value contains unsupported characters. "
+                + "Use a SQL expression like now(), gen_random_uuid(), "
+                + "current_timestamp, cast(...), etc."
+            )
+        return None
+
+    is_valid = True
+    error_msg: str | None = None
+    if check_rpk_available():
+        is_valid, error_msg = validate_bloblang_expression(
+            stripped_value,
+            "column_template_value",
+        )
+
+    if not is_valid:
+        detail = error_msg if error_msg else "unknown Bloblang parser error"
+        return f"Invalid Bloblang expression: {detail}"
+
+    return None
 
 
 def validate_template_key(key: str) -> str | None:
@@ -124,6 +224,7 @@ def add_template_definition(
     not_null: bool = False,
     default: str | None = None,
     applies_to: list[str] | None = None,
+    value_source: str | None = None,
 ) -> bool:
     """Add a new template definition to column-templates.yaml.
 
@@ -136,6 +237,7 @@ def add_template_definition(
         not_null: Whether column is NOT NULL.
         default: SQL default expression for DDL.
         applies_to: Optional list of table patterns (glob).
+        value_source: Value generation mode: bloblang, source_ref, or sql.
 
     Returns:
         True on success, False on error.
@@ -150,6 +252,17 @@ def add_template_definition(
     type_error = validate_column_type(col_type)
     if type_error is not None:
         print_error(type_error)
+        return False
+
+    effective_value_source = value_source or _infer_value_source(value)
+    source_error = validate_value_source(effective_value_source)
+    if source_error is not None:
+        print_error(source_error)
+        return False
+
+    value_error = validate_template_value(value, effective_value_source)
+    if value_error is not None:
+        print_error(value_error)
         return False
 
     # Check for duplicate
@@ -172,6 +285,9 @@ def add_template_definition(
     if description:
         entry["description"] = description
     entry["value"] = value
+    normalized_source = _normalize_value_source(effective_value_source)
+    if normalized_source is not None:
+        entry["value_source"] = normalized_source
     if default is not None:
         entry["default"] = default
     if applies_to:
@@ -236,6 +352,7 @@ def edit_template_definition(
     description: str | None = None,
     not_null: bool | None = None,
     default: str | None = None,
+    value_source: str | None = None,
 ) -> bool:
     """Edit an existing template definition in column-templates.yaml.
 
@@ -249,6 +366,7 @@ def edit_template_definition(
         description: New description (or None to keep).
         not_null: New NOT NULL setting (or None to keep).
         default: New SQL default (or None to keep).
+        value_source: New value generation mode (or None to keep/infer).
 
     Returns:
         True on success, False on error.
@@ -280,6 +398,32 @@ def edit_template_definition(
 
     entry_dict = cast(dict[str, Any], entry)
 
+    current_value_raw = entry_dict.get("value")
+    current_value = str(current_value_raw) if current_value_raw is not None else ""
+    existing_source_raw = entry_dict.get("value_source")
+    existing_source = (
+        _normalize_value_source(existing_source_raw)
+        if isinstance(existing_source_raw, str)
+        else None
+    )
+
+    effective_value = value if value is not None else current_value
+    effective_value_source = (
+        value_source
+        if value_source is not None
+        else (existing_source or _infer_value_source(effective_value))
+    )
+
+    source_error = validate_value_source(effective_value_source)
+    if source_error is not None:
+        print_error(source_error)
+        return False
+
+    value_error = validate_template_value(effective_value, effective_value_source)
+    if value_error is not None:
+        print_error(value_error)
+        return False
+
     # Update provided fields
     changes: list[str] = []
     if name is not None:
@@ -300,6 +444,17 @@ def edit_template_definition(
     if default is not None:
         entry_dict["default"] = default
         changes.append(f"default → {default}")
+    if value_source is not None:
+        normalized_source = _normalize_value_source(value_source)
+        if normalized_source is not None:
+            entry_dict["value_source"] = normalized_source
+            changes.append(f"value_source → {normalized_source}")
+
+    if "value_source" not in entry_dict:
+        normalized_source = _normalize_value_source(effective_value_source)
+        if normalized_source is not None:
+            entry_dict["value_source"] = normalized_source
+            changes.append(f"value_source → {normalized_source}")
 
     if not changes:
         print_warning("No changes specified")

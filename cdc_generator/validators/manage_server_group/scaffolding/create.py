@@ -72,14 +72,13 @@ def _copy_template_library_files(project_root: Path) -> None:
     bloblang_target = project_root / "services" / "_schemas" / "_bloblang"
     bloblang_source = _resolve_template_file(generator_root, Path("_bloblang"))
 
-    if bloblang_target.exists():
-        print("⊘ Skipped (exists): services/_schemas/_bloblang/")
-    elif bloblang_source is not None:
-        # Copy entire bloblang directory recursively
-        shutil.copytree(bloblang_source, bloblang_target)
-        print("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
-    else:
+    if bloblang_source is None:
         print("⚠ Warning: Bloblang templates not found in generator")
+    else:
+        # Merge entire bloblang directory recursively.
+        # This ensures examples are copied even when scaffold pre-created dirs.
+        shutil.copytree(bloblang_source, bloblang_target, dirs_exist_ok=True)
+        print("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
 
     # Copy DB type mapping definitions
     map_files = [

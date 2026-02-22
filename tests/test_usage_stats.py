@@ -36,6 +36,51 @@ def test_normalize_usage_key_ignores_flag_order() -> None:
     assert left == right
 
 
+def test_normalize_usage_key_ignores_flag_values() -> None:
+    left = usage_stats._normalize_usage_key(
+        [
+            "mss",
+            "custom-tables",
+            "--add-custom-table=customer_id",
+            "--service=directory",
+        ]
+    )
+    right = usage_stats._normalize_usage_key(
+        [
+            "mss",
+            "custom-tables",
+            "--service",
+            "directory",
+            "--add-custom-table",
+            "tenant_id",
+        ]
+    )
+
+    assert left is not None
+    assert right is not None
+    assert left == right
+    assert "--service=directory" not in left
+    assert "--add-custom-table=customer_id" not in left
+    assert "--service" in left
+    assert "--add-custom-table" in left
+
+
+def test_read_usage_file_merges_legacy_flag_values(tmp_path: Path) -> None:
+    stats_file = tmp_path / "igor.efrem.txt"
+    stats_file.write_text(
+        (
+            "cdc mss custom-tables | flags: --add-custom-table=customer_id, --service=directory\t1\n"
+            "cdc mss custom-tables | flags: --service, --add-custom-table\t2\n"
+        ),
+        encoding="utf-8",
+    )
+
+    counts = usage_stats._read_usage_file(stats_file)
+    assert counts == {
+        "cdc mss custom-tables | flags: --add-custom-table, --service": 3,
+    }
+
+
 def test_track_usage_increments_per_user_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -84,3 +129,22 @@ def test_generate_usage_stats_aggregates_users(tmp_path: Path) -> None:
     assert "### other.user" in report
     assert "### total" in report
     assert "| cdc generate | 5 |" in report
+
+
+def test_generate_usage_stats_rewrites_user_file_canonical(tmp_path: Path) -> None:
+    stats_dir = tmp_path / "_docs" / "_stats"
+    stats_dir.mkdir(parents=True, exist_ok=True)
+
+    user_file = stats_dir / "igor.efrem.txt"
+    user_file.write_text(
+        (
+            "cdc mss custom-tables | flags: --add-custom-table=customer_id, --service=directory\t2\n"
+            "cdc mss custom-tables | flags: --service, --add-custom-table\t1\n"
+        ),
+        encoding="utf-8",
+    )
+
+    usage_stats.generate_usage_stats(tmp_path)
+    rewritten = user_file.read_text(encoding="utf-8")
+
+    assert rewritten == "cdc mss custom-tables | flags: --add-custom-table, --service\t3\n"

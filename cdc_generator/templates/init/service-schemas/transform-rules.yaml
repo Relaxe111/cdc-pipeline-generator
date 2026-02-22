@@ -1,0 +1,7 @@
+# Transform rule catalog for reusable row/column transforms.
+#
+# Add rules via:
+#   cdc mss transforms --list-rules
+#   cdc manage-services schema transforms --list-rules
+#
+rules: {}

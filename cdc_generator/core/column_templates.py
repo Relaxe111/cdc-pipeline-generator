@@ -21,7 +21,7 @@ Example service YAML usage:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from cdc_generator.helpers.helpers_logging import print_error, print_warning
 from cdc_generator.helpers.service_schema_paths import (
@@ -46,6 +46,10 @@ class ColumnTemplate:
         not_null: Whether the column is NOT NULL.
         description: Human-readable description.
         value: Bloblang expression for pipeline runtime.
+        value_source: Source of ``value`` expression. One of:
+            - ``bloblang``  (pipeline mapping expression)
+            - ``source_ref`` (``{group.sources.*.key}`` indirection)
+            - ``sql``       (database expression, e.g. now(), gen_random_uuid())
         default: SQL default expression for DDL (e.g., now()).
         applies_to: Optional list of table patterns this template can be applied to.
             Supports glob patterns (e.g., "*.user", "public.*").
@@ -58,6 +62,7 @@ class ColumnTemplate:
     not_null: bool
     description: str
     value: str
+    value_source: Literal["bloblang", "source_ref", "sql"] = "bloblang"
     default: str | None = None
     applies_to: list[str] | None = None
 
@@ -113,6 +118,30 @@ def clear_cache() -> None:
 # ---------------------------------------------------------------------------
 
 _REQUIRED_FIELDS = ("name", "type", "value")
+
+_VALUE_SOURCE_ALIASES: dict[str, Literal["bloblang", "source_ref", "sql"]] = {
+    "bloblang": "bloblang",
+    "source_ref": "source_ref",
+    "source-ref": "source_ref",
+    "sql": "sql",
+}
+
+
+def _normalize_value_source(
+    raw_value_source: object,
+    value: str,
+) -> Literal["bloblang", "source_ref", "sql"]:
+    """Normalize declared value source with backward-compatible inference."""
+    from cdc_generator.core.source_ref_resolver import is_source_ref
+
+    if isinstance(raw_value_source, str):
+        normalized = _VALUE_SOURCE_ALIASES.get(raw_value_source.strip().lower())
+        if normalized is not None:
+            return normalized
+
+    if is_source_ref(value):
+        return "source_ref"
+    return "bloblang"
 
 
 def _resolve_file_reference(value: str) -> tuple[str, str | None]:
@@ -190,6 +219,10 @@ def _parse_single_template(
 
     # Resolve file:// references to actual Bloblang content
     resolved_value, _file_ref = _resolve_file_reference(value)
+    value_source = _normalize_value_source(
+        data.get("value_source"),
+        value,
+    )
 
     not_null_raw = data.get("not_null", False)
     not_null = bool(not_null_raw) if isinstance(not_null_raw, bool) else False
@@ -217,6 +250,7 @@ def _parse_single_template(
         not_null=not_null,
         description=description,
         value=resolved_value,  # Use resolved content, not original reference
+        value_source=value_source,
         default=default,
         applies_to=applies_to,
     )
