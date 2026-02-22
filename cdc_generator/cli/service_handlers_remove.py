@@ -1,4 +1,4 @@
-"""Service removal handlers for manage-service."""
+"""Service removal handlers for manage-services config."""
 
 import argparse
 import shutil

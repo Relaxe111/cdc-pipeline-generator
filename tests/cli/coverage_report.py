@@ -311,7 +311,7 @@ _COMMAND_SOURCE_MODULES: dict[str, list[str]] = {
         "core/structure_replicator.py",
     ],
     "manage-source-groups": [
-        "cli/service_group",
+        "cli/source_group.py",
         "validators/manage_server_group/config.py",
         "validators/manage_server_group/display.py",
         "validators/manage_server_group/handlers.py",

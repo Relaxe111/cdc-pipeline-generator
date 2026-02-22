@@ -1,4 +1,4 @@
-"""Source table listing handlers for manage-service."""
+"""Source table listing handlers for manage-services config."""
 
 import argparse
 from typing import cast
@@ -160,7 +160,7 @@ def handle_list_source_tables(args: argparse.Namespace) -> int:
                 + f"'{args.service}'"
             )
             print_info(
-                "Add tables with: cdc manage-service "
+                "Add tables with: cdc manage-services config "
                 + f"--service {args.service} "
                 + "--add-source-table <schema.table>"
             )

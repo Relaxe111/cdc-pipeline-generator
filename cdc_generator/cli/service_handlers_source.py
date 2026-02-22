@@ -1,4 +1,4 @@
-"""Source table CLI operations for manage-service."""
+"""Source table CLI operations for manage-services config."""
 
 import argparse
 from typing import Any

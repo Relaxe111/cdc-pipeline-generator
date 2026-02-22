@@ -1,4 +1,4 @@
-"""Source database inspection handlers for manage-service."""
+"""Source database inspection handlers for manage-services config."""
 
 import argparse
 

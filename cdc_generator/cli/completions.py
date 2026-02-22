@@ -159,8 +159,8 @@ def _get_param(ctx: click.Context, name: str) -> str:
 def _get_service(ctx: click.Context) -> str:
     """Get service name from --service flag or positional argument.
 
-    manage-service supports both ``--service directory`` and the shorthand
-    ``cdc manage-service directory``.  With ``allow_extra_args=True``,
+    manage-services config supports both ``--service directory`` and the shorthand
+    ``cdc manage-services config directory``.  With ``allow_extra_args=True``,
     Click puts the positional word into ``ctx.args`` (not ``ctx.params``).
     We pick the first non-flag token from ``ctx.args`` as the service name.
     """

@@ -70,3 +70,6 @@ generated/pipelines/*
 generated/schemas/*
 generated/table-definitions/*
 !generated/**/.gitkeep
+
+# Temporary investigation workspace (remove after final summary is moved to _docs)
+_docs-temporary-audit-refactor/

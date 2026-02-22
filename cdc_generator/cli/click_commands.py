@@ -132,11 +132,12 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="Manage existing source table")
 # -- Inspect / validation --
 @click.option("--inspect", is_flag=True, help="Inspect database schema")
-@click.option("--inspect-sink", is_flag=True,
+@click.option("--inspect-sink", "--sink-inspect", is_flag=True,
               help="Inspect sink database schema (use with --all for all sinks)")
 @click.option("--schema", shell_complete=complete_schemas,
               help="Database schema to inspect or filter")
-@click.option("--save", is_flag=True, help="Save detailed table schemas to YAML")
+@click.option("--save", "--sink-save", is_flag=True,
+              help="Save detailed table schemas to YAML")
 @click.option("--generate-validation", is_flag=True,
               help="Generate JSON Schema for validation")
 @click.option("--validate-hierarchy", is_flag=True,
@@ -145,7 +146,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="Comprehensive configuration validation")
 @click.option("--validate-bloblang", is_flag=True,
               help="Validate Bloblang syntax using rpk")
-@click.option("--all", "all_flag", is_flag=True, help="Process all schemas")
+@click.option("--all", "--sink-all", "all_flag", is_flag=True,
+              help="Process all schemas")
 @click.option("--env", help="Environment (nonprod/prod)")
 @click.option("--primary-key", help="Primary key column name")
 @click.option("--ignore-columns", shell_complete=complete_columns,

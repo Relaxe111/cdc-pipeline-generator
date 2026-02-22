@@ -1,4 +1,4 @@
-"""Custom sink table management for manage-service CLI.
+"""Custom sink table management for manage-services config CLI.
 
 Handles creation and modification of custom tables — tables that don't exist
 in any source and will be auto-created in the sink database.
@@ -508,7 +508,7 @@ def _load_columns_from_source_table(
             f"Schema for source table '{table_ref}' not found in service-schemas"
         )
         print_info(
-            "Run: cdc manage-service --service "
+            "Run: cdc manage-services config --service "
             + f"{service} --inspect --all --save"
         )
         return None

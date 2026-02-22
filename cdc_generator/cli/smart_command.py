@@ -293,7 +293,7 @@ class SmartCommand(click.Command):
 # ============================================================================
 
 
-# manage-service: context flag → sub-options that become relevant
+# manage-services config: context flag → sub-options that become relevant
 # Keys and values use underscore form (Click param names).
 MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     # ── Source inspection ──────────────────────────────────────
@@ -375,12 +375,12 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "remove_service": set(),
 }
 
-# Options always shown for manage-service
+# Options always shown for manage-services config
 MANAGE_SERVICE_ALWAYS: set[str] = {
     "service", "service_positional", "server", "all",
 }
 
-# Hierarchical prerequisites for manage-service.
+# Hierarchical prerequisites for manage-services config.
 # An option only appears if ALL its prerequisites are active.
 #
 # Hierarchy:

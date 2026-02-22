@@ -1,4 +1,4 @@
-"""Bloblang validation handler for manage-service."""
+"""Bloblang validation handler for manage-services config."""
 
 from __future__ import annotations
 

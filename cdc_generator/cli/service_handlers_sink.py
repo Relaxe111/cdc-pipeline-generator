@@ -1,4 +1,4 @@
-"""Sink CLI operations for manage-service."""
+"""Sink CLI operations for manage-services config."""
 
 import argparse
 from typing import cast
@@ -303,7 +303,7 @@ def handle_sink_update_schema(args: argparse.Namespace) -> int:
     if not hasattr(args, "sink_table") or args.sink_table is None:
         print_error("--update-schema requires --sink-table")
         print_info(
-            "Example: cdc manage-service --service directory "
+            "Example: cdc manage-services config --service directory "
             + "--sink sink_asma.calendar "
             + "--sink-table public.customer_user "
             + "--update-schema calendar"
@@ -334,7 +334,7 @@ def handle_sink_map_column_on_table(args: argparse.Namespace) -> int:
     if not hasattr(args, "sink_table") or args.sink_table is None:
         print_error("--map-column on existing table requires --sink-table")
         print_info(
-            "Example: cdc manage-service --service directory "
+            "Example: cdc manage-services config --service directory "
             + "--sink sink_asma.proxy "
             + "--sink-table public.directory_user_name "
             + "--map-column brukerBrukerNavn user_name"
@@ -362,13 +362,13 @@ def handle_sink_map_column_error() -> int:
         + "--sink-table to specify which table to map"
     )
     print_info(
-        "Add new table: cdc manage-service --service directory "
+        "Add new table: cdc manage-services config --service directory "
         + "--sink sink_asma.chat "
         + "--add-sink-table public.users "
         + "--map-column id user_id"
     )
     print_info(
-        "Map existing: cdc manage-service --service directory "
+        "Map existing: cdc manage-services config --service directory "
         + "--sink sink_asma.proxy "
         + "--sink-table public.users "
         + "--map-column id user_id"
@@ -395,7 +395,7 @@ def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
             "--add-custom-sink-table requires --from <source_schema.source_table>"
         )
         print_info(
-            "Example (inline + source ref): cdc manage-service --service directory "
+            "Example (inline + source ref): cdc manage-services config --service directory "
             + "--sink sink_asma.proxy "
             + "--add-custom-sink-table public.audit_log "
             + "--from public.audit_log "
@@ -403,7 +403,7 @@ def handle_sink_add_custom_table(args: argparse.Namespace) -> int:
             + "--column event_type:text:not_null"
         )
         print_info(
-            "Example (from source schema): cdc manage-service --service directory "
+            "Example (from source schema): cdc manage-services config --service directory "
             + "--sink sink_asma.proxy "
             + "--add-custom-sink-table public.audit_log "
             + "--from public.audit_log"
@@ -455,7 +455,7 @@ def handle_modify_custom_table(args: argparse.Namespace) -> int:
         + "--add-column or --remove-column"
     )
     print_info(
-        "Example: cdc manage-service --service directory "
+        "Example: cdc manage-services config --service directory "
         + "--sink sink_asma.proxy "
         + "--modify-custom-table public.audit_log "
         + "--add-column updated_at:timestamptz:default_now"

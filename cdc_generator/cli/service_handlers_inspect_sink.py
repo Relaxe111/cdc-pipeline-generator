@@ -1,4 +1,4 @@
-"""Sink database inspection handlers for manage-service."""
+"""Sink database inspection handlers for manage-services config."""
 
 import argparse
 

@@ -1,4 +1,4 @@
-"""Facade exports for manage-service handlers.
+"""Facade exports for manage-services config handlers.
 
 Split into smaller modules to keep file size manageable and improve
 maintainability. Import from this module to preserve legacy import paths.

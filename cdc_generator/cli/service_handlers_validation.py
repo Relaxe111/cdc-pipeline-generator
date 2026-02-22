@@ -1,4 +1,4 @@
-"""Validation handlers for manage-service."""
+"""Validation handlers for manage-services config."""
 
 import argparse
 

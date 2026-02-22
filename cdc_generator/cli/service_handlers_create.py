@@ -1,4 +1,4 @@
-"""Service creation handlers for manage-service."""
+"""Service creation handlers for manage-services config."""
 
 import argparse
 from pathlib import Path
@@ -143,7 +143,7 @@ def handle_create_service(args: argparse.Namespace) -> int:
         )
         print_info("To modify it, edit the file directly or use:")
         print_info(
-            f"  cdc manage-service --service {args.service} "
+            f"  cdc manage-services config --service {args.service} "
             + "--add-source-table <schema.table>"
         )
         return 1

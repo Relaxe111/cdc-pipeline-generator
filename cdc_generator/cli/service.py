@@ -3,10 +3,10 @@
 Interactive service management tool for CDC pipeline.
 
 Usage:
-    cdc manage-service
-    cdc manage-service --service adopus --inspect --all
-    cdc manage-service --service adopus --add-table Actor
-    cdc manage-service --service adopus --remove-table Test
+    cdc manage-services config
+    cdc manage-services config --service adopus --inspect --all
+    cdc manage-services config --service adopus --add-table Actor
+    cdc manage-services config --service adopus --remove-table Test
 """
 
 import argparse
@@ -60,36 +60,36 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--list-services": (
         "List all services from services/*.yaml",
-        "cdc manage-service --list-services",
+        "cdc manage-services config --list-services",
     ),
     "--service": (
-        "Service name from services/*.yaml",
-        "cdc manage-service --service adopus --inspect --all",
+        "Service config key from services/*.yaml (design/config scope)",
+        "cdc manage-services config --service adopus --inspect --all",
     ),
     "--create-service": (
         "Name for the new service to create",
-        "cdc manage-service --create-service myservice",
+        "cdc manage-services config --create-service myservice",
     ),
     "--add-validation-database": (
         "Validation database override used during --create-service",
-        "cdc manage-service --create-service adopus --add-validation-database AdOpusTest",
+        "cdc manage-services config --create-service adopus --add-validation-database AdOpusTest",
     ),
     "--remove-service": (
         "Name of the service to remove",
-        "cdc manage-service --remove-service myservice",
+        "cdc manage-services config --remove-service myservice",
     ),
     "--add-source-table": (
         "Table name to add (format: schema.table, repeat flag for multiple)",
-        "cdc manage-service --service adopus --add-source-table dbo.Actor",
+        "cdc manage-services config --service adopus --add-source-table dbo.Actor",
     ),
     "--remove-table": (
         "Table name to remove (format: schema.table)",
-        "cdc manage-service --service adopus --remove-table dbo.Actor",
+        "cdc manage-services config --service adopus --remove-table dbo.Actor",
     ),
     "--source-table": (
         "Existing source table to manage (format: schema.table)",
         (
-            "cdc manage-service --service proxy"
+            "cdc manage-services config --service proxy"
             " --source-table public.queries"
             " --track-columns public.queries.status"
         ),
@@ -97,40 +97,47 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--inspect-sink": (
         "Sink key to inspect (format: sink_group.target_service)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --inspect-sink sink_asma.calendar --all"
+        ),
+    ),
+    "--sink-inspect": (
+        "Alias for --inspect-sink",
+        (
+            "cdc manage-services config --service directory"
+            " --sink-inspect sink_asma.calendar --sink-all"
         ),
     ),
     "--schema": (
         "Database schema to inspect or filter",
-        "cdc manage-service --service adopus --inspect --schema dbo",
+        "cdc manage-services config --service adopus --inspect --schema dbo",
     ),
     "--add-sink": (
         "Sink key to add (format: sink_group.target_service)",
-        "cdc manage-service --service directory --add-sink sink_asma.chat",
+        "cdc manage-services config --service directory --add-sink sink_asma.chat",
     ),
     "--remove-sink": (
         "Sink key to remove",
-        "cdc manage-service --service directory --remove-sink sink_asma.chat",
+        "cdc manage-services config --service directory --remove-sink sink_asma.chat",
     ),
     "--sink": (
         "Target sink for table operations",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --add-sink-table public.users"
         ),
     ),
     "--add-sink-table": (
         "Table name to add to sink (requires --sink)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --add-sink-table public.users"
         ),
     ),
     "--from": (
         "Source table reference for sink (defaults to sink table name)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.proxy --add-sink-table other.manage_audits"
             " --from logs.audit_queue --replicate-structure"
         ),
@@ -138,7 +145,7 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--replicate-structure": (
         "Auto-generate sink table DDL from source schema",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --add-sink-table public.customer_user"
             " --replicate-structure --target-exists false"
         ),
@@ -146,14 +153,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--remove-sink-table": (
         "Table name to remove from sink (requires --sink)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --remove-sink-table public.users"
         ),
     ),
     "--target": (
         "Target table name for mapped sink table",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --add-sink-table public.attachments"
             " --target public.chat_attachments"
         ),
@@ -161,26 +168,34 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--target-schema": (
         "Override target schema for cloned table",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.chat --add-sink-table public.users"
             " --target-schema custom_schema"
         ),
     ),
     "--env": (
         "Environment for inspection (default: nonprod)",
-        "cdc manage-service --service adopus --inspect --env prod",
+        "cdc manage-services config --service adopus --inspect --env prod",
+    ),
+    "--sink-all": (
+        "Alias for --all (inspect every allowed schema)",
+        "cdc manage-services config --service directory --sink-inspect sink_asma.calendar --sink-all",
+    ),
+    "--sink-save": (
+        "Alias for --save (persist inspected sink schemas)",
+        "cdc manage-services config --service directory --sink-inspect sink_asma.calendar --sink-all --sink-save",
     ),
     "--primary-key": (
         "Primary key column name",
         (
-            "cdc manage-service --service adopus"
+            "cdc manage-services config --service adopus"
             " --add-source-table dbo.Actor --primary-key actno"
         ),
     ),
     "--add-custom-sink-table": (
         "Table name for custom table (format: schema.table)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.proxy"
             " --add-custom-sink-table public.audit_log"
             " --column id:uuid:pk"
@@ -190,7 +205,7 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--modify-custom-table": (
         "Custom table to modify (format: schema.table)",
         (
-            "cdc manage-service --service directory"
+            "cdc manage-services config --service directory"
             " --sink sink_asma.proxy"
             " --modify-custom-table public.audit_log"
             " --add-column updated_at:timestamptz:default_now"
@@ -230,7 +245,7 @@ class ServiceArgumentParser(argparse.ArgumentParser):
                     "Tip: for replicate fanout, omit --sink and use --all"
                 )
                 print_info(
-                    "Example: cdc manage-service --service directory "
+                    "Example: cdc manage-services config --service directory "
                     + "--all --add-sink-table --from public.customer_user "
                     + "--replicate-structure --sink-schema directory"
                 )
@@ -247,50 +262,56 @@ class ServiceArgumentParser(argparse.ArgumentParser):
         raise SystemExit(1)
 
 _EPILOG = """\
+Terminology:
+    --service: configuration scope selector for manage-services config commands.
+    --customer: execution/deployment selector used in pipeline/migration flows.
+    db-per-tenant: customer resolves to one customer database.
+    db-shared: customer resolves to logical tenant slices (e.g. customer_id).
+
 Examples:
   # Create a new service
-  cdc manage-service --service myservice --create-service
+    cdc manage-services config --service myservice --create-service
 
     # Remove a service
-    cdc manage-service --remove-service myservice
+    cdc manage-services config --remove-service myservice
 
   # Inspect database tables
-  cdc manage-service --service adopus --inspect --schema dbo
-  cdc manage-service --service adopus --inspect --all
+    cdc manage-services config --service adopus --inspect --schema dbo
+    cdc manage-services config --service adopus --inspect --all
 
   # Add tables to service
-  cdc manage-service --service adopus --add-source-table dbo.Actor
-  cdc manage-service --service adopus \\
+    cdc manage-services config --service adopus --add-source-table dbo.Actor
+    cdc manage-services config --service adopus \
       --add-source-table dbo.Actor --add-source-table dbo.Fraver
 
   # Remove table from service
-  cdc manage-service --service adopus --remove-table dbo.Actor
+    cdc manage-services config --service adopus --remove-table dbo.Actor
 
   # Validate service configuration
-  cdc manage-service --service adopus --validate-config
+    cdc manage-services config --service adopus --validate-config
 
   # Inspect sink database tables
-  cdc manage-service --service directory --inspect-sink sink_asma.calendar --all
-  cdc manage-service --service directory --inspect-sink sink_asma.calendar --schema public
+    cdc manage-services config --service directory --inspect-sink sink_asma.calendar --all
+    cdc manage-services config --service directory --inspect-sink sink_asma.calendar --schema public
 
   # Sink management
-  cdc manage-service --service directory --add-sink sink_asma.chat
-  cdc manage-service --service directory \\
+  cdc manage-services config --service directory --add-sink sink_asma.chat
+  cdc manage-services config --service directory \
       --sink sink_asma.chat \\
       --add-sink-table public.customer_user
-  cdc manage-service --service directory \\
+  cdc manage-services config --service directory \
       --sink sink_asma.chat \\
       --add-sink-table public.attachments \\
       --target public.chat_attachments \\
       --map-column id attachment_id \\
       --map-column name file_name
-  cdc manage-service --service directory --list-sinks
-  cdc manage-service --service directory --validate-sinks
-  cdc manage-service --service directory \\
+  cdc manage-services config --service directory --list-sinks
+  cdc manage-services config --service directory --validate-sinks
+  cdc manage-services config --service directory \
       --remove-sink sink_asma.chat
 
   # Custom sink tables (auto-created in sink database)
-  cdc manage-service --service directory \\
+    cdc manage-services config --service directory \
       --sink sink_asma.proxy \\
       --add-custom-sink-table public.audit_log \\
       --column id:uuid:pk \\
@@ -299,11 +320,11 @@ Examples:
       --column created_at:timestamptz:not_null:default_now
 
   # Modify custom table columns
-  cdc manage-service --service directory \\
+  cdc manage-services config --service directory \
       --sink sink_asma.proxy \\
       --modify-custom-table public.audit_log \\
       --add-column updated_at:timestamptz:default_now
-  cdc manage-service --service directory \\
+  cdc manage-services config --service directory \
       --sink sink_asma.proxy \\
       --modify-custom-table public.audit_log \\
       --remove-column payload
@@ -379,9 +400,9 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
 
 
 def _build_parser() -> ServiceArgumentParser:
-    """Build the argument parser for manage-service."""
+    """Build the argument parser for manage-services config."""
     parser = ServiceArgumentParser(
-        description="Interactive CDC service management tool",
+        description="CDC service configuration management (design/config command family)",
         epilog=_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -398,7 +419,7 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--service",
         required=False,
-        help="Service name from services/*.yaml",
+        help="Service config key from services/*.yaml (primary scope selector)",
     )
     parser.add_argument(
         "--create-service",
@@ -429,7 +450,7 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--list-source-tables",
         action="store_true",
-        help="List all source tables in this service",
+        help="List source tables configured for the selected service",
     )
     parser.add_argument(
         "--add-source-table",
@@ -459,15 +480,16 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--inspect",
         action="store_true",
-        help="Inspect database schema (auto-detects DB)",
+        help="Inspect source database schema for selected service (or all with --all)",
     )
     parser.add_argument(
-        "--inspect-sink",
+        "--inspect-sink", "--sink-inspect",
+        dest="inspect_sink",
         nargs="?",
         const=_INSPECT_ALL_SINKS,
         metavar="SINK_KEY",
         help=(
-            "Inspect sink database schema. "
+            "Inspect sink database schema for the selected service. "
             "Provide SINK_KEY for one sink, or use --inspect-sink --all "
             "to inspect all configured sinks."
         ),
@@ -477,7 +499,8 @@ def _build_parser() -> ServiceArgumentParser:
         help="Database schema to inspect or filter",
     )
     parser.add_argument(
-        "--save",
+        "--save", "--sink-save",
+        dest="save",
         action="store_true",
         help="Save detailed table schemas to YAML",
     )
@@ -502,7 +525,8 @@ def _build_parser() -> ServiceArgumentParser:
         help="Validate Bloblang syntax in templates and transforms using rpk",
     )
     parser.add_argument(
-        "--all",
+        "--all", "--sink-all",
+        dest="all",
         action="store_true",
         help="Process all schemas",
     )
@@ -709,7 +733,7 @@ def _auto_detect_service(
             f"Multiple services found: {available}"
         )
         print_error(
-            "Please specify: cdc manage-service <name>"
+            "Please specify: cdc manage-services config --service <name>"
             + " or --service <name>"
         )
         return None
@@ -719,8 +743,10 @@ def _auto_detect_service(
 
 def _dispatch_validation(args: argparse.Namespace) -> int | None:
     """Handle validation-related commands. None = not handled."""
-    early_handlers: tuple[tuple[str, Callable[[argparse.Namespace], int] | Callable[[], int]], ...] = (
-        ("list_services", handle_list_services),
+    if getattr(args, "list_services", False):
+        return handle_list_services()
+
+    early_handlers: tuple[tuple[str, Callable[[argparse.Namespace], int]], ...] = (
         ("list_source_tables", handle_list_source_tables),
         ("create_service", handle_create_service),
         ("remove_service", handle_remove_service),
@@ -729,8 +755,6 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     for attr, handler in early_handlers:
         if not getattr(args, attr, False):
             continue
-        if attr == "list_services":
-            return handler()
         return handler(args)
 
     # Special case: --inspect can run without --service (inspects all)
@@ -904,7 +928,7 @@ def _dispatch(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    """Entry point for `cdc manage-service`."""
+    """Entry point for `cdc manage-services config`."""
     parser = _build_parser()
     args = parser.parse_args()
 

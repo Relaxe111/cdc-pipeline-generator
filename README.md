@@ -280,17 +280,73 @@ docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generato
 ### Service Management
 
 ```bash
-# Create service
-cdc manage-service --create <name>
+# Top-level shortcut alias
+#   manage-services  -> ms
+# So these are equivalent:
+#   cdc manage-services config ...
+#   cdc ms config ...
 
-# Add tables
-cdc manage-service --service <name> --add-table <TableName> --primary-key <column>
+# Create service
+cdc ms config --create-service <name>
+
+# List services
+cdc ms config --list-services
+
+# Add source table
+cdc ms config --service <name> --add-source-table <schema.table> --primary-key <column>
 
 # Remove tables
-cdc manage-service --service <name> --remove-table <TableName>
+cdc ms config --service <name> --remove-table <schema.table>
 
-# Inspect database schema
-cdc manage-service --service <name> --inspect --schema <schema-name>
+# List configured source tables
+cdc ms config --service <name> --list-source-tables
+
+# Inspect source schema (read-only)
+cdc ms config --service <name> --inspect --schema <schema-name>
+cdc ms config --service <name> --inspect --all
+
+# Inspect + save source table schemas
+cdc ms config --service <name> --inspect --schema <schema-name> --save
+cdc ms config --service <name> --inspect --all --save
+```
+
+### Sink Inspection & Save Flow
+
+```bash
+# Step 1: list sinks configured on a service
+cdc ms config --service <source_service> --list-sinks
+
+# Step 2: inspect one sink (read-only)
+cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --schema <schema>
+cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --all
+
+# Step 3: inspect + save one sink
+cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --all --save
+
+# Step 4: inspect + save all configured sinks for a service
+cdc ms config --service <source_service> --inspect-sink --all --save
+```
+
+### Sink Shortcut Flag Aliases
+
+```bash
+# Aliases added to simplify sink flows:
+#   --sink-inspect  -> --inspect-sink
+#   --sink-all      -> --all
+#   --sink-save     -> --save
+
+# Example (equivalent to --inspect-sink ... --all --save)
+cdc ms config --service directory --sink-inspect sink_asma.calendar --sink-all --sink-save
+```
+
+### Where schemas are saved
+
+```bash
+# Source inspect --save writes table YAML files under:
+service-schemas/<service>/<schema>/<table>.yaml
+
+# Sink inspect --save writes under target service path:
+service-schemas/<target_service>/<schema>/<table>.yaml
 ```
 
 ### Pipeline Generation

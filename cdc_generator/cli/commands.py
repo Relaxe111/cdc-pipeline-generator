@@ -15,6 +15,7 @@ Commands:
     manage-pipelines     Manage pipeline lifecycle commands
     manage-migrations    Manage migration and DB lifecycle commands
     setup-local          Set up local development environment
+    generate-usage-stats Generate command usage stats from _docs/_stats user files
     reset-local          Reset local environment
     nuke-local           Complete cleanup of local environment
     reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
@@ -30,6 +31,8 @@ import sys
 from pathlib import Path
 
 import click
+
+from cdc_generator.cli.usage_stats import track_usage
 
 # Minimum number of CLI args (program name + command)
 _MIN_ARGS = 2
@@ -151,6 +154,11 @@ GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
         "module": "cdc_generator.cli.setup_local",
         "script": "cli/setup_local.py",
         "description": "Set up local development environment with on-demand services",
+    },
+    "generate-usage-stats": {
+        "module": "cdc_generator.cli.usage_stats",
+        "script": "cli/usage_stats.py",
+        "description": "Generate command usage stats from _docs/_stats user files",
     },
 }
 
@@ -311,6 +319,8 @@ def print_help(
 
     print("\n⚡ Aliases:")
     print("  ms                   - alias for manage-services")
+    print("  msc                  - alias for manage-services config")
+    print("  mss                  - alias for manage-services schema")
     print("  msog                 - alias for manage-source-groups")
     print("  msig                 - alias for manage-sink-groups")
     print("  mp                   - alias for manage-pipelines")
@@ -592,7 +602,11 @@ def _register_commands() -> None:
     Commands with typed Click option declarations (from click_commands.py)
     are registered directly. Remaining commands use generic passthrough.
     """
-    from cdc_generator.cli.click_commands import CLICK_COMMANDS
+    from cdc_generator.cli.click_commands import (
+        CLICK_COMMANDS,
+        manage_service_cmd,
+        manage_services_schema_cmd,
+    )
 
     # Register typed commands (have full Click option declarations)
     for _name, cmd_obj in CLICK_COMMANDS.items():
@@ -604,6 +618,10 @@ def _register_commands() -> None:
         cmd_obj = CLICK_COMMANDS.get(canonical)
         if cmd_obj is not None:
             _click_cli.add_command(cmd_obj, name=alias)
+
+    # Register direct subcommand aliases as top-level shortcuts.
+    _click_cli.add_command(manage_service_cmd, name="msc")
+    _click_cli.add_command(manage_services_schema_cmd, name="mss")
 
     # Register remaining commands as generic passthrough
     typed_names = set(CLICK_COMMANDS.keys())
@@ -641,6 +659,11 @@ def main() -> int:
                 standalone_mode=True,
             )
         return 0
+
+    if len(sys.argv) >= _MIN_ARGS:
+        workspace_root, _implementation_name, _is_dev_container = detect_environment()
+        with contextlib.suppress(Exception):
+            track_usage(workspace_root, sys.argv[1:])
 
     if len(sys.argv) < _MIN_ARGS or sys.argv[1] in ["help", "--help", "-h"]:
         workspace_root, implementation_name, is_dev_container = detect_environment()

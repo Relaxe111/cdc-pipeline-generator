@@ -1,0 +1,3 @@
+cdc generate-usage-stats	2
+cdc manage-services config directory	1
+cdc manage-services config directory | flags: --al	1

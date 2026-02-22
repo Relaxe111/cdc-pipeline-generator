@@ -1,4 +1,4 @@
-"""Misc handlers for manage-service (no-service and interactive)."""
+"""Misc handlers for manage-services config (no-service and interactive)."""
 
 import argparse
 
@@ -27,10 +27,10 @@ def handle_no_service() -> int:
 
     print_error("❌ Error: --service is required")
     print_info(
-        "Usage: cdc manage-service --service <name> [options]"
+        "Usage: cdc manage-services config --service <name> [options]"
     )
     print_info(
-        "Run 'cdc manage-service --help' for more information"
+        "Run 'cdc manage-services config --help' for more information"
     )
     return 1
 
