@@ -610,6 +610,8 @@ manage_services_cmd.add_command(manage_service_cmd, name="config")
 @click.option("--type", "col_type", shell_complete=complete_pg_types,
               help="PostgreSQL column type")
 @click.option("--value", help="Bloblang expression or env var")
+@click.option("--value-source", type=click.Choice(["bloblang", "source_ref", "sql", "env"]),
+              help="Value generation mode")
 @click.option("--description", help="Human-readable description")
 @click.option("--not-null", is_flag=True, help="Mark column as NOT NULL")
 @click.option("--nullable", is_flag=True, help="Mark column as nullable")

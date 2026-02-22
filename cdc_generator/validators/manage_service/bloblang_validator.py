@@ -200,10 +200,11 @@ def validate_column_templates_bloblang(
                 continue
 
             value = str(raw_value)
+            value_source = str(template.get("value_source", "bloblang"))
 
             # Source refs are resolved later (not Bloblang), e.g. {asma.sources.*.key}
-            if is_source_ref(value):
-                print_success(f"  ✓ {key}: {value[:50]}... (source-ref)")
+            if is_source_ref(value) or value_source in ("source_ref", "sql", "env"):
+                print_success(f"  ✓ {key}: {value[:50]}... ({value_source})")
                 valid_count += 1
                 continue
 

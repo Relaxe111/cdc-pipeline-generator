@@ -42,12 +42,14 @@ templates:
     not_null: true
     description: Source table name
     value: meta("table")
+    value_source: bloblang
   environment:
     name: _environment
     type: text
     not_null: true
     description: Deployment environment
     value: "${ENVIRONMENT}"
+    value_source: bloblang
 """
     path = tmp_path / "service-schemas" / "column-templates.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +136,7 @@ class TestAddTemplateDefinition:
         assert template.column_type == "text"
         assert template.not_null is True
         assert template.value == "${TENANT_ID}"
+        assert template.value_source == "env"
 
     def test_add_with_default(self, templates_file: Path) -> None:
         result = add_template_definition(
@@ -143,6 +146,7 @@ class TestAddTemplateDefinition:
             value="now()",
             default="now()",
             not_null=True,
+            value_source="sql",
         )
         assert result is True
 
@@ -150,6 +154,7 @@ class TestAddTemplateDefinition:
         template = get_template("sync_ts")
         assert template is not None
         assert template.default == "now()"
+        assert template.value_source == "sql"
 
     def test_add_duplicate_fails(self, templates_file: Path) -> None:
         """Cannot add a template with an existing key."""

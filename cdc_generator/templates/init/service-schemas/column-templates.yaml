@@ -1,6 +1,35 @@
-# Column template definitions for reusable sink columns.
+# ============================================================================
+# Column Templates Library
+# ============================================================================
+# Reusable column definitions referenced by name in service YAML column_templates.
 #
+# Usage in service YAML:
+#   column_templates:
+#     - template: source_table
+#     - template: environment
+#       name: deploy_env           # override column name
+#     - template: tenant_id
+#       value: "{asma.sources.*.customer_id}"  # source-group reference
+#
+# Template fields:
+#   name:        Column name (used as default, overridable in service YAML)
+#   type:        PostgreSQL column type
+#   not_null:    Whether column is NOT NULL (default: false)
+#   description: Human-readable description
+#   value:       Bloblang expression for pipeline runtime
+#                - Bloblang expressions: root().source_table, this.field, meta("key")
+#                - Environment variables: ${VARIABLE_NAME}
+#   value_source: Source of the value expression (bloblang | source_ref | env | sql)
+#   default:     SQL default for DDL (e.g., now(), gen_random_uuid())
+#
+# Value overrides:
+#   In service YAML, use 'value' to override the template default.
+#   Supports source-group references: {group.sources.*.key}
+#   - {asma.sources.*.customer_id} → resolved at generation time per source
+#   - The '*' resolves to the current source name being generated
+#   - Keys are looked up at source level first, then env level
+# ============================================================================
 # Add templates via:
-#   cdc mss column-templates --add <key> --type <pg_type> --value <expr>
+#   cdc mss column-templates --add <key> --type <pg_type> --value <expr> --value-source <mode>
 #
 templates: {}

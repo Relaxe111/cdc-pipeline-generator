@@ -1,0 +1,8 @@
+input:
+  stdin: {}
+pipeline:
+  processors:
+    - mapping: |
+        __LINT_PLACEHOLDER__
+output:
+  drop: {}

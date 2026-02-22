@@ -50,6 +50,7 @@ class ColumnTemplate:
             - ``bloblang``  (pipeline mapping expression)
             - ``source_ref`` (``{group.sources.*.key}`` indirection)
             - ``sql``       (database expression, e.g. now(), gen_random_uuid())
+            - ``env``       (environment variable, e.g. ${VAR_NAME})
         default: SQL default expression for DDL (e.g., now()).
         applies_to: Optional list of table patterns this template can be applied to.
             Supports glob patterns (e.g., "*.user", "public.*").
@@ -62,7 +63,7 @@ class ColumnTemplate:
     not_null: bool
     description: str
     value: str
-    value_source: Literal["bloblang", "source_ref", "sql"] = "bloblang"
+    value_source: Literal["bloblang", "source_ref", "sql", "env"] = "bloblang"
     default: str | None = None
     applies_to: list[str] | None = None
 
@@ -119,18 +120,19 @@ def clear_cache() -> None:
 
 _REQUIRED_FIELDS = ("name", "type", "value")
 
-_VALUE_SOURCE_ALIASES: dict[str, Literal["bloblang", "source_ref", "sql"]] = {
+_VALUE_SOURCE_ALIASES: dict[str, Literal["bloblang", "source_ref", "sql", "env"]] = {
     "bloblang": "bloblang",
     "source_ref": "source_ref",
     "source-ref": "source_ref",
     "sql": "sql",
+    "env": "env",
 }
 
 
 def _normalize_value_source(
     raw_value_source: object,
     value: str,
-) -> Literal["bloblang", "source_ref", "sql"]:
+) -> Literal["bloblang", "source_ref", "sql", "env"]:
     """Normalize declared value source with backward-compatible inference."""
     from cdc_generator.core.source_ref_resolver import is_source_ref
 
@@ -141,6 +143,14 @@ def _normalize_value_source(
 
     if is_source_ref(value):
         return "source_ref"
+    
+    stripped = value.strip()
+    import re
+    if stripped.startswith("${") and stripped.endswith("}"):
+        inner = stripped[2:-1]
+        if re.fullmatch(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
+            return "env"
+
     return "bloblang"
 
 

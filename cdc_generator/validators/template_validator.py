@@ -497,10 +497,10 @@ def validate_column_template(
     )
     errors.extend(source_ref_errors)
 
-    # Validate Bloblang syntax via rpk connect lint (skip for source-refs)
+    # Validate Bloblang syntax via rpk connect lint (skip for source-refs, sql, env)
     from cdc_generator.core.source_ref_resolver import is_source_ref
 
-    if not is_source_ref(effective_value):
+    if not is_source_ref(effective_value) and template.value_source == "bloblang":
         bloblang_errors = _validate_bloblang_syntax(
             effective_value, template_key,
         )

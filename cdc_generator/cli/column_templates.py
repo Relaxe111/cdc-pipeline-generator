@@ -10,6 +10,7 @@ Usage:
     cdc manage-column-templates --add tenant_id \\
         --type text --not-null \\
         --value '${TENANT_ID}' \\
+        --value-source bloblang \\
         --description "Tenant identifier"
     cdc manage-column-templates --edit tenant_id \\
         --value '{asma.sources.*.customer_id}'
@@ -62,6 +63,10 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "Bloblang expression or env var reference",
         "--value '${TENANT_ID}'",
     ),
+    "--value-source": (
+        "Value generation mode (bloblang, source_ref, sql, env)",
+        "--value-source bloblang",
+    ),
     "--name": (
         "Column name (defaults to _<key>)",
         "--name _tenant_id",
@@ -85,12 +90,14 @@ Examples:
   cdc manage-column-templates --add tenant_id \\
       --type text --not-null \\
       --value '${TENANT_ID}' \\
+      --value-source bloblang \\
       --description "Tenant identifier"
 
   # Add template with SQL default
   cdc manage-column-templates --add sync_timestamp \\
       --type timestamptz --not-null \\
       --value 'now()' \\
+      --value-source sql \\
       --default 'now()' \\
       --description "Sync timestamp"
 
@@ -103,8 +110,9 @@ Examples:
 
 Template value expressions:
   Bloblang:     meta("table"), this.field, now(), uuid_v4()
-  Environment:  ${VARIABLE_NAME}
+  Environment:  ${VARIABLE_NAME} (use with bloblang source)
   Source ref:   {group.sources.*.key} (resolved at generation time)
+  SQL:          now(), gen_random_uuid(), current_timestamp
 """
 
 
@@ -183,6 +191,12 @@ def _build_parser() -> TemplateArgumentParser:
         ),
     )
     parser.add_argument(
+        "--value-source",
+        metavar="MODE",
+        choices=["bloblang", "source_ref", "sql", "env"],
+        help="Value generation mode (bloblang, source_ref, sql, env)",
+    )
+    parser.add_argument(
         "--description",
         metavar="DESC",
         help="Human-readable description",
@@ -231,7 +245,7 @@ def _handle_list() -> int:
         print_info("No column templates defined")
         print_info(
             "Add one with: cdc manage-column-templates"
-            " --add <key> --type <type> --value <expr>"
+            +" --add <key> --type <type> --value <expr>"
         )
         return 0
 
@@ -247,7 +261,7 @@ def _handle_list() -> int:
         )
         if t.description:
             print(f"    {t.description}")
-        print(f"    value: {t.value}")
+        print(f"    value: {t.value} (source: {t.value_source})")
     return 0
 
 
@@ -266,6 +280,7 @@ def _handle_show(key: str) -> int:
     print(f"  Type:         {template.column_type}")
     print(f"  NOT NULL:     {template.not_null}")
     print(f"  Value:        {template.value}")
+    print(f"  Value source: {template.value_source}")
     if template.default:
         print(f"  SQL default:  {template.default}")
     if template.description:
@@ -315,6 +330,7 @@ def _handle_add(args: argparse.Namespace) -> int:
         not_null=not_null,
         default=args.sql_default,
         applies_to=args.applies_to,
+        value_source=args.value_source,
     ):
         return 0
     return 1
@@ -343,6 +359,7 @@ def _handle_edit(args: argparse.Namespace) -> int:
         description=args.description,
         not_null=not_null,
         default=args.sql_default,
+        value_source=args.value_source,
     ):
         return 0
     return 1

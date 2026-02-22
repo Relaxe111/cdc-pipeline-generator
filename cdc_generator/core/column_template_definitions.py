@@ -7,6 +7,7 @@ which manages template *references* on sink tables.
 Usage:
     cdc manage-column-templates --add tenant_id \\
         --type text --not-null --value '${TENANT_ID}' \\
+        --value-source bloblang \\
         --description "Tenant identifier"
     cdc manage-column-templates --remove tenant_id
     cdc manage-column-templates --list
@@ -66,12 +67,13 @@ _VALID_TYPES = frozenset({
     "inet", "cidr", "macaddr",
 })
 
-_VALID_VALUE_SOURCES = frozenset({"bloblang", "source_ref", "sql"})
+_VALID_VALUE_SOURCES = frozenset({"bloblang", "source_ref", "sql", "env"})
 _VALUE_SOURCE_ALIASES: dict[str, str] = {
     "source-ref": "source_ref",
     "source_ref": "source_ref",
     "bloblang": "bloblang",
     "sql": "sql",
+    "env": "env",
 }
 
 _SQL_EXPR_ALLOWED_RE = re.compile(
@@ -91,6 +93,13 @@ def _infer_value_source(value: str) -> str:
 
     if is_source_ref(value):
         return "source_ref"
+    
+    stripped = value.strip()
+    if stripped.startswith("${") and stripped.endswith("}"):
+        inner = stripped[2:-1]
+        if re.fullmatch(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
+            return "env"
+
     return "bloblang"
 
 
@@ -107,7 +116,7 @@ def validate_value_source(value_source: str) -> str | None:
     )
 
 
-def validate_template_value(value: str, value_source: str) -> str | None:
+def validate_template_value(value: str, value_source: str) -> str | None:  # noqa: PLR0911
     """Validate template value according to its declared value_source."""
     from cdc_generator.core.source_ref_resolver import (
         parse_source_ref,
@@ -149,6 +158,14 @@ def validate_template_value(value: str, value_source: str) -> str | None:
                 + "Use a SQL expression like now(), gen_random_uuid(), "
                 + "current_timestamp, cast(...), etc."
             )
+        return None
+
+    if normalized_source == "env":
+        if not stripped_value.startswith("${") or not stripped_value.endswith("}"):
+            return "Env value must be in the format ${VAR_NAME}"
+        inner = stripped_value[2:-1]
+        if not re.fullmatch(r"^[A-Za-z_][A-Za-z0-9_]*$", inner):
+            return "Env variable name must contain only letters, numbers, and underscores, and cannot start with a number"
         return None
 
     is_valid = True
@@ -200,7 +217,7 @@ def validate_column_type(col_type: str) -> str | None:
         Error message if invalid, None if valid.
     """
     # Allow parameterized types like varchar(255)
-    base_type = col_type.split("(")[0].strip().lower()
+    base_type = col_type.split("(", 1)[0].strip().lower()
     if base_type not in _VALID_TYPES:
         available = ", ".join(sorted(_VALID_TYPES))
         return (
@@ -215,7 +232,7 @@ def validate_column_type(col_type: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def add_template_definition(
+def add_template_definition(  # noqa: PLR0913
     key: str,
     name: str,
     col_type: str,
@@ -237,7 +254,7 @@ def add_template_definition(
         not_null: Whether column is NOT NULL.
         default: SQL default expression for DDL.
         applies_to: Optional list of table patterns (glob).
-        value_source: Value generation mode: bloblang, source_ref, or sql.
+        value_source: Value generation mode: bloblang, source_ref, sql, or env.
 
     Returns:
         True on success, False on error.
@@ -344,7 +361,7 @@ def remove_template_definition(key: str) -> bool:
     return True
 
 
-def edit_template_definition(
+def edit_template_definition(  # noqa: PLR0913
     key: str,
     name: str | None = None,
     col_type: str | None = None,
