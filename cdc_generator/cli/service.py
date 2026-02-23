@@ -303,8 +303,8 @@ Examples:
       --sink sink_asma.chat \\
       --add-sink-table public.attachments \\
       --target public.chat_attachments \\
-      --map-column id attachment_id \\
-      --map-column name file_name
+      --map-column attachment_id:id \\
+      --map-column file_name:name
   cdc manage-services config --service directory --list-sinks
   cdc manage-services config --service directory --validate-sinks
   cdc manage-services config --service directory \
@@ -634,10 +634,12 @@ def _build_parser() -> ServiceArgumentParser:
     )
     parser.add_argument(
         "--map-column",
-        nargs=2,
-        metavar=("SOURCE_COL", "TARGET_COL"),
+        metavar="TARGET_COL:SOURCE_COL",
         action="append",
-        help="Map source column to target column",
+        help=(
+            "Map source column to sink target column (TARGET:SOURCE). "
+            + "Legacy SOURCE TARGET format is also accepted."
+        ),
     )
     parser.add_argument(
         "--include-sink-columns",
@@ -936,10 +938,56 @@ def _dispatch(args: argparse.Namespace) -> int:
     return handle_interactive(args)
 
 
+def _normalize_map_column_args(argv: list[str]) -> list[str]:
+    """Normalize ``--map-column`` values to ``TARGET:SOURCE`` form.
+
+    Accepts both:
+    - ``--map-column TARGET:SOURCE`` (preferred)
+    - ``--map-column SOURCE TARGET`` (legacy)
+    """
+    normalized: list[str] = []
+    idx = 0
+    while idx < len(argv):
+        token = argv[idx]
+
+        if token != "--map-column":
+            normalized.append(token)
+            idx += 1
+            continue
+
+        normalized.append(token)
+        if idx + 1 >= len(argv):
+            idx += 1
+            continue
+
+        first_value = argv[idx + 1]
+
+        # Preferred form: --map-column TARGET:SOURCE
+        if ":" in first_value:
+            normalized.append(first_value)
+            idx += 2
+            continue
+
+        # Legacy form: --map-column SOURCE TARGET
+        if idx + 2 < len(argv):
+            second_value = argv[idx + 2]
+            if not second_value.startswith("-"):
+                normalized.append(f"{second_value}:{first_value}")
+                idx += 3
+                continue
+
+        # Leave invalid single-value legacy usage to argparse validation.
+        normalized.append(first_value)
+        idx += 2
+
+    return normalized
+
+
 def main() -> int:
     """Entry point for `cdc manage-services config`."""
     parser = _build_parser()
-    args = parser.parse_args()
+    normalized_argv = _normalize_map_column_args(sys.argv[1:])
+    args = parser.parse_args(normalized_argv)
 
     # Merge positional service_name into --service
     if args.service_name and not args.service:

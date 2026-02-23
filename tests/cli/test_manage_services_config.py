@@ -1075,3 +1075,51 @@ class TestCliManageServiceCompletions:
         out = result.stdout
         assert "source_table" in out
         assert "sync_timestamp" in out
+
+    def test_msc_map_column_suggests_sink_source_pairs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        """`--map-column` suggests sink-first pairs as TARGET:SOURCE."""
+        _create_project(isolated_project, with_sink=True)
+
+        source_schema_dir = (
+            isolated_project / "service-schemas" / "proxy" / "dbo"
+        )
+        source_schema_dir.mkdir(parents=True, exist_ok=True)
+        (source_schema_dir / "Actor.yaml").write_text(
+            "columns:\n"
+            "  - name: id\n"
+            "    type: uuid\n"
+            "  - name: actor_name\n"
+            "    type: text\n"
+        )
+
+        target_schema_dir = (
+            isolated_project / "service-schemas" / "chat" / "public"
+        )
+        target_schema_dir.mkdir(parents=True, exist_ok=True)
+        (target_schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: user_id\n"
+            "    type: uuid\n"
+            "  - name: display_name\n"
+            "    type: text\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc msc "
+                + "--add-sink-table public.customer_user "
+                + "--from dbo.Actor "
+                + "--target-exists true "
+                + "--map-column user"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "user_id:" in out

@@ -349,6 +349,55 @@ class TestHandleSinkAddTable:
         result = handle_sink_add_table(args)
         assert result == 0
 
+    def test_auto_sets_target_exists_true_when_map_column_present(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Infers target_exists=true when mapping to an existing target table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            from_table="public.users",
+            target="public.orders",
+            target_exists=None,
+            map_column=[["user_id", "user_id"]],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_sink_table_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        add_sink_table_mock.assert_called_once()
+        call_kwargs = add_sink_table_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["target_exists"] is True
+
+    def test_accepts_target_source_map_column_format(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Parses --map-column TARGET:SOURCE into source->target mapping."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            from_table="public.users",
+            target_exists="true",
+            map_column=["user_id:id"],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_sink_table_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        add_sink_table_mock.assert_called_once()
+        call_kwargs = add_sink_table_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["columns"] == {"id": "user_id"}
+
     def test_requires_from_for_add_sink_table(
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
@@ -717,6 +766,29 @@ class TestHandleSinkMapColumnOnTable:
             result = handle_sink_map_column_on_table(args)
         assert result == 0
         map_mock.assert_called_once()
+
+    def test_accepts_target_source_format_on_existing_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Supports TARGET:SOURCE map-column format on existing sink tables."""
+        args = _ns(
+            sink="sink_asma.chat",
+            sink_table="public.users",
+            map_column=["user_id:id"],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.map_sink_columns",
+            return_value=True,
+        ) as map_mock:
+            result = handle_sink_map_column_on_table(args)
+
+        assert result == 0
+        map_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.users",
+            [("id", "user_id")],
+        )
 
     def test_returns_1_on_mapping_failure(
         self, project_dir: Path, service_with_sink: Path,

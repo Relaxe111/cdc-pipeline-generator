@@ -9,7 +9,10 @@ from unittest.mock import Mock, patch
 import click
 from click.shell_completion import CompletionItem
 
-from cdc_generator.cli.completions import complete_available_sink_keys
+from cdc_generator.cli.completions import (
+    complete_available_sink_keys,
+    complete_map_column,
+)
 
 
 def _values(items: list[CompletionItem]) -> list[str]:
@@ -118,3 +121,260 @@ def test_click_cli_registers_manage_services_command() -> None:
 
     assert "manage-services" in _click_cli.commands
     assert "manage-service" not in _click_cli.commands
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_compatible_target_prefixes_for_map_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_compatible_target_columns_for_source_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.load_sink_tables_for_autocomplete"
+)
+def test_complete_map_column_first_position_uses_compatible_sources(
+    mock_load_tables: Mock,
+    mock_legacy_targets: Mock,
+    mock_target_prefixes: Mock,
+) -> None:
+    """First --map-column token suggests unique sink target prefixes."""
+    mock_load_tables.return_value = {
+        "public.directory_user_name": {
+            "from": "public.customer_user",
+            "target": "public.directory_user_name",
+        },
+    }
+    mock_legacy_targets.return_value = []
+    mock_target_prefixes.return_value = ["user_id:"]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "sink_table": "public.directory_user_name",
+                "map_column": None,
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_map_column(
+        ctx,
+        cast(click.Parameter, None),
+        "u",
+    )
+
+    assert _values(items) == ["user_id:"]
+    mock_target_prefixes.assert_called_once_with(
+        "myservice",
+        "sink_asma.proxy",
+        "public.customer_user",
+        "public.directory_user_name",
+        40,
+    )
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_compatible_target_columns_for_source_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.load_sink_tables_for_autocomplete"
+)
+def test_complete_map_column_second_position_uses_selected_source(
+    mock_load_tables: Mock,
+    mock_compatible_targets: Mock,
+) -> None:
+    """Legacy second token still suggests compatible target columns."""
+    mock_load_tables.return_value = {
+        "public.directory_user_name": {
+            "from": "public.customer_user",
+            "target": "public.directory_user_name",
+        },
+    }
+    mock_compatible_targets.return_value = ["first_name", "last_name"]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "sink_table": "public.directory_user_name",
+                "map_column": ["full_name"],
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_map_column(
+        ctx,
+        cast(click.Parameter, None),
+        "f",
+    )
+
+    assert _values(items) == ["first_name"]
+    mock_compatible_targets.assert_called_once_with(
+        "myservice",
+        "sink_asma.proxy",
+        "public.customer_user",
+        "public.directory_user_name",
+        "full_name",
+    )
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_compatible_map_column_pairs_for_target_prefix"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_compatible_target_columns_for_source_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.load_sink_tables_for_autocomplete"
+)
+def test_complete_map_column_target_prefix_then_source_pairs(
+    mock_load_tables: Mock,
+    mock_legacy_targets: Mock,
+    mock_pair_helper: Mock,
+) -> None:
+    """After typing target:, completion suggests target:source pairs."""
+    mock_load_tables.return_value = {
+        "public.directory_user_name": {
+            "from": "public.customer_user",
+            "target": "public.directory_user_name",
+        },
+    }
+    mock_legacy_targets.return_value = []
+    mock_pair_helper.return_value = ["user_id:user_id"]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "sink_table": "public.directory_user_name",
+                "map_column": None,
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_map_column(
+        ctx,
+        cast(click.Parameter, None),
+        "user_id:",
+    )
+
+    assert _values(items) == ["user_id:user_id"]
+    mock_pair_helper.assert_called_once_with(
+        "myservice",
+        "sink_asma.proxy",
+        "public.customer_user",
+        "public.directory_user_name",
+        "user_id",
+        "",
+        40,
+    )
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_compatible_target_prefixes_for_map_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_compatible_target_columns_for_source_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.load_sink_tables_for_autocomplete"
+)
+def test_complete_map_column_next_flag_excludes_mapped_target_prefixes(
+    mock_load_tables: Mock,
+    mock_legacy_targets: Mock,
+    mock_target_prefixes: Mock,
+) -> None:
+    """When one mapping exists, next --map-column still completes and skips mapped targets."""
+    mock_load_tables.return_value = {
+        "public.directory_user_name": {
+            "from": "public.customer_user",
+            "target": "public.directory_user_name",
+        },
+    }
+    mock_legacy_targets.return_value = []
+    mock_target_prefixes.return_value = ["email:", "pnr:", "status:"]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "sink_table": "public.directory_user_name",
+                "map_column": ["email:epost"],
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_map_column(
+        ctx,
+        cast(click.Parameter, None),
+        "",
+    )
+
+    assert _values(items) == ["pnr:", "status:"]
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_compatible_map_column_pairs_for_target_prefix"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_compatible_target_columns_for_source_column"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.load_sink_tables_for_autocomplete"
+)
+def test_complete_map_column_pair_step_excludes_mapped_sources(
+    mock_load_tables: Mock,
+    mock_legacy_targets: Mock,
+    mock_pair_helper: Mock,
+) -> None:
+    """Pair suggestions exclude already mapped source columns."""
+    mock_load_tables.return_value = {
+        "public.directory_user_name": {
+            "from": "public.customer_user",
+            "target": "public.directory_user_name",
+        },
+    }
+    mock_legacy_targets.return_value = []
+    mock_pair_helper.return_value = [
+        "pnr:epost",
+        "pnr:empno",
+        "pnr:extraNotat",
+    ]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "sink_table": "public.directory_user_name",
+                "map_column": ["email:epost"],
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_map_column(
+        ctx,
+        cast(click.Parameter, None),
+        "pnr:e",
+    )
+
+    assert _values(items) == ["pnr:empno", "pnr:extraNotat"]

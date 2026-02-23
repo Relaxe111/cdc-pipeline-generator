@@ -235,16 +235,40 @@ class TestMapSinkColumns:
         )
         assert result is False
 
-    def test_fails_type_mismatch(
+    def test_allows_numeric_to_text_convertible_mapping(
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
-        """Fails when column types are incompatible (integer → text)."""
+        """Allows numeric → text mappings as explicitly convertible."""
         # status is integer, first_name is text
         result = map_sink_columns(
             "myservice",
             "sink_asma.proxy",
             "public.directory_user_name",
             [("status", "first_name")],
+        )
+        assert result is True
+
+    def test_allows_uuid_to_text_mapping(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Allows strict uuid -> loose text mapping."""
+        result = map_sink_columns(
+            "myservice",
+            "sink_asma.proxy",
+            "public.directory_user_name",
+            [("user_id", "first_name")],
+        )
+        assert result is True
+
+    def test_rejects_text_to_uuid_mapping(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Rejects loose text -> strict uuid mapping."""
+        result = map_sink_columns(
+            "myservice",
+            "sink_asma.proxy",
+            "public.directory_user_name",
+            [("full_name", "user_id")],
         )
         assert result is False
 

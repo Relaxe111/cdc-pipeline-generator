@@ -22,6 +22,8 @@ from cdc_generator.validators.manage_service.sink_operations import (
     validate_sinks,
 )
 
+_MAP_COLUMN_PAIR_PARTS = 2
+
 
 def _list_sink_keys_for_service(service: str) -> list[str]:
     """Return configured sink keys for a service."""
@@ -97,6 +99,15 @@ def _resolve_target_exists_value(
         return str(args.target_exists)
 
     if not hasattr(args, "target_exists") or args.target_exists is None:
+        has_map_column = bool(getattr(args, "map_column", None))
+        has_target = bool(getattr(args, "target", None))
+        if has_map_column or has_target:
+            print_info(
+                "Auto-setting --target-exists true "
+                + "(mapping/target options imply existing table)"
+            )
+            return "true"
+
         print_error(
             "--add-sink-table requires --target-exists "
             + "(true or false)"
@@ -115,6 +126,7 @@ def _build_table_opts(
     args: argparse.Namespace,
     target_exists_value: str,
     replicate_structure: bool,
+    map_column_pairs: list[tuple[str, str]] | None = None,
 ) -> dict[str, object]:
     """Build add_sink_table options from CLI args."""
     table_opts: dict[str, object] = {
@@ -126,8 +138,8 @@ def _build_table_opts(
         table_opts["sink_schema"] = args.sink_schema
     if args.target is not None:
         table_opts["target"] = args.target
-    if args.map_column:
-        table_opts["columns"] = dict(args.map_column)
+    if map_column_pairs:
+        table_opts["columns"] = dict(map_column_pairs)
     if args.target_schema:
         table_opts["target_schema"] = args.target_schema
     if args.include_sink_columns:
@@ -139,6 +151,73 @@ def _build_table_opts(
         if hasattr(args, "value") and args.value:
             table_opts["column_template_value"] = args.value
     return table_opts
+
+
+def _parse_map_column_pairs(
+    map_column_raw: object,
+) -> list[tuple[str, str]] | None:
+    """Parse map-column values into ``(source, target)`` tuples.
+
+    Supports both ``TARGET:SOURCE`` and legacy ``SOURCE TARGET`` tuple-like
+    values used by older tests or direct handler invocations.
+    """
+    if map_column_raw is None:
+        return []
+
+    if not isinstance(map_column_raw, list | tuple):
+        print_error(
+            "Invalid --map-column value. Expected TARGET:SOURCE format"
+        )
+        return None
+
+    def _parse_target_source_token(token: str) -> tuple[str, str] | None:
+        if ":" not in token:
+            return None
+        target, source = token.split(":", 1)
+        target_name = target.strip()
+        source_name = source.strip()
+        if not target_name or not source_name:
+            return None
+        return source_name, target_name
+
+    pairs: list[tuple[str, str]] = []
+    entries: list[object] = (
+        cast(list[object], map_column_raw)
+        if isinstance(map_column_raw, list)
+        else list(cast(tuple[object, ...], map_column_raw))
+    )
+
+    for entry in entries:
+        parsed_pair: tuple[str, str] | None = None
+
+        if isinstance(entry, str):
+            parsed_pair = _parse_target_source_token(entry)
+        elif isinstance(entry, list | tuple):
+            raw_values: list[object] = (
+                cast(list[object], entry)
+                if isinstance(entry, list)
+                else list(cast(tuple[object, ...], entry))
+            )
+
+            entry_values = [str(value).strip() for value in raw_values]
+            if len(entry_values) == 1:
+                parsed_pair = _parse_target_source_token(entry_values[0])
+            elif len(entry_values) == _MAP_COLUMN_PAIR_PARTS:
+                # Legacy tuple/list input: SOURCE TARGET
+                source_name = entry_values[0]
+                target_name = entry_values[1]
+                if source_name and target_name:
+                    parsed_pair = (source_name, target_name)
+
+        if parsed_pair is None:
+            print_error(
+                "Invalid --map-column format. Use TARGET:SOURCE"
+            )
+            return None
+
+        pairs.append(parsed_pair)
+
+    return pairs
 
 
 def _handle_from_all_add_table(
@@ -361,10 +440,15 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
         return 1
     table_name, from_table = table_resolution
 
+    map_column_pairs = _parse_map_column_pairs(getattr(args, "map_column", None))
+    if map_column_pairs is None:
+        return 1
+
     table_opts = _build_table_opts(
         args,
         target_exists_value,
         replicate_structure,
+        map_column_pairs,
     )
 
     if from_table == "all":
@@ -372,14 +456,20 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
             print_error(
                 "When using --from all, omit the value for --add-sink-table"
             )
-            return 1
-        return _handle_from_all_add_table(args, sink_keys, table_opts)
+        else:
+            return _handle_from_all_add_table(args, sink_keys, table_opts)
 
-    if table_name is None:
+    if from_table != "all" and table_name is None:
         table_name = from_table
         print_info(
             f"Using source table name '{table_name}' for sink table"
         )
+
+    if table_name is None:
+        print_error(
+            "Unable to resolve sink table name."
+        )
+        return 1
 
     table_opts["from"] = from_table
 
@@ -399,8 +489,8 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
                 f"Added sink table to {success_count}/{len(sink_keys)} sinks"
             )
         print_info("Run 'cdc generate' to update pipelines")
-        return 0
-    return 1
+
+    return 0 if success_count > 0 else 1
 
 
 def handle_sink_remove_table(args: argparse.Namespace) -> int:
@@ -460,13 +550,13 @@ def handle_sink_map_column_on_table(args: argparse.Namespace) -> int:
             "Example: cdc manage-services config --service directory "
             + "--sink sink_asma.proxy "
             + "--sink-table public.directory_user_name "
-            + "--map-column brukerBrukerNavn user_name"
+            + "--map-column user_name:brukerBrukerNavn"
         )
         return 1
 
-    column_mappings: list[tuple[str, str]] = [
-        (str(pair[0]), str(pair[1])) for pair in args.map_column
-    ]
+    column_mappings = _parse_map_column_pairs(args.map_column)
+    if column_mappings is None:
+        return 1
 
     if map_sink_columns(
         args.service,
@@ -488,13 +578,13 @@ def handle_sink_map_column_error() -> int:
         "Add new table: cdc manage-services config --service directory "
         + "--sink sink_asma.chat "
         + "--add-sink-table public.users "
-        + "--map-column id user_id"
+        + "--map-column user_id:id"
     )
     print_info(
         "Map existing: cdc manage-services config --service directory "
         + "--sink sink_asma.proxy "
         + "--sink-table public.users "
-        + "--map-column id user_id"
+        + "--map-column user_id:id"
     )
     return 1
 

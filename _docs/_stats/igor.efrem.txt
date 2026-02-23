@@ -1,0 +1,3 @@
+cdc manage-services config directory	1
+cdc manage-services config directory | flags: --al	1
+cdc msc | flags: --add-sink-table, --from, --map-column	1

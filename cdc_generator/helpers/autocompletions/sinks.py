@@ -544,3 +544,187 @@ def list_source_columns_for_sink_table(
             continue
 
     return []
+
+
+def _load_column_type_map(service_name: str, table_key: str) -> dict[str, str]:
+    """Load ``{column_name: type}`` from schema YAML for ``schema.table``."""
+    table_parts = table_key.split('.', 1)
+    if len(table_parts) != SCHEMA_TABLE_PARTS:
+        return {}
+
+    schema, table = table_parts
+    for service_dir in get_service_schema_read_dirs(service_name):
+        table_file = service_dir / schema / f"{table}.yaml"
+        if not table_file.is_file():
+            continue
+
+        try:
+            table_schema = load_yaml_file(table_file)
+            columns = table_schema.get("columns", [])
+            if not isinstance(columns, list):
+                return {}
+
+            result: dict[str, str] = {}
+            for col in columns:
+                if not isinstance(col, dict):
+                    continue
+                name = col.get("name")
+                col_type = col.get("type")
+                if isinstance(name, str) and isinstance(col_type, str):
+                    result[name] = col_type
+            return result
+        except Exception:
+            continue
+
+    return {}
+
+
+def list_compatible_target_columns_for_source_column(
+    service_name: str,
+    sink_key: str,
+    source_table: str,
+    target_table: str,
+    source_column: str,
+) -> list[str]:
+    """List target columns that are type-compatible with the source column."""
+    from cdc_generator.validators.manage_service.sink_operations import (
+        check_type_compatibility,
+    )
+
+    source_types = _load_column_type_map(service_name, source_table)
+    if source_column not in source_types:
+        return []
+
+    parts = sink_key.split('.', 1)
+    if len(parts) != SCHEMA_TABLE_PARTS:
+        return []
+    target_service = parts[1]
+
+    target_types = _load_column_type_map(target_service, target_table)
+    source_type = source_types[source_column]
+    return sorted(
+        target_col
+        for target_col, target_type in target_types.items()
+        if check_type_compatibility(source_type, target_type)
+    )
+
+
+def list_compatible_source_columns_for_target_table(
+    service_name: str,
+    sink_key: str,
+    source_table: str,
+    target_table: str,
+) -> list[str]:
+    """List source columns that have at least one compatible target column."""
+    source_types = _load_column_type_map(service_name, source_table)
+    if not source_types:
+        return []
+
+    return sorted(
+        src_col
+        for src_col in source_types
+        if list_compatible_target_columns_for_source_column(
+            service_name,
+            sink_key,
+            source_table,
+            target_table,
+            src_col,
+        )
+    )
+
+
+def list_compatible_target_prefixes_for_map_column(
+    service_name: str,
+    sink_key: str,
+    source_table: str,
+    target_table: str,
+    limit: int = 40,
+) -> list[str]:
+    """Return up to ``limit`` unique ``target:`` prefixes from target schema."""
+    del service_name
+    del source_table  # source filtering happens in target:source step
+
+    if limit <= 0:
+        return []
+
+    parts = sink_key.split('.', 1)
+    if len(parts) != SCHEMA_TABLE_PARTS:
+        return []
+    target_service = parts[1]
+
+    target_types = _load_column_type_map(target_service, target_table)
+    if not target_types:
+        return []
+
+    return [
+        f"{target_column}:"
+        for target_column in sorted(target_types)
+    ][:limit]
+
+
+def list_compatible_map_column_pairs_for_target_prefix(
+    service_name: str,
+    sink_key: str,
+    source_table: str,
+    target_table: str,
+    target_prefix: str,
+    source_prefix: str,
+    limit: int = 40,
+) -> list[str]:
+    """Return up to ``limit`` ``target:source`` pairs for a target prefix."""
+    from cdc_generator.validators.manage_service.sink_operations import (
+        check_type_compatibility,
+    )
+
+    if limit <= 0:
+        return []
+
+    target_prefix_normalized = target_prefix.casefold()
+    source_prefix_normalized = source_prefix.casefold()
+
+    source_types = _load_column_type_map(service_name, source_table)
+    if not source_types:
+        return []
+
+    parts = sink_key.split('.', 1)
+    if len(parts) != SCHEMA_TABLE_PARTS:
+        return []
+    target_service = parts[1]
+
+    target_types = _load_column_type_map(target_service, target_table)
+    if not target_types:
+        return []
+
+    compat_cache: dict[tuple[str, str], bool] = {}
+    results: list[str] = []
+
+    for target_column in sorted(target_types):
+        if (
+            target_prefix_normalized
+            and not target_column.casefold().startswith(target_prefix_normalized)
+        ):
+            continue
+
+        target_type = target_types[target_column]
+        for source_column in sorted(source_types):
+            if (
+                source_prefix_normalized
+                and not source_column.casefold().startswith(source_prefix_normalized)
+            ):
+                continue
+
+            source_type = source_types[source_column]
+            cache_key = (source_type, target_type)
+            if cache_key not in compat_cache:
+                compat_cache[cache_key] = check_type_compatibility(
+                    source_type,
+                    target_type,
+                )
+            if not compat_cache[cache_key]:
+                continue
+
+            results.append(f"{target_column}:{source_column}")
+            if len(results) >= limit:
+                return results
+
+    return results

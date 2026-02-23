@@ -185,8 +185,8 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--update-schema", help="Update schema of sink table")
 @click.option("--target-schema", shell_complete=complete_target_schema,
               help="Override target schema for cloned sink table")
-@click.option("--map-column", nargs=2, shell_complete=complete_map_column,
-              help="Map source column to target column")
+@click.option("--map-column", multiple=True, shell_complete=complete_map_column,
+              help="Map columns as target:source")
 @click.option("--include-sink-columns",
               shell_complete=complete_include_sink_columns,
               help="Only sync these columns to sink")

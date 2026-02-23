@@ -76,11 +76,13 @@ def validate_pg_schema_name(schema: str) -> str | None:
         if schema[0].isdigit():
             return (
                 f"Schema name '{schema}' starts with a digit. "
-                f"PostgreSQL identifiers must start with a letter or underscore"
+                "Use a name starting with a letter or underscore, "
+                "for example: '_clone' or 'clone_1'"
             )
         return (
             f"Schema name '{schema}' contains invalid characters. "
-            f"Only letters, digits, underscores, and dollar signs are allowed"
+            "Allowed: letters, digits, underscore (_), dollar sign ($), "
+            "and must start with a letter or underscore"
         )
 
     return None
@@ -1191,6 +1193,78 @@ def _check_type_compatibility(
 
     Uses TypeMapper to normalize types, then compares.
     """
+    source_type_normalized = source_type.strip().lower()
+    sink_type_normalized = sink_type.strip().lower()
+
+    text_like_markers = (
+        "char",
+        "text",
+        "string",
+        "varchar",
+        "nvarchar",
+        "nchar",
+        "citext",
+    )
+    uuid_markers = (
+        "uuid",
+        "uniqueidentifier",
+    )
+    numeric_markers = (
+        "int",
+        "integer",
+        "bigint",
+        "smallint",
+        "tinyint",
+        "numeric",
+        "decimal",
+        "float",
+        "double",
+        "real",
+        "money",
+    )
+
+    source_is_text_like = any(
+        marker in source_type_normalized
+        for marker in text_like_markers
+    )
+    sink_is_text_like = any(
+        marker in sink_type_normalized
+        for marker in text_like_markers
+    )
+    source_is_uuid = any(
+        marker in source_type_normalized
+        for marker in uuid_markers
+    )
+    sink_is_uuid = any(
+        marker in sink_type_normalized
+        for marker in uuid_markers
+    )
+    source_is_numeric = any(
+        marker in source_type_normalized
+        for marker in numeric_markers
+    )
+
+    # String-like SQL types should be mutually compatible.
+    if source_is_text_like and sink_is_text_like:
+        return True
+
+    # PostgreSQL often reports custom domain columns as USER-DEFINED.
+    # Treat this sink type like a loose text-like destination.
+    if sink_type_normalized == "user-defined":
+        return source_is_text_like or source_is_uuid or source_is_numeric
+
+    # Explicit directional convertibility rules requested for map suggestions.
+    if source_is_numeric and sink_is_text_like:
+        return True
+    if source_is_uuid and sink_is_text_like:
+        return True
+    if source_is_text_like and sink_is_uuid:
+        return False
+
+    # Non-text source types should not map into text-like sink columns.
+    if sink_is_text_like and not source_is_text_like:
+        return source_is_uuid or source_is_numeric
+
     try:
         from cdc_generator.helpers.type_mapper import TypeMapper
 
@@ -1204,6 +1278,21 @@ def _check_type_compatibility(
     except FileNotFoundError:
         # No mapping file — fall back to direct string comparison
         return source_type.lower() == sink_type.lower()
+
+
+def check_type_compatibility(
+    source_type: str,
+    sink_type: str,
+    source_engine: str = "pgsql",
+    sink_engine: str = "pgsql",
+) -> bool:
+    """Public compatibility helper for source/sink SQL column types."""
+    return _check_type_compatibility(
+        source_type,
+        sink_type,
+        source_engine,
+        sink_engine,
+    )
 
 
 def _resolve_source_table_from_sink(
