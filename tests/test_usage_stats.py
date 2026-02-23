@@ -129,6 +129,8 @@ def test_generate_usage_stats_aggregates_users(tmp_path: Path) -> None:
     assert "### other.user" in report
     assert "### total" in report
     assert "| cdc generate | 5 |" in report
+    assert "```toon" in report
+    assert "```json" not in report
 
 
 def test_generate_usage_stats_rewrites_user_file_canonical(tmp_path: Path) -> None:

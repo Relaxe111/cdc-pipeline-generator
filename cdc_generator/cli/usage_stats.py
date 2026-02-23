@@ -10,6 +10,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone, tzinfo
 from pathlib import Path
+from typing import cast
 
 _STATS_DIR_PARTS = ("_docs", "_stats")
 _STATS_FILE_EXT = ".txt"
@@ -18,6 +19,52 @@ _CDC = "cdc"
 _MIN_COMMAND_PATH_PARTS = 2
 
 _VALID_COMMAND_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$", re.IGNORECASE)
+
+
+def _toon_escape_key(key: str) -> str:
+    """Return TOON-safe key representation.
+
+    Keep bare keys when simple; otherwise quote and escape like JSON strings.
+    """
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key):
+        return key
+    escaped = key.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toon_scalar(value: object) -> str:
+    """Render a scalar value as TOON-compatible text."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    text = str(value)
+    if text and not any(ch in text for ch in ["\n", ":", "#", '"']):
+        return text
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _to_toon(value: object, indent: int = 0) -> list[str]:
+    """Encode a Python object into TOON-like object notation lines."""
+    pad = "  " * indent
+
+    if isinstance(value, dict):
+        mapping = cast(dict[str, object], value)
+        lines: list[str] = []
+        for raw_key, raw_value in mapping.items():
+            key = _toon_escape_key(str(raw_key))
+            if isinstance(raw_value, dict):
+                lines.append(f"{pad}{key}:")
+                nested = cast(dict[str, object], raw_value)
+                lines.extend(_to_toon(nested, indent + 1))
+            else:
+                lines.append(f"{pad}{key}: {_toon_scalar(raw_value)}")
+        return lines
+
+    return [pad + _toon_scalar(value)]
 
 
 def _utc_now_iso() -> str:
@@ -251,6 +298,14 @@ def _render_stats_markdown(users: dict[str, dict[str, int]]) -> str:
             totals[command] += count
 
     generated_at = _utc_now_iso()
+    total_items = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+
+    machine_readable: dict[str, object] = {
+        "generated_at_utc": generated_at,
+        "users": {user: dict(users[user]) for user in sorted(users)},
+        "total": dict(total_items),
+    }
+    toon_text = "\n".join(_to_toon(machine_readable))
 
     lines: list[str] = [
         "# Command Usage Stats",
@@ -259,48 +314,17 @@ def _render_stats_markdown(users: dict[str, dict[str, int]]) -> str:
         "",
         "## Machine Readable",
         "",
-        "```json",
-        "{",
-        f'  "generated_at_utc": "{generated_at}",',
-        '  "users": {',
+        "```toon",
+        toon_text,
+        "```",
+        "",
+        "## Human Readable",
+        "",
+        "Generated: " + generated_at,
+        "",
     ]
 
     user_names = sorted(users)
-    for index, user_name in enumerate(user_names):
-        suffix = "," if index < len(user_names) - 1 else ""
-        lines.append(f'    "{user_name}": {{')
-        user_items = sorted(users[user_name].items(), key=lambda item: (-item[1], item[0]))
-        for command_index, (command, count) in enumerate(user_items):
-            command_suffix = "," if command_index < len(user_items) - 1 else ""
-            escaped = command.replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'      "{escaped}": {count}{command_suffix}')
-        lines.append("    }" + suffix)
-
-    lines.extend(
-        [
-            "  },",
-            '  "total": {',
-        ]
-    )
-
-    total_items = sorted(totals.items(), key=lambda item: (-item[1], item[0]))
-    for index, (command, count) in enumerate(total_items):
-        suffix = "," if index < len(total_items) - 1 else ""
-        escaped = command.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'    "{escaped}": {count}{suffix}')
-
-    lines.extend(
-        [
-            "  }",
-            "}",
-            "```",
-            "",
-            "## Human Readable",
-            "",
-            "Generated: " + generated_at,
-            "",
-        ]
-    )
 
     for user_name in user_names:
         lines.append("### " + user_name)

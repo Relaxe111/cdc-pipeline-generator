@@ -8,7 +8,6 @@ Commands are normalized so flag/argument order does not affect grouping.
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import shlex
 import subprocess
@@ -16,6 +15,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 _LOG_PREFIX = "@@@"
 _LOG_SEPARATOR = "\x1f"
@@ -61,6 +61,49 @@ _ALLOWED_COMMAND_ROOTS = frozenset(
         "validate",
     }
 )
+
+
+def _toon_escape_key(key: str) -> str:
+    """Return TOON-safe key representation."""
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key):
+        return key
+    escaped = key.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toon_scalar(value: object) -> str:
+    """Render a scalar value as TOON-compatible text."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    text = str(value)
+    if text and not any(ch in text for ch in ["\n", ":", "#", '"']):
+        return text
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _to_toon(value: object, indent: int = 0) -> list[str]:
+    """Encode a Python object into TOON-like object notation lines."""
+    pad = "  " * indent
+
+    if isinstance(value, dict):
+        mapping = cast(dict[str, object], value)
+        lines: list[str] = []
+        for raw_key, raw_value in mapping.items():
+            key = _toon_escape_key(str(raw_key))
+            if isinstance(raw_value, dict):
+                lines.append(f"{pad}{key}:")
+                nested = cast(dict[str, object], raw_value)
+                lines.extend(_to_toon(nested, indent + 1))
+            else:
+                lines.append(f"{pad}{key}: {_toon_scalar(raw_value)}")
+        return lines
+
+    return [pad + _toon_scalar(value)]
 
 
 def _allowed_command_roots() -> set[str]:
@@ -278,6 +321,7 @@ def _render_markdown(counts: dict[str, dict[str, int]]) -> str:
         "users": counts,
         "total": dict(sorted(totals.items(), key=lambda item: (-item[1], item[0]))),
     }
+    toon_text = "\n".join(_to_toon(serializable))
 
     lines: list[str] = [
         "# CDC Command Usage Stats",
@@ -287,8 +331,8 @@ def _render_markdown(counts: dict[str, dict[str, int]]) -> str:
         "",
         "## Machine Readable",
         "",
-        "```json",
-        json.dumps(serializable, indent=2, sort_keys=True),
+        "```toon",
+        toon_text,
         "```",
         "",
         "## Human Readable",
