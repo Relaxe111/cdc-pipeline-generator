@@ -297,6 +297,70 @@ def test_add_sink_table_with_from_writes_yaml(
     assert table_config["target_exists"] is False
 
 
+def test_add_sink_table_with_column_template_writes_yaml(
+    temp_service_file: Path,
+    monkeypatch: Any,
+) -> None:
+    """Test that add_sink_table writes column_templates to YAML."""
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.get_project_root",
+        lambda: temp_service_file.parent.parent,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: yaml.safe_load(temp_service_file.read_text()),
+    )
+
+    def mock_save(_service: str, config: dict[str, object]) -> bool:
+        with temp_service_file.open("w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+        return True
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        mock_save,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="adopus.Actor",
+        table_opts={
+            "target_exists": False,
+            "from": "dbo.Actor",
+            "replicate_structure": True,
+            "column_template": "customer_id",
+            "column_template_name": "customer_id",
+            "column_template_value": "{adopus.sources.*.customer_id}",
+        },
+    )
+
+    assert result is True
+
+    with temp_service_file.open(encoding="utf-8") as f:
+        updated_config = yaml.safe_load(f)
+
+    sinks = cast(dict[str, object], updated_config["sinks"])
+    sink_target = cast(dict[str, object], sinks["sink_test.target"])
+    tables = cast(dict[str, object], sink_target["tables"])
+    table_config = cast(dict[str, object], tables["adopus.Actor"])
+
+    assert table_config["from"] == "dbo.Actor"
+    assert table_config["replicate_structure"] is True
+    assert table_config["target_exists"] is False
+    column_templates = cast(list[dict[str, str]], table_config["column_templates"])
+    assert len(column_templates) == 1
+    assert column_templates[0] == {
+        "template": "customer_id",
+        "name": "customer_id",
+        "value": "{adopus.sources.*.customer_id}",
+    }
+
+
 def test_add_sink_table_without_from_fails(
     temp_service_file: Path,
     monkeypatch: Any,

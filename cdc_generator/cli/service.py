@@ -128,10 +128,10 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         ),
     ),
     "--add-sink-table": (
-        "Table name to add to sink (requires --sink)",
+        "Table name to add to sink (auto-detects service & sink if only one exists)",
         (
-            "cdc manage-services config --service directory"
-            " --sink sink_asma.chat --add-sink-table public.users"
+            "cdc msc --add-sink-table --from dbo.Actor "
+            "--replicate-structure --sink-schema adopus --add-column-template customer_id"
         ),
     ),
     "--from": (
@@ -337,8 +337,9 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
         "--add-column-template",
         metavar="TEMPLATE",
         help=(
-            "Add column template to sink table "
-            + "(requires --sink-table)"
+            "Add column template (from column-templates.yaml). "
+            + "Can be used with --add-sink-table for creation "
+            + "or --sink-table for existing tables"
         ),
     )
     parser.add_argument(
@@ -574,6 +575,7 @@ def _build_parser() -> ServiceArgumentParser:
         "--add-sink-table",
         metavar="TABLE",
         nargs="?",
+        const=True,
         help="Add table to sink (requires --sink). If omitted, uses --from value as table name.",
     )
     parser.add_argument(
@@ -592,7 +594,8 @@ def _build_parser() -> ServiceArgumentParser:
         metavar="SOURCE_TABLE",
         help=(
             "Source table reference for sink table "
-            + "(format: schema.table). Defaults to same name as sink table."
+            + "(format: schema.table, or 'all' for all source tables). "
+            + "Defaults to same name as sink table."
         ),
     )
     parser.add_argument(
@@ -796,6 +799,12 @@ def _dispatch_inspect(args: argparse.Namespace) -> int | None:
 def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
     """Handle extra column and transform commands. None = not handled."""
     if not args.service:
+        return None
+
+    # If we are adding a sink table, these flags are handled by the sink table creation flow
+    has_from = hasattr(args, "from_table") and args.from_table
+    is_adding_sink_table = args.add_sink_table is not None or has_from
+    if is_adding_sink_table:
         return None
 
     extra_handlers: dict[str, Callable[[argparse.Namespace], int]] = {

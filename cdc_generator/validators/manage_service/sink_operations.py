@@ -103,6 +103,9 @@ class TableConfigOptions:
     from_table: str | None = None
     replicate_structure: bool = False
     sink_schema: str | None = None
+    column_template: str | None = None
+    column_template_name: str | None = None
+    column_template_value: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +393,16 @@ def _build_table_config(opts: TableConfigOptions) -> dict[str, object]:
             cfg["target_schema"] = opts.target_schema
         if opts.include_columns:
             cfg["include_columns"] = opts.include_columns
+
+    # Add column template if provided
+    if opts.column_template:
+        template_entry: dict[str, str] = {"template": opts.column_template}
+        if opts.column_template_name:
+            template_entry["name"] = opts.column_template_name
+        if opts.column_template_value:
+            template_entry["value"] = opts.column_template_value
+        cfg["column_templates"] = [template_entry]
+
     return cfg
 
 
@@ -416,7 +429,7 @@ def _validate_table_add(
     sinks = _get_sinks_dict(config)
     sink_cfg = _resolve_sink_config(sinks, sink_key) if sink_key in sinks else None
 
-    if not sink_cfg:
+    if sink_cfg is None:
         return None, f"Sink '{sink_key}' not found"
 
     tables = _get_sink_tables(sink_cfg)
@@ -465,6 +478,9 @@ def _save_custom_table_structure(
     table_key: str,
     from_table: str,
     source_service: str,
+    column_template: str | None = None,
+    column_template_name: str | None = None,
+    column_template_value: str | None = None,
 ) -> None:
     """Save minimal reference file to service-schemas/{target}/custom-tables/.
 
@@ -477,6 +493,9 @@ def _save_custom_table_structure(
         table_key: Target table key (e.g., 'notification.customer_user').
         from_table: Source table key (e.g., 'public.customer_user').
         source_service: Source service name to find original schema.
+        column_template: Optional column template key to add immediately.
+        column_template_name: Optional name override for column template.
+        column_template_value: Optional value override for column template.
     """
 
     target_service = _get_target_service_from_sink_key(sink_key)
@@ -523,6 +542,15 @@ def _save_custom_table_structure(
             "table": target_table,
         },
     }
+        
+    # Add column template if provided
+    if column_template:
+        template_entry: dict[str, str] = {"template": column_template}
+        if column_template_name:
+            template_entry["name"] = column_template_name
+        if column_template_value:
+            template_entry["value"] = column_template_value
+        reference_data["column_templates"] = [template_entry]
 
     # Target directory and file
     target_dir = SERVICE_SCHEMAS_DIR / target_service / "custom-tables"
@@ -765,7 +793,8 @@ def add_sink_table(
         table_key: Source table in format 'schema.table'.
         table_opts: Optional table config dict. REQUIRED key:
             target_exists (bool). Other keys: target, target_schema,
-            include_columns, columns, from, replicate_structure, sink_schema.
+            include_columns, columns, from, replicate_structure, sink_schema,
+            column_template, column_template_name, column_template_value.
 
     Returns:
         True on success, False otherwise.
@@ -844,6 +873,21 @@ def add_sink_table(
         from_table=str(from_table) if from_table is not None else None,
         replicate_structure=replicate_structure,
         sink_schema=str(sink_schema) if sink_schema is not None else None,
+        column_template=(
+            str(opts["column_template"])
+            if "column_template" in opts
+            else None
+        ),
+        column_template_name=(
+            str(opts["column_template_name"])
+            if "column_template_name" in opts
+            else None
+        ),
+        column_template_value=(
+            str(opts["column_template_value"])
+            if "column_template_value" in opts
+            else None
+        ),
     )
 
     compatibility_error = _validate_add_table_schema_compatibility(
@@ -866,8 +910,18 @@ def add_sink_table(
     # Use from_table if provided, otherwise source table is final_table_key
     if sink_schema is not None and replicate_structure:
         source_table = str(from_table) if from_table else table_key
+        # Extract column template options if provided
+        column_template = opts.get("column_template")
+        column_template_name = opts.get("column_template_name")
+        column_template_value = opts.get("column_template_value")
         _save_custom_table_structure(
-            sink_key, final_table_key, source_table, service
+            sink_key,
+            final_table_key,
+            source_table,
+            service,
+            str(column_template) if column_template else None,
+            str(column_template_name) if column_template_name else None,
+            str(column_template_value) if column_template_value else None,
         )
 
     label = f"→ '{target}'" if target_exists and target else "(clone)"

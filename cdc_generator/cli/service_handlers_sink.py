@@ -36,7 +36,208 @@ def _list_sink_keys_for_service(service: str) -> list[str]:
     if not isinstance(sinks_raw, dict):
         return []
 
-    return sorted(str(k) for k in sinks_raw.keys())
+    sinks = cast(dict[str, object], sinks_raw)
+    return sorted(sinks)
+
+
+def _list_source_tables_for_service(service: str) -> list[str]:
+    """Return configured source table keys for a service."""
+    from cdc_generator.helpers.service_config import load_service_config
+
+    try:
+        config = load_service_config(service)
+    except FileNotFoundError:
+        return []
+
+    source_raw = config.get("source")
+    if not isinstance(source_raw, dict):
+        return []
+    source = cast(dict[str, object], source_raw)
+
+    tables_raw = source.get("tables")
+    if not isinstance(tables_raw, dict):
+        return []
+    tables = cast(dict[str, object], tables_raw)
+
+    return sorted(tables)
+
+
+def _resolve_sink_keys_for_add_table(
+    args: argparse.Namespace,
+) -> tuple[list[str], bool] | None:
+    """Resolve sink targets for add-sink-table flow."""
+    all_sinks_mode = bool(getattr(args, "all", False)) or getattr(
+        args, "sink", None,
+    ) == "all"
+    if all_sinks_mode:
+        sink_keys = _list_sink_keys_for_service(args.service)
+        if not sink_keys:
+            print_error(f"No sinks configured for service '{args.service}'")
+            return None
+        return sink_keys, True
+
+    sink_key = _resolve_sink_key(args)
+    if not sink_key:
+        return None
+    return [sink_key], False
+
+
+def _resolve_target_exists_value(
+    args: argparse.Namespace,
+    replicate_structure: bool,
+) -> str | None:
+    """Resolve target_exists value (including replicate defaults)."""
+    if replicate_structure:
+        if not hasattr(args, "target_exists") or args.target_exists is None:
+            print_info(
+                "Auto-setting --target-exists false "
+                + "(table will be created with replicate_structure)"
+            )
+            return "false"
+        return str(args.target_exists)
+
+    if not hasattr(args, "target_exists") or args.target_exists is None:
+        print_error(
+            "--add-sink-table requires --target-exists "
+            + "(true or false)"
+        )
+        print_info(
+            "Example (autocreate): --target-exists false\n"
+            + "Example (map existing): --target-exists true "
+            + "--target public.users"
+        )
+        return None
+
+    return str(args.target_exists)
+
+
+def _build_table_opts(
+    args: argparse.Namespace,
+    target_exists_value: str,
+    replicate_structure: bool,
+) -> dict[str, object]:
+    """Build add_sink_table options from CLI args."""
+    table_opts: dict[str, object] = {
+        "target_exists": target_exists_value == "true",
+    }
+    if replicate_structure:
+        table_opts["replicate_structure"] = True
+    if hasattr(args, "sink_schema") and args.sink_schema is not None:
+        table_opts["sink_schema"] = args.sink_schema
+    if args.target is not None:
+        table_opts["target"] = args.target
+    if args.map_column:
+        table_opts["columns"] = dict(args.map_column)
+    if args.target_schema:
+        table_opts["target_schema"] = args.target_schema
+    if args.include_sink_columns:
+        table_opts["include_columns"] = args.include_sink_columns
+    if hasattr(args, "add_column_template") and args.add_column_template:
+        table_opts["column_template"] = args.add_column_template
+        if hasattr(args, "column_name") and args.column_name:
+            table_opts["column_template_name"] = args.column_name
+        if hasattr(args, "value") and args.value:
+            table_opts["column_template_value"] = args.value
+    return table_opts
+
+
+def _handle_from_all_add_table(
+    args: argparse.Namespace,
+    sink_keys: list[str],
+    table_opts: dict[str, object],
+) -> int:
+    """Handle add-sink-table fanout for --from all."""
+    source_tables = _list_source_tables_for_service(args.service)
+    if not source_tables:
+        print_error(
+            f"No source tables found for service '{args.service}'"
+        )
+        return 1
+
+    print_info(f"Adding {len(source_tables)} source tables to sink(s)...")
+
+    success_count = 0
+    for src_table in source_tables:
+        table_opts["from"] = src_table
+        for sink_key in sink_keys:
+            if add_sink_table(
+                args.service,
+                sink_key,
+                src_table,
+                table_opts=table_opts,
+            ):
+                success_count += 1
+
+    if success_count > 0:
+        print_info(
+            f"Successfully added {success_count} table configurations."
+        )
+        print_info("Run 'cdc generate' to update pipelines")
+        return 0
+    return 1
+
+
+def _validate_sink_add_table_mode(
+    all_sinks_mode: bool,
+    replicate_structure: bool,
+    args: argparse.Namespace,
+) -> bool:
+    """Validate add-sink-table mode-specific constraints."""
+    if all_sinks_mode and not replicate_structure:
+        print_error(
+            "--all with --add-sink-table is only supported with --replicate-structure"
+        )
+        print_info(
+            "Example: --all --add-sink-table --from public.customer_user "
+            + "--replicate-structure --sink-schema activities"
+        )
+        return False
+
+    if replicate_structure and (
+        not hasattr(args, "sink_schema") or args.sink_schema is None
+    ):
+        print_error(
+            "--replicate-structure requires --sink-schema "
+            + "(specify target schema for custom table)"
+        )
+        print_info(
+            "Example: --replicate-structure --sink-schema notification"
+        )
+        return False
+
+    return True
+
+
+def _resolve_add_table_names(
+    args: argparse.Namespace,
+    all_sinks_mode: bool,
+) -> tuple[str | None, str] | None:
+    """Resolve and validate table name and --from value."""
+    table_name = args.add_sink_table
+    if table_name is True:
+        table_name = None
+    from_table: str | None = getattr(args, "from_table", None)
+
+    if all_sinks_mode and table_name is not None:
+        print_error(
+            "When using --all with --replicate-structure, omit the value for --add-sink-table"
+        )
+        print_info(
+            "Use: --add-sink-table --from <schema.table> --replicate-structure --sink-schema <schema>"
+        )
+        return None
+
+    if from_table is None:
+        print_error(
+            "--add-sink-table requires --from <source_schema.source_table> or --from all"
+        )
+        print_info(
+            "Example: --add-sink-table public.customer_user "
+            + "--from public.customer_user --target-exists false"
+        )
+        return None
+
+    return table_name, from_table
 
 
 def _resolve_sink_key(args: argparse.Namespace) -> str | None:
@@ -134,131 +335,53 @@ def handle_sink_remove(args: argparse.Namespace) -> int:
 
 def handle_sink_add_table(args: argparse.Namespace) -> int:
     """Add table to sink (requires --sink or auto-defaults if only one sink)."""
-    all_sinks_mode = bool(getattr(args, "all", False)) or getattr(args, "sink", None) == "all"
+    sink_resolution = _resolve_sink_keys_for_add_table(args)
+    if sink_resolution is None:
+        return 1
+    sink_keys, all_sinks_mode = sink_resolution
 
-    sink_keys: list[str]
-    if all_sinks_mode:
-        sink_keys = _list_sink_keys_for_service(args.service)
-        if not sink_keys:
-            print_error(f"No sinks configured for service '{args.service}'")
-            return 1
-    else:
-        sink_key = _resolve_sink_key(args)
-        if not sink_key:
-            return 1
-        sink_keys = [sink_key]
-
-    # Check if replicate_structure is set
-    replicate_structure = hasattr(args, "replicate_structure") and args.replicate_structure
-
-    if all_sinks_mode and not replicate_structure:
-        print_error(
-            "--all with --add-sink-table is only supported with --replicate-structure"
-        )
-        print_info(
-            "Example: --all --add-sink-table --from public.customer_user "
-            + "--replicate-structure --sink-schema activities"
-        )
+    replicate_structure = bool(
+        hasattr(args, "replicate_structure") and args.replicate_structure
+    )
+    if not _validate_sink_add_table_mode(
+        all_sinks_mode,
+        replicate_structure,
+        args,
+    ):
         return 1
 
-    # Validate sink_schema is provided when replicate_structure is set
-    if replicate_structure and (not hasattr(args, "sink_schema") or args.sink_schema is None):
-        print_error(
-            "--replicate-structure requires --sink-schema "
-            + "(specify target schema for custom table)"
-        )
-        print_info(
-            "Example: --replicate-structure --sink-schema notification"
-        )
+    target_exists_value = _resolve_target_exists_value(
+        args, replicate_structure,
+    )
+    if target_exists_value is None:
         return 1
 
-    # Auto-set target_exists to false if replicate_structure is set
-    if replicate_structure:
-        if not hasattr(args, "target_exists") or args.target_exists is None:
-            target_exists_value = "false"
-            print_info(
-                "Auto-setting --target-exists false "
-                + "(table will be created with replicate_structure)"
-            )
-        else:
-            target_exists_value = args.target_exists
-    else:
-        if not hasattr(args, "target_exists") or args.target_exists is None:
+    table_resolution = _resolve_add_table_names(args, all_sinks_mode)
+    if table_resolution is None:
+        return 1
+    table_name, from_table = table_resolution
+
+    table_opts = _build_table_opts(
+        args,
+        target_exists_value,
+        replicate_structure,
+    )
+
+    if from_table == "all":
+        if table_name is not None:
             print_error(
-                "--add-sink-table requires --target-exists "
-                + "(true or false)"
-            )
-            print_info(
-                "Example (autocreate): --target-exists false\n"
-                + "Example (map existing): --target-exists true "
-                + "--target public.users"
+                "When using --from all, omit the value for --add-sink-table"
             )
             return 1
-        target_exists_value = args.target_exists
-
-    # Auto-name from --from if table name not provided
-    table_name = args.add_sink_table
-    from_table: str | None = getattr(args, "from_table", None)
-
-    if all_sinks_mode and table_name is not None:
-        print_error(
-            "When using --all with --replicate-structure, omit the value for --add-sink-table"
-        )
-        print_info(
-            "Use: --add-sink-table --from <schema.table> --replicate-structure --sink-schema <schema>"
-        )
-        return 1
-
-    if from_table is None:
-        print_error(
-            "--add-sink-table requires --from <source_schema.source_table>"
-        )
-        print_info(
-            "Example: --add-sink-table public.customer_user "
-            + "--from public.customer_user --target-exists false"
-        )
-        return 1
+        return _handle_from_all_add_table(args, sink_keys, table_opts)
 
     if table_name is None:
-        if from_table is not None:
-            table_name = from_table
-            print_info(
-                f"Using source table name '{table_name}' for sink table"
-            )
-        else:
-            print_error(
-                "--add-sink-table requires a table name or --from flag"
-            )
-            print_info(
-                "Example: --add-sink-table public.users\n"
-                + "Or: --from public.customer_user (uses same name)"
-            )
-            return 1
+        table_name = from_table
+        print_info(
+            f"Using source table name '{table_name}' for sink table"
+        )
 
-    table_opts: dict[str, object] = {
-        "target_exists": target_exists_value == "true",
-    }
-
-    # Handle 'from' field for source table reference
-    if from_table is not None:
-        table_opts["from"] = from_table
-
-    # Handle replicate_structure flag
-    if replicate_structure:
-        table_opts["replicate_structure"] = True
-
-    # Handle sink_schema override
-    if hasattr(args, "sink_schema") and args.sink_schema is not None:
-        table_opts["sink_schema"] = args.sink_schema
-
-    if args.target is not None:
-        table_opts["target"] = args.target
-    if args.map_column:
-        table_opts["columns"] = dict(args.map_column)
-    if args.target_schema:
-        table_opts["target_schema"] = args.target_schema
-    if args.include_sink_columns:
-        table_opts["include_columns"] = args.include_sink_columns
+    table_opts["from"] = from_table
 
     success_count = 0
     for sink_key in sink_keys:
@@ -266,7 +389,7 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
             args.service,
             sink_key,
             table_name,
-            table_opts=table_opts if table_opts else None,
+            table_opts=table_opts,
         ):
             success_count += 1
 

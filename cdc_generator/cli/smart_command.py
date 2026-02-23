@@ -168,6 +168,11 @@ class SmartCommand(click.Command):
         # fanout mode for add-sink-table.
         if "sink" in active or "all_flag" in active or "all" in active:
             active.add("sink_or_all")
+
+        # Alias: column template actions can be reached via --sink-table OR --add-sink-table
+        if "sink_table" in active or "add_sink_table" in active:
+            active.add("sink_table_or_add")
+
         return active
 
     def _infer_unique_service_name(self, active: set[str]) -> str:
@@ -341,7 +346,7 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "add_sink_table": {
         "sink", "from", "from_table", "target", "target_exists",
         "target_schema", "sink_schema", "replicate_structure",
-        "map_column", "include_sink_columns", "all",
+        "map_column", "include_sink_columns", "all", "add_column_template",
     },
     # ── Remove sink table ──────────────────────────────────────
     "remove_sink_table": {"sink"},
@@ -402,7 +407,7 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
     "add_custom_sink_table": {"sink"},
     "modify_custom_table": {"sink"},
     # ── Sink-table actions require --sink-table ────────────────
-    "add_column_template": {"sink_table"},
+    "add_column_template": {"sink_table_or_add"},
     "remove_column_template": {"sink_table"},
     "list_column_templates": {"sink_table"},
     "add_transform": {"sink_table"},

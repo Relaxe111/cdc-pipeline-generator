@@ -231,7 +231,9 @@ class TestEditTemplateDefinition:
 
     def test_edit_value(self, templates_file: Path) -> None:
         result = edit_template_definition(
-            "environment", value="{asma.sources.*.customer_id}",
+            "environment",
+            value="{asma.sources.*.customer_id}",
+            value_source="source_ref",
         )
         assert result is True
 
@@ -239,6 +241,49 @@ class TestEditTemplateDefinition:
         template = get_template("environment")
         assert template is not None
         assert template.value == "{asma.sources.*.customer_id}"
+        assert template.value_source == "source_ref"
+
+    def test_edit_value_sql(self, templates_file: Path) -> None:
+        result = edit_template_definition(
+            "environment",
+            value="current_timestamp",
+            value_source="sql",
+        )
+        assert result is True
+
+        clear_cache()
+        template = get_template("environment")
+        assert template is not None
+        assert template.value == "current_timestamp"
+        assert template.value_source == "sql"
+
+    def test_edit_value_env(self, templates_file: Path) -> None:
+        result = edit_template_definition(
+            "environment",
+            value="${MY_ENV_VAR}",
+            value_source="env",
+        )
+        assert result is True
+
+        clear_cache()
+        template = get_template("environment")
+        assert template is not None
+        assert template.value == "${MY_ENV_VAR}"
+        assert template.value_source == "env"
+
+    def test_edit_value_bloblang(self, templates_file: Path) -> None:
+        result = edit_template_definition(
+            "environment",
+            value="this.customer_id",
+            value_source="bloblang",
+        )
+        assert result is True
+
+        clear_cache()
+        template = get_template("environment")
+        assert template is not None
+        assert template.value == "this.customer_id"
+        assert template.value_source == "bloblang"
 
     def test_edit_name(self, templates_file: Path) -> None:
         result = edit_template_definition(

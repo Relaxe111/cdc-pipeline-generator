@@ -148,8 +148,15 @@ def _get_param(ctx: click.Context, name: str) -> str:
     val = ctx.params.get(name)
     if val is None:
         return ""
-    if isinstance(val, tuple | list):
-        values = [str(item) for item in val if str(item)]
+    if isinstance(val, tuple):
+        sequence = list(cast(tuple[object, ...], val))
+        values = [str(item) for item in sequence if str(item)]
+        if not values:
+            return ""
+        return values[0]
+    if isinstance(val, list):
+        sequence = cast(list[object], val)
+        values = [str(item) for item in sequence if str(item)]
         if not values:
             return ""
         return values[0]
@@ -730,8 +737,12 @@ def complete_from_table(
     _param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
-    """Complete --from from service ``source.tables`` keys only."""
-    return complete_source_tables(ctx, _param, incomplete)
+    """Complete --from from service ``source.tables`` keys plus ``all``."""
+    base = complete_source_tables(ctx, _param, incomplete)
+    all_item = CompletionItem("all")
+    if "all".startswith(incomplete):
+        return [all_item, *base]
+    return base
 
 
 def complete_sink_keys(

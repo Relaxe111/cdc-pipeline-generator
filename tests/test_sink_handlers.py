@@ -475,6 +475,36 @@ class TestHandleSinkAddTable:
         assert isinstance(table_opts, dict)
         assert table_opts["sink_schema"] == "custom_schema"
 
+    def test_add_column_template_is_forwarded(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--add-column-template options are forwarded during add-sink-table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="false",
+            from_table="public.users",
+            add_column_template="customer_id",
+            column_name="customer_id",
+            value="{adopus.sources.*.customer_id}",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        call_kwargs = add_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["column_template"] == "customer_id"
+        assert table_opts["column_template_name"] == "customer_id"
+        assert (
+            table_opts["column_template_value"]
+            == "{adopus.sources.*.customer_id}"
+        )
+
     def test_all_mode_requires_replicate_structure(
         self, project_dir: Path, service_multi_sink: Path,
     ) -> None:
@@ -529,6 +559,49 @@ class TestHandleSinkAddTable:
         assert add_mock.call_count == 2
         called_sinks = {call.args[1] for call in add_mock.call_args_list}
         assert called_sinks == {"sink_asma.calendar", "sink_asma.chat"}
+
+    def test_from_all_requires_omitted_table_name(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--from all requires bare --add-sink-table (no TABLE value)."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.users",
+            from_table="all",
+            replicate_structure=True,
+            sink_schema="shared",
+            target_exists=None,
+        )
+        result = handle_sink_add_table(args)
+        assert result == 1
+
+    def test_from_all_adds_all_source_tables(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--from all applies add-sink-table to every source table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table=None,
+            from_table="all",
+            replicate_structure=True,
+            sink_schema="chat",
+            target_exists=None,
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        assert add_mock.call_count == 2
+        called_tables = {call.args[2] for call in add_mock.call_args_list}
+        assert called_tables == {"public.queries", "public.users"}
+        for call in add_mock.call_args_list:
+            opts = call.kwargs["table_opts"]
+            assert isinstance(opts, dict)
+            assert opts["replicate_structure"] is True
+            assert opts["sink_schema"] == "chat"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
