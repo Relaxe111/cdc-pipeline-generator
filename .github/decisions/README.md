@@ -2,6 +2,27 @@
 
 This directory contains lightweight Architecture Decision Records (ADRs) documenting significant decisions made in the CDC pipeline generator project.
 
+## Quality Bar (Concise + Practical)
+
+Each ADR should stay short and implementation-useful:
+- state the concrete problem
+- record the decision in actionable terms
+- define scope and when to load/use the ADR
+- summarize impact in a few bullets
+- avoid long examples and speculative implementation dumps
+
+## Status Lifecycle (Keep Context Fresh)
+
+- `Accepted`: active guidance
+- `Proposed`: candidate guidance (validate before broad adoption)
+- `Deprecated`: no longer recommended; keep only short rationale + replacement pointer
+- `Superseded`: replaced by newer ADR; include `Superseded by: 00XX-...`
+
+Default load policy:
+1. Prefer `Accepted`
+2. Use `Proposed` only when actively evaluating that direction
+3. Do not load `Deprecated`/`Superseded` unless doing migration or historical analysis
+
 ## Format
 
 Each decision is a short markdown file:
@@ -13,6 +34,11 @@ NNNN-short-title.md
 ## Template
 
 Use [0000-template.md](0000-template.md) as a starting point.
+
+Load pattern:
+1. Start with this README
+2. Open only the single relevant ADR (`000X-*.md`)
+3. Open additional ADRs only if cross-cutting
 
 ## Decisions
 

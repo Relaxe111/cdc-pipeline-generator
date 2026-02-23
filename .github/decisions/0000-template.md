@@ -2,8 +2,10 @@
 
 **Status:** Proposed | Accepted | Deprecated | Superseded  
 **Date:** YYYY-MM-DD
+**Superseded by:** 00XX-title.md | N/A
+**Replaces:** 00YY-title.md | N/A
 
-## Context
+## Problem
 
 What is the issue? Why do we need to make this decision?
 
@@ -11,14 +13,22 @@ What is the issue? Why do we need to make this decision?
 
 What did we decide?
 
-## Consequences
+## Scope
 
-### Positive
-- Benefit 1
-- Benefit 2
+Where does this apply, and where does it not apply?
 
-### Negative
-- Tradeoff 1
+## How to Use
 
-### Notes
-- Implementation details or caveats
+When should engineers/agents load this ADR during implementation?
+
+## Impact
+
+- Benefit/tradeoff summary bullets only.
+
+## Status Notes
+
+Implementation caveats, migration notes, or follow-ups.
+
+For `Deprecated`/`Superseded` ADRs keep this section minimal and include:
+- one-line reason
+- explicit replacement pointer (`Superseded by`) or `No replacement`

@@ -1,6 +1,6 @@
 # CDC Pipeline Generator - Copilot Instructions
 
-> **📚 Full Documentation:** For detailed instructions, reference the topic-specific guides below when needed.
+> Router file: keep this minimal and load detailed guides on demand.
 
 ---
 
@@ -17,60 +17,12 @@
 
 ---
 
-## 🏛️ CRITICAL Rules
+## 🏛️ Always-On Invariants
 
-### 1. Pattern-Agnostic Code
-**ALWAYS use `server_group_type` to drive behavior:**
-
-```python
-# ✅ CORRECT
-if server_group.server_group_type == "db-per-tenant":
-    for customer in service.customers:
-        generate_pipeline(customer.database_name, ...)
-
-# ❌ WRONG
-if service.name == "adopus":  # Never check service names!
-```
-
-### 2. Never Break Existing Functionality
-- ✅ Add new functionality alongside existing (extend, don't replace)
-- ✅ New parameters must be optional with defaults
-- ✅ Test both db-per-tenant AND db-shared patterns
-- ❌ Don't change existing function signatures
-- ❌ Don't remove features without explicit request
-
-### 3. Shared Data Structures
-**Create TypedDict/dataclass for configs:**
-```python
-# ✅ CORRECT - Single source of truth
-class ServiceConfig(TypedDict):
-    service: str
-    server_group: str
-    shared: dict[str, Any]
-
-def load_service_config(service: str) -> ServiceConfig:
-    raw = yaml.safe_load(...)
-    validate_service_structure(raw)  # Runtime validation
-    return cast(ServiceConfig, raw)
-
-# ❌ WRONG - Multiple raw dict accesses
-config = yaml.safe_load(...)  # No validation, no types
-```
-
-### 4. Type Safety
-- ✅ Fix source code type hints (our functions)
-- ✅ Install type stubs for external libraries
-- ✅ Use `cast()` only for external libraries
-- ❌ **ABSOLUTELY FORBIDDEN: `# type: ignore` - NEVER USE THIS**
-- ❌ **DO NOT ADD `# type: ignore` COMMENTS - FIX THE ACTUAL TYPE ISSUE**
-- ❌ **IF YOU SEE `# type: ignore` - REMOVE IT AND FIX THE ROOT CAUSE**
-
-### 5. Python Linting & Analysis (Strict)
-- ✅ Follow Pylance strict rules when working in Python
-- ✅ Follow Ruff strict rules when working in Python
-- ✅ Fix **all** Pylance and Ruff warnings in touched files
-- ❌ **NEVER use implicit string concatenation** (ISC001)
-- ✅ Use `+` operator or single f-strings to join multi-line strings
+- Use `server_group_type` for behavior; never branch on service names.
+- Keep backward compatibility: extend, don’t break existing signatures/flows.
+- Treat generator as the only script/code location; implementations stay YAML/artifacts only.
+- Route detailed constraints to scoped guides below; do not duplicate policy text here.
 
 ---
 
@@ -86,7 +38,33 @@ config = yaml.safe_load(...)  # No validation, no types
 | [Development Workflow](.github/copilot-instructions-dev-workflow.md) | Dev container, testing, common tasks |
 | [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (Redpanda Connect → Bento), decision gates, phased rollout |
 | [Redpanda Connect](_docs/redpanda-connect/README.md) | Pipeline templates, Bloblang syntax |
-| [Decisions](.github/decisions/) | Past architectural decisions and rationale |
+| [Decision Navigation (ADR)](.github/decisions/README.md) | Entry point for past architectural decisions; load targeted ADRs only |
+
+---
+
+## 🧭 Decision Navigation (ADR Path)
+
+Use this path when you need historical rationale or trade-off context:
+
+1. Open `.github/decisions/README.md` (index)
+2. Load only the single relevant `000X-*.md` ADR with status `Accepted` or `Proposed`
+3. Load additional ADRs only for cross-cutting changes
+
+ADR lifecycle policy (anti-stale):
+- ADRs marked `Deprecated` or `Superseded` are not default guidance.
+- If an ADR is superseded, follow the replacement ADR (`Superseded by: 00XX-...`).
+- Deprecated ADRs must include a one-line replacement reference or explicit `No replacement` note.
+- Do not reintroduce deprecated approaches unless the task explicitly requires legacy migration analysis.
+
+| ADR | Topic | Load when task is about... |
+|-----|-------|----------------------------|
+| `0001-split-copilot-instructions.md` | Instruction split and token efficiency | instruction organization, routing, context size |
+| `0002-strict-type-checking.md` | Strict typing toolchain | pyright/mypy/ruff strictness and enforcement |
+| `0003-shared-data-structures.md` | Shared typed config models | TypedDict/dataclass contracts for YAML config |
+| `0004-runtime-bloblang-validation.md` | Runtime Bloblang validation | validating mappings against sample data/runtime checks |
+| `0005-schema-management-and-type-definitions.md` | Schema CLI and type definitions | schema management command design and type catalogs |
+
+When any ADR becomes obsolete, keep only a minimal tombstone entry (status + superseded/replacement link).
 
 ---
 
@@ -106,47 +84,12 @@ config = yaml.safe_load(...)  # No validation, no types
 | DB inspection | `cdc_generator/helpers/helpers_mssql.py` + `cdc_generator/validators/*/db_inspector.py` |
 | Bloblang/templates | `pipeline-templates/*.yaml` + [Redpanda docs](_docs/redpanda-connect/README.md) |
 | Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `cdc_generator/core/pipeline_generator.py` + `pipeline-templates/*.yaml` |
-| Architecture decisions | `.github/decisions/` + [architecture](.github/copilot-instructions-architecture.md) |
+| Architecture decisions / ADR rationale | `.github/decisions/README.md` + relevant `000X-*.md` + [architecture](.github/copilot-instructions-architecture.md) |
 
 ---
 
-## 🚀 Quick Reference
+## Router Policy
 
-**Module Structure:**
-- `core/` - Pipeline generation
-- `helpers/` - Reusable utilities
-- `validators/` - Config validation
-- `cli/` - Command-line interface
-
-**CLI Completion Model:**
-- CLI is implemented with Click, which provides declarative command/option definitions and built-in shell completion hooks
-- Dynamic completions are generated on-the-fly via `_CDC_COMPLETE=fish_complete`
-- Smart completions show only relevant subcommands/options inferred from the parent command context
-- When adding new CLI flags/options, update both Click option registration and smart completion group mappings
-- This Click + smart-completion model is AI-friendly: command structure is predictable, options are discoverable, and context-aware completions reduce ambiguity during automated assistance
-
-**Design Checklist:**
-- [ ] Uses `server_group_type`, not service names
-- [ ] Backward compatible (optional params)
-- [ ] TypedDict for config structures
-- [ ] Runtime validation at load time
-- [ ] Type hints (no `# type: ignore`)
-- [ ] Tested with both patterns
-
-**File Limit:** 500 lines max - refactor into modules if exceeded
-
----
-
-## 💡 Common Pitfalls
-
-❌ Hardcoding service/implementation names  
-❌ Changing existing function signatures  
-❌ Accessing raw YAML dicts without validation  
-❌ Using `# type: ignore` instead of fixing types  
-❌ Duplicating logic instead of extracting helpers  
-
-✅ Use `server_group_type` field  
-✅ Add optional parameters with defaults  
-✅ Create shared TypedDict structures  
-✅ Fix type hints at source  
-✅ Extract common patterns into helpers  
+- Keep this file as a dispatcher only.
+- Put detailed, domain-specific policy in `copilot-instructions-*` guides.
+- Add new trigger rows instead of adding long narrative sections here.

@@ -3,39 +3,31 @@
 **Status:** Accepted  
 **Date:** 2026-02-06
 
-## Context
+## Problem
 
-Copilot instructions were loaded into context on every message (~4,000-5,000 tokens combined). Most content was rarely needed for any single task (Fish shell rules, PostgreSQL quoting, detailed type examples).
+One large instruction file mixed always-needed rules with rarely-needed details, causing context bloat and weaker routing.
 
 ## Decision
 
-Split monolithic instruction files into:
-- **Core file** (~80-114 lines) - Always loaded, contains critical rules only
-- **Topic files** - Loaded on-demand via context triggers
+Adopt a router + scoped guides model:
+- keep `copilot-instructions.md` minimal
+- move detailed rules into `copilot-instructions-*` files
+- use explicit context triggers to load only relevant guides
 
-### Workspace root:
-- `copilot-instructions.md` (80 lines) → always loaded
-- `instructions-dev-container.md` → when running commands
-- `instructions-type-safety-yaml.md` → when handling YAML types
+## Scope
 
-### Generator:
-- `copilot-instructions.md` (114 lines) → always loaded
-- `copilot-instructions-type-safety.md` → when fixing types
-- `copilot-instructions-architecture.md` → when designing features
-- `copilot-instructions-dev-workflow.md` → when testing/deploying
+Applies to instruction organization and loading strategy across workspace and generator guidance.
 
-## Consequences
+## How to Use
 
-### Positive
-- 73% token reduction per message
-- Core rules have stronger signal (less dilution)
-- Easier to maintain individual topic files
-- More context budget for actual code
+Load this ADR when changing instruction structure, adding new instruction files, or adjusting auto-load triggers.
 
-### Negative
-- AI must actively load topic files when needed (mitigated by context triggers)
-- Slightly more files to maintain
+## Impact
 
-### Notes
-- Context triggers added to both instruction files to guide auto-loading
-- All detailed content preserved, just reorganized
+- Reduces always-loaded instruction weight
+- Improves signal quality of the router file
+- Adds dependency on correct trigger maintenance
+
+## Status Notes
+
+Current instruction layout follows this ADR and should remain the baseline.

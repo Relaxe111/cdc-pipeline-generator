@@ -1,139 +1,35 @@
 # Type Safety Guidelines
 
-## Python Type Safety (CRITICAL)
+## Non-Negotiables
 
-**⚠️ NEVER use `# type: ignore` or suppression patterns**
+- Never add `# type: ignore`, `# noqa`, or suppression-only workarounds.
+- Fix type issues at source in our code, not at call sites.
+- Use fully typed signatures (`dict[str, Any]`, `list[str]`, `Optional[...]`) for all touched functions.
+- Use package imports only (for example from `cdc_generator...`), never fragile relative shortcuts.
 
-When Pylance reports type errors:
+## Resolution Order (Use This Sequence)
 
-1. ✅ **Fix source functions first (our code):** If the error comes from importing our own functions, fix the type hints in the source file
-2. ✅ **Add proper type hints:** Use `list[str]`, `Dict[str, Any]`, `Optional[List[Dict[str, Any]]]`, etc.
-3. ✅ **Use `cast()` for external libraries only:** Only use `cast()` when dealing with third-party code you can't modify
-4. ✅ **Install type stubs:** `types-PyYAML`, `types-pymssql`, etc. for third-party libraries
-5. ✅ **Fix import paths:** Use proper package imports (e.g., `from cdc_generator.helpers.helpers_logging import`)
-6. ❌ **NEVER suppress errors:** Don't use `type: ignore`, `# noqa`, or try/except ImportError just to silence warnings
+1. Fix our function/type definitions where the bad type originates.
+2. Add or tighten type annotations in shared interfaces.
+3. Install/update third-party stubs in `Dockerfile.dev` (for example `types-PyYAML`, `types-pymssql`).
+4. Use `cast(...)` only for unavoidable third-party boundaries.
 
----
+If a fix requires suppression, stop and refactor instead.
 
-## Resolution Priority
+## Shared Config Structures (Required)
 
-**Most preferred to least:**
+- Define shared `TypedDict`/dataclass contracts for service/server-group config.
+- Validate YAML shape at load time in one centralized loader.
+- Pass validated typed objects through the codebase; do not pass raw YAML dicts.
+- Do not duplicate parsing/validation logic across modules.
 
-1. **Fix our source code** - Update function signatures with proper types (`Dict[str, Any]` instead of `Dict`)
-2. **Install type stubs** - For third-party packages (`types-PyYAML`, `types-pymssql`)
-3. **Use `cast()` sparingly** - Only for external library return values you can't control
-4. **NEVER suppress** - Never use `type: ignore` or similar suppressions
+## Required Patterns
 
----
+- Keep one source of truth for config schema.
+- Prefer explicit typed return values from loaders.
+- Catch schema drift via validation failures early.
 
-## Benefits
+## Implementation Notes
 
-- Catches bugs at development time
-- Better IDE support and autocomplete
-- Safer refactoring
-- Self-documenting code
-
----
-
-## Examples
-
-### ❌ WRONG - Casting our own function's return type
-```python
-from cdc_generator.helpers.service_config import load_service_config
-config = cast(Dict[str, Any], load_service_config(service))  # Bad - we own this code!
-```
-
-### ✅ CORRECT - Fix the source function instead
-```python
-# In service_config.py:
-def load_service_config(service_name: str = "adopus") -> Dict[str, Any]:  # Fixed at source
-    ...
-```
-
-### ❌ WRONG - Suppressing type errors
-```python
-from helpers_logging import print_error  # type: ignore
-```
-
-### ✅ CORRECT - Proper import path
-```python
-from cdc_generator.helpers.helpers_logging import print_error
-```
-
-### ✅ ACCEPTABLE - Using cast for third-party library
-```python
-from typing import cast, Any
-import some_external_lib
-result = cast(dict[str, Any], some_external_lib.get_data())
-```
-
----
-
-## Shared Data Structures (CRITICAL)
-
-**⚠️ ALWAYS create shared, validated structures for configuration objects**
-
-### For service and server-group configurations:
-
-1. **Single Source of Truth** - Create TypedDict or dataclass definitions
-2. **Compile-time Validation** - Use type hints for static checking
-3. **Runtime Validation** - Validate object keys and types at load time
-4. **Centralized Usage** - Pass validated objects, not raw dicts
-5. **Catch Changes Early** - Schema changes break at validation, not usage
-
-### Example
-
-```python
-# ✅ CORRECT - Shared, validated structure
-from typing import TypedDict, Literal, Optional
-
-class ServiceConfig(TypedDict):
-    service: str
-    server_group: str
-    shared: dict[str, Any]
-    customers: Optional[list[dict[str, Any]]]
-    
-class ServerGroupConfig(TypedDict):
-    server_group_type: Literal['db-per-tenant', 'db-shared']
-    server_type: Literal['mssql', 'postgres']
-    database_ref: str
-    sources: dict[str, Any]
-
-def load_service_config(service: str) -> ServiceConfig:
-    """Load and validate service config"""
-    raw = yaml.safe_load(...)
-    # Runtime validation here
-    validate_service_structure(raw)
-    return cast(ServiceConfig, raw)
-
-# ❌ WRONG - Multiple implementations accessing raw dicts
-def some_function():
-    config = yaml.safe_load(...)  # No validation
-    service_name = config['service']  # Could fail
-    
-def another_function():
-    data = yaml.safe_load(...)  # Duplicate loading logic
-    server_type = data.get('server_type', 'mssql')  # Different access pattern
-```
-
-### Benefits
-
-- ✅ Type errors caught at development time
-- ✅ Schema changes propagate automatically
-- ✅ Consistent access patterns everywhere
-- ✅ No duplicate validation/parsing logic
-- ✅ Self-documenting structure
-- ✅ Easier refactoring and maintenance
-
----
-
-## Type Stubs in Dockerfile
-
-All type stubs must be in `Dockerfile.dev`:
-
-```dockerfile
-RUN pip install --no-cache-dir \
-    types-PyYAML \
-    types-pymssql \
-    ...
-```
+- Keep type stub installs in `Dockerfile.dev`.
+- When touching files, resolve all relevant Pylance/Ruff type issues in those files.

@@ -3,55 +3,31 @@
 **Status:** Proposed  
 **Date:** 2026-02-06
 
-## Context
+## Problem
 
-Service and server-group configurations are loaded from YAML and accessed as raw `dict[str, Any]` throughout the codebase. This leads to:
-- Inconsistent access patterns (`.get()` vs `[]`)
-- No compile-time validation of keys
-- No runtime validation of structure
-- Duplicate parsing logic in multiple files
-- Bugs only discovered at runtime deep in the call stack
+Configuration objects are frequently handled as raw YAML dicts, causing inconsistent access patterns and late runtime failures.
 
 ## Decision
 
-Create shared TypedDict (or dataclass) definitions for all configuration objects:
+Move toward shared typed config contracts plus centralized runtime validation:
+- define TypedDict/dataclass contracts for core config objects
+- load/validate once at boundaries
+- pass typed objects through downstream logic
 
-```python
-class ServiceConfig(TypedDict):
-    service: str
-    server_group: str
-    shared: SharedConfig
-    customers: NotRequired[list[CustomerConfig]]
+## Scope
 
-class ServerGroupConfig(TypedDict):
-    server_group_type: Literal['db-per-tenant', 'db-shared']
-    server_type: Literal['mssql', 'postgres']
-    database_ref: str
-    sources: dict[str, SourceConfig]
-```
+Applies to service/server-group config handling and any code path consuming YAML config.
 
-### Implementation plan:
-1. Define types in `cdc_generator/types/` module
-2. Add runtime validation in load functions
-3. Refactor existing code to use typed objects
-4. Catch schema changes at validation, not usage
+## How to Use
 
-## Consequences
+Load this ADR when introducing new config structures, refactoring YAML loaders, or reviewing config access patterns.
 
-### Positive
-- Type errors caught at development time
-- Schema changes propagate automatically
-- Consistent access patterns everywhere
-- No duplicate validation/parsing logic
-- Self-documenting configuration structure
-- Easier refactoring and maintenance
+## Impact
 
-### Negative
-- Initial refactoring effort across codebase
-- Need to keep TypedDicts in sync with YAML schema
-- `cast()` needed at YAML load boundary
+- Improves type safety and schema consistency
+- Reduces duplicate parsing/validation logic
+- Requires coordinated refactoring and contract maintenance
 
-### Notes
-- Start with ServiceConfig and ServerGroupConfig
-- Expand to CustomerConfig, EnvironmentConfig, etc. incrementally
-- Runtime validation should produce clear error messages
+## Status Notes
+
+Proposed direction; implement incrementally starting from highest-churn config paths.

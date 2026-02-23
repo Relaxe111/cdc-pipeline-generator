@@ -3,33 +3,31 @@
 **Status:** Accepted  
 **Date:** 2026-02-06
 
-## Context
+## Problem
 
-Python type checking was configured only via VS Code settings (`python.analysis.*`), making it non-portable and invisible to CI. MyPy and Ruff had minimal configuration.
+Type/lint strictness was inconsistent across tools and editor-dependent, reducing reliability and CI portability.
 
 ## Decision
 
-1. Created `pyrightconfig.json` with strict mode and explicit error rules
-2. Enhanced `pyproject.toml` with strict MyPy (`strict = true`) and expanded Ruff rules (17 categories)
-3. Removed Pylance settings from `.vscode/settings.json` (now in pyrightconfig.json)
+Enforce strict Python quality via repository config:
+- `pyrightconfig.json` as source of truth for Pyright/Pylance strictness
+- strict MyPy and Ruff configuration in `pyproject.toml`
+- avoid local editor-only settings as the primary enforcement mechanism
 
-### Tools and strictness:
-- **Pylance/Pyright:** `typeCheckingMode: strict`, all `reportUnknown*` as errors
-- **MyPy:** `strict = true`, `disallow_any_explicit`, `warn_unreachable`
-- **Ruff:** E, W, F, I, N, UP, ANN, ASYNC, B, A, C4, RET, SIM, ARG, PTH, PL, RUF
+## Scope
 
-## Consequences
+Applies to Python analysis and linting configuration for the generator repository.
 
-### Positive
-- Type errors caught at development time
-- Config portable across editors (pyrightconfig.json)
-- Consistent enforcement via CI-ready tools
-- Auto-fixed 2,233 formatting issues on first run
+## How to Use
 
-### Negative
-- 1,167 remaining Ruff errors + 316 MyPy errors to fix gradually
-- Stricter rules may slow initial development on new code
+Load this ADR when modifying type-check/lint rules, discussing strictness changes, or diagnosing tool-policy conflicts.
 
-### Notes
-- Fix errors incrementally, prioritize high-value files first
-- Install `types-psycopg2` for missing type stubs
+## Impact
+
+- Improves consistency across local and CI environments
+- Increases early detection of type/design defects
+- Raises initial remediation effort on legacy files
+
+## Status Notes
+
+Strict mode is intentional; exceptions should be justified and explicit.
