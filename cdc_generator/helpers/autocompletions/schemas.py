@@ -3,7 +3,31 @@
 from typing import Any, cast
 
 from cdc_generator.helpers.autocompletions.utils import find_file_upward
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+
+def _schemas_from_schema_dirs(service_name: str) -> set[str]:
+    """Collect schema names from service schema directories on disk."""
+    schemas: set[str] = set()
+    source_groups_file = find_file_upward("source-groups.yaml")
+    if not source_groups_file:
+        return schemas
+
+    project_root = source_groups_file.parent
+    service_dirs = get_service_schema_read_dirs(service_name, project_root)
+    for service_dir in service_dirs:
+        if not service_dir.is_dir():
+            continue
+        for child in service_dir.iterdir():
+            if not child.is_dir():
+                continue
+            if child.name.startswith("_"):
+                continue
+            if child.name == "custom-tables":
+                continue
+            schemas.add(child.name)
+    return schemas
 
 
 def list_schemas_for_service(service_name: str) -> list[str]:
@@ -31,33 +55,38 @@ def list_schemas_for_service(service_name: str) -> list[str]:
     if not server_group_file:
         return []
 
+    discovered: set[str] = set()
+
     try:
         data = load_yaml_file(server_group_file)
-        if not data:
-            return []
+        if data:
+            # Find first server group (should only be one)
+            for server_group_data in data.values():
+                if not isinstance(server_group_data, dict) or 'sources' not in server_group_data:
+                    continue
 
-        # Find first server group (should only be one)
-        for server_group_data in data.values():
-            if not isinstance(server_group_data, dict) or 'sources' not in server_group_data:
-                continue
+                group_dict = cast(dict[str, Any], server_group_data)
+                sources = group_dict.get('sources', {})
+                if not isinstance(sources, dict) or service_name not in sources:
+                    continue
 
-            group_dict = cast(dict[str, Any], server_group_data)
-            sources = group_dict.get('sources', {})
-            if not isinstance(sources, dict) or service_name not in sources:
-                continue
+                sources_dict = cast(dict[str, Any], sources)
+                service_config = sources_dict[service_name]
+                if not isinstance(service_config, dict):
+                    continue
 
-            sources_dict = cast(dict[str, Any], sources)
-            service_config = sources_dict[service_name]
-            if not isinstance(service_config, dict):
-                continue
+                service_dict = cast(dict[str, Any], service_config)
+                schemas = service_dict.get('schemas', [])
+                if isinstance(schemas, list):
+                    schemas_list = cast(list[Any], schemas)
+                    discovered.update(
+                        str(s) for s in schemas_list if isinstance(s, str)
+                    )
+                break
 
-            service_dict = cast(dict[str, Any], service_config)
-            schemas = service_dict.get('schemas', [])
-            if isinstance(schemas, list):
-                schemas_list = cast(list[Any], schemas)
-                return sorted(str(s) for s in schemas_list if isinstance(s, str))
-            return []
+        discovered.update(_schemas_from_schema_dirs(service_name))
+        return sorted(discovered)
 
-        return []
     except Exception:
-        return []
+        discovered.update(_schemas_from_schema_dirs(service_name))
+        return sorted(discovered)

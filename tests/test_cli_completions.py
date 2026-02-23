@@ -12,6 +12,7 @@ from click.shell_completion import CompletionItem
 from cdc_generator.cli.completions import (
     complete_available_sink_keys,
     complete_map_column,
+    complete_target_schema,
 )
 
 
@@ -113,6 +114,95 @@ def test_complete_available_sink_keys_filters_same_source_service_target(
     )
 
     assert _values(items) == ["sink_asma.activities", "sink_asma.tracing"]
+
+
+@patch("cdc_generator.helpers.service_config.load_service_config")
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_custom_table_definitions_for_sink_target"
+)
+@patch("cdc_generator.helpers.autocompletions.sinks.get_default_sink_for_service")
+@patch("cdc_generator.helpers.autocompletions.schemas.list_schemas_for_service")
+def test_complete_target_schema_includes_custom_and_configured_schemas(
+    mock_schemas: Mock,
+    mock_default_sink: Mock,
+    mock_custom_tables: Mock,
+    mock_load_config: Mock,
+) -> None:
+    """--sink-schema includes target schemas + custom-table + configured sink schemas."""
+    mock_schemas.return_value = ["public"]
+    mock_default_sink.return_value = "sink_asma.directory"
+    mock_custom_tables.return_value = ["audit.login_events"]
+    mock_load_config.return_value = {
+        "sinks": {
+            "sink_asma.directory": {
+                "tables": {
+                    "analytics.user_rollups": {},
+                },
+            },
+        }
+    }
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={"service": "adopus"},
+            args=[],
+        ),
+    )
+
+    items = complete_target_schema(ctx, cast(click.Parameter, None), "")
+
+    assert _values(items) == ["analytics", "custom:audit", "public"]
+    audit_items = [item for item in items if item.value == "custom:audit"]
+    assert len(audit_items) == 1
+    assert audit_items[0].help == "custom-table schema"
+
+
+@patch("cdc_generator.helpers.service_config.load_service_config")
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks."
+    "list_custom_table_definitions_for_sink_target"
+)
+@patch("cdc_generator.helpers.autocompletions.schemas.list_schemas_for_service")
+def test_complete_target_schema_all_mode_uses_common_including_custom_tables(
+    mock_schemas: Mock,
+    mock_custom_tables: Mock,
+    mock_load_config: Mock,
+) -> None:
+    """--all mode returns common schemas across sinks, including custom-table schemas."""
+    mock_schemas.return_value = ["public", "core"]
+
+    def _custom_for_sink(sink_key: str) -> list[str]:
+        if sink_key == "sink_asma.directory":
+            return ["audit.login_events", "public.audit_log"]
+        if sink_key == "sink_asma.chat":
+            return ["audit.message_events", "public.chat_audit"]
+        return []
+
+    mock_custom_tables.side_effect = _custom_for_sink
+    mock_load_config.return_value = {
+        "sinks": {
+            "sink_asma.directory": {"tables": {}},
+            "sink_asma.chat": {"tables": {}},
+        }
+    }
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={"service": "adopus", "all_flag": True},
+            args=[],
+        ),
+    )
+
+    items = complete_target_schema(ctx, cast(click.Parameter, None), "")
+
+    assert _values(items) == [
+        "custom:audit",
+        "core",
+        "custom:public",
+    ]
 
 
 def test_click_cli_registers_manage_services_command() -> None:

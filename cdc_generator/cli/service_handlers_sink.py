@@ -129,13 +129,18 @@ def _build_table_opts(
     map_column_pairs: list[tuple[str, str]] | None = None,
 ) -> dict[str, object]:
     """Build add_sink_table options from CLI args."""
+    def _normalize_sink_schema_token(raw_value: str) -> str:
+        if raw_value.startswith("custom:"):
+            return raw_value.split(":", 1)[1]
+        return raw_value
+
     table_opts: dict[str, object] = {
         "target_exists": target_exists_value == "true",
     }
     if replicate_structure:
         table_opts["replicate_structure"] = True
     if hasattr(args, "sink_schema") and args.sink_schema is not None:
-        table_opts["sink_schema"] = args.sink_schema
+        table_opts["sink_schema"] = _normalize_sink_schema_token(args.sink_schema)
     if args.target is not None:
         table_opts["target"] = args.target
     if map_column_pairs:

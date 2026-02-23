@@ -147,3 +147,26 @@ def test_show_custom_table_missing_returns_none(tmp_path: Path) -> None:
         data = show_custom_table("chat", "public.audit_log")
 
     assert data is None
+
+
+def test_list_custom_tables_includes_nested_schema_layout(tmp_path: Path) -> None:
+    custom_dir = (
+        tmp_path
+        / "service-schemas"
+        / "chat"
+        / "custom-tables"
+    )
+    (custom_dir / "public").mkdir(parents=True)
+    (custom_dir / "logs").mkdir(parents=True)
+    (custom_dir / "public" / "audit_log.yaml").write_text("{}\n", encoding="utf-8")
+    (custom_dir / "logs" / "event_stream.yaml").write_text("{}\n", encoding="utf-8")
+    (custom_dir / "legacy.table.yaml").write_text("{}\n", encoding="utf-8")
+    (custom_dir / "column-templates.yaml").write_text("{}\n", encoding="utf-8")
+
+    with patch(
+        "cdc_generator.validators.manage_service_schema.custom_table_ops.get_project_root",
+        return_value=tmp_path,
+    ):
+        tables = list_custom_tables("chat")
+
+    assert tables == ["legacy.table", "logs.event_stream", "public.audit_log"]

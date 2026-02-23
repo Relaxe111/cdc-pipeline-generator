@@ -383,14 +383,33 @@ def list_custom_tables(service: str) -> list[str]:
 
     Returns:
         List of table references (schema.table).
+
+    Supports both layouts:
+    - flat files: custom-tables/schema.table.yaml
+    - nested schema dirs: custom-tables/schema/table.yaml
     """
     table_refs: set[str] = set()
     for service_dir in get_service_schema_read_dirs(service, get_project_root()):
         custom_dir = service_dir / _CUSTOM_TABLES_DIR
         if not custom_dir.exists():
             continue
-        for file_path in custom_dir.glob("*.yaml"):
-            table_refs.add(file_path.stem)
+        for file_path in custom_dir.rglob("*.yaml"):
+            rel_parts = file_path.relative_to(custom_dir).parts
+            if len(rel_parts) == 1:
+                # Flat format: schema.table.yaml
+                if "." in file_path.stem:
+                    table_refs.add(file_path.stem)
+                continue
+
+            # Nested format: schema/table.yaml
+            schema = rel_parts[0]
+            stem = file_path.stem
+            if "." in stem:
+                stem_schema, _table = stem.split(".", 1)
+                if stem_schema == schema:
+                    table_refs.add(stem)
+                    continue
+            table_refs.add(f"{schema}.{stem}")
 
     return sorted(table_refs)
 

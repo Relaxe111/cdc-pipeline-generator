@@ -119,7 +119,34 @@ yaml.preserve_quotes = True
 yaml.default_flow_style = False
 ```
 
-### 3.1 YAML Loader (REQUIRED)
+### 3.1 YAML Deduplication (Abstract Rule)
+
+When YAML contains repeated mapping blocks, prefer YAML anchors + merge keys to keep files concise and maintainable.
+
+```yaml
+# ✅ Prefer: shared defaults + per-entry override
+defaults: &shared_defaults
+    enabled: true
+    retries: 3
+
+item_a:
+    <<: *shared_defaults
+    source: a
+
+item_b:
+    <<: *shared_defaults
+    source: b
+```
+
+Rules:
+
+- Apply to any YAML file where duplicated blocks repeat 2+ times.
+- Keep anchor names descriptive and domain-agnostic unless a domain requires a fixed convention.
+- Put only stable/shared keys in the anchor; keep per-item fields explicit next to each entry.
+- If one item needs custom behavior, override only that item; do not fork the shared anchor for everyone.
+- Preserve deterministic ordering/style so future tooling updates can re-apply the same compact pattern.
+
+### 3.2 YAML Loader (REQUIRED)
 
 Use the project's stubbed loader instead of importing `yaml` directly.
 

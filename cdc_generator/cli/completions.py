@@ -311,31 +311,43 @@ def _schemas_from_sink_tables(sink_cfg: dict[str, Any]) -> set[str]:
     return schemas
 
 
-def _common_sink_schemas_for_all_sinks(service: str) -> list[str]:
-    """List schema names available across all configured sinks for a service.
+def _schemas_from_schema_table_specs(items: list[str]) -> set[str]:
+    """Extract schema names from ``schema.table`` strings."""
+    schemas: set[str] = set()
+    for item in items:
+        if "." not in item:
+            continue
+        schema, _table = item.split(".", 1)
+        if schema:
+            schemas.add(schema)
+    return schemas
 
-    Used by --sink-schema completion when --all fanout mode is active.
-    Includes schemas from:
-    1) target service schema declarations
-    2) already-configured sink tables (including custom/not-yet-created tables)
-    """
+
+def _common_sink_schema_data_for_all_sinks(
+    service: str,
+) -> tuple[list[str], set[str]]:
+    """Return common schemas plus subset that originates from custom-tables."""
     from cdc_generator.helpers.autocompletions.schemas import list_schemas_for_service
+    from cdc_generator.helpers.autocompletions.sinks import (
+        list_custom_table_definitions_for_sink_target,
+    )
     from cdc_generator.helpers.service_config import load_service_config
 
     try:
         config = load_service_config(service)
     except FileNotFoundError:
-        return []
+        return ([], set())
 
     sinks_raw = config.get("sinks")
     if not isinstance(sinks_raw, dict):
-        return []
+        return ([], set())
 
     sinks = cast(dict[str, Any], sinks_raw)
     if not sinks:
-        return []
+        return ([], set())
 
     common: set[str] | None = None
+    common_custom: set[str] | None = None
     for sink_key, sink_cfg_raw in sinks.items():
         if "." not in sink_key:
             continue
@@ -345,13 +357,26 @@ def _common_sink_schemas_for_all_sinks(service: str) -> list[str]:
 
         candidates: set[str] = set(_safe_call(list_schemas_for_service, target_service))
         candidates.update(_schemas_from_sink_tables(sink_cfg))
+        custom_candidates = _schemas_from_schema_table_specs(
+            _safe_call(list_custom_table_definitions_for_sink_target, sink_key)
+        )
+        candidates.update(custom_candidates)
 
         if common is None:
             common = candidates
         else:
             common &= candidates
 
-    return sorted(common) if common else []
+        if common_custom is None:
+            common_custom = custom_candidates
+        else:
+            common_custom &= custom_candidates
+
+    if not common:
+        return ([], set())
+
+    custom_subset = (common_custom or set()) & common
+    return (sorted(common), custom_subset)
 
 
 # ---------------------------------------------------------------------------
@@ -945,15 +970,29 @@ def complete_target_schema(
 ) -> list[CompletionItem]:
     """Complete schemas for a sink's target service."""
     service = _get_service(ctx)
-    sink_key = _get_param(ctx, "sink")
+    sink_key = _get_sink_key_with_default(ctx)
 
     if not sink_key:
         all_mode = bool(ctx.params.get("all_flag"))
         if all_mode and service:
-            return _filter(
-                _common_sink_schemas_for_all_sinks(service),
-                incomplete,
+            common_schemas, common_custom_schemas = _common_sink_schema_data_for_all_sinks(
+                service,
             )
+            normalized_incomplete = incomplete.casefold()
+            items: list[CompletionItem] = []
+            for schema in common_schemas:
+                display_value = (
+                    f"custom:{schema}" if schema in common_custom_schemas else schema
+                )
+                if not display_value.casefold().startswith(normalized_incomplete):
+                    continue
+                if schema in common_custom_schemas:
+                    items.append(CompletionItem(display_value, help="custom-table schema"))
+                    continue
+
+                items.append(CompletionItem(display_value))
+
+            return items
         return []
 
     parts = sink_key.split(".")
@@ -965,11 +1004,45 @@ def complete_target_schema(
     from cdc_generator.helpers.autocompletions.schemas import (
         list_schemas_for_service,
     )
-
-    return _filter(
-        _safe_call(list_schemas_for_service, target_service),
-        incomplete,
+    from cdc_generator.helpers.autocompletions.sinks import (
+        list_custom_table_definitions_for_sink_target,
     )
+    from cdc_generator.helpers.service_config import load_service_config
+
+    candidates: set[str] = set(
+        _safe_call(list_schemas_for_service, target_service)
+    )
+    custom_schemas = _schemas_from_schema_table_specs(
+        _safe_call(list_custom_table_definitions_for_sink_target, sink_key)
+    )
+    candidates.update(custom_schemas)
+
+    try:
+        config = load_service_config(service)
+        sinks_raw = config.get("sinks")
+        if isinstance(sinks_raw, dict):
+            sink_cfg_raw = cast(dict[str, Any], sinks_raw).get(sink_key)
+            if isinstance(sink_cfg_raw, dict):
+                candidates.update(
+                    _schemas_from_sink_tables(cast(dict[str, Any], sink_cfg_raw))
+                )
+    except Exception:
+        pass
+
+    normalized_incomplete = incomplete.casefold()
+    items: list[CompletionItem] = []
+    for schema in sorted(candidates):
+        display_value = (
+            f"custom:{schema}" if schema in custom_schemas else schema
+        )
+        if not display_value.casefold().startswith(normalized_incomplete):
+            continue
+        if schema in custom_schemas:
+            items.append(CompletionItem(display_value, help="custom-table schema"))
+            continue
+
+        items.append(CompletionItem(display_value))
+    return items
 
 
 def complete_templates_on_table(
