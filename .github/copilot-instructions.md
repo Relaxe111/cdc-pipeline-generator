@@ -97,15 +97,15 @@ config = yaml.safe_load(...)  # No validation, no types
 | Task | Files to Load |
 |------|--------------|
 | Service YAML changes | `services/*.yaml` + `source-groups.yaml` + `validators/manage_service/` |
-| Pipeline generation | `pipeline-templates/*.yaml` + `core/pipeline_generator.py` |
+| Pipeline generation | `pipeline-templates/*.yaml` + `cdc_generator/core/pipeline_generator.py` |
 | Server group changes | `source-groups.yaml` + `validators/manage_server_group/` |
-| CLI command work | `cli/commands.py` + `cli/*.py` |
+| CLI command work | `cdc_generator/cli/commands.py` + `cdc_generator/cli/*.py` |
 | Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/copilot-instructions-type-safety.md) |
-| Adding helpers | `helpers/*.py` (check existing before creating new) |
-| Schema validation | `validators/manage_service/schema_generator/` |
-| DB inspection | `helpers/helpers_mssql.py` + `validators/*/db_inspector.py` |
+| Adding helpers | `cdc_generator/helpers/*.py` (check existing before creating new) |
+| Schema validation | `cdc_generator/validators/manage_service/schema_generator/` |
+| DB inspection | `cdc_generator/helpers/helpers_mssql.py` + `cdc_generator/validators/*/db_inspector.py` |
 | Bloblang/templates | `pipeline-templates/*.yaml` + [Redpanda docs](_docs/redpanda-connect/README.md) |
-| Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `core/pipeline_generator.py` + `pipeline-templates/*.yaml` |
+| Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `cdc_generator/core/pipeline_generator.py` + `pipeline-templates/*.yaml` |
 | Architecture decisions | `.github/decisions/` + [architecture](.github/copilot-instructions-architecture.md) |
 
 ---
