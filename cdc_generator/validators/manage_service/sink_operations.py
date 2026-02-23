@@ -478,24 +478,20 @@ def _save_custom_table_structure(
     table_key: str,
     from_table: str,
     source_service: str,
-    column_template: str | None = None,
-    column_template_name: str | None = None,
-    column_template_value: str | None = None,
 ) -> None:
     """Save minimal reference file to service-schemas/{target}/custom-tables/.
 
     Creates a lightweight YAML reference that points to the source table schema.
     Base structure (columns, PKs, types) is deduced from source at generation time.
-    Only non-deducible content (column_templates, transforms) is stored here.
+    This file stores only source/sink linkage metadata.
+    Non-deducible sink behavior (column_templates, transforms) is
+    stored in service YAML as the single source of truth.
 
     Args:
         sink_key: Sink key (e.g., 'sink_asma.notification').
         table_key: Target table key (e.g., 'notification.customer_user').
         from_table: Source table key (e.g., 'public.customer_user').
         source_service: Source service name to find original schema.
-        column_template: Optional column template key to add immediately.
-        column_template_name: Optional name override for column template.
-        column_template_value: Optional value override for column template.
     """
 
     target_service = _get_target_service_from_sink_key(sink_key)
@@ -543,15 +539,6 @@ def _save_custom_table_structure(
         },
     }
         
-    # Add column template if provided
-    if column_template:
-        template_entry: dict[str, str] = {"template": column_template}
-        if column_template_name:
-            template_entry["name"] = column_template_name
-        if column_template_value:
-            template_entry["value"] = column_template_value
-        reference_data["column_templates"] = [template_entry]
-
     # Target directory and file
     target_dir = SERVICE_SCHEMAS_DIR / target_service / "custom-tables"
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -567,15 +554,8 @@ def _save_custom_table_structure(
             + "# sink_target: Defines the target schema/table in sink database\n"
             + "#\n"
             + "# Base structure (columns, types, PKs) is deduced from source at generation time.\n"
-            + "# Only store non-deducible content here:\n"
-            + "#\n"
-            + "# column_templates:  (references column-templates.yaml)\n"
-            + "#   - template: source_table\n"
-            + "#   - template: environment\n"
-            + "#     name: deploy_env\n"
-            + "#\n"
-            + "# transforms:  (references transform-rules.yaml)\n"
-            + "#   - rule: user_class_splitter\n"
+            + "# Non-deducible sink behavior (column_templates, transforms)\n"
+            + "# is stored in services/<service>.yaml under sinks.<sink>.tables.<table>.\n"
             + "\n",
             encoding="utf-8",
         )
@@ -910,18 +890,11 @@ def add_sink_table(
     # Use from_table if provided, otherwise source table is final_table_key
     if sink_schema is not None and replicate_structure:
         source_table = str(from_table) if from_table else table_key
-        # Extract column template options if provided
-        column_template = opts.get("column_template")
-        column_template_name = opts.get("column_template_name")
-        column_template_value = opts.get("column_template_value")
         _save_custom_table_structure(
             sink_key,
             final_table_key,
             source_table,
             service,
-            str(column_template) if column_template else None,
-            str(column_template_name) if column_template_name else None,
-            str(column_template_value) if column_template_value else None,
         )
 
     label = f"→ '{target}'" if target_exists and target else "(clone)"

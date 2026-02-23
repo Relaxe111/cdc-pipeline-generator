@@ -1,6 +1,6 @@
 cdc msc | flags: --add-column-template, --add-sink-table, --from, --replicate-structure, --service, --sink-schema	20
-cdc manage-services config directory	14
-cdc manage-services config directory | flags: --al	14
+cdc manage-services config directory	15
+cdc manage-services config directory | flags: --al	15
 cdc generate-usage-stats	2
 cdc msc | flags: --add-column-template, --add-sink-table, --from, --replicate-structure, --sink-schema	2
 cdc msc | flags: --create-service	2

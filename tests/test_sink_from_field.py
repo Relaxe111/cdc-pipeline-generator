@@ -361,6 +361,74 @@ def test_add_sink_table_with_column_template_writes_yaml(
     }
 
 
+def test_add_sink_table_custom_reference_does_not_duplicate_templates(
+    temp_service_file: Path,
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    """Custom reference file must not duplicate column_templates metadata."""
+    service_schemas_dir = tmp_path / "service-schemas"
+    source_schema_dir = service_schemas_dir / "test_service" / "dbo"
+    source_schema_dir.mkdir(parents=True)
+    (source_schema_dir / "Actor.yaml").write_text("columns: []\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.get_project_root",
+        lambda: tmp_path,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.SERVICE_SCHEMAS_DIR",
+        service_schemas_dir,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.get_service_schema_read_dirs",
+        lambda _service, _root: [service_schemas_dir / "test_service"],
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: yaml.safe_load(temp_service_file.read_text()),
+    )
+
+    def mock_save(_service: str, config: dict[str, object]) -> bool:
+        with temp_service_file.open("w", encoding="utf-8") as f:
+            yaml.dump(config, f)
+        return True
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        mock_save,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="adopus.Actor",
+        table_opts={
+            "target_exists": False,
+            "from": "dbo.Actor",
+            "replicate_structure": True,
+            "sink_schema": "adopus",
+            "column_template": "customer_id",
+            "column_template_name": "customer_id",
+            "column_template_value": "{test_service.sources.*.customer_id}",
+        },
+    )
+
+    assert result is True
+
+    ref_file = service_schemas_dir / "target" / "custom-tables" / "adopus.Actor.yaml"
+    assert ref_file.exists()
+
+    reference_data = cast(dict[str, object], yaml.safe_load(ref_file.read_text()))
+    assert "source_reference" in reference_data
+    assert "sink_target" in reference_data
+    assert "column_templates" not in reference_data
+
+
 def test_add_sink_table_without_from_fails(
     temp_service_file: Path,
     monkeypatch: Any,
