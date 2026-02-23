@@ -18,7 +18,8 @@ Core CDC concepts and system design:
 - **[FIELD_MAPPING.md](./architecture/FIELD_MAPPING.md)** - MSSQL → PostgreSQL field mapping
 - **[EVENT_DRIVEN_MERGE_SYSTEM.md](./architecture/EVENT_DRIVEN_MERGE_SYSTEM.md)** - Merge/upsert strategy
 - **[CDC_PRODUCTION_SAFEGUARDS.md](./architecture/CDC_PRODUCTION_SAFEGUARDS.md)** - Production deployment checklist
-- **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bytewax & Materialize evaluation, potential use cases, and phased introduction plan
+- **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bento, Bytewax, Materialize, and Vector comparison
+- **[BENTO_MIGRATION_DECISION_PLAN.md](./architecture/BENTO_MIGRATION_DECISION_PLAN.md)** - Decision gates and phased plan for Redpanda Connect → Bento migration in generator-driven source/sink pipelines
 - **[CDC_EVENT_TRACING.md](./architecture/CDC_EVENT_TRACING.md)** - End-to-end event latency tracing with embedded timestamps, sampling strategies (≤5% permanent + 100% debug mode), bottleneck detection queries, and performance mitigations
 
 ### [Development](./development/)

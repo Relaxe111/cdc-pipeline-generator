@@ -80,10 +80,11 @@ config = yaml.safe_load(...)  # No validation, no types
 
 | Guide | When to Use |
 |-------|-------------|
-| [Coding Guidelines](.github/copilot-coding-guidelines.md) | Code style, naming, organization, file size limits |
-| [Type Safety Rules](.github/instructions-type-safety.md) | Fixing type errors, adding type hints |
-| [Architecture](.github/instructions-architecture.md) | Understanding patterns, service structure |
-| [Development Workflow](.github/instructions-dev-workflow.md) | Dev container, testing, common tasks |
+| [Coding Guidelines](.github/copilot-instructions-coding-guidelines.md) | Code style, naming, organization, file size limits |
+| [Type Safety Rules](.github/copilot-instructions-type-safety.md) | Fixing type errors, adding type hints |
+| [Architecture](.github/copilot-instructions-architecture.md) | Understanding patterns, service structure |
+| [Development Workflow](.github/copilot-instructions-dev-workflow.md) | Dev container, testing, common tasks |
+| [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (Redpanda Connect → Bento), decision gates, phased rollout |
 | [Redpanda Connect](_docs/redpanda-connect/README.md) | Pipeline templates, Bloblang syntax |
 | [Decisions](.github/decisions/) | Past architectural decisions and rationale |
 
@@ -99,12 +100,13 @@ config = yaml.safe_load(...)  # No validation, no types
 | Pipeline generation | `pipeline-templates/*.yaml` + `core/pipeline_generator.py` |
 | Server group changes | `source-groups.yaml` + `validators/manage_server_group/` |
 | CLI command work | `cli/commands.py` + `cli/*.py` |
-| Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/instructions-type-safety.md) |
+| Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/copilot-instructions-type-safety.md) |
 | Adding helpers | `helpers/*.py` (check existing before creating new) |
 | Schema validation | `validators/manage_service/schema_generator/` |
 | DB inspection | `helpers/helpers_mssql.py` + `validators/*/db_inspector.py` |
 | Bloblang/templates | `pipeline-templates/*.yaml` + [Redpanda docs](_docs/redpanda-connect/README.md) |
-| Architecture decisions | `.github/decisions/` + [architecture](.github/instructions-architecture.md) |
+| Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `core/pipeline_generator.py` + `pipeline-templates/*.yaml` |
+| Architecture decisions | `.github/decisions/` + [architecture](.github/copilot-instructions-architecture.md) |
 
 ---
 

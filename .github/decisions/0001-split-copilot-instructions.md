@@ -20,9 +20,9 @@ Split monolithic instruction files into:
 
 ### Generator:
 - `copilot-instructions.md` (114 lines) → always loaded
-- `instructions-type-safety.md` → when fixing types
-- `instructions-architecture.md` → when designing features
-- `instructions-dev-workflow.md` → when testing/deploying
+- `copilot-instructions-type-safety.md` → when fixing types
+- `copilot-instructions-architecture.md` → when designing features
+- `copilot-instructions-dev-workflow.md` → when testing/deploying
 
 ## Consequences
 

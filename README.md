@@ -409,6 +409,11 @@ See: [`examples/db-shared/`](examples/db-shared/)
 
 ## 🏗️ Architecture Patterns
 
+Detailed architecture and migration docs:
+
+- [`_docs/architecture/STREAMING_ALTERNATIVES.md`](_docs/architecture/STREAMING_ALTERNATIVES.md)
+- [`_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md`](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md)
+
 ### db-per-tenant (One database per customer)
 
 **Use case:** Each customer has a dedicated source database.

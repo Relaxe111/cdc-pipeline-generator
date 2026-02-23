@@ -77,7 +77,7 @@ cdc reload-cdc-autocompletions
 ## 📖 Documentation References
 
 **Always read before coding:**
-- **[Coding Guidelines](.github/copilot-coding-guidelines.md)** - Code organization, style, naming conventions, function/file size limits, type hints
+- **[Coding Guidelines](.github/copilot-instructions-coding-guidelines.md)** - Code organization, style, naming conventions, function/file size limits, type hints
 
 **For Redpanda Connect / Bloblang transformations:**
 - **[Redpanda Connect Docs](_docs/redpanda-connect/README.md)** - Complete Bloblang reference and pipeline patterns
