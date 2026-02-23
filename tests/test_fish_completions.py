@@ -228,9 +228,6 @@ class TestManageServicesConfigOptions:
             "--add-column-template",
             "--remove-column-template",
             "--list-column-templates",
-            "--add-transform",
-            "--remove-transform",
-            "--list-transforms",
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
@@ -526,8 +523,6 @@ class TestShellCompleteCallbacksWired:
             "--remove-sink-table",
             "--add-column-template",
             "--remove-column-template",
-            "--add-transform",
-            "--remove-transform",
         ]:
             assert self._has_shell_complete(cmd, opt), (
                 f"manage-services config {opt} missing shell_complete callback"
@@ -653,7 +648,6 @@ class TestSmartCompletion:
             "cdc manage-services config --sink asma --sink-table pub.Actor --"
         )
         assert "--add-column-template" in opts
-        assert "--add-transform" in opts
         assert "--remove-column-template" in opts
 
     def test_column_template_appears_with_add_sink_table(self) -> None:
@@ -677,7 +671,6 @@ class TestSmartCompletion:
             "cdc manage-services config --sink sink_asma.proxy --"
         )
         assert "--add-column-template" not in opts
-        assert "--add-transform" not in opts
 
     def test_column_name_requires_add_column_template(self) -> None:
         """--column-name only appears after --add-column-template."""

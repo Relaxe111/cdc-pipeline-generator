@@ -1,0 +1,29 @@
+# User Class Splitter
+# Splits one row into multiple rows based on role flags.
+#
+# Usage in service YAML:
+#   transforms:
+#     - bloblang_ref: file://services/_bloblang/examples/user_class_splitter.blobl
+
+let results = []
+let base = this
+let results = if this.Patient == true {
+  $results.append($base.merge({"_user_class": "Patient"}))
+} else {
+  $results
+}
+let results = if this.Ansatt == true {
+  $results.append($base.merge({"_user_class": "Ansatt"}))
+} else {
+  $results
+}
+let results = if this.Frilanser == true {
+  $results.append($base.merge({"_user_class": "Frilanser"}))
+} else {
+  $results
+}
+root = if $results.length() > 0 {
+  $results
+} else {
+  deleted()
+}

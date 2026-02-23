@@ -400,32 +400,19 @@ class TestTransformValidationUsesSourceTableKey:
         self,
         source_schema_dir: Path,
         tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Transform validation resolves 'from' field for schema lookup."""
-        # Create transform-rules.yaml
-        rules_file = tmp_path / "transform-rules.yaml"
-        rules_file.write_text(
-            "rules:\n"
-            "  uppercase_name:\n"
-            "    description: Uppercase name\n"
-            "    type: conditional_column\n"
-            "    output_column:\n"
-            "      name: _upper_name\n"
-            "      type: text\n"
-            "      not_null: false\n"
-            "    conditions:\n"
-            "    - when: 'this.name != null'\n"
-            "      value: 'this.name.uppercase()'\n"
-            "    default_value: 'null'\n"
+        monkeypatch.chdir(tmp_path)
+        bloblang_file = (
+            tmp_path
+            / "services"
+            / "_bloblang"
+            / "examples"
+            / "uppercase_name.blobl"
         )
-
-        from cdc_generator.core.transform_rules import (
-            clear_cache as clear_rules_cache,
-        )
-        from cdc_generator.core.transform_rules import set_rules_path
-
-        clear_rules_cache()
-        set_rules_path(rules_file)
+        bloblang_file.parent.mkdir(parents=True)
+        bloblang_file.write_text('root._upper_name = this.name.uppercase()\n')
 
         config = _make_service_config(
             target_exists=False,
@@ -446,9 +433,8 @@ class TestTransformValidationUsesSourceTableKey:
                 "test_svc",
                 "sink_asma.proxy",
                 "directory_replica.customers",
-                "uppercase_name",
+                "file://services/_bloblang/examples/uppercase_name.blobl",
             )
 
         assert result is True
         mock_save.assert_called_once()
-        clear_rules_cache()

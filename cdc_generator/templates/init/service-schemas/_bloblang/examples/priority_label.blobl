@@ -1,0 +1,14 @@
+# Priority Label
+# Adds _priority_label based on numeric priority thresholds.
+#
+# Usage in service YAML:
+#   transforms:
+#     - bloblang_ref: file://services/_bloblang/examples/priority_label.blobl
+
+root._priority_label = if this.priority > 3 {
+  "high"
+} else if this.priority > 1 {
+  "medium"
+} else {
+  "low"
+}

@@ -135,3 +135,27 @@ def uses_environment_variables(bloblang: str) -> set[str]:
     """
     pattern = r'\$\{([A-Z_][A-Z0-9_]*)\}'
     return set(re.findall(pattern, bloblang))
+
+
+def extract_root_assignments(bloblang: str) -> set[str]:
+    """Extract top-level root field assignments from Bloblang.
+
+    Finds patterns like:
+    - root.field = ...
+    - root.field.subfield = ... (captures ``field``)
+
+    Args:
+        bloblang: Bloblang expression to parse.
+
+    Returns:
+        Set of root field names assigned in the expression.
+
+    Examples:
+        >>> extract_root_assignments('root._priority = "high"')
+        {'_priority'}
+
+        >>> extract_root_assignments('root.profile.name = this.name')
+        {'profile'}
+    """
+    pattern = r'\broot\.([a-zA-Z_][a-zA-Z0-9_]*)\b\s*='
+    return set(re.findall(pattern, bloblang))

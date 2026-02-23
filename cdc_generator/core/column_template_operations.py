@@ -2,7 +2,7 @@
 
 Manages adding/removing/listing column_templates and transforms in sink table configs.
 Column templates reference column-templates.yaml by name.
-Transforms reference transform-rules.yaml by name.
+Transforms reference Bloblang files under services/_bloblang/.
 
 Service YAML structure:
     sinks:
@@ -15,9 +15,9 @@ Service YAML structure:
               - template: source_table
               - template: environment
                 name: deploy_env
-            transforms:
-              - rule: user_class_splitter
-              - rule: active_users_only
+                        transforms:
+                            - bloblang_ref: services/_bloblang/adopus/user_class.blobl
+                            - bloblang_ref: services/_bloblang/adopus/region.blobl
 """
 
 from dataclasses import dataclass
@@ -28,10 +28,9 @@ from cdc_generator.core.column_templates import (
     get_template,
     validate_template_reference,
 )
-from cdc_generator.core.transform_rules import (
-    TransformRule,
-    get_rule,
-    validate_rule_reference,
+from cdc_generator.core.bloblang_refs import (
+    is_bloblang_ref,
+    read_bloblang_ref,
 )
 from cdc_generator.helpers.helpers_logging import (
     print_error,
@@ -65,15 +64,15 @@ class ResolvedColumnTemplate:
 
 @dataclass(frozen=True)
 class ResolvedTransform:
-    """A transform resolved from a rule reference.
+    """A transform resolved from a Bloblang file reference.
 
     Attributes:
-        rule_key: Reference to transform-rules.yaml key.
-        rule: Resolved TransformRule.
+        bloblang_ref: Project-relative path to Bloblang file.
+        bloblang: Resolved Bloblang expression.
     """
 
-    rule_key: str
-    rule: TransformRule
+    bloblang_ref: str
+    bloblang: str
 
 
 # ---------------------------------------------------------------------------
@@ -286,13 +285,13 @@ def _get_transforms_list(
 
 def _find_transform_index(
     transforms: list[object],
-    rule_key: str,
+    bloblang_ref: str,
 ) -> int | None:
-    """Find the index of a transform by rule key.
+    """Find the index of a transform by Bloblang file reference.
 
     Args:
         transforms: List of transform dicts.
-        rule_key: Rule key to find.
+        bloblang_ref: Bloblang ref to find.
 
     Returns:
         Index if found, None otherwise.
@@ -300,64 +299,68 @@ def _find_transform_index(
     for idx, item in enumerate(transforms):
         if isinstance(item, dict):
             item_dict = cast(dict[str, object], item)
-            if item_dict.get("rule") == rule_key:
+            if item_dict.get("bloblang_ref") == bloblang_ref:
                 return idx
     return None
 
 
 def add_transform(
     table_cfg: dict[str, object],
-    rule_key: str,
+    bloblang_ref: str,
 ) -> bool:
-    """Add a transform (rule reference) to a sink table config.
+    """Add a transform (Bloblang file reference) to a sink table config.
 
     Args:
         table_cfg: Sink table configuration dict (mutated in place).
-        rule_key: Rule key from transform-rules.yaml.
+        bloblang_ref: Bloblang ref under services/_bloblang/.
 
     Returns:
         True on success, False on error.
     """
-    # Validate rule exists
-    error = validate_rule_reference(rule_key)
-    if error is not None:
-        print_error(error)
+    if not is_bloblang_ref(bloblang_ref):
+        print_error(
+            "Invalid transform reference. Expected path under services/_bloblang/ "
+            + "ending with .blobl or .bloblang"
+        )
+        return False
+
+    if read_bloblang_ref(bloblang_ref) is None:
+        print_error(f"Transform Bloblang file not found: {bloblang_ref}")
         return False
 
     transforms = _get_transforms_list(table_cfg)
 
     # Check for duplicate
-    existing_idx = _find_transform_index(transforms, rule_key)
+    existing_idx = _find_transform_index(transforms, bloblang_ref)
     if existing_idx is not None:
-        print_warning(f"Transform rule '{rule_key}' already exists on this table")
+        print_warning(
+            f"Transform '{bloblang_ref}' already exists on this table"
+        )
         return False
 
-    transforms.append({"rule": rule_key})
-
-    rule = get_rule(rule_key)
-    desc = f" ({rule.description})" if rule and rule.description else ""
-    print_success(f"Added transform rule '{rule_key}'{desc}")
+    transforms.append({"bloblang_ref": bloblang_ref})
+    print_success(f"Added transform '{bloblang_ref}'")
     return True
 
 
 def remove_transform(
     table_cfg: dict[str, object],
-    rule_key: str,
+    bloblang_ref: str,
 ) -> bool:
-    """Remove a transform (rule reference) from a sink table config.
+    """Remove a transform (Bloblang ref) from a sink table config.
 
     Args:
         table_cfg: Sink table configuration dict (mutated in place).
-        rule_key: Rule key to remove.
+        bloblang_ref: Bloblang ref to remove.
 
     Returns:
         True on success, False if not found.
     """
     transforms = _get_transforms_list(table_cfg)
 
-    idx = _find_transform_index(transforms, rule_key)
+    idx = _find_transform_index(transforms, bloblang_ref)
     if idx is None:
-        print_warning(f"Transform rule '{rule_key}' not found on this table")
+        print_warning(f"Transform '{bloblang_ref}' not found on this table")
         _list_existing_transforms(transforms)
         return False
 
@@ -367,7 +370,7 @@ def remove_transform(
     if not transforms:
         table_cfg.pop("transforms", None)
 
-    print_success(f"Removed transform rule '{rule_key}'")
+    print_success(f"Removed transform '{bloblang_ref}'")
     return True
 
 
@@ -377,23 +380,23 @@ def _list_existing_transforms(transforms: list[object]) -> None:
     Args:
         transforms: List of transform dicts.
     """
-    rules = [
-        str(cast(dict[str, object], item).get("rule", "?"))
+    refs = [
+        str(cast(dict[str, object], item).get("bloblang_ref", "?"))
         for item in transforms
         if isinstance(item, dict)
     ]
-    if rules:
-        print_info(f"Existing transforms: {', '.join(rules)}")
+    if refs:
+        print_info(f"Existing transforms: {', '.join(refs)}")
 
 
 def list_transforms(table_cfg: dict[str, object]) -> list[str]:
-    """List all transform rule keys on a sink table.
+    """List all transform Bloblang refs on a sink table.
 
     Args:
         table_cfg: Sink table configuration dict.
 
     Returns:
-        List of rule keys.
+        List of Bloblang refs.
     """
     raw = table_cfg.get("transforms")
     if not isinstance(raw, list):
@@ -402,9 +405,9 @@ def list_transforms(table_cfg: dict[str, object]) -> list[str]:
     result: list[str] = []
     for item in cast(list[object], raw):
         if isinstance(item, dict):
-            rule = cast(dict[str, object], item).get("rule")
-            if isinstance(rule, str):
-                result.append(rule)
+            bloblang_ref = cast(dict[str, object], item).get("bloblang_ref")
+            if isinstance(bloblang_ref, str):
+                result.append(bloblang_ref)
     return result
 
 
@@ -467,7 +470,7 @@ def resolve_column_templates(
 def resolve_transforms(
     table_cfg: dict[str, object],
 ) -> list[ResolvedTransform]:
-    """Resolve all transform rule references to TransformRule objects.
+    """Resolve all transform refs to Bloblang expression content.
 
     Args:
         table_cfg: Sink table configuration dict.
@@ -477,8 +480,8 @@ def resolve_transforms(
 
     Example:
         >>> resolved = resolve_transforms(table_cfg)
-        >>> resolved[0].rule.rule_type
-        'row_multiplier'
+        >>> resolved[0].bloblang_ref
+        'services/_bloblang/adopus/user_class.blobl'
     """
     raw = table_cfg.get("transforms")
     if not isinstance(raw, list):
@@ -490,15 +493,23 @@ def resolve_transforms(
             continue
 
         entry = cast(dict[str, object], item)
-        rule_key = entry.get("rule")
-        if not isinstance(rule_key, str):
+        bloblang_ref = entry.get("bloblang_ref")
+        if not isinstance(bloblang_ref, str):
             continue
 
-        rule = get_rule(rule_key)
-        if rule is None:
-            print_warning(f"Transform references unknown rule: '{rule_key}'")
+        bloblang = read_bloblang_ref(bloblang_ref)
+        if bloblang is None:
+            print_warning(
+                "Transform references missing Bloblang file: "
+                + f"'{bloblang_ref}'"
+            )
             continue
 
-        result.append(ResolvedTransform(rule_key=rule_key, rule=rule))
+        result.append(
+            ResolvedTransform(
+                bloblang_ref=bloblang_ref,
+                bloblang=bloblang,
+            )
+        )
 
     return result

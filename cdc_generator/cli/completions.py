@@ -579,7 +579,7 @@ def complete_transform_rules(
     _param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
-    """Complete with transform rule keys from transform-rules.yaml."""
+    """Complete with transform Bloblang file references."""
     from cdc_generator.helpers.autocompletions.column_template_completions import (
         list_transform_rule_keys,
     )

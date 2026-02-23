@@ -297,7 +297,10 @@ class TestHandleAddTransform:
 
     def test_returns_1_without_service(self) -> None:
         """Returns 1 when --service missing."""
-        args = _ns(service=None, add_transform="map_boolean")
+        args = _ns(
+            service=None,
+            add_transform="file://services/_bloblang/examples/map_boolean.blobl",
+        )
         result = handle_add_transform(args)
         assert result == 1
 
@@ -305,7 +308,10 @@ class TestHandleAddTransform:
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
         """Returns 1 when --sink-table not provided."""
-        args = _ns(add_transform="map_boolean", sink_table=None)
+        args = _ns(
+            add_transform="file://services/_bloblang/examples/map_boolean.blobl",
+            sink_table=None,
+        )
         result = handle_add_transform(args)
         assert result == 1
 
@@ -313,7 +319,10 @@ class TestHandleAddTransform:
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
         """Returns 0 when add_transform operation succeeds."""
-        args = _ns(add_transform="map_boolean", skip_validation=True)
+        args = _ns(
+            add_transform="file://services/_bloblang/examples/map_boolean.blobl",
+            skip_validation=True,
+        )
         with patch(
             "cdc_generator.cli.service_handlers_templates.add_transform_to_table",
             return_value=True,
@@ -325,7 +334,7 @@ class TestHandleAddTransform:
             "proxy",
             "sink_asma.chat",
             "public.users",
-            "map_boolean",
+            "file://services/_bloblang/examples/map_boolean.blobl",
             True,
         )
 
@@ -333,7 +342,9 @@ class TestHandleAddTransform:
         self, project_dir: Path, service_with_sink: Path,
     ) -> None:
         """Returns 1 when add_transform operation fails."""
-        args = _ns(add_transform="map_boolean")
+        args = _ns(
+            add_transform="file://services/_bloblang/examples/map_boolean.blobl",
+        )
         with patch(
             "cdc_generator.cli.service_handlers_templates.add_transform_to_table",
             return_value=False,
@@ -347,7 +358,10 @@ class TestHandleRemoveTransform:
 
     def test_returns_1_without_service(self) -> None:
         """Returns 1 when --service missing."""
-        args = _ns(service=None, remove_transform="map_boolean")
+        args = _ns(
+            service=None,
+            remove_transform="file://services/_bloblang/examples/map_boolean.blobl",
+        )
         result = handle_remove_transform(args)
         assert result == 1
 
@@ -367,10 +381,10 @@ class TestHandleRemoveTransform:
             "        public.users:\n"
             "          target_exists: false\n"
             "          transforms:\n"
-            "            - rule: map_boolean\n"
+            "            - bloblang_ref: file://services/_bloblang/examples/map_boolean.blobl\n"
         )
         args = _ns(
-            remove_transform="map_boolean",
+            remove_transform="file://services/_bloblang/examples/map_boolean.blobl",
             sink="sink_asma.chat",
             sink_table="public.users",
         )
@@ -415,7 +429,7 @@ class TestHandleListTransforms:
             "        public.users:\n"
             "          target_exists: false\n"
             "          transforms:\n"
-            "            - rule: map_boolean\n"
+            "            - bloblang_ref: file://services/_bloblang/examples/map_boolean.blobl\n"
         )
         args = _ns(
             list_transforms=True,

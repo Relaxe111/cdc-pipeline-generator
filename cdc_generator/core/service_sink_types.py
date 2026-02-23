@@ -82,18 +82,18 @@ class ExtraColumnEntry(TypedDict, total=False):
 
 
 class TransformEntry(TypedDict, total=False):
-    """A single transform rule reference in a sink table config.
+    """A single transform Bloblang reference in a sink table config.
 
     Attributes:
-        rule: Transform rule key from transform-rules.yaml.
+        bloblang_ref: Project-relative path to Bloblang expression file.
 
     Example:
         transforms:
-          - rule: user_class_splitter
-          - rule: active_users_only
+          - bloblang_ref: services/_bloblang/adopus/user_class.blobl
+          - bloblang_ref: services/_bloblang/adopus/region.blobl
     """
 
-    rule: str
+    bloblang_ref: str
 
 
 class SinkTableConfig(TypedDict, total=False):

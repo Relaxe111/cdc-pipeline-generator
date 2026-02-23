@@ -6,7 +6,7 @@
 #     user_status:
 #       name: user_status_label
 #       type: text
-#       value: file://service-schemas/bloblang/examples/user_status_mapper.blobl
+#       value: file://services/_bloblang/examples/user_status_mapper.blobl
 
 root = match this.status {
   "A" => "ACTIVE",

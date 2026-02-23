@@ -615,13 +615,38 @@ def _analyze_identity_coverage(
         if source_type is None:
             continue
 
-        if _check_type_compatibility(source_type, sink_type):
+        if _check_identity_type_compatibility(source_type, sink_type):
             identity_covered.add(sink_col)
             continue
 
         incompatible_identity.append((sink_col, source_type, sink_type))
 
     return identity_covered, incompatible_identity
+
+
+def _check_identity_type_compatibility(
+    source_type: str,
+    sink_type: str,
+) -> bool:
+    """Return True when implicit same-name mapping is type-safe.
+
+    Identity mapping is intentionally stricter than explicit --map-column
+    mapping. We only allow implicit mapping when source/sink types resolve
+    to the same canonical type.
+    """
+    source_type_normalized = source_type.strip().lower()
+    sink_type_normalized = sink_type.strip().lower()
+
+    try:
+        from cdc_generator.helpers.type_mapper import TypeMapper
+
+        source_mapper = TypeMapper("pgsql", "pgsql")
+        sink_mapper = TypeMapper("pgsql", "pgsql")
+        normalized_source = source_mapper.map_type(source_type_normalized)
+        normalized_sink = sink_mapper.map_type(sink_type_normalized)
+        return normalized_source == normalized_sink
+    except FileNotFoundError:
+        return source_type_normalized == sink_type_normalized
 
 
 def _find_required_unmapped_sink_columns(

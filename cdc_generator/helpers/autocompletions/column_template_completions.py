@@ -1,15 +1,15 @@
-"""Autocompletion helpers for column templates and transform rules.
+"""Autocompletion helpers for column templates and transforms.
 
 Provides dynamic completion data for --add-column-template, --remove-column-template,
 --add-transform, and --remove-transform CLI flags.
 """
 
+from cdc_generator.core.bloblang_refs import list_bloblang_refs
 from cdc_generator.core.column_templates import list_template_keys
 from cdc_generator.core.column_template_operations import (
     list_column_templates,
     list_transforms,
 )
-from cdc_generator.core.transform_rules import list_rule_keys
 
 from .sinks import load_sink_tables_for_autocomplete
 
@@ -28,16 +28,16 @@ def list_column_template_keys() -> list[str]:
 
 
 def list_transform_rule_keys() -> list[str]:
-    """List all available transform rule keys.
+    """List all available transform Bloblang refs.
 
     Returns:
-        Sorted list of rule keys for autocompletion.
+        Sorted list of Bloblang refs for autocompletion.
 
     Example:
         >>> list_transform_rule_keys()
-        ['active_users_only', 'priority_label', 'user_class_splitter']
+        ['services/_bloblang/adopus/user_class.blobl']
     """
-    return list_rule_keys()
+    return list_bloblang_refs()
 
 
 def list_column_templates_for_table(
@@ -75,7 +75,7 @@ def list_transforms_for_table(
     sink_key: str,
     table_key: str,
 ) -> list[str]:
-    """List transform rule keys on a specific sink table.
+    """List transform Bloblang refs on a specific sink table.
 
     Used for --remove-transform autocompletion.
 
@@ -85,14 +85,14 @@ def list_transforms_for_table(
         table_key: Table key (schema.table).
 
     Returns:
-        List of rule keys configured on the table.
+        List of Bloblang refs configured on the table.
 
     Example:
         >>> list_transforms_for_table(
         ...     'directory', 'sink_asma.notification',
         ...     'notification.customer_user',
         ... )
-        ['user_class_splitter']
+        ['services/_bloblang/adopus/user_class.blobl']
     """
     table_cfg = _load_table_config(service_name, sink_key, table_key)
     if table_cfg is None:

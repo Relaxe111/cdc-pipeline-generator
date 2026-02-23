@@ -1,11 +1,11 @@
 """Column template and transform operations for sink tables.
 
 Manages column_templates and transforms in sink table configurations.
-All operations reference templates/rules by name only.
+Transforms are referenced as Bloblang files under services/_bloblang/.
 
-Template/rule definitions:
+Template/transform definitions:
   - service-schemas/column-templates.yaml
-  - service-schemas/transform-rules.yaml
+    - services/_bloblang/**/*.blobl
 """
 
 from typing import cast
@@ -426,16 +426,16 @@ def add_transform_to_table(
     service: str,
     sink_key: str,
     table_key: str,
-    rule_key: str,
+    bloblang_ref: str,
     skip_validation: bool = False,
 ) -> bool:
-    """Add a transform rule reference to a sink table.
+    """Add a transform Bloblang reference to a sink table.
 
     Args:
         service: Service name.
         sink_key: Sink key.
         table_key: Table key.
-        rule_key: Transform rule key from transform-rules.yaml.
+        bloblang_ref: Transform Bloblang file ref under services/_bloblang/.
         skip_validation: Skip database schema validation (for migrations).
 
     Returns:
@@ -457,15 +457,23 @@ def add_transform_to_table(
         # key differs from the actual source schema location.
         source_table_key = _resolve_source_table_key(table_cfg, table_key)
 
-        print_info(f"\nValidating transform '{rule_key}' for table '{table_key}'...")
+        print_info(
+            f"\nValidating transform '{bloblang_ref}' for table '{table_key}'..."
+        )
+
+        existing_refs = list_transforms(table_cfg)
+        refs_to_validate = list(existing_refs)
+        if bloblang_ref not in refs_to_validate:
+            refs_to_validate.append(bloblang_ref)
+
         if not validate_transforms_for_table(
-            service, table_key, [rule_key],
+            service, table_key, refs_to_validate,
             source_table_key=source_table_key,
         ):
             print_error("Transform validation failed. Use --skip-validation to bypass.")
             return False
 
-    if not add_transform(table_cfg, rule_key):
+    if not add_transform(table_cfg, bloblang_ref):
         return False
 
     if not save_service_config(service, config):
@@ -479,15 +487,15 @@ def remove_transform_from_table(
     service: str,
     sink_key: str,
     table_key: str,
-    rule_key: str,
+    bloblang_ref: str,
 ) -> bool:
-    """Remove a transform rule reference from a sink table.
+    """Remove a transform Bloblang reference from a sink table.
 
     Args:
         service: Service name.
         sink_key: Sink key.
         table_key: Table key.
-        rule_key: Transform rule key to remove.
+        bloblang_ref: Transform Bloblang ref to remove.
 
     Returns:
         True on success, False on error.
@@ -497,7 +505,7 @@ def remove_transform_from_table(
         return False
 
     config, table_cfg = resolved
-    if not remove_transform(table_cfg, rule_key):
+    if not remove_transform(table_cfg, bloblang_ref):
         return False
 
     if not save_service_config(service, config):
@@ -527,24 +535,14 @@ def list_transforms_on_table(
         return False
 
     _config, table_cfg = resolved
-    rules = list_transforms(table_cfg)
+    refs = list_transforms(table_cfg)
 
     print_header(f"Transforms on '{table_key}' in sink '{sink_key}'")
-    if not rules:
+    if not refs:
         print_info("No transforms configured")
         return False
 
-    for rule_key in rules:
-        from cdc_generator.core.transform_rules import get_rule
-
-        rule = get_rule(rule_key)
-        if rule:
-            print(
-                f"  {Colors.CYAN}{rule_key}{Colors.RESET}"
-                + f" ({rule.rule_type})"
-                + f"  {Colors.DIM}{rule.description}{Colors.RESET}"
-            )
-        else:
-            print(f"  {Colors.YELLOW}{rule_key}{Colors.RESET} (unknown rule)")
+    for bloblang_ref in refs:
+        print(f"  {Colors.CYAN}{bloblang_ref}{Colors.RESET}")
 
     return True

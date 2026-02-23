@@ -1,0 +1,12 @@
+# Valid Status Filter
+# Keeps rows with status in {active, pending}.
+#
+# Usage in service YAML:
+#   transforms:
+#     - bloblang_ref: file://services/_bloblang/examples/valid_status_filter.blobl
+
+root = if this.status == "active" || this.status == "pending" {
+  this
+} else {
+  deleted()
+}

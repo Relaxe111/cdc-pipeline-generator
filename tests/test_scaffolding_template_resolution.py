@@ -115,18 +115,17 @@ class TestScaffoldTemplatePathResolution:
         _write_bloblang_templates(template_root)
 
         project_root = _prepare_project_root(tmp_path)
-        (project_root / "services" / "_schemas" / "_bloblang" / "examples").mkdir(
+        (project_root / "services" / "_bloblang" / "examples").mkdir(
             parents=True,
             exist_ok=True,
         )
 
         create._copy_template_library_files(project_root)
 
-        assert (project_root / "services" / "_schemas" / "_bloblang" / "README.md").exists()
+        assert (project_root / "services" / "_bloblang" / "README.md").exists()
         assert (
             project_root
             / "services"
-            / "_schemas"
             / "_bloblang"
             / "examples"
             / "json_extractor.blobl"
@@ -144,18 +143,17 @@ class TestScaffoldTemplatePathResolution:
         _write_bloblang_templates(template_root)
 
         project_root = _prepare_project_root(tmp_path)
-        (project_root / "services" / "_schemas" / "_bloblang" / "examples").mkdir(
+        (project_root / "services" / "_bloblang" / "examples").mkdir(
             parents=True,
             exist_ok=True,
         )
 
         update._copy_template_library_files(project_root)
 
-        assert (project_root / "services" / "_schemas" / "_bloblang" / "README.md").exists()
+        assert (project_root / "services" / "_bloblang" / "README.md").exists()
         assert (
             project_root
             / "services"
-            / "_schemas"
             / "_bloblang"
             / "examples"
             / "json_extractor.blobl"

@@ -6,11 +6,11 @@ and have compatible types.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import cast
 
+from cdc_generator.core.bloblang_refs import read_bloblang_ref
 from cdc_generator.core.column_templates import get_template
-from cdc_generator.core.transform_rules import get_rule
 from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
@@ -19,6 +19,7 @@ from cdc_generator.helpers.helpers_logging import (
 )
 from cdc_generator.validators.bloblang_parser import (
     extract_column_references,
+    extract_root_assignments,
     is_static_expression,
     uses_environment_variables,
 )
@@ -34,6 +35,7 @@ class ValidationResult:
     warnings: list[str]
     referenced_columns: set[str]
     env_vars: set[str]
+    produced_columns: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -542,11 +544,12 @@ def validate_column_template(
 
 
 def validate_transform_rule(
-    rule_key: str,
+    bloblang_ref: str,
     _table_key: str,
     source_schema: TableSchema,
+    available_columns: set[str] | None = None,
 ) -> ValidationResult:
-    """Validate a transform rule against database schema.
+    """Validate a transform Bloblang file against database schema.
 
     Checks:
     - Rule exists
@@ -554,7 +557,7 @@ def validate_transform_rule(
     - Value expressions reference existing columns
 
     Args:
-        rule_key: Transform rule key.
+        bloblang_ref: Transform Bloblang file reference.
         table_key: Table key (e.g., "dbo.users").
         source_schema: Database table schema.
 
@@ -566,12 +569,13 @@ def validate_transform_rule(
     all_referenced_columns: set[str] = set()
     all_env_vars: set[str] = set()
 
-    # Check rule exists
-    rule = get_rule(rule_key)
-    if not rule:
-        errors.append(f"Transform rule '{rule_key}' not found in transform-rules.yaml")
+    bloblang = read_bloblang_ref(bloblang_ref)
+    if bloblang is None:
+        errors.append(
+            f"Transform Bloblang file not found: '{bloblang_ref}'"
+        )
         return ValidationResult(
-            item_key=rule_key,
+            item_key=bloblang_ref,
             is_valid=False,
             errors=errors,
             warnings=warnings,
@@ -579,59 +583,39 @@ def validate_transform_rule(
             env_vars=all_env_vars,
         )
 
-    # Validate each condition
-    for idx, condition in enumerate(rule.conditions):
-        # Check 'when' expression
-        when_columns = extract_column_references(condition.when)
-        when_env = uses_environment_variables(condition.when)
-        all_referenced_columns.update(when_columns)
-        all_env_vars.update(when_env)
+    bloblang_errors = _validate_bloblang_syntax(bloblang, bloblang_ref)
+    errors.extend(bloblang_errors)
 
-        for col in when_columns:
-            if col not in source_schema.columns:
+    referenced_columns = extract_column_references(bloblang)
+    all_referenced_columns.update(referenced_columns)
+    all_env_vars.update(uses_environment_variables(bloblang))
+
+    runtime_available = (
+        set(available_columns)
+        if available_columns is not None
+        else set(source_schema.columns.keys())
+    )
+
+    if not is_static_expression(bloblang):
+        table_label = f"{source_schema.schema_name}.{source_schema.table_name}"
+        for col in sorted(referenced_columns):
+            if col not in runtime_available:
                 errors.append(
-                    f"Transform '{rule_key}' condition[{idx}].when "
-                    + f"references column '{col}' which does not exist "
-                    + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
+                    f"Transform '{bloblang_ref}' references column '{col}' "
+                    + f"which does not exist in available runtime columns for "
+                    + f"source table '{table_label}'"
                 )
 
-        # Check 'value' expression if present
-        if condition.value:
-            value_columns = extract_column_references(condition.value)
-            value_env = uses_environment_variables(condition.value)
-            all_referenced_columns.update(value_columns)
-            all_env_vars.update(value_env)
-
-            for col in value_columns:
-                if col not in source_schema.columns:
-                    errors.append(
-                        f"Transform '{rule_key}' condition[{idx}].value "
-                        + f"references column '{col}' which does not exist "
-                        + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
-                    )
-
-    # Check default_value if present
-    if rule.default_value:
-        default_columns = extract_column_references(rule.default_value)
-        default_env = uses_environment_variables(rule.default_value)
-        all_referenced_columns.update(default_columns)
-        all_env_vars.update(default_env)
-
-        for col in default_columns:
-            if col not in source_schema.columns:
-                errors.append(
-                    f"Transform '{rule_key}' default_value "
-                    + f"references column '{col}' which does not exist "
-                    + f"in source table '{source_schema.schema_name}.{source_schema.table_name}'"
-                )
+    produced_columns = extract_root_assignments(bloblang)
 
     return ValidationResult(
-        item_key=rule_key,
+        item_key=bloblang_ref,
         is_valid=len(errors) == 0,
         errors=errors,
         warnings=warnings,
         referenced_columns=all_referenced_columns,
         env_vars=all_env_vars,
+        produced_columns=produced_columns,
     )
 
 
@@ -712,7 +696,7 @@ def validate_templates_for_table(
 def validate_transforms_for_table(
     service: str,
     table_key: str,
-    transform_keys: list[str],
+    transform_refs: list[str],
     env: str = "nonprod",
     source_table_key: str | None = None,
 ) -> bool:
@@ -721,7 +705,7 @@ def validate_transforms_for_table(
     Args:
         service: Service name.
         table_key: Table key (e.g., "dbo.users").
-        transform_keys: List of transform rule keys to validate.
+        transform_refs: List of transform Bloblang refs to validate.
         env: Environment to inspect.
         source_table_key: Optional source table key (from the ``from``
             field) for sink tables whose schema lives under a different
@@ -732,12 +716,12 @@ def validate_transforms_for_table(
     """
     if source_table_key:
         print_info(
-            f"\nValidating {len(transform_keys)} transform rule(s)"
+            f"\nValidating {len(transform_refs)} transform(s)"
             + f" for '{table_key}' (source: '{source_table_key}')..."
         )
     else:
         print_info(
-            f"\nValidating {len(transform_keys)} transform rule(s) for '{table_key}'..."
+            f"\nValidating {len(transform_refs)} transform(s) for '{table_key}'..."
         )
 
     # Get database schema
@@ -749,20 +733,26 @@ def validate_transforms_for_table(
         return False
 
     all_valid = True
+    runtime_available = set(schema.columns.keys())
 
-    for rule_key in transform_keys:
-        result = validate_transform_rule(rule_key, table_key, schema)
+    for bloblang_ref in transform_refs:
+        result = validate_transform_rule(
+            bloblang_ref,
+            table_key,
+            schema,
+            available_columns=runtime_available,
+        )
 
         if result.is_valid:
             status = "✓"
             if result.referenced_columns:
                 cols = ", ".join(sorted(result.referenced_columns))
-                print_success(f"  {status} {rule_key} (uses: {cols})")
+                print_success(f"  {status} {bloblang_ref} (uses: {cols})")
             else:
-                print_success(f"  {status} {rule_key} (static expression)")
+                print_success(f"  {status} {bloblang_ref} (static expression)")
         else:
             all_valid = False
-            print_error(f"  ✗ {rule_key}")
+            print_error(f"  ✗ {bloblang_ref}")
             for error in result.errors:
                 print_error(f"      {error}")
 
@@ -773,5 +763,8 @@ def validate_transforms_for_table(
         if result.env_vars:
             env_list = ", ".join(sorted(result.env_vars))
             print_info(f"      Environment variables: {env_list}")
+
+        if result.is_valid and result.produced_columns:
+            runtime_available.update(result.produced_columns)
 
     return all_valid

@@ -1,0 +1,12 @@
+# Active Users Only
+# Keeps rows where is_active is true, drops everything else.
+#
+# Usage in service YAML:
+#   transforms:
+#     - bloblang_ref: file://services/_bloblang/examples/active_users_only.blobl
+
+root = if this.is_active == true {
+  this
+} else {
+  deleted()
+}

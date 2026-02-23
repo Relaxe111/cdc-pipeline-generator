@@ -40,7 +40,7 @@ def _copy_template_library_files(project_root: Path) -> None:
 
     Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
     from the generator's templates/init/service-schemas/ directory to the
-    implementation's services/_schemas/.
+    implementation's services/_schemas/ and services/_bloblang/.
 
     Args:
         project_root: Root directory of the implementation
@@ -71,7 +71,7 @@ def _copy_template_library_files(project_root: Path) -> None:
             print_warning(f"⚠️  Template not found in generator: {filename}")
 
     # Copy bloblang directory (examples and README)
-    bloblang_target = project_root / "services" / "_schemas" / "_bloblang"
+    bloblang_target = project_root / "services" / "_bloblang"
     bloblang_source = _resolve_template_file(generator_root, Path("_bloblang"))
 
     if bloblang_source is None:
@@ -80,7 +80,7 @@ def _copy_template_library_files(project_root: Path) -> None:
         # Merge entire bloblang directory recursively.
         # This ensures examples are copied even when scaffold pre-created dirs.
         shutil.copytree(bloblang_source, bloblang_target, dirs_exist_ok=True)
-        print_success("✓ Copied Bloblang examples: services/_schemas/_bloblang/")
+        print_success("✓ Copied Bloblang examples: services/_bloblang/")
 
     # Copy DB type mapping definitions
     map_files = [

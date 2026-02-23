@@ -20,12 +20,6 @@ from cdc_generator.core.column_templates import (
 from cdc_generator.core.column_templates import (
     set_templates_path,
 )
-from cdc_generator.core.transform_rules import (
-    clear_cache as clear_rule_cache,
-)
-from cdc_generator.core.transform_rules import (
-    set_rules_path,
-)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -36,7 +30,6 @@ from cdc_generator.core.transform_rules import (
 def _reset_caches() -> None:  # type: ignore[misc]
     """Clear all caches before each test."""
     clear_template_cache()
-    clear_rule_cache()
 
 
 @pytest.fixture()
@@ -70,32 +63,19 @@ templates:
 
 
 @pytest.fixture()
-def setup_rules(tmp_path: Path) -> Path:
-    """Create a temporary transform-rules.yaml."""
-    content = """\
-rules:
-  user_class_splitter:
-    type: row_multiplier
-    description: Split by boolean flags
-    output_column:
-      name: _user_class
-      type: text
-      not_null: true
-    conditions:
-      - when: this.Patient == true
-        value: '"Patient"'
-    on_no_match: drop
-  active_filter:
-    type: filter
-    description: Keep active rows
-    conditions:
-      - when: this.is_active == true
-    on_no_match: drop
-"""
-    file_path = tmp_path / "transform-rules.yaml"
-    file_path.write_text(content)
-    set_rules_path(file_path)
-    return file_path
+def setup_bloblang(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        """Create a temporary services/_bloblang tree with transform files."""
+        monkeypatch.chdir(tmp_path)
+        bloblang_dir = tmp_path / "services" / "_bloblang" / "examples"
+        bloblang_dir.mkdir(parents=True)
+
+        splitter = bloblang_dir / "user_class_splitter.blobl"
+        splitter.write_text('root = if this.Patient == true { "Patient" } else { deleted() }\n')
+
+        active = bloblang_dir / "active_filter.blobl"
+        active.write_text("root = if this.is_active == true { this } else { deleted() }\n")
+
+        return bloblang_dir
 
 
 def _make_table_cfg() -> dict[str, object]:
@@ -251,33 +231,35 @@ class TestListExtraColumns:
 class TestAddTransform:
     """Tests for add_transform."""
 
-    def test_add_valid_rule(self, setup_rules: Path) -> None:
+    def test_add_valid_rule(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = add_transform(table_cfg, "user_class_splitter")
+        ref = "file://services/_bloblang/examples/user_class_splitter.blobl"
+        result = add_transform(table_cfg, ref)
         assert result is True
         assert "transforms" in table_cfg
         transforms = table_cfg["transforms"]
         assert isinstance(transforms, list)
         assert len(transforms) == 1
-        assert transforms[0] == {"rule": "user_class_splitter"}
+        assert transforms[0] == {"bloblang_ref": ref}
 
-    def test_add_multiple(self, setup_rules: Path) -> None:
+    def test_add_multiple(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "user_class_splitter")
-        add_transform(table_cfg, "active_filter")
+        add_transform(table_cfg, "file://services/_bloblang/examples/user_class_splitter.blobl")
+        add_transform(table_cfg, "file://services/_bloblang/examples/active_filter.blobl")
         transforms = table_cfg["transforms"]
         assert isinstance(transforms, list)
         assert len(transforms) == 2
 
-    def test_add_duplicate_fails(self, setup_rules: Path) -> None:
+    def test_add_duplicate_fails(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "user_class_splitter")
-        result = add_transform(table_cfg, "user_class_splitter")
+        ref = "file://services/_bloblang/examples/user_class_splitter.blobl"
+        add_transform(table_cfg, ref)
+        result = add_transform(table_cfg, ref)
         assert result is False
 
-    def test_add_unknown_rule_fails(self, setup_rules: Path) -> None:
+    def test_add_unknown_rule_fails(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = add_transform(table_cfg, "nonexistent")
+        result = add_transform(table_cfg, "file://services/_bloblang/examples/nonexistent.blobl")
         assert result is False
         assert "transforms" not in table_cfg
 
@@ -285,26 +267,29 @@ class TestAddTransform:
 class TestRemoveTransform:
     """Tests for remove_transform."""
 
-    def test_remove_existing(self, setup_rules: Path) -> None:
+    def test_remove_existing(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "user_class_splitter")
-        add_transform(table_cfg, "active_filter")
+        splitter = "file://services/_bloblang/examples/user_class_splitter.blobl"
+        active = "file://services/_bloblang/examples/active_filter.blobl"
+        add_transform(table_cfg, splitter)
+        add_transform(table_cfg, active)
 
-        result = remove_transform(table_cfg, "user_class_splitter")
+        result = remove_transform(table_cfg, splitter)
         assert result is True
         transforms = table_cfg["transforms"]
         assert isinstance(transforms, list)
         assert len(transforms) == 1
 
-    def test_remove_last_cleans_up(self, setup_rules: Path) -> None:
+    def test_remove_last_cleans_up(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "active_filter")
-        remove_transform(table_cfg, "active_filter")
+        active = "file://services/_bloblang/examples/active_filter.blobl"
+        add_transform(table_cfg, active)
+        remove_transform(table_cfg, active)
         assert "transforms" not in table_cfg
 
-    def test_remove_nonexistent_fails(self, setup_rules: Path) -> None:
+    def test_remove_nonexistent_fails(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        result = remove_transform(table_cfg, "nonexistent")
+        result = remove_transform(table_cfg, "file://services/_bloblang/examples/nonexistent.blobl")
         assert result is False
 
 
@@ -316,12 +301,14 @@ class TestListTransforms:
         result = list_transforms(table_cfg)
         assert result == []
 
-    def test_list_populated(self, setup_rules: Path) -> None:
+    def test_list_populated(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "user_class_splitter")
-        add_transform(table_cfg, "active_filter")
+        splitter = "file://services/_bloblang/examples/user_class_splitter.blobl"
+        active = "file://services/_bloblang/examples/active_filter.blobl"
+        add_transform(table_cfg, splitter)
+        add_transform(table_cfg, active)
         result = list_transforms(table_cfg)
-        assert result == ["user_class_splitter", "active_filter"]
+        assert result == [splitter, active]
 
 
 # ---------------------------------------------------------------------------
@@ -405,29 +392,31 @@ class TestResolveExtraColumns:
 class TestResolveTransforms:
     """Tests for resolve_transforms."""
 
-    def test_resolve_valid(self, setup_rules: Path) -> None:
+    def test_resolve_valid(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
-        add_transform(table_cfg, "user_class_splitter")
-        add_transform(table_cfg, "active_filter")
+        splitter = "file://services/_bloblang/examples/user_class_splitter.blobl"
+        active = "file://services/_bloblang/examples/active_filter.blobl"
+        add_transform(table_cfg, splitter)
+        add_transform(table_cfg, active)
 
         resolved = resolve_transforms(table_cfg)
         assert len(resolved) == 2
-        assert resolved[0].rule_key == "user_class_splitter"
-        assert resolved[0].rule.rule_type == "row_multiplier"
-        assert resolved[1].rule_key == "active_filter"
-        assert resolved[1].rule.rule_type == "filter"
+        assert resolved[0].bloblang_ref == splitter
+        assert "Patient" in resolved[0].bloblang
+        assert resolved[1].bloblang_ref == active
+        assert "is_active" in resolved[1].bloblang
 
     def test_resolve_empty(self) -> None:
         table_cfg = _make_table_cfg()
         resolved = resolve_transforms(table_cfg)
         assert resolved == []
 
-    def test_resolve_skips_invalid(self, setup_rules: Path) -> None:
+    def test_resolve_skips_invalid(self, setup_bloblang: Path) -> None:
         table_cfg = _make_table_cfg()
         table_cfg["transforms"] = [
-            {"rule": "active_filter"},
-            {"rule": "nonexistent_rule"},
+            {"bloblang_ref": "file://services/_bloblang/examples/active_filter.blobl"},
+            {"bloblang_ref": "file://services/_bloblang/examples/nonexistent.blobl"},
         ]
         resolved = resolve_transforms(table_cfg)
         assert len(resolved) == 1
-        assert resolved[0].rule_key == "active_filter"
+        assert resolved[0].bloblang_ref == "file://services/_bloblang/examples/active_filter.blobl"

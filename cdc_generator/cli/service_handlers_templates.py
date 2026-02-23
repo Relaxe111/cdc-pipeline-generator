@@ -142,11 +142,15 @@ def handle_add_transform(args: argparse.Namespace) -> int:
         return 1
 
     service, sink_key, sink_table = resolved
-    rule_key = args.add_transform
+    bloblang_ref = args.add_transform
     skip_validation = getattr(args, "skip_validation", False)
 
     if add_transform_to_table(
-        service, sink_key, sink_table, rule_key, skip_validation,
+        service,
+        sink_key,
+        sink_table,
+        bloblang_ref,
+        skip_validation,
     ):
         return 0
     return 1
@@ -159,10 +163,13 @@ def handle_remove_transform(args: argparse.Namespace) -> int:
         return 1
 
     service, sink_key, sink_table = resolved
-    rule_key = args.remove_transform
+    bloblang_ref = args.remove_transform
 
     if remove_transform_from_table(
-        service, sink_key, sink_table, rule_key,
+        service,
+        sink_key,
+        sink_table,
+        bloblang_ref,
     ):
         return 0
     return 1
@@ -209,22 +216,16 @@ def handle_list_column_templates(_args: argparse.Namespace) -> int:
 
 def handle_list_transform_rules(_args: argparse.Namespace) -> int:
     """Handle --list-transform-rules flag."""
-    from cdc_generator.core.transform_rules import get_rules
+    from cdc_generator.core.bloblang_refs import list_bloblang_refs
 
-    rules = get_rules()
-    print_header("Available transform rules")
+    refs = list_bloblang_refs()
+    print_header("Available Bloblang transforms")
 
-    if not rules:
-        print_info("No transform rules found")
+    if not refs:
+        print_info("No Bloblang transform files found")
         return 0
 
-    for key in sorted(rules):
-        rule = rules[key]
-        conditions_count = len(rule.conditions)
-        print(
-            f"  {Colors.CYAN}{key}{Colors.RESET}"
-            + f" ({rule.rule_type}, {conditions_count} conditions)"
-            + f"  {Colors.DIM}{rule.description}{Colors.RESET}"
-        )
+    for ref in refs:
+        print(f"  {Colors.CYAN}{ref}{Colors.RESET}")
 
     return 0

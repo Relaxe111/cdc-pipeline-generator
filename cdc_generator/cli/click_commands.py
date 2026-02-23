@@ -194,7 +194,7 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="List all sink configurations")
 @click.option("--validate-sinks", is_flag=True,
               help="Validate sink configuration")
-# -- Column templates & transforms --
+# -- Column templates --
 @click.option("--add-column-template", shell_complete=complete_column_templates,
               help="Add column template to sink table")
 @click.option("--remove-column-template",
@@ -204,13 +204,6 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="List column templates on sink table")
 @click.option("--column-name", help="Override column name for template")
 @click.option("--value", help="Override column value for template")
-@click.option("--add-transform", shell_complete=complete_transform_rules,
-              help="Add transform rule to sink table")
-@click.option("--remove-transform",
-              shell_complete=complete_transforms_on_table,
-              help="Remove transform rule from sink table")
-@click.option("--list-transforms", is_flag=True,
-              help="List transforms on sink table")
 @click.option("--skip-validation", is_flag=True,
               help="Skip database schema validation")
 # -- Custom sink table --
@@ -518,26 +511,71 @@ def manage_services_schema_custom_tables_cmd(
 
 @click.command(
     name="transforms",
-    help="Manage global transform rule catalog",
+    help="Manage sink table transforms",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name")
+@click.option("--sink", shell_complete=complete_sink_keys,
+              help="Sink key")
+@click.option("--sink-table", shell_complete=complete_sink_tables,
+              help="Sink table")
+@click.option("--add-transform", shell_complete=complete_transform_rules,
+              help="Add transform Bloblang ref")
+@click.option("--remove-transform", shell_complete=complete_transforms_on_table,
+              help="Remove transform Bloblang ref")
+@click.option("--list-transforms", is_flag=True,
+              help="List transforms on sink table")
+@click.option("--skip-validation", is_flag=True,
+              help="Skip database schema validation")
 @click.option("--list-rules", is_flag=True,
-              help="List all available transform rules")
+              help="List available Bloblang transform refs")
 @click.option("--list-transform-rules", is_flag=True,
               help="Alias for --list-rules")
 def manage_services_schema_transforms_cmd(
+    service: str | None,
+    sink: str | None,
+    sink_table: str | None,
+    add_transform: str | None,
+    remove_transform: str | None,
+    list_transforms: bool,
+    skip_validation: bool,
     list_rules: bool,
     list_transform_rules: bool,
 ) -> int:
     """manage-services schema transforms passthrough."""
     from cdc_generator.cli.service_handlers_templates import (
+        handle_add_transform,
         handle_list_transform_rules,
+        handle_list_transforms,
+        handle_remove_transform,
     )
+
+    args = argparse.Namespace(
+        service=service,
+        sink=sink,
+        sink_table=sink_table,
+        add_transform=add_transform,
+        remove_transform=remove_transform,
+        list_transforms=list_transforms,
+        skip_validation=skip_validation,
+    )
+
+    if add_transform:
+        return handle_add_transform(args)
+    if remove_transform:
+        return handle_remove_transform(args)
+    if list_transforms:
+        return handle_list_transforms(args)
 
     if not list_rules and not list_transform_rules:
         click.echo("❌ Missing action for manage-services schema transforms")
-        click.echo("   Try: cdc manage-services schema transforms --list-rules")
+        click.echo(
+            "   Try: cdc manage-services schema transforms --service <svc> "
+            + "--sink <key> --sink-table <schema.table> --list-transforms"
+        )
+        click.echo("        cdc manage-services schema transforms --list-rules")
         return 1
 
     return handle_list_transform_rules(argparse.Namespace())
