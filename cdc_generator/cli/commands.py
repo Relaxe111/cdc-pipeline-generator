@@ -173,10 +173,10 @@ SERVICE_COMMANDS: dict[str, dict[str, str]] = {
         "script": "cli/service_schema.py",
         "description": (
             "Manage service resources "
-            + "(custom-tables, column-templates, transforms)"
+            + "(inspect, custom-tables, column-templates, transforms)"
         ),
         "usage": (
-            "cdc manage-services resources <custom-tables|column-templates|transforms>"
+            "cdc manage-services resources <inspect|custom-tables|column-templates|transforms>"
         ),
     },
 }

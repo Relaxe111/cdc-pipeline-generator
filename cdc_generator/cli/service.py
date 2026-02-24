@@ -4,7 +4,7 @@ Interactive service management tool for CDC pipeline.
 
 Usage:
     cdc manage-services config
-    cdc manage-services config --service adopus --inspect --all
+    cdc manage-services config --service adopus --list-source-tables
     cdc manage-services config --service adopus --add-table Actor
     cdc manage-services config --service adopus --remove-table Test
 """
@@ -15,14 +15,14 @@ from collections.abc import Callable
 from typing import NoReturn
 
 from cdc_generator.cli.service_handlers import (
+        handle_inspect,
+        handle_inspect_sink,
     handle_add_column_template,
     handle_add_source_table,
     handle_add_source_tables,
     handle_add_transform,
     handle_create_service,
     handle_generate_validation,
-    handle_inspect,
-    handle_inspect_sink,
     handle_interactive,
     handle_list_column_templates,
     handle_list_services,
@@ -54,8 +54,6 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
 )
 
-_INSPECT_ALL_SINKS = "__all_sinks__"
-
 # flag → (description, example)
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--list-services": (
@@ -64,7 +62,7 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     ),
     "--service": (
         "Service config key from services/*.yaml (design/config scope)",
-        "cdc manage-services config --service adopus --inspect --all",
+        "cdc manage-services config --service adopus --list-source-tables",
     ),
     "--create-service": (
         "Name for the new service to create",
@@ -94,23 +92,12 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
             " --track-columns public.queries.status"
         ),
     ),
-    "--inspect-sink": (
-        "Sink key to inspect (format: sink_group.target_service)",
-        (
-            "cdc manage-services config --service directory"
-            " --inspect-sink sink_asma.calendar --all"
-        ),
-    ),
-    "--sink-inspect": (
-        "Alias for --inspect-sink",
-        (
-            "cdc manage-services config --service directory"
-            " --sink-inspect sink_asma.calendar --sink-all"
-        ),
-    ),
     "--schema": (
-        "Database schema to inspect or filter",
-        "cdc manage-services config --service adopus --inspect --schema dbo",
+        "Source schema for source-table operations",
+        (
+            "cdc manage-services config --service adopus"
+            " --add-source-table Actor --schema dbo"
+        ),
     ),
     "--add-sink": (
         "Sink key to add (format: sink_group.target_service)",
@@ -172,18 +159,6 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
             " --sink sink_asma.chat --add-sink-table public.users"
             " --target-schema custom_schema"
         ),
-    ),
-    "--env": (
-        "Environment for inspection (default: nonprod)",
-        "cdc manage-services config --service adopus --inspect --env prod",
-    ),
-    "--sink-all": (
-        "Alias for --all (inspect every allowed schema)",
-        "cdc manage-services config --service directory --sink-inspect sink_asma.calendar --sink-all",
-    ),
-    "--sink-save": (
-        "Alias for --save (persist inspected sink schemas)",
-        "cdc manage-services config --service directory --sink-inspect sink_asma.calendar --sink-all --sink-save",
     ),
     "--primary-key": (
         "Primary key column name",
@@ -275,10 +250,6 @@ Examples:
     # Remove a service
     cdc manage-services config --remove-service myservice
 
-  # Inspect database tables
-    cdc manage-services config --service adopus --inspect --schema dbo
-    cdc manage-services config --service adopus --inspect --all
-
   # Add tables to service
     cdc manage-services config --service adopus --add-source-table dbo.Actor
     cdc manage-services config --service adopus \
@@ -289,10 +260,6 @@ Examples:
 
   # Validate service configuration
     cdc manage-services config --service adopus --validate-config
-
-  # Inspect sink database tables
-    cdc manage-services config --service directory --inspect-sink sink_asma.calendar --all
-    cdc manage-services config --service directory --inspect-sink sink_asma.calendar --schema public
 
   # Sink management
   cdc manage-services config --service directory --add-sink sink_asma.chat
@@ -477,33 +444,10 @@ def _build_parser() -> ServiceArgumentParser:
         ),
     )
 
-    # Inspect / validation args
-    parser.add_argument(
-        "--inspect",
-        action="store_true",
-        help="Inspect source database schema for selected service (or all with --all)",
-    )
-    parser.add_argument(
-        "--inspect-sink", "--sink-inspect",
-        dest="inspect_sink",
-        nargs="?",
-        const=_INSPECT_ALL_SINKS,
-        metavar="SINK_KEY",
-        help=(
-            "Inspect sink database schema for the selected service. "
-            "Provide SINK_KEY for one sink, or use --inspect-sink --all "
-            "to inspect all configured sinks."
-        ),
-    )
+    # Validation args
     parser.add_argument(
         "--schema",
-        help="Database schema to inspect or filter",
-    )
-    parser.add_argument(
-        "--save", "--sink-save",
-        dest="save",
-        action="store_true",
-        help="Save detailed table schemas to YAML",
+        help="Source schema for source-table operations",
     )
     parser.add_argument(
         "--generate-validation",
@@ -530,11 +474,6 @@ def _build_parser() -> ServiceArgumentParser:
         dest="all",
         action="store_true",
         help="Process all schemas",
-    )
-    parser.add_argument(
-        "--env",
-        default="nonprod",
-        help="Environment for inspection (default: nonprod)",
     )
     parser.add_argument(
         "--primary-key",
@@ -728,7 +667,7 @@ def _auto_detect_service(
         print_info(f"Auto-detected service: {args.service}")
     elif len(service_files) > 1 and not args.create_service:
         # Allow these commands to run on all services
-        if args.validate_config or args.inspect or getattr(args, "list_services", False):
+        if args.validate_config or getattr(args, "list_services", False):
             return args
 
         available = ", ".join(
@@ -762,8 +701,8 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
             continue
         return handler(args)
 
-    # Special case: --inspect can run without --service (inspects all)
-    # Check this BEFORE the service requirement check
+    # Backward-compat dispatch support for test-level namespaces and internal routing.
+    # CLI parser no longer exposes inspect flags under manage-services config.
     if getattr(args, "inspect", False) or getattr(args, "inspect_sink", False):
         return _dispatch_inspect(args)
 
@@ -778,22 +717,6 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
     for attr, handler in validators:
         if getattr(args, attr, False):
             return handler(args)
-
-    return None
-
-
-def _dispatch_inspect(args: argparse.Namespace) -> int | None:
-    """Handle inspect-related commands. None = not handled."""
-    # Special case: --inspect can run without --service (inspects all)
-    if args.inspect:
-        return handle_inspect(args)
-
-    # inspect_sink requires a specific service
-    if args.inspect_sink:
-        if not args.service:
-            print_error("--inspect-sink requires --service <name>")
-            return 1
-        return handle_inspect_sink(args)
 
     return None
 
@@ -820,6 +743,20 @@ def _dispatch_extra_columns(args: argparse.Namespace) -> int | None:
     for attr, handler in extra_handlers.items():
         if getattr(args, attr, False):
             return handler(args)
+
+    return None
+
+
+def _dispatch_inspect(args: argparse.Namespace) -> int | None:
+    """Handle inspect-related commands for internal routing/tests."""
+    if getattr(args, "inspect", False):
+        return handle_inspect(args)
+
+    if getattr(args, "inspect_sink", False):
+        if not getattr(args, "service", None):
+            print_error("--inspect-sink requires --service <name>")
+            return 1
+        return handle_inspect_sink(args)
 
     return None
 

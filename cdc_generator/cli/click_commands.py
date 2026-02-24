@@ -131,23 +131,9 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
               help="Remove table from service")
 @click.option("--source-table", shell_complete=complete_source_tables,
               help="Manage existing source table")
-# -- Inspect / validation --
-@click.option("--inspect", is_flag=True, help="Inspect database schema")
-@click.option("--inspect-sink", "--sink-inspect",
-              shell_complete=complete_sink_keys,
-              is_flag=False,
-              flag_value=_INSPECT_ALL_SINKS,
-              default=None,
-              metavar="SINK_KEY",
-              help=(
-                  "Inspect sink database schema for the selected service. "
-                  + "Provide SINK_KEY for one sink, or use --inspect-sink --all "
-                  + "to inspect all configured sinks."
-              ))
+# -- Validation --
 @click.option("--schema", shell_complete=complete_schemas,
-              help="Database schema to inspect or filter")
-@click.option("--save", "--sink-save", is_flag=True,
-              help="Save detailed table schemas to YAML")
+              help="Database schema hint for source-table operations")
 @click.option("--generate-validation", is_flag=True,
               help="Generate JSON Schema for validation")
 @click.option("--validate-hierarchy", is_flag=True,
@@ -157,8 +143,7 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
 @click.option("--validate-bloblang", is_flag=True,
               help="Validate Bloblang syntax using rpk")
 @click.option("--all", "--sink-all", "all_flag", is_flag=True,
-              help="Process all schemas")
-@click.option("--env", help="Environment (nonprod/prod)")
+              help="Process all sinks/tables where supported")
 @click.option("--primary-key", help="Primary key column name")
 @click.option("--ignore-columns", shell_complete=complete_columns,
               multiple=True,
@@ -604,6 +589,14 @@ def manage_services_resources_cmd(ctx: click.Context) -> int:
     """manage-services resources command group."""
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for manage-services resources")
+        click.echo(
+            "   Try: cdc manage-services resources inspect "
+            + "--service directory --inspect --all"
+        )
+        click.echo(
+            "        cdc manage-services resources inspect "
+            + "--service directory --inspect-sink sink_asma.chat --all"
+        )
         click.echo("   Try: cdc manage-services resources custom-tables --list-services")
         click.echo("        cdc manage-services resources column-templates --list")
         click.echo("        cdc manage-services resources transforms --list-rules")
@@ -628,7 +621,7 @@ def manage_services_cmd(ctx: click.Context) -> int:
     """Manage-services command group."""
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for manage-services")
-        click.echo("   Try: cdc manage-services config --service directory --inspect --all")
+        click.echo("   Try: cdc manage-services config --service directory --list-source-tables")
         return 1
     return 0
 
@@ -710,6 +703,91 @@ manage_services_resources_cmd.add_command(
 manage_services_resources_cmd.add_command(
     manage_services_schema_transforms_cmd,
     name="transforms",
+)
+
+
+@click.command(
+    name="inspect",
+    help=(
+        "Inspect source/sink database schemas and optionally "
+        + "save resources under services/_schemas"
+    ),
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Existing service name")
+@click.option("--inspect", is_flag=True,
+              help="Inspect source database schema")
+@click.option("--inspect-sink", "--sink-inspect",
+              shell_complete=complete_sink_keys,
+              is_flag=False,
+              flag_value=_INSPECT_ALL_SINKS,
+              default=None,
+              metavar="SINK_KEY",
+              help=(
+                  "Inspect sink database schema for the selected service. "
+                  + "Provide SINK_KEY for one sink, or use --inspect-sink --all "
+                  + "to inspect all configured sinks."
+              ))
+@click.option("--schema", shell_complete=complete_schemas,
+              help="Database schema to inspect or filter")
+@click.option("--all", "--sink-all", "all_flag", is_flag=True,
+              help="Process all schemas")
+@click.option("--save", "--sink-save", is_flag=True,
+              help="Save detailed table schemas to YAML")
+@click.option("--env", default="nonprod",
+              help="Environment for inspection (nonprod/prod)")
+def manage_services_resources_inspect_cmd(
+    service: str | None,
+    inspect: bool,
+    inspect_sink: str | None,
+    schema: str | None,
+    all_flag: bool,
+    save: bool,
+    env: str,
+) -> int:
+    """manage-services resources inspect handler."""
+    from cdc_generator.cli.service_handlers_inspect import handle_inspect
+    from cdc_generator.cli.service_handlers_inspect_sink import handle_inspect_sink
+    from cdc_generator.helpers.autocompletions.services import (
+        list_existing_services,
+    )
+
+    resolved_service = service
+    if not resolved_service:
+        existing_services = list_existing_services()
+        if len(existing_services) == 1:
+            resolved_service = existing_services[0]
+
+    args = argparse.Namespace(
+        service=resolved_service,
+        inspect=inspect,
+        inspect_sink=inspect_sink,
+        schema=schema,
+        all=all_flag,
+        save=save,
+        env=env,
+    )
+
+    if inspect:
+        return handle_inspect(args)
+
+    if inspect_sink:
+        if not resolved_service:
+            click.echo("❌ --inspect-sink requires --service <name>")
+            return 1
+        return handle_inspect_sink(args)
+
+    click.echo("❌ Missing action for manage-services resources inspect")
+    click.echo("   Try: cdc manage-services resources inspect --service <svc> --inspect --all")
+    click.echo("        cdc manage-services resources inspect --service <svc> --inspect-sink sink_group.target --all")
+    return 1
+
+
+manage_services_resources_cmd.add_command(
+    manage_services_resources_inspect_cmd,
+    name="inspect",
 )
 manage_services_cmd.add_command(manage_services_resources_cmd, name="resources")
 

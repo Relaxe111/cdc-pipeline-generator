@@ -301,10 +301,6 @@ class SmartCommand(click.Command):
 # manage-services config: context flag → sub-options that become relevant
 # Keys and values use underscore form (Click param names).
 MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
-    # ── Source inspection ──────────────────────────────────────
-    "inspect": {"schema", "all", "save", "env", "server"},
-    # ── Sink inspection ────────────────────────────────────────
-    "inspect_sink": {"schema", "all", "save", "env"},
     # ── Add single source table ────────────────────────────────
     "add_source_table": {"primary_key", "schema"},
     # ── Add multiple source tables ─────────────────────────────
@@ -390,7 +386,7 @@ MANAGE_SERVICE_ALWAYS: set[str] = {
 #
 # Hierarchy:
 #   service → sink → sink_table → column template / transform ops
-#   service → inspect, add_source_table, etc.
+#   service → add_source_table, etc.
 #   sink → add_sink_table, remove_sink_table, sink_table, ...
 #   sink_table → add_column_template, remove_column_template, ...
 #

@@ -205,7 +205,18 @@ def get_server_group_for_service(
             return None
 
     for sg_name, sg_data in config.items():
-        if 'sources' in sg_data and service_name in sg_data.get('sources', {}):
+        if not isinstance(sg_data, dict):
+            continue
+
+        sources_obj = sg_data.get('sources', {})
+        sources = sources_obj if isinstance(sources_obj, dict) else {}
+        if service_name in sources:
+            return sg_name
+
+        # db-per-tenant: service can be modeled as the server-group root key,
+        # while sources contain customer entries only.
+        pattern = str(sg_data.get('server_group_type', sg_data.get('pattern', '')))
+        if pattern == 'db-per-tenant' and sg_name == service_name:
             return sg_name
 
     return None

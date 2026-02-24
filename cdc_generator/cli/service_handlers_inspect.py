@@ -103,9 +103,22 @@ def _schemas_for_per_tenant(
             + f"server group '{server_group}'"
         )
         return 1
+
+    # 1) Preferred: database_ref is a direct source key
     if database_ref in sources:
         source_config = sources[database_ref]
         return source_config.get("schemas", [])
+
+    # 2) Fallback: database_ref is a database name in validation_env
+    validation_env = str(sg_data.get("validation_env") or "default")
+    for source_name, source_config in sources.items():
+        env_data = source_config.get(validation_env)
+        if not isinstance(env_data, dict):
+            continue
+        env_database = env_data.get("database")
+        if env_database == database_ref:
+            return source_config.get("schemas", [])
+
     print_error(
         f"Reference database '{database_ref}' not found "
         + f"in sources for server group '{server_group}'"

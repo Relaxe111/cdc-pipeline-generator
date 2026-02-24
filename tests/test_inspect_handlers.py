@@ -17,6 +17,9 @@ from cdc_generator.cli.service_handlers_inspect import (
 from cdc_generator.cli.service_handlers_inspect_sink import (
     handle_inspect_sink,
 )
+from cdc_generator.validators.manage_service.db_inspector_common import (
+    get_service_db_config,
+)
 
 # project_dir fixture is provided by tests/conftest.py
 
@@ -73,6 +76,71 @@ class TestResolveInspectDbType:
         """Returns None for unknown service."""
         db_type, _sg, _ = _resolve_inspect_db_type("nonexistent")
         assert db_type is None
+
+    def test_resolves_db_per_tenant_by_group_key(
+        self, project_dir: Path,
+    ) -> None:
+        """db-per-tenant service may resolve via server-group key, not source key."""
+        (project_dir / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  sources:\n"
+            "    Test:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusTest\n"
+        )
+
+        db_type, sg, _ = _resolve_inspect_db_type("adopus")
+        assert db_type == "mssql"
+        assert sg == "adopus"
+
+
+class TestServiceDbConfigDbPerTenant:
+    """Regression tests for db-per-tenant service DB config resolution."""
+
+    def test_resolves_validation_database_from_customer_source_entry(
+        self, project_dir: Path,
+    ) -> None:
+        """Service-level config should match source entry by validation_database."""
+        (project_dir / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  servers:\n"
+            "    default:\n"
+            "      host: localhost\n"
+            "      port: 1433\n"
+            "      user: sa\n"
+            "      password: secret\n"
+            "  sources:\n"
+            "    Test:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusTest\n"
+        )
+        (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    validation_database: AdOpusTest\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+        )
+
+        config = get_service_db_config("adopus")
+
+        assert config is not None
+        assert config["env_config"]["database_name"] == "AdOpusTest"
+        mssql_cfg = config["env_config"]["mssql"]
+        assert mssql_cfg["host"] == "localhost"
+        assert mssql_cfg["port"] == 1433
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -396,6 +464,50 @@ class TestHandleInspectUnsupportedDb:
         ):
             result = handle_inspect(args)
         assert result == 1
+
+    def test_db_per_tenant_database_ref_as_database_name(
+        self, project_dir: Path,
+    ) -> None:
+        """db-per-tenant inspect resolves schemas when database_ref is DB name."""
+        (project_dir / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  database_ref: AdOpusTest\n"
+            "  sources:\n"
+            "    Test:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusTest\n"
+        )
+        (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    validation_database: AdOpusTest\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+        )
+
+        args = _ns(service="adopus", inspect=True, all=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "dbo",
+                "TABLE_NAME": "Actor",
+                "COLUMN_COUNT": 10,
+            },
+        ]
+
+        with patch(
+            "cdc_generator.cli.service_handlers_inspect.inspect_mssql_schema",
+            return_value=tables,
+        ) as mssql_mock:
+            result = handle_inspect(args)
+
+        assert result == 0
+        mssql_mock.assert_called_once_with("adopus", "nonprod")
 
 
 class TestHandleInspectSinkSchemaNotAllowed:

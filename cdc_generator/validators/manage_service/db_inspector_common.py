@@ -154,9 +154,40 @@ def get_service_db_config(
                 f"validation_env not set for server group '{server_group_name}'"
             )
 
-        # Find the environment with this database in source-groups.yaml sources
-        sources = server_group.get("sources", {})
-        service_sources = sources.get(service, {})
+        # Find source entry in source-groups.yaml sources.
+        sources_raw = server_group.get("sources", {})
+        sources = (
+            cast(dict[str, Any], sources_raw)
+            if isinstance(sources_raw, dict)
+            else {}
+        )
+
+        # db-per-tenant: service name is server-group key, while sources are
+        # customer entries. Resolve by matching validation database in validation_env.
+        # db-shared: service is usually a direct source key.
+        service_sources: dict[str, Any] = {}
+        source_label = service
+
+        direct_source = sources.get(service)
+        if isinstance(direct_source, dict):
+            service_sources = cast(dict[str, Any], direct_source)
+        else:
+            matched_source_name = ""
+            for source_name, source_data in sources.items():
+                if not isinstance(source_data, dict):
+                    continue
+                source_dict = cast(dict[str, Any], source_data)
+                env_data = source_dict.get(validation_env)
+                if not isinstance(env_data, dict):
+                    continue
+                env_dict = cast(dict[str, Any], env_data)
+                if env_dict.get("database") == validation_database:
+                    matched_source_name = str(source_name)
+                    service_sources = source_dict
+                    break
+
+            if matched_source_name:
+                source_label = matched_source_name
 
         # Use validation_env to find the specific environment
         env_config_found: dict[str, Any] | None = None
@@ -171,7 +202,7 @@ def get_service_db_config(
                     f"❌ Mismatch: validation_database '{validation_database}' does not match \n"
                     + f"   database '{db_in_env}' in environment '{validation_env}'\n"
                     + "\n"
-                    + f"   Available environments in source-groups.yaml for service '{service}':\n"
+                    + f"   Available environments in source-groups.yaml for source '{source_label}':\n"
                 )
                 for e in available_envs:
                     e_data = cast(dict[str, Any], service_sources[e])
@@ -230,7 +261,7 @@ def get_service_db_config(
             print_error(
                 f"❌ Environment '{validation_env}' not found in source-groups.yaml\n"
                 + "\n"
-                + f"   Available environments for service '{service}':\n"
+                + f"   Available environments for source '{source_label}':\n"
             )
             for e in available_envs:
                 e_data = cast(dict[str, Any], service_sources[e])
