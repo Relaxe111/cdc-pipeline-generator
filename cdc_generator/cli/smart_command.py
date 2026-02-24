@@ -508,7 +508,7 @@ MANAGE_SINK_GROUPS_ALWAYS: set[str] = set()
 MANAGE_SINK_GROUPS_REQUIRES: dict[str, set[str]] = {}
 
 
-# manage-services schema custom-tables: context flag → sub-options
+# manage-services resources custom-tables: context flag → sub-options
 MANAGE_SCHEMA_CUSTOM_TABLES_GROUPS: dict[str, set[str]] = {
     "list_services": set(),
     "list_custom_tables": set(),

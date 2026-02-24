@@ -1,6 +1,6 @@
 """Service schema autocompletion functions.
 
-Provides completions for the ``manage-services schema`` command,
+Provides completions for the ``manage-services resources`` command,
 including service names from ``service-schemas/`` and custom table
 references.
 """
@@ -15,7 +15,7 @@ def list_schema_services() -> list[str]:
     """List services that have service-schemas directories.
 
     Used for ``--service`` flag autocompletion in
-    ``manage-services schema`` command.
+    ``manage-services resources`` command.
 
     Returns:
         Sorted list of service directory names.

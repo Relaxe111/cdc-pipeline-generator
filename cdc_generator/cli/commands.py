@@ -167,16 +167,16 @@ SERVICE_COMMANDS: dict[str, dict[str, str]] = {
         "description": "Manage CDC service definitions",
         "usage": "cdc manage-services config [service] [options]",
     },
-    "schema": {
+    "resources": {
         "runner": "generator",
         "module": "cdc_generator.cli.service_schema",
         "script": "cli/service_schema.py",
         "description": (
-            "Manage schema resources "
+            "Manage service resources "
             + "(custom-tables, column-templates, transforms)"
         ),
         "usage": (
-            "cdc manage-services schema <custom-tables|column-templates|transforms>"
+            "cdc manage-services resources <custom-tables|column-templates|transforms>"
         ),
     },
 }
@@ -248,7 +248,7 @@ def print_help(
     print("\n⚡ Aliases:")
     print("  ms                   - alias for manage-services")
     print("  msc                  - alias for manage-services config")
-    print("  mss                  - alias for manage-services schema")
+    print("  mss                  - alias for manage-services resources")
     print("  msog                 - alias for manage-source-groups")
     print("  msig                 - alias for manage-sink-groups")
     print("  mp                   - alias for manage-pipelines")
@@ -458,7 +458,7 @@ def _register_commands() -> None:
     from cdc_generator.cli.click_commands import (
         CLICK_COMMANDS,
         manage_services_config_cmd,
-        manage_services_schema_cmd,
+        manage_services_resources_cmd,
     )
 
     # Register typed commands (have full Click option declarations)
@@ -474,7 +474,7 @@ def _register_commands() -> None:
 
     # Register direct subcommand aliases as top-level shortcuts.
     _click_cli.add_command(manage_services_config_cmd, name="msc")
-    _click_cli.add_command(manage_services_schema_cmd, name="mss")
+    _click_cli.add_command(manage_services_resources_cmd, name="mss")
 
     # Register remaining commands as generic passthrough
     typed_names = set(CLICK_COMMANDS.keys())

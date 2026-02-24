@@ -6,17 +6,17 @@ stored under ``services/_schemas/{service}/custom-tables/``
 (legacy read compatibility: ``service-schemas/{service}/custom-tables/``).
 
 Usage:
-    cdc manage-services schema custom-tables --service chat --list
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat --list
+    cdc manage-services resources custom-tables --service chat \
         --add-custom-table public.audit_log \\
         --column id:uuid:pk \\
         --column event_type:text:not_null \\
         --column payload:jsonb
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat \
         --show public.audit_log
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat \
         --remove-custom-table public.audit_log
-    cdc manage-services schema custom-tables --list-services
+    cdc manage-services resources custom-tables --list-services
 """
 
 import argparse
@@ -37,14 +37,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--service": (
         "Service name from services/_schemas/",
         (
-            "cdc manage-services schema custom-tables"
+            "cdc manage-services resources custom-tables"
             " --service chat --list"
         ),
     ),
     "--add-custom-table": (
         "Table reference as schema.table",
         (
-            "cdc manage-services schema custom-tables --service chat"
+            "cdc manage-services resources custom-tables --service chat"
             " --add-custom-table public.audit_log"
             " --column id:uuid:pk"
             " --column event_type:text:not_null"
@@ -53,14 +53,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--show": (
         "Table reference as schema.table",
         (
-            "cdc manage-services schema custom-tables"
+            "cdc manage-services resources custom-tables"
             " --service chat --show public.audit_log"
         ),
     ),
     "--remove-custom-table": (
         "Table reference as schema.table",
         (
-            "cdc manage-services schema custom-tables"
+            "cdc manage-services resources custom-tables"
             " --service chat"
             " --remove-custom-table public.audit_log"
         ),
@@ -79,13 +79,13 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
 _EPILOG = """\
 Examples:
   # List services with schemas
-    cdc manage-services schema custom-tables --list-services
+    cdc manage-services resources custom-tables --list-services
 
   # List custom tables for a service
-    cdc manage-services schema custom-tables --service chat --list
+    cdc manage-services resources custom-tables --service chat --list
 
   # Create a custom table
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat \
       --add-custom-table public.audit_log \\
       --column id:uuid:pk \\
       --column event_type:text:not_null \\
@@ -93,11 +93,11 @@ Examples:
       --column created_at:timestamptz:not_null:default_now
 
   # Show custom table details
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat \
       --show public.audit_log
 
   # Remove a custom table
-    cdc manage-services schema custom-tables --service chat \
+    cdc manage-services resources custom-tables --service chat \
       --remove-custom-table public.audit_log
 
 Column specification format:
@@ -136,7 +136,7 @@ class SchemaArgumentParser(argparse.ArgumentParser):
 
 
 def _build_parser() -> SchemaArgumentParser:
-    """Build argument parser for manage-services schema custom-tables."""
+    """Build argument parser for manage-services resources custom-tables."""
     parser = SchemaArgumentParser(
         description="Manage custom table schema definitions",
         epilog=_EPILOG,
@@ -259,7 +259,7 @@ def _handle_add_custom_table(
             "--add-custom-table requires at least one --column"
         )
         print_info(
-            "Example: cdc manage-services schema custom-tables"
+            "Example: cdc manage-services resources custom-tables"
             + " --service chat"
             + " --add-custom-table public.audit_log"
             + " --column id:uuid:pk"
@@ -384,7 +384,7 @@ def _dispatch_service_action(
 
 
 def main() -> int:
-    """Entry point for ``cdc manage-services schema custom-tables``."""
+    """Entry point for ``cdc manage-services resources custom-tables``."""
     parser = _build_parser()
     args = parser.parse_args()
     return _dispatch(args)

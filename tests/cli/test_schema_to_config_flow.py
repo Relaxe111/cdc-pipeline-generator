@@ -7,7 +7,7 @@ Tests the complete workflow:
 4. Verify custom table appears in generated output
 
 This validates the integration between:
-- manage-services schema (custom table creation)
+- manage-services resources (custom table creation)
 - manage-services config (sink binding)
 - manage-pipelines generate (pipeline generation)
 """

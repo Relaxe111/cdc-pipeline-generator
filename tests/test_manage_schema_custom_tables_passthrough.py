@@ -1,4 +1,4 @@
-"""Regression tests for manage-services schema custom-tables passthrough."""
+"""Regression tests for manage-services resources custom-tables passthrough."""
 
 import sys
 from unittest.mock import patch
@@ -47,7 +47,7 @@ def test_custom_tables_passthrough_full_command() -> None:
             sys.argv = [
                 "cdc",
                 "manage-services",
-                "schema",
+                "resources",
                 "custom-tables",
                 "--service",
                 "directory",

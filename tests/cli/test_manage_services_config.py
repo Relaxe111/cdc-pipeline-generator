@@ -7,7 +7,7 @@ Tests the full flow through a real **fish** shell for:
 - --list-sinks / --add-sink / --remove-sink
 - --add-sink-table / --remove-sink-table
 - --validate-config
-- manage-services schema column-templates / transforms
+- manage-services resources column-templates / transforms
 - fish autocompletions for manage-services config flags
 """
 
@@ -845,7 +845,7 @@ class TestCliGenerateValidation:
 
 
 class TestCliSchemaColumnTemplates:
-    """CLI e2e: manage-services schema column-templates."""
+    """CLI e2e: manage-services resources column-templates."""
 
     def test_list_templates(
         self, run_cdc: RunCdc, isolated_project: Path,
@@ -861,7 +861,7 @@ class TestCliSchemaColumnTemplates:
 
 
 class TestCliSchemaTransforms:
-    """CLI e2e: manage-services schema transforms."""
+    """CLI e2e: manage-services resources transforms."""
 
     def test_list_transform_rules(
         self, run_cdc: RunCdc, isolated_project: Path,

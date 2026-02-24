@@ -462,7 +462,7 @@ def manage_sink_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 
 # ============================================================================
-# manage-services schema custom-tables
+# manage-services resources custom-tables
 # ============================================================================
 
 @click.command(
@@ -495,7 +495,7 @@ def manage_services_schema_custom_tables_cmd(
     _ctx: click.Context,
     **_kwargs: object,
 ) -> int:
-    """manage-services schema custom-tables passthrough."""
+    """manage-services resources custom-tables passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
 
     try:
@@ -505,7 +505,7 @@ def manage_services_schema_custom_tables_cmd(
 
     return execute_grouped_command(
         "manage-services",
-        "schema",
+        "resources",
         sys.argv[subcommand_index + 1:],
     )
 
@@ -545,7 +545,7 @@ def manage_services_schema_transforms_cmd(
     list_rules: bool,
     list_transform_rules: bool,
 ) -> int:
-    """manage-services schema transforms passthrough."""
+    """manage-services resources transforms passthrough."""
     from cdc_generator.cli.service_handlers_templates import (
         handle_add_transform,
         handle_list_transform_rules,
@@ -571,32 +571,32 @@ def manage_services_schema_transforms_cmd(
         return handle_list_transforms(args)
 
     if not list_rules and not list_transform_rules:
-        click.echo("❌ Missing action for manage-services schema transforms")
+        click.echo("❌ Missing action for manage-services resources transforms")
         click.echo(
-            "   Try: cdc manage-services schema transforms --service <svc> "
+            "   Try: cdc manage-services resources transforms --service <svc> "
             + "--sink <key> --sink-table <schema.table> --list-transforms"
         )
-        click.echo("        cdc manage-services schema transforms --list-rules")
+        click.echo("        cdc manage-services resources transforms --list-rules")
         return 1
 
     return handle_list_transform_rules(argparse.Namespace())
 
 
 @click.group(
-    name="schema",
-    help="Manage service schema resources",
+    name="resources",
+    help="Manage service resources",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
     invoke_without_command=True,
 )
 @click.pass_context
-def manage_services_schema_cmd(ctx: click.Context) -> int:
-    """manage-services schema command group."""
+def manage_services_resources_cmd(ctx: click.Context) -> int:
+    """manage-services resources command group."""
     if ctx.invoked_subcommand is None:
-        click.echo("❌ Missing subcommand for manage-services schema")
-        click.echo("   Try: cdc manage-services schema custom-tables --list-services")
-        click.echo("        cdc manage-services schema column-templates --list")
-        click.echo("        cdc manage-services schema transforms --list-rules")
+        click.echo("❌ Missing subcommand for manage-services resources")
+        click.echo("   Try: cdc manage-services resources custom-tables --list-services")
+        click.echo("        cdc manage-services resources column-templates --list")
+        click.echo("        cdc manage-services resources transforms --list-rules")
         return 1
 
     return 0
@@ -608,7 +608,7 @@ def manage_services_schema_cmd(ctx: click.Context) -> int:
 
 @click.group(
     name="manage-services",
-    help="Manage service config and schema commands",
+    help="Manage service config and resources commands",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
     invoke_without_command=True,
@@ -627,7 +627,7 @@ manage_services_cmd.add_command(manage_services_config_cmd, name="config")
 
 
 # ============================================================================
-# manage-services schema column-templates
+# manage-services resources column-templates
 # ============================================================================
 
 @click.command(
@@ -661,7 +661,7 @@ manage_services_cmd.add_command(manage_services_config_cmd, name="config")
 def manage_column_templates_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
-    """manage-services schema column-templates passthrough."""
+    """manage-services resources column-templates passthrough."""
     from cdc_generator.cli.commands import (
         detect_environment,
         get_script_paths,
@@ -681,7 +681,7 @@ def manage_column_templates_cmd(
         "script": "cli/column_templates.py",
     }
     return run_generator_spec(
-        "manage-services schema column-templates",
+        "manage-services resources column-templates",
         cmd_info,
         paths,
         sys.argv[start_index:],
@@ -689,19 +689,19 @@ def manage_column_templates_cmd(
     )
 
 
-manage_services_schema_cmd.add_command(
+manage_services_resources_cmd.add_command(
     manage_services_schema_custom_tables_cmd,
     name="custom-tables",
 )
-manage_services_schema_cmd.add_command(
+manage_services_resources_cmd.add_command(
     manage_column_templates_cmd,
     name="column-templates",
 )
-manage_services_schema_cmd.add_command(
+manage_services_resources_cmd.add_command(
     manage_services_schema_transforms_cmd,
     name="transforms",
 )
-manage_services_cmd.add_command(manage_services_schema_cmd, name="schema")
+manage_services_cmd.add_command(manage_services_resources_cmd, name="resources")
 
 
 # ============================================================================

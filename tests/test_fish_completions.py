@@ -64,13 +64,13 @@ def _get_manage_services_config_command() -> click.Command:
 
 
 def _get_manage_services_schema_column_templates_command() -> click.Command:
-    """Return the typed command for `manage-services schema column-templates`."""
+    """Return the typed command for `manage-services resources column-templates`."""
     cmds = _get_typed_commands()
     root_group = cmds["manage-services"]
     assert isinstance(root_group, click.Group)
-    schema_group = root_group.commands["schema"]
-    assert isinstance(schema_group, click.Group)
-    return schema_group.commands["column-templates"]
+    resources_group = root_group.commands["resources"]
+    assert isinstance(resources_group, click.Group)
+    return resources_group.commands["column-templates"]
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +331,7 @@ class TestManageSinkGroupsOptions:
 
 
 class TestManageServicesSchemaColumnTemplatesOptions:
-    """manage-services schema column-templates options must be declared."""
+    """manage-services resources column-templates options must be declared."""
 
     def test_has_crud_options(self) -> None:
         """CRUD options must be declared."""
@@ -435,17 +435,17 @@ class TestManageServicesOptions:
         group = cmds["manage-services"]
         assert isinstance(group, click.Group)
         assert "config" in group.commands
-        assert "schema" in group.commands
+        assert "resources" in group.commands
 
     def test_schema_has_canonical_nested_subcommands(self) -> None:
         cmds = _get_typed_commands()
         root_group = cmds["manage-services"]
         assert isinstance(root_group, click.Group)
-        schema_group = root_group.commands["schema"]
-        assert isinstance(schema_group, click.Group)
-        assert "custom-tables" in schema_group.commands
-        assert "column-templates" in schema_group.commands
-        assert "transforms" in schema_group.commands
+        resources_group = root_group.commands["resources"]
+        assert isinstance(resources_group, click.Group)
+        assert "custom-tables" in resources_group.commands
+        assert "column-templates" in resources_group.commands
+        assert "transforms" in resources_group.commands
 
 
 # ---------------------------------------------------------------------------
@@ -551,11 +551,11 @@ class TestShellCompleteCallbacksWired:
             )
 
     def test_manage_services_schema_column_templates_dynamic_options(self) -> None:
-        """manage-services schema column-templates options have shell_complete."""
+        """manage-services resources column-templates options have shell_complete."""
         cmd = _get_manage_services_schema_column_templates_command()
         for opt in ["--show", "--edit", "--remove", "--type"]:
             assert self._has_shell_complete(cmd, opt), (
-                "manage-services schema column-templates "
+                "manage-services resources column-templates "
                 + f"{opt} missing shell_complete callback"
             )
 
@@ -689,7 +689,7 @@ class TestSmartCompletion:
     def test_schema_custom_tables_keeps_service_visible(self) -> None:
         """--service remains visible after selecting custom-tables action."""
         opts = self._complete(
-            "cdc manage-services schema custom-tables "
+            "cdc manage-services resources custom-tables "
             + "--add-custom-table public.audit_log --"
         )
         assert "--service" in opts

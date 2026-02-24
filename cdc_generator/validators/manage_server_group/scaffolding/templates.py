@@ -572,6 +572,8 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 ## Approved Aliases
 
 - `ms` -> `manage-services`
+- `msc` -> `manage-services config`
+- `mss` -> `manage-services resources`
 - `msog` -> `manage-source-groups`
 - `msig` -> `manage-sink-groups`
 - `mp` -> `manage-pipelines`
@@ -580,7 +582,7 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 ## Grouped Canonical Subcommands
 
 - `cdc manage-services config`
-- `cdc manage-services schema`
+- `cdc manage-services resources`
 - `cdc manage-pipelines generate`
 - `cdc manage-migrations schema-docs`
 
@@ -632,7 +634,7 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 ## Notes
 
 - Prefer canonical grouped commands in docs and scripts.
-- Use canonical grouped commands only (`manage-services config` and `manage-services schema`).
+- Use canonical grouped commands only (`manage-services config` and `manage-services resources`).
 - Run commands from this implementation root (`{server_group_name}`) unless command docs state otherwise.
 """
 

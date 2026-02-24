@@ -18,14 +18,14 @@
 #           - bloblang_ref: file://services/_bloblang/examples/active_users_only.blobl
 #
 # CLI usage:
-#   cdc manage-services schema transforms \
+#   cdc manage-services resources transforms \
 #     --service <service> \
 #     --sink <sink_key> \
 #     --sink-table <schema.table> \
 #     --add-transform file://services/_bloblang/examples/user_class_splitter.blobl
 #
 # List available refs:
-#   cdc manage-services schema transforms --list-rules
+#   cdc manage-services resources transforms --list-rules
 # ============================================================================
 
 rules:
