@@ -573,7 +573,7 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 
 - `ms` -> `manage-services`
 - `msc` -> `manage-services config`
-- `mss` -> `manage-services resources`
+- `msr` -> `manage-services resources`
 - `msog` -> `manage-source-groups`
 - `msig` -> `manage-sink-groups`
 - `mp` -> `manage-pipelines`

@@ -39,7 +39,7 @@ def test_normalize_usage_key_ignores_flag_order() -> None:
 def test_normalize_usage_key_ignores_flag_values() -> None:
     left = usage_stats._normalize_usage_key(
         [
-            "mss",
+            "msr",
             "custom-tables",
             "--add-custom-table=customer_id",
             "--service=directory",
@@ -47,7 +47,7 @@ def test_normalize_usage_key_ignores_flag_values() -> None:
     )
     right = usage_stats._normalize_usage_key(
         [
-            "mss",
+            "msr",
             "custom-tables",
             "--service",
             "directory",
@@ -70,14 +70,14 @@ def test_read_usage_file_merges_legacy_flag_values(tmp_path: Path) -> None:
     stats_file.write_text(
         (
             "cdc mss custom-tables | flags: --add-custom-table=customer_id, --service=directory\t1\n"
-            "cdc mss custom-tables | flags: --service, --add-custom-table\t2\n"
+            "cdc msr custom-tables | flags: --service, --add-custom-table\t2\n"
         ),
         encoding="utf-8",
     )
 
     counts = usage_stats._read_usage_file(stats_file)
     assert counts == {
-        "cdc mss custom-tables | flags: --add-custom-table, --service": 3,
+        "cdc msr custom-tables | flags: --add-custom-table, --service": 3,
     }
 
 
@@ -141,7 +141,7 @@ def test_generate_usage_stats_rewrites_user_file_canonical(tmp_path: Path) -> No
     user_file.write_text(
         (
             "cdc mss custom-tables | flags: --add-custom-table=customer_id, --service=directory\t2\n"
-            "cdc mss custom-tables | flags: --service, --add-custom-table\t1\n"
+            "cdc msr custom-tables | flags: --service, --add-custom-table\t1\n"
         ),
         encoding="utf-8",
     )
@@ -149,4 +149,4 @@ def test_generate_usage_stats_rewrites_user_file_canonical(tmp_path: Path) -> No
     usage_stats.generate_usage_stats(tmp_path)
     rewritten = user_file.read_text(encoding="utf-8")
 
-    assert rewritten == "cdc mss custom-tables | flags: --add-custom-table, --service\t3\n"
+    assert rewritten == "cdc msr custom-tables | flags: --add-custom-table, --service\t3\n"

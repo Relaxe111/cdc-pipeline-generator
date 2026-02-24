@@ -65,8 +65,8 @@ def test_custom_tables_passthrough_full_command() -> None:
     ]
 
 
-def test_custom_tables_passthrough_mss_alias() -> None:
-    """mss alias forwards all args after custom-tables token."""
+def test_custom_tables_passthrough_msr_alias() -> None:
+    """msr alias forwards all args after custom-tables token."""
     forwarded_args: list[str] = []
 
     def _capture(_group: str, _subcommand: str, args: list[str]) -> int:
@@ -82,7 +82,7 @@ def test_custom_tables_passthrough_mss_alias() -> None:
         try:
             sys.argv = [
                 "cdc",
-                "mss",
+                "msr",
                 "custom-tables",
                 "--service",
                 "directory",
@@ -106,8 +106,8 @@ def test_custom_tables_passthrough_mss_alias() -> None:
     ]
 
 
-def test_column_templates_passthrough_mss_alias() -> None:
-    """mss alias forwards args after column-templates token."""
+def test_column_templates_passthrough_msr_alias() -> None:
+    """msr alias forwards args after column-templates token."""
     forwarded_args: list[str] = []
 
     def _capture(
@@ -139,7 +139,7 @@ def test_column_templates_passthrough_mss_alias() -> None:
         try:
             sys.argv = [
                 "cdc",
-                "mss",
+                "msr",
                 "column-templates",
                 "--add",
                 "customer_id",

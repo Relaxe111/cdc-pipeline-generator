@@ -25,11 +25,11 @@ users:
     "cdc manage-services config | flags: --, --add-column-template=tpl, --add-sink-table=pub.Actor, --sink=asma": 1
     "cdc manage-services config directory 4": 1
     "cdc manage-services config directory | flags: | flags: --al=4": 1
-    "cdc mss custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt1n": 1
-    "cdc mss custom-tables | flags: | flags: --add-custom-tablet2n, --service,": 1
-    "cdc mss custom-tables | flags: | flags: --add-custom-table,, --service\":=3,": 1
-    "cdc mss custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt2n": 1
-    "cdc mss custom-tables | flags: | flags: --add-custom-tablet1n, --service,": 1
+    "cdc msr custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt1n": 1
+    "cdc msr custom-tables | flags: | flags: --add-custom-tablet2n, --service,": 1
+    "cdc msr custom-tables | flags: | flags: --add-custom-table,, --service\":=3,": 1
+    "cdc msr custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt2n": 1
+    "cdc msr custom-tables | flags: | flags: --add-custom-tablet1n, --service,": 1
     "cdc ms config | flags: --list-services": 1
     "cdc ms config | flags: --service=directory, --sink-all, --sink-inspect=sink_asma.calendar, --sink-save": 1
     "cdc manage-services config directory 1": 1
@@ -1052,11 +1052,11 @@ total:
   "cdc msc | flags: | flags: --add-column-template,, --add-sink-table,, --from,, --replicate-structure,, --sink-schema=2": 1
   "cdc msc | flags: | flags: --create-service=2": 1
   "cdc msc | flags: | flags: --help=1": 1
-  "cdc mss custom-tables | flags: | flags: --add-custom-table,, --service\":=3,": 1
-  "cdc mss custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt1n": 1
-  "cdc mss custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt2n": 1
-  "cdc mss custom-tables | flags: | flags: --add-custom-tablet1n, --service,": 1
-  "cdc mss custom-tables | flags: | flags: --add-custom-tablet2n, --service,": 1
+  "cdc msr custom-tables | flags: | flags: --add-custom-table,, --service\":=3,": 1
+  "cdc msr custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt1n": 1
+  "cdc msr custom-tables | flags: | flags: --add-custom-table=customer_id,, --service=directoryt2n": 1
+  "cdc msr custom-tables | flags: | flags: --add-custom-tablet1n, --service,": 1
+  "cdc msr custom-tables | flags: | flags: --add-custom-tablet2n, --service,": 1
   "cdc scaffold | flags: --implementation=test, --pattern=db-shared": 1
   "cdc setup-local": 1
   "cdc test tests/cli/test_scaffold.py": 1
@@ -1587,11 +1587,11 @@ Generated: 2026-02-23T00:43:52+00:00
 | cdc msc \| flags: \| flags: --add-column-template,, --add-sink-table,, --from,, --replicate-structure,, --sink-schema=2 | 1 |
 | cdc msc \| flags: \| flags: --create-service=2 | 1 |
 | cdc msc \| flags: \| flags: --help=1 | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table,, --service":=3, | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt1n | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt2n | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-tablet1n, --service, | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-tablet2n, --service, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table,, --service":=3, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt1n | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt2n | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-tablet1n, --service, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-tablet2n, --service, | 1 |
 | cdc scaffold \| flags: --implementation=test, --pattern=db-shared | 1 |
 | cdc setup-local | 1 |
 | cdc test tests/cli/test_scaffold.py | 1 |
@@ -2117,11 +2117,11 @@ Generated: 2026-02-23T00:43:52+00:00
 | cdc msc \| flags: \| flags: --add-column-template,, --add-sink-table,, --from,, --replicate-structure,, --sink-schema=2 | 1 |
 | cdc msc \| flags: \| flags: --create-service=2 | 1 |
 | cdc msc \| flags: \| flags: --help=1 | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table,, --service":=3, | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt1n | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt2n | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-tablet1n, --service, | 1 |
-| cdc mss custom-tables \| flags: \| flags: --add-custom-tablet2n, --service, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table,, --service":=3, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt1n | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-table=customer_id,, --service=directoryt2n | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-tablet1n, --service, | 1 |
+| cdc msr custom-tables \| flags: \| flags: --add-custom-tablet2n, --service, | 1 |
 | cdc scaffold \| flags: --implementation=test, --pattern=db-shared | 1 |
 | cdc setup-local | 1 |
 | cdc test tests/cli/test_scaffold.py | 1 |

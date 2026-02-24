@@ -48,6 +48,7 @@ _ALLOWED_COMMAND_ROOTS = frozenset(
         "mp",
         "ms",
         "msc",
+        "msr",
         "msig",
         "msog",
         "mss",

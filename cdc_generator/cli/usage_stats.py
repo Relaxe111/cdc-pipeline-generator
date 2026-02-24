@@ -19,6 +19,9 @@ _CDC = "cdc"
 _MIN_COMMAND_PATH_PARTS = 2
 
 _VALID_COMMAND_TOKEN_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$", re.IGNORECASE)
+_COMMAND_ROOT_ALIASES: dict[str, str] = {
+    "mss": "msr",
+}
 
 
 def _toon_escape_key(key: str) -> str:
@@ -150,6 +153,12 @@ def _normalize_usage_key(argv_tokens: list[str]) -> str | None:
         if _VALID_COMMAND_TOKEN_RE.match(token) is None:
             return None
 
+    if len(command_path) > 1:
+        command_path[1] = _COMMAND_ROOT_ALIASES.get(
+            command_path[1],
+            command_path[1],
+        )
+
     flags: list[str] = []
     positional_args: list[str] = []
 
@@ -193,6 +202,13 @@ def _canonicalize_stored_key(command: str) -> str:
 
     parts = command.split(" | ")
     base = parts[0]
+    base_tokens = base.split()
+    if len(base_tokens) > 1:
+        base_tokens[1] = _COMMAND_ROOT_ALIASES.get(
+            base_tokens[1],
+            base_tokens[1],
+        )
+        base = " ".join(base_tokens)
     args_part = ""
     flags_part = ""
 

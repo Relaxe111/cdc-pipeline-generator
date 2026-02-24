@@ -159,7 +159,7 @@ class TestClickCommandRegistration:
         cli = _get_click_cli()
         registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
 
-        for alias in ["ms", "msc", "mss", "msog", "msig", "mp", "mm"]:
+        for alias in ["ms", "msc", "msr", "msog", "msig", "mp", "mm"]:
             assert alias in registered, (
                 f"Management alias {alias!r} not registered"
             )
@@ -178,7 +178,7 @@ class TestClickCommandRegistration:
 
         # Direct subcommand aliases should be distinct command objects.
         assert commands["msc"] is not commands["manage-services"]
-        assert commands["mss"] is not commands["manage-services"]
+        assert commands["msr"] is not commands["manage-services"]
 
 
 # ---------------------------------------------------------------------------

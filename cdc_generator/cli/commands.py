@@ -248,7 +248,7 @@ def print_help(
     print("\n⚡ Aliases:")
     print("  ms                   - alias for manage-services")
     print("  msc                  - alias for manage-services config")
-    print("  mss                  - alias for manage-services resources")
+    print("  msr                  - alias for manage-services resources")
     print("  msog                 - alias for manage-source-groups")
     print("  msig                 - alias for manage-sink-groups")
     print("  mp                   - alias for manage-pipelines")
@@ -474,7 +474,7 @@ def _register_commands() -> None:
 
     # Register direct subcommand aliases as top-level shortcuts.
     _click_cli.add_command(manage_services_config_cmd, name="msc")
-    _click_cli.add_command(manage_services_resources_cmd, name="mss")
+    _click_cli.add_command(manage_services_resources_cmd, name="msr")
 
     # Register remaining commands as generic passthrough
     typed_names = set(CLICK_COMMANDS.keys())
