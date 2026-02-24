@@ -3,8 +3,8 @@
 from pathlib import Path
 
 import pytest  # type: ignore[import-not-found]
-from cdc_generator.core import transform_rules as transform_rules_module
 
+from cdc_generator.core import transform_rules as transform_rules_module
 from cdc_generator.core.transform_rules import (
     _parse_conditions,
     _parse_output_column,

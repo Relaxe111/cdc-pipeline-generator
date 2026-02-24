@@ -13,9 +13,11 @@ from .config import (
     load_database_exclude_patterns,
     load_env_mappings,
     load_schema_exclude_patterns,
+    load_table_exclude_patterns,
     save_database_exclude_patterns,
     save_env_mappings,
     save_schema_exclude_patterns,
+    save_table_exclude_patterns,
 )
 
 
@@ -133,6 +135,49 @@ def handle_add_schema_exclude(args: Namespace) -> int:
     return 0
 
 
+def handle_add_table_exclude(args: Namespace) -> int:
+    """Handle adding pattern(s) to the table exclude list.
+
+    Supports comma-separated patterns for bulk addition.
+    """
+    if not args.add_to_table_excludes:
+        print_error("No pattern specified")
+        return 1
+
+    patterns = load_table_exclude_patterns()
+    input_patterns = [p.strip() for p in args.add_to_table_excludes.split(',')]
+
+    added: list[str] = []
+    skipped: list[str] = []
+
+    for pattern in input_patterns:
+        if not pattern:
+            continue
+
+        if pattern in patterns:
+            skipped.append(pattern)
+            continue
+
+        patterns.append(pattern)
+        added.append(pattern)
+
+    if added:
+        save_table_exclude_patterns(patterns)
+        print_success(f"✓ Added {len(added)} pattern(s) to table exclude list:")
+        for pattern in added:
+            print_info(f"  • {pattern}")
+
+    if skipped:
+        print_warning(f"Already in list ({len(skipped)}): {', '.join(skipped)}")
+
+    if not added and not skipped:
+        print_error("No valid patterns provided")
+        return 1
+
+    print_info(f"\nCurrent table exclude patterns: {patterns}")
+    return 0
+
+
 def parse_env_mapping(mapping_str: str) -> dict[str, str]:
     """Parse comma-separated environment mapping string into dict.
 
@@ -157,8 +202,8 @@ def parse_env_mapping(mapping_str: str) -> dict[str, str]:
     env_mappings: dict[str, str] = {}
     errors: list[str] = []
 
-    for idx, pair in enumerate(mapping_str.split(','), 1):
-        pair = pair.strip()
+    for idx, pair_raw in enumerate(mapping_str.split(','), 1):
+        pair = pair_raw.strip()
         if not pair:
             continue
 

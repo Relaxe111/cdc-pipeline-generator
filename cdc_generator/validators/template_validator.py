@@ -602,7 +602,7 @@ def validate_transform_rule(
             if col not in runtime_available:
                 errors.append(
                     f"Transform '{bloblang_ref}' references column '{col}' "
-                    + f"which does not exist in available runtime columns for "
+                    + "which does not exist in available runtime columns for "
                     + f"source table '{table_label}'"
                 )
 

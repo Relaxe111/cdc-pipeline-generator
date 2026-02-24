@@ -103,6 +103,9 @@ from cdc_generator.helpers.source_custom_keys import (
     normalize_source_custom_keys,
 )
 from cdc_generator.helpers.yaml_loader import ConfigDict, load_yaml_file
+from cdc_generator.validators.manage_server_group.autocomplete_definitions import (
+    generate_service_autocomplete_definitions,
+)
 from cdc_generator.validators.manage_server_group.patterns import (
     build_extraction_pattern_config,
 )
@@ -191,6 +194,10 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--add-to-schema-excludes": (
         "Add schema exclude pattern(s) to sink group",
         "cdc manage-sink-groups --add-to-schema-excludes hdb_catalog",
+    ),
+    "--add-to-table-excludes": (
+        "Add table exclude pattern(s) to sink group",
+        "cdc manage-sink-groups --add-to-table-excludes '^log'",
     ),
     "--add-source-custom-key": (
         "Add or update SQL-based custom key",
@@ -392,6 +399,9 @@ def _create_standalone_sink(
             schema_exclude_patterns=getattr(
                 args, 'schema_exclude_patterns', None
             ),
+            table_exclude_patterns=getattr(
+                args, 'table_exclude_patterns', None
+            ),
         ),
     )
 
@@ -406,6 +416,8 @@ def _create_standalone_sink(
         print_info(f"Database exclude patterns: {args.database_exclude_patterns}")
     if getattr(args, 'schema_exclude_patterns', None):
         print_info(f"Schema exclude patterns: {args.schema_exclude_patterns}")
+    if getattr(args, 'table_exclude_patterns', None):
+        print_info(f"Table exclude patterns: {args.table_exclude_patterns}")
     print_info("\nNext steps:")
     print_info(f"1. Add servers to sink group '{sink_group_name}' using --add-server")
     print_info("2. Edit services/*.yaml to add sink configurations")
@@ -681,6 +693,9 @@ def _fetch_databases(
             schema_exclude_patterns=resolved.get(
                 "schema_exclude_patterns"
             ),
+            table_exclude_patterns=resolved.get(
+                "table_exclude_patterns"
+            ),
             server_name=server_name,
         )
     if sink_type == "postgres":
@@ -693,6 +708,9 @@ def _fetch_databases(
             ),
             schema_exclude_patterns=resolved.get(
                 "schema_exclude_patterns"
+            ),
+            table_exclude_patterns=resolved.get(
+                "table_exclude_patterns"
             ),
             server_name=server_name,
         )
@@ -950,6 +968,13 @@ def handle_update_command(args: argparse.Namespace) -> int:
 
     save_sink_groups(sink_groups, get_sink_file_path())
 
+    generate_service_autocomplete_definitions(
+        cast(Any, resolved),
+        cast(list[dict[str, Any]], databases),
+        cast(list[str], resolved.get("table_exclude_patterns", [])),
+        cast(list[str], resolved.get("schema_exclude_patterns", [])),
+    )
+
     print_success(
         f"Updated '{sink_group_name}' sources from {len(databases)} discovered database(s)"
     )
@@ -1136,6 +1161,9 @@ def handle_info_command(args: argparse.Namespace) -> int:
     if resolved.get('schema_exclude_patterns'):
         schema_patterns = resolved.get('schema_exclude_patterns', [])
         print(f"Schema Exclude:    {', '.join(schema_patterns)}")
+    if resolved.get('table_exclude_patterns'):
+        table_patterns = resolved.get('table_exclude_patterns', [])
+        print(f"Table Exclude:     {', '.join(table_patterns)}")
 
     if resolved.get("_inherited_from"):
         print(f"Inherited From:   {resolved.get('_inherited_from', 'N/A')}")
@@ -2070,6 +2098,66 @@ def handle_add_to_schema_excludes_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_add_to_table_excludes_command(args: argparse.Namespace) -> int:
+    """Add table exclude pattern(s) to sink group configuration."""
+    if not args.add_to_table_excludes:
+        print_error("--add-to-table-excludes requires a pattern")
+        return 1
+
+    parsed_patterns = _parse_csv_patterns(str(args.add_to_table_excludes))
+    if not parsed_patterns:
+        print_error("No valid patterns provided for --add-to-table-excludes")
+        return 1
+
+    result = _resolve_sink_group_for_pattern_update(
+        args,
+        action_flag="--add-to-table-excludes",
+    )
+    if isinstance(result, int):
+        return result
+
+    sink_groups, sink_group_name, sink_group, sink_file = result
+    merged_patterns, added_count = _append_unique_patterns(
+        sink_group.get("table_exclude_patterns", []),
+        parsed_patterns,
+    )
+    cast(dict[str, Any], sink_group)["table_exclude_patterns"] = merged_patterns
+    sink_groups[sink_group_name] = sink_group
+    save_sink_groups(sink_groups, sink_file)
+
+    print_success(
+        f"Updated table_exclude_patterns for sink group '{sink_group_name}'"
+    )
+    print_info(
+        f"Patterns: +{added_count} added"
+        + f" (total: {len(merged_patterns)})"
+    )
+    return 0
+
+
+def handle_list_table_excludes_command(args: argparse.Namespace) -> int:
+    """List table exclude patterns from sink group configuration."""
+    result = _resolve_sink_group_for_pattern_update(
+        args,
+        action_flag="--list-table-excludes",
+    )
+    if isinstance(result, int):
+        return result
+
+    _sink_groups, sink_group_name, sink_group, _sink_file = result
+    patterns = sink_group.get("table_exclude_patterns", [])
+    patterns_list = patterns if isinstance(patterns, list) else []
+
+    print_header(f"Table Exclude Patterns: {sink_group_name}")
+    if not patterns_list:
+        print_info("No table exclude patterns configured")
+        return 0
+
+    for item in patterns_list:
+        print_info(f"  • {item}")
+    return 0
+
+
 def main() -> int:
     """CLI entry point for manage-sink-groups command."""
     # Build colorized description
@@ -2183,6 +2271,15 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         ),
     )
     parser.add_argument(
+        "--table-exclude-patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help=(
+            f"{Colors.YELLOW}Regex patterns for excluding"
+            f" tables (space-separated){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
         "--for-source-group",
         metavar="NAME",
         help=(
@@ -2277,6 +2374,22 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         help=(
             f"{Colors.YELLOW}Add pattern(s) to schema_exclude_patterns"
             f" (comma-separated supported){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--add-to-table-excludes",
+        metavar="PATTERN",
+        help=(
+            f"{Colors.YELLOW}Add pattern(s) to table_exclude_patterns"
+            f" (comma-separated supported){Colors.RESET}"
+        ),
+    )
+    parser.add_argument(
+        "--list-table-excludes",
+        action="store_true",
+        help=(
+            f"{Colors.YELLOW}List table_exclude_patterns"
+            f" for sink group{Colors.RESET}"
         ),
     )
     parser.add_argument(
@@ -2432,6 +2545,14 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "add_to_schema_excludes": (
             args.add_to_schema_excludes,
             lambda: handle_add_to_schema_excludes_command(args),
+        ),
+        "add_to_table_excludes": (
+            args.add_to_table_excludes,
+            lambda: handle_add_to_table_excludes_command(args),
+        ),
+        "list_table_excludes": (
+            args.list_table_excludes,
+            lambda: handle_list_table_excludes_command(args),
         ),
         "add_source_custom_key": (
             args.add_source_custom_key,

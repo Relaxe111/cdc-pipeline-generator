@@ -14,6 +14,9 @@ from unittest.mock import patch
 
 import pytest
 
+from cdc_generator.cli.service_handlers_bloblang import (
+    handle_validate_bloblang,
+)
 from cdc_generator.cli.service_handlers_templates import (
     _resolve_sink_and_table,
     handle_add_column_template,
@@ -28,9 +31,6 @@ from cdc_generator.cli.service_handlers_validation import (
     handle_generate_validation,
     handle_validate_config,
     handle_validate_hierarchy,
-)
-from cdc_generator.cli.service_handlers_bloblang import (
-    handle_validate_bloblang,
 )
 
 # project_dir fixture is provided by tests/conftest.py

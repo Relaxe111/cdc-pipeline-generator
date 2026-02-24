@@ -59,12 +59,11 @@ def create_service(
                     schemas = _extract_schemas_from_source(source_for_database)
                 else:
                     schemas = ['dbo']
-            else:
-                # Use database_ref for validation
-                if database_ref and database_ref in sources:
-                    source_config = cast(dict[str, Any], sources[database_ref])
-                    schemas = _extract_schemas_from_source(source_config)
-                    validation_database = _extract_database_from_source(source_config)
+            # Use database_ref for validation
+            elif database_ref and database_ref in sources:
+                source_config = cast(dict[str, Any], sources[database_ref])
+                schemas = _extract_schemas_from_source(source_config)
+                validation_database = _extract_database_from_source(source_config)
 
             if not validation_database:
                 raise ValueError(

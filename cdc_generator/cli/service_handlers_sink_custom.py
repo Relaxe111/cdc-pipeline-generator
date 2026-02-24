@@ -16,11 +16,11 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
-from cdc_generator.helpers.service_schema_paths import (
-    get_service_schema_read_dirs,
-)
 from cdc_generator.helpers.service_config import (
     load_service_config,
+)
+from cdc_generator.helpers.service_schema_paths import (
+    get_service_schema_read_dirs,
 )
 from cdc_generator.helpers.yaml_loader import (
     load_yaml_file,

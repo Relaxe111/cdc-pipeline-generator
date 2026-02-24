@@ -1,6 +1,7 @@
 """Save detailed database schemas to YAML files."""
 
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -20,6 +21,147 @@ from cdc_generator.helpers.service_schema_paths import (
 )
 
 from .db_inspector_common import get_connection_params, get_service_db_config
+
+_TRACKED_TABLES_FILE = "tracked-tables.yaml"
+_SCHEMA_TABLE_PARTS = 2
+
+
+def _tracked_tables_file_path(service: str) -> Path:
+    """Return tracked-tables.yaml path for a service under services/_schemas."""
+    service_schema_dir = get_service_schema_write_dir(service)
+    return service_schema_dir / _TRACKED_TABLES_FILE
+
+
+def _normalize_table_ref(table_ref: str) -> tuple[str, str] | None:
+    """Normalize ``schema.table`` into a tuple, or ``None`` if invalid."""
+    normalized = table_ref.strip()
+    parts = normalized.split(".", 1)
+    if len(parts) != _SCHEMA_TABLE_PARTS:
+        return None
+
+    schema_name = parts[0].strip()
+    table_name = parts[1].strip()
+    if not schema_name or not table_name:
+        return None
+
+    return schema_name, table_name
+
+
+def load_tracked_tables(service: str) -> dict[str, list[str]]:
+    """Load tracked tables from ``services/_schemas/{service}/tracked-tables.yaml``."""
+    tracked_file = _tracked_tables_file_path(service)
+    if not tracked_file.exists():
+        return {}
+
+    with tracked_file.open() as f:
+        raw_data = yaml.safe_load(f)
+
+    if not isinstance(raw_data, dict):
+        return {}
+
+    raw_mapping = cast(dict[object, object], raw_data)
+
+    tracked: dict[str, list[str]] = {}
+    for schema_raw, tables_raw in raw_mapping.items():
+        if not isinstance(schema_raw, str):
+            continue
+        schema_name = schema_raw.strip()
+        if not schema_name or not isinstance(tables_raw, list):
+            continue
+
+        table_values = cast(list[object], tables_raw)
+
+        table_names = [
+            str(table_name).strip()
+            for table_name in table_values
+            if isinstance(table_name, str) and str(table_name).strip()
+        ]
+        if table_names:
+            tracked[schema_name] = sorted(table_names)
+
+    return tracked
+
+
+def add_tracked_tables(
+    service: str,
+    table_refs: list[str],
+) -> bool:
+    """Add tracked ``schema.table`` refs to service tracked-tables.yaml."""
+    tracked_file = _tracked_tables_file_path(service)
+    existing = load_tracked_tables(service)
+
+    merged: dict[str, set[str]] = {
+        schema_name: set(table_names)
+        for schema_name, table_names in existing.items()
+    }
+
+    added_count = 0
+    for table_ref in table_refs:
+        normalized = _normalize_table_ref(table_ref)
+        if not normalized:
+            continue
+        schema_name, table_name = normalized
+        merged.setdefault(schema_name, set())
+        if table_name not in merged[schema_name]:
+            merged[schema_name].add(table_name)
+            added_count += 1
+
+    if added_count == 0:
+        return bool(existing)
+
+    tracked_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        schema_name: sorted(table_names)
+        for schema_name, table_names in sorted(merged.items())
+        if table_names
+    }
+
+    with tracked_file.open("w") as f:
+        yaml.dump(
+            payload,
+            f,
+            default_flow_style=False,
+            sort_keys=False,
+            indent=2,
+        )
+
+    print_success(
+        f"✓ Updated tracked tables: {tracked_file} "
+        + f"(+{added_count})"
+    )
+    return True
+
+
+def filter_tables_by_tracked(
+    service: str,
+    tables: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Filter tables to tracked whitelist for a service.
+
+    If no tracked-tables file (or empty file) exists, returns all tables.
+    """
+    tracked = load_tracked_tables(service)
+    if not tracked:
+        return tables
+
+    tracked_refs = {
+        f"{schema_name}.{table_name}".casefold()
+        for schema_name, table_names in tracked.items()
+        for table_name in table_names
+    }
+
+    filtered = [
+        table
+        for table in tables
+        if f"{table.get('TABLE_SCHEMA')}.{table.get('TABLE_NAME')}".casefold()
+        in tracked_refs
+    ]
+
+    print_info(
+        f"Tracked table filter applied for '{service}': "
+        + f"{len(filtered)}/{len(tables)} table(s) selected"
+    )
+    return filtered
 
 
 def save_detailed_schema_mssql(

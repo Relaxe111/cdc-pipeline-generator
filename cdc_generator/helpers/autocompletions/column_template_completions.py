@@ -5,11 +5,11 @@ Provides dynamic completion data for --add-column-template, --remove-column-temp
 """
 
 from cdc_generator.core.bloblang_refs import list_bloblang_refs
-from cdc_generator.core.column_templates import list_template_keys
 from cdc_generator.core.column_template_operations import (
     list_column_templates,
     list_transforms,
 )
+from cdc_generator.core.column_templates import list_template_keys
 
 from .sinks import load_sink_tables_for_autocomplete
 

@@ -26,7 +26,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
     print_success,
 )
-from cdc_generator.helpers.service_config import load_service_config, get_project_root
+from cdc_generator.helpers.service_config import get_project_root, load_service_config
 
 from .legacy_db_inspector import save_detailed_schema
 from .mini_schema_generators import (

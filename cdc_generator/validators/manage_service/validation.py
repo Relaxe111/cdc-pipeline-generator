@@ -1,6 +1,5 @@
 """Validation functions for CDC service configuration."""
 
-import re
 from pathlib import Path
 
 from cdc_generator.helpers.helpers_logging import (
@@ -65,34 +64,33 @@ def validate_service_config(service: str) -> bool:
         source = config['source']
         if not isinstance(source, dict):
             errors.append("'source' must be a dict/object")
+        # Check for tables
+        elif 'tables' not in source:
+            errors.append("Missing 'source.tables' - no tables defined for CDC")
         else:
-            # Check for tables
-            if 'tables' not in source:
-                errors.append("Missing 'source.tables' - no tables defined for CDC")
+            tables = source['tables']
+            if not isinstance(tables, dict):
+                errors.append("'source.tables' must be a dict (schema.table format)")
+            elif not tables:
+                warnings.append("No CDC tables defined in source.tables")
             else:
-                tables = source['tables']
-                if not isinstance(tables, dict):
-                    errors.append("'source.tables' must be a dict (schema.table format)")
-                elif not tables:
-                    warnings.append("No CDC tables defined in source.tables")
-                else:
-                    # Validate each table definition
-                    for table_key, table_config in tables.items():
-                        if '.' not in table_key:
-                            warnings.append(f"Table key '{table_key}' should be in schema.table format (e.g., 'public.users')")
+                # Validate each table definition
+                for table_key, table_config in tables.items():
+                    if '.' not in table_key:
+                        warnings.append(f"Table key '{table_key}' should be in schema.table format (e.g., 'public.users')")
 
-                        if table_config is None:
-                            continue  # Empty table config is OK (uses defaults)
+                    if table_config is None:
+                        continue  # Empty table config is OK (uses defaults)
 
-                        if not isinstance(table_config, dict):
-                            errors.append(f"{table_key}: table configuration must be a dict/object, got {type(table_config).__name__}")
-                            continue
+                    if not isinstance(table_config, dict):
+                        errors.append(f"{table_key}: table configuration must be a dict/object, got {type(table_config).__name__}")
+                        continue
 
-                        # Check for common config patterns
-                        valid_keys = {'include_columns', 'ignore_columns', 'primary_key', 'track_columns'}
-                        for key in table_config.keys():
-                            if key not in valid_keys:
-                                warnings.append(f"{table_key}: unknown configuration key '{key}' (valid: {', '.join(sorted(valid_keys))})")
+                    # Check for common config patterns
+                    valid_keys = {'include_columns', 'ignore_columns', 'primary_key', 'track_columns'}
+                    for key in table_config.keys():
+                        if key not in valid_keys:
+                            warnings.append(f"{table_key}: unknown configuration key '{key}' (valid: {', '.join(sorted(valid_keys))})")
 
     # 3. Check sinks section (optional)
     if 'sinks' in config:

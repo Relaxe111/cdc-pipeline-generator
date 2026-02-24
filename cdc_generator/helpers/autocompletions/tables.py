@@ -4,6 +4,7 @@ from cdc_generator.helpers.autocompletions.utils import (
     find_directory_upward,
     find_service_schemas_dir_upward,
 )
+from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 
@@ -40,6 +41,50 @@ def list_tables_for_service(service_name: str) -> list[str]:
                     tables.append(f"{schema_name}.{table_name}")
 
     return sorted(tables)
+
+
+def list_tables_for_service_autocomplete(service_name: str) -> list[str]:
+    """List tables using pre-generated autocomplete definitions when available.
+
+    Preferred source:
+      services/_schemas/_definitions/{service}-autocompletes.yaml
+
+    Fallback source:
+      services/_schemas/{service}/{schema}/{table}.yaml files
+    """
+    definitions_file = (
+        get_project_root()
+        / "services"
+        / "_schemas"
+        / "_definitions"
+        / f"{service_name}-autocompletes.yaml"
+    )
+
+    if definitions_file.is_file():
+        try:
+            data = load_yaml_file(definitions_file)
+            if isinstance(data, dict):
+                tables: list[str] = []
+                for schema_raw, table_names_raw in data.items():
+                    if not isinstance(schema_raw, str):
+                        continue
+                    schema_name = schema_raw.strip()
+                    if not schema_name or not isinstance(table_names_raw, list):
+                        continue
+
+                    for table_name_raw in table_names_raw:
+                        if not isinstance(table_name_raw, str):
+                            continue
+                        table_name = table_name_raw.strip()
+                        if table_name:
+                            tables.append(f"{schema_name}.{table_name}")
+
+                if tables:
+                    return sorted(tables)
+        except Exception:
+            pass
+
+    return list_tables_for_service(service_name)
 
 
 def list_columns_for_table(service_name: str, schema: str, table: str) -> list[str]:

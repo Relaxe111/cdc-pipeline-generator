@@ -83,6 +83,14 @@ def _get_manage_services_resources_inspect_command() -> click.Command:
     return resources_group.commands["inspect"]
 
 
+def _get_manage_services_resources_command() -> click.Command:
+    """Return the typed command group for `manage-services resources`."""
+    cmds = _get_typed_commands()
+    root_group = cmds["manage-services"]
+    assert isinstance(root_group, click.Group)
+    return root_group.commands["resources"]
+
+
 # ---------------------------------------------------------------------------
 # Tests: cdc.fish bootstrap file
 # ---------------------------------------------------------------------------
@@ -274,8 +282,21 @@ class TestManageServicesConfigOptions:
             "--sink-inspect",
             "--sink-all",
             "--sink-save",
+            "--track-table",
             "--schema",
             "--env",
+        ]:
+            assert opt in opts, f"Missing option: {opt}"
+
+    def test_resources_root_has_track_table_options(self) -> None:
+        """Root resources command supports tracked-table management options."""
+        opts = _get_command_option_names(
+            _get_manage_services_resources_command(),
+        )
+        for opt in [
+            "--source",
+            "--sink",
+            "--track-table",
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
@@ -319,6 +340,13 @@ class TestManageSourceGroupsOptions:
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
+    def test_has_table_exclude_options(self) -> None:
+        """Table exclude options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-source-groups"])
+        for opt in ["--add-to-table-excludes", "--list-table-excludes"]:
+            assert opt in opts, f"Missing option: {opt}"
+
 
 class TestManageSinkGroupsOptions:
     """manage-sink-groups must have typed Click option declarations."""
@@ -341,7 +369,12 @@ class TestManageSinkGroupsOptions:
         """Exclude-pattern options must be declared."""
         cmds = _get_typed_commands()
         opts = _get_command_option_names(cmds["manage-sink-groups"])
-        for opt in ["--add-to-ignore-list", "--add-to-schema-excludes"]:
+        for opt in [
+            "--add-to-ignore-list",
+            "--add-to-schema-excludes",
+            "--add-to-table-excludes",
+            "--list-table-excludes",
+        ]:
             assert opt in opts, f"Missing option: {opt}"
 
     def test_has_source_custom_key_options(self) -> None:
@@ -617,10 +650,7 @@ class TestSmartCompletion:
         parts = shlex.split(partial_cmd)
         if parts and parts[0] == "cdc":
             parts = parts[1:]
-        if partial_cmd.endswith(" "):
-            incomplete = ""
-        else:
-            incomplete = parts.pop() if parts else ""
+        incomplete = "" if partial_cmd.endswith(" ") else parts.pop() if parts else ""
         comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
         return [c.value for c in comp.get_completions(parts, incomplete)]
 
@@ -757,6 +787,7 @@ class TestSmartCompletion:
         assert "--schema" in opts
         assert "--all" in opts
         assert "--save" in opts
+        assert "--track-table" in opts
         assert "--env" in opts
 
     def test_inspect_save_partial_dash_suggests_all(self) -> None:
@@ -814,6 +845,38 @@ class TestSmartCompletion:
 
         assert "sink_asma.directory" in opts
         assert "sink_asma.chat" in opts
+
+    def test_track_table_value_completion_uses_schema_tables(self) -> None:
+        """--track-table suggests schema.table values from service schema resources."""
+        from unittest.mock import patch
+
+        with patch(
+            "cdc_generator.helpers.autocompletions.tables.list_tables_for_service",
+            return_value=["public.users", "public.rooms"],
+        ):
+            opts = self._complete(
+                "cdc manage-services resources inspect "
+                + "--service directory --inspect --save --track-table "
+            )
+
+        assert "public.users" in opts
+        assert "public.rooms" in opts
+
+    def test_resources_root_track_table_completion_uses_source_context(self) -> None:
+        """At msr root, --source drives --track-table value completion."""
+        from unittest.mock import patch
+
+        with patch(
+            "cdc_generator.helpers.autocompletions.tables.list_tables_for_service_autocomplete",
+            return_value=["dbo.Actor", "dbo.Address"],
+        ):
+            opts = self._complete(
+                "cdc manage-services resources "
+                + "--source adopus --track-table "
+            )
+
+        assert "dbo.Actor" in opts
+        assert "dbo.Address" in opts
 
     def test_add_source_table_context(self) -> None:
         opts = self._complete(

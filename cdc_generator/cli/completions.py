@@ -179,6 +179,8 @@ def _get_service(ctx: click.Context) -> str:
     """
     svc = _get_param(ctx, "service")
     if not svc:
+        svc = _get_param(ctx, "source")
+    if not svc:
         svc = _get_param(ctx, "service_positional")
     if not svc and ctx.args:
         # First non-flag token in extra args is the positional service name
@@ -761,6 +763,41 @@ def complete_source_tables(
         _safe_call(list_source_tables_for_service, service),
         incomplete,
     )
+
+
+def complete_track_tables(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete tracked table refs (schema.table) from existing schema resources."""
+    service = _get_service(ctx)
+    if not service:
+        return []
+
+    inspect_sink_value = _get_param(ctx, "inspect_sink")
+    if inspect_sink_value and inspect_sink_value not in {"", "__all_sinks__"}:
+        parts = inspect_sink_value.split(".", 1)
+        if len(parts) == _SINK_KEY_PARTS and parts[1].strip():
+            service = parts[1].strip()
+
+    from cdc_generator.helpers.autocompletions.tables import (
+        list_tables_for_service_autocomplete,
+    )
+
+    candidates = _safe_call(list_tables_for_service_autocomplete, service)
+    already_selected = {
+        value.casefold()
+        for value in _get_multi_param_values(ctx, "track_table")
+        if value.strip()
+    }
+
+    filtered = [
+        table_name
+        for table_name in candidates
+        if table_name.casefold() not in already_selected
+    ]
+    return _filter(filtered, incomplete)
 
 
 def complete_from_table(

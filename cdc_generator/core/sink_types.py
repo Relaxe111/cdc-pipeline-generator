@@ -134,6 +134,7 @@ class SinkGroupStandalone(TypedDict, total=False):
     # Discovery/filtering patterns (same as source groups)
     database_exclude_patterns: list[str]  # regex patterns for excluding databases
     schema_exclude_patterns: list[str]  # regex patterns for excluding schemas
+    table_exclude_patterns: list[str]  # regex patterns for excluding tables
     # Required:
     servers: dict[str, SinkServerConfig]
     sources: dict[str, SinkSource]
@@ -185,6 +186,9 @@ class ResolvedSinkGroup(TypedDict, total=False):
     type: str
     kafka_topology: str
     description: str
+    database_exclude_patterns: list[str]
+    schema_exclude_patterns: list[str]
+    table_exclude_patterns: list[str]
     servers: dict[str, ResolvedSinkServer]
     sources: dict[str, SinkSource]
     # Metadata

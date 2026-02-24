@@ -23,11 +23,6 @@ from cdc_generator.helpers.autocompletions.scaffold import (
 from cdc_generator.helpers.autocompletions.schemas import (
     list_schemas_for_service,
 )
-from cdc_generator.helpers.autocompletions.service_schemas import (
-    list_custom_table_columns_for_mapping,
-    list_custom_tables_for_schema_service,
-    list_schema_services,
-)
 from cdc_generator.helpers.autocompletions.server_groups import (
     list_databases_from_server_group,
     list_non_inherited_sink_group_names,
@@ -35,6 +30,11 @@ from cdc_generator.helpers.autocompletions.server_groups import (
     list_servers_for_sink_group,
     list_servers_from_server_group,
     list_sink_group_names,
+)
+from cdc_generator.helpers.autocompletions.service_schemas import (
+    list_custom_table_columns_for_mapping,
+    list_custom_tables_for_schema_service,
+    list_schema_services,
 )
 from cdc_generator.helpers.autocompletions.services import (
     list_available_services_from_server_group,

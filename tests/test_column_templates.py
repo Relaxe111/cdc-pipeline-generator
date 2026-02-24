@@ -3,8 +3,8 @@
 from pathlib import Path
 
 import pytest
-from cdc_generator.core import column_templates as column_templates_module
 
+from cdc_generator.core import column_templates as column_templates_module
 from cdc_generator.core.column_templates import (
     _parse_single_template,
     clear_cache,

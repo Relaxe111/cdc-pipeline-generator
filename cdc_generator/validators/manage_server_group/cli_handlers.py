@@ -8,6 +8,7 @@ from .handlers_config import (
     handle_add_env_mapping,
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
+    handle_add_table_exclude,
     parse_env_mapping,
 )
 from .handlers_group import (
@@ -43,6 +44,7 @@ __all__ = [
     "handle_add_ignore_pattern",
     "handle_add_schema_exclude",
     "handle_add_server",
+    "handle_add_table_exclude",
     "handle_info",
     "handle_list_extraction_patterns",
     "handle_list_servers",

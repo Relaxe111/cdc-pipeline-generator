@@ -18,7 +18,12 @@ from cdc_generator.helpers.psycopg2_loader import (
     has_psycopg2,
 )
 
-from .filters import should_exclude_schema, should_ignore_database, should_include_database
+from .filters import (
+    should_exclude_schema,
+    should_exclude_table,
+    should_ignore_database,
+    should_include_database,
+)
 from .types import DatabaseInfo, ExtractedIdentifiers, ServerConfig, ServerGroupConfig
 
 
@@ -422,6 +427,7 @@ def list_mssql_databases(
     include_pattern: str | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
+    table_exclude_patterns: list[str] | None = None,
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
     """List all databases on MSSQL server.
@@ -432,6 +438,7 @@ def list_mssql_databases(
         include_pattern: Regex pattern to include only matching databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_exclude_patterns: Patterns to exclude tables
         server_name: Name of this server (for multi-server support)
     """
     print_info("Connecting to MSSQL server...")
@@ -455,6 +462,8 @@ def list_mssql_databases(
     excluded_count = 0
     ignored_schema_count = 0
     databases_with_ignored_schemas = 0
+    ignored_table_count = 0
+    databases_with_ignored_tables = 0
     for row in cursor.fetchall():
         db_name = row[0]
 
@@ -472,12 +481,17 @@ def list_mssql_databases(
             # Get schemas for this database
             cursor.execute(f"""
                 USE [{db_name}];
-                SELECT DISTINCT TABLE_SCHEMA
+                SELECT TABLE_SCHEMA, TABLE_NAME
                 FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_TYPE = 'BASE TABLE'
-                ORDER BY TABLE_SCHEMA
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
             """)
-            all_schemas = [r[0] for r in cursor.fetchall()]
+            all_table_rows = [
+                (str(r[0]), str(r[1]))
+                for r in cursor.fetchall()
+                if isinstance(r[0], str) and isinstance(r[1], str)
+            ]
+            all_schemas = sorted({schema_name for schema_name, _ in all_table_rows})
 
             # Filter schemas based on provided exclude patterns
             schema_patterns = schema_exclude_patterns or []
@@ -487,12 +501,20 @@ def list_mssql_databases(
                 ignored_schema_count += ignored_schemas
                 databases_with_ignored_schemas += 1
 
-            # Get table count
-            cursor.execute(f"""
-                USE [{db_name}];
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'
-            """)
-            table_count = _extract_scalar_count(cursor.fetchone())
+            table_patterns = table_exclude_patterns or []
+            table_count = 0
+            ignored_tables_for_db = 0
+            for schema_name, table_name in all_table_rows:
+                if schema_name not in schemas:
+                    continue
+                if should_exclude_table(table_name, table_patterns):
+                    ignored_tables_for_db += 1
+                    continue
+                table_count += 1
+
+            if ignored_tables_for_db > 0:
+                ignored_table_count += ignored_tables_for_db
+                databases_with_ignored_tables += 1
 
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
@@ -527,16 +549,27 @@ def list_mssql_databases(
             + f"\033[31m{patterns_text}\033[0m"
         )
 
+    if ignored_table_count > 0:
+        table_patterns = table_exclude_patterns or []
+        patterns_text = ', '.join(table_patterns)
+        print_info(
+            "📋 Ignored "
+            + f"{ignored_table_count} table(s) from "
+            + f"{databases_with_ignored_tables} database(s) matching patterns: "
+            + f"\033[31m{patterns_text}\033[0m"
+        )
+
     conn.close()
     return databases
 
 
-def list_postgres_databases(
+def list_postgres_databases(  # noqa: PLR0915
     server_config: ServerConfig,
     server_group_config: ServerGroupConfig,
     include_pattern: str | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
+    table_exclude_patterns: list[str] | None = None,
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
     """List all databases on PostgreSQL server.
@@ -547,6 +580,7 @@ def list_postgres_databases(
         include_pattern: Regex pattern to include only matching databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_exclude_patterns: Patterns to exclude tables
         server_name: Name of this server (for multi-server support)
     """
     print_info("Connecting to PostgreSQL server...")
@@ -593,6 +627,8 @@ def list_postgres_databases(
     databases: list[DatabaseInfo] = []
     ignored_schema_count = 0
     databases_with_ignored_schemas = 0
+    ignored_table_count = 0
+    databases_with_ignored_tables = 0
     for db_name in filtered_db_names:
         try:
             db_conn = get_postgres_connection(server_config, db_name)
@@ -616,15 +652,34 @@ def list_postgres_databases(
             if ignored_schemas > 0:
                 ignored_schema_count += ignored_schemas
                 databases_with_ignored_schemas += 1
+
             db_cursor.execute("""
-                SELECT COUNT(*)
+                SELECT table_schema, table_name
                 FROM information_schema.tables
                 WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
                 AND table_schema NOT LIKE 'pg_temp_%'
                 AND table_schema NOT LIKE 'pg_toast_temp_%'
                 AND table_type = 'BASE TABLE'
             """)
-            table_count = _extract_scalar_count(db_cursor.fetchone())
+            all_table_rows = [
+                (str(row[0]), str(row[1]))
+                for row in db_cursor.fetchall()
+                if isinstance(row[0], str) and isinstance(row[1], str)
+            ]
+            table_patterns = table_exclude_patterns or []
+            table_count = 0
+            ignored_tables_for_db = 0
+            for schema_name, table_name in all_table_rows:
+                if schema_name not in schemas:
+                    continue
+                if should_exclude_table(table_name, table_patterns):
+                    ignored_tables_for_db += 1
+                    continue
+                table_count += 1
+
+            if ignored_tables_for_db > 0:
+                ignored_table_count += ignored_tables_for_db
+                databases_with_ignored_tables += 1
 
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
@@ -650,6 +705,16 @@ def list_postgres_databases(
             "📊 Ignored "
             + f"{ignored_schema_count} schema(s) from "
             + f"{databases_with_ignored_schemas} database(s) matching patterns: "
+            + f"\033[31m{patterns_text}\033[0m"
+        )
+
+    if ignored_table_count > 0:
+        table_patterns = table_exclude_patterns or []
+        patterns_text = ', '.join(table_patterns)
+        print_info(
+            "📋 Ignored "
+            + f"{ignored_table_count} table(s) from "
+            + f"{databases_with_ignored_tables} database(s) matching patterns: "
             + f"\033[31m{patterns_text}\033[0m"
         )
 

@@ -49,6 +49,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "all": False,
         "env": "nonprod",
         "save": False,
+        "track_table": [],
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -286,6 +287,41 @@ class TestHandleInspectHappyPath:
         assert saved_tables[0]["TABLE_SCHEMA"] == "public"
         assert save_args[4] == "postgres"
 
+    def test_inspect_save_applies_tracked_table_filter(
+        self, project_dir: Path,
+    ) -> None:
+        """--save filters tables by tracked-table whitelist before writing _schemas."""
+        args = _ns(inspect=True, all=True, save=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "queries",
+                "COLUMN_COUNT": 5,
+            },
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "audit_log",
+                "COLUMN_COUNT": 2,
+            },
+        ]
+
+        with patch(
+            "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
+            return_value=tables,
+        ), patch(
+            "cdc_generator.cli.service_handlers_inspect.filter_tables_by_tracked",
+            return_value=[tables[0]],
+        ) as filter_mock, patch(
+            "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
+            return_value=True,
+        ) as save_mock:
+            result = handle_inspect(args)
+
+        assert result == 0
+        filter_mock.assert_called_once_with("proxy", tables)
+        save_args = save_mock.call_args.args
+        assert save_args[3] == [tables[0]]
+
 
 class TestHandleInspectSinkHappyPath:
     """Success-path tests for handle_inspect_sink."""
@@ -363,6 +399,44 @@ class TestHandleInspectSinkHappyPath:
         assert isinstance(saved_tables, list)
         assert len(saved_tables) == 1
         assert saved_tables[0]["TABLE_SCHEMA"] == "public"
+
+    def test_inspect_sink_save_applies_tracked_table_filter(
+        self, project_dir: Path, service_yaml: Path,
+    ) -> None:
+        """Sink --save filters tables by tracked-table whitelist before saving."""
+        args = _ns(inspect_sink="sink_asma.chat", all=True, save=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "users",
+                "COLUMN_COUNT": 5,
+            },
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "internal_logs",
+                "COLUMN_COUNT": 2,
+            },
+        ]
+
+        with patch(
+            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+            return_value=["sink_asma.chat"],
+        ), patch(
+            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+            return_value=(tables, "postgres", ["public"]),
+        ), patch(
+            "cdc_generator.cli.service_handlers_inspect_sink.filter_tables_by_tracked",
+            return_value=[tables[0]],
+        ) as filter_mock, patch(
+            "cdc_generator.cli.service_handlers_inspect_sink.save_sink_schema",
+            return_value=True,
+        ) as save_mock:
+            result = handle_inspect_sink(args)
+
+        assert result == 0
+        filter_mock.assert_called_once_with("chat", tables)
+        save_args = save_mock.call_args.args
+        assert save_args[4] == [tables[0]]
 
     def test_inspect_all_sinks_success(
         self, project_dir: Path, service_yaml: Path,

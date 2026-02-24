@@ -1,7 +1,6 @@
 """Mini JSON Schema generators for keys (service, server_group, database_name, schema_name, table_name)."""
 
 import json
-from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore

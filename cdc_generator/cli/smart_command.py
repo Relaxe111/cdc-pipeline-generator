@@ -424,8 +424,10 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "add_to_ignore_list": set(),
     "list_ignore_patterns": set(),
     "add_to_schema_excludes": set(),
+    "add_to_table_excludes": set(),
     "add_source_custom_key": {"custom_key_value", "custom_key_exec_type"},
     "list_schema_excludes": set(),
+    "list_table_excludes": set(),
     "add_env_mapping": set(),
     "list_env_mappings": set(),
     "add_server": {
@@ -475,6 +477,8 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "validate": set(),
     "add_to_ignore_list": {"sink_group"},
     "add_to_schema_excludes": {"sink_group"},
+    "add_to_table_excludes": {"sink_group"},
+    "list_table_excludes": {"sink_group"},
     "add_source_custom_key": {
         "sink_group", "custom_key_value", "custom_key_exec_type",
     },
@@ -482,6 +486,7 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
         "add_server", "remove_server", "server",
         "list_server_extraction_patterns",
         "add_to_ignore_list", "add_to_schema_excludes", "add_source_custom_key",
+        "add_to_table_excludes", "list_table_excludes",
         "host", "port", "user", "password", "extraction_patterns",
         "env", "strip_patterns", "env_mapping", "description",
         "custom_key_value", "custom_key_exec_type",

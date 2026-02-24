@@ -15,14 +15,14 @@ from collections.abc import Callable
 from typing import NoReturn
 
 from cdc_generator.cli.service_handlers import (
-        handle_inspect,
-        handle_inspect_sink,
     handle_add_column_template,
     handle_add_source_table,
     handle_add_source_tables,
     handle_add_transform,
     handle_create_service,
     handle_generate_validation,
+    handle_inspect,
+    handle_inspect_sink,
     handle_interactive,
     handle_list_column_templates,
     handle_list_services,

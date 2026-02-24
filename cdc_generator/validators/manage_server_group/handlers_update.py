@@ -15,6 +15,9 @@ from cdc_generator.helpers.source_custom_keys import (
     normalize_source_custom_keys,
 )
 
+from .autocomplete_definitions import (
+    generate_service_autocomplete_definitions,
+)
 from .config import (
     get_single_server_group,
     load_server_groups,
@@ -85,7 +88,7 @@ def _print_update_header(
     print_info(f"{'='*80}\n")
 
 
-def _inspect_server_databases(
+def _inspect_server_databases(  # noqa: PLR0913
     server_name: str,
     server_config: ServerConfig,
     server_group: ServerGroupConfig,
@@ -93,6 +96,7 @@ def _inspect_server_databases(
     include_pattern: str | None,
     database_exclude_patterns: list[str],
     schema_exclude_patterns: list[str],
+    table_exclude_patterns: list[str],
 ) -> list[DatabaseInfo] | None:
     """Inspect a single server and return its databases.
 
@@ -104,6 +108,7 @@ def _inspect_server_databases(
         include_pattern: Optional regex to filter databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_exclude_patterns: Patterns to exclude tables
 
     Returns:
         List of DatabaseInfo objects, or None on error
@@ -124,6 +129,7 @@ def _inspect_server_databases(
             include_pattern,
             database_exclude_patterns,
             schema_exclude_patterns,
+            table_exclude_patterns,
             server_name=server_name,
         )
     elif sg_type == 'postgres':
@@ -133,6 +139,7 @@ def _inspect_server_databases(
             include_pattern,
             database_exclude_patterns,
             schema_exclude_patterns,
+            table_exclude_patterns,
             server_name=server_name,
         )
     else:
@@ -238,7 +245,12 @@ def _merge_with_existing_sources(
     return merged_databases
 
 
-def _apply_updates(sg_name: str, all_databases: list[DatabaseInfo]) -> bool:
+def _apply_updates(
+    sg_name: str,
+    all_databases: list[DatabaseInfo],
+    server_group: ServerGroupConfig,
+    scanned_databases: list[DatabaseInfo],
+) -> bool:
     """Apply database updates to YAML, schemas, and completions.
 
     Args:
@@ -261,16 +273,24 @@ def _apply_updates(sg_name: str, all_databases: list[DatabaseInfo]) -> bool:
     # Update envs list based on discovered environments
     try:
         config = load_server_groups()
-        server_group = get_single_server_group(config)
-        if server_group:
-            update_envs_list(server_group)
-            write_server_group_yaml(sg_name, server_group)
+        loaded_server_group = get_single_server_group(config)
+        if loaded_server_group:
+            update_envs_list(loaded_server_group)
+            write_server_group_yaml(sg_name, loaded_server_group)
             print_info("✓ Updated available environments list")
     except Exception as e:
         print_warning(f"Could not update envs list: {e}")
 
     # Update VS Code schema
     update_vscode_schema(all_databases)
+
+    # Generate fast table autocomplete cache per service
+    generate_service_autocomplete_definitions(
+        server_group,
+        scanned_databases,
+        cast(list[str], server_group.get('table_exclude_patterns', [])),
+        cast(list[str], server_group.get('schema_exclude_patterns', [])),
+    )
 
     # Update Fish completions
     update_completions()
@@ -410,6 +430,10 @@ def handle_update(args: Namespace) -> int:
             # Get exclude patterns (typed in ServerGroupConfig)
             database_exclude_patterns = server_group.get('database_exclude_patterns', [])
             schema_exclude_patterns = server_group.get('schema_exclude_patterns', [])
+            table_exclude_patterns = cast(
+                list[str],
+                server_group.get('table_exclude_patterns', []),
+            )
 
             # Select which servers to update (default only unless --all or specific name)
             servers_to_update = _select_servers_for_update(
@@ -446,6 +470,7 @@ def handle_update(args: Namespace) -> int:
                     include_pattern,
                     database_exclude_patterns,
                     schema_exclude_patterns,
+                    table_exclude_patterns,
                 )
                 if databases is None:
                     scan_failed = True
@@ -486,7 +511,12 @@ def handle_update(args: Namespace) -> int:
             )
 
             # Apply updates
-            if _apply_updates(sg_name, all_databases):
+            if _apply_updates(
+                sg_name,
+                all_databases,
+                server_group,
+                scanned_databases,
+            ):
                 result = 0
             break
     except (MissingEnvironmentVariableError, PostgresConnectionError, Exception) as e:

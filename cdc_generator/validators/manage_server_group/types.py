@@ -244,6 +244,7 @@ class ServerGroupConfig(TypedDict, total=False):
     envs: list[str]                         # Discovered available environments
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]
+    table_exclude_patterns: list[str]
     env_mappings: dict[str, str]           # e.g., {"production": "prod", "staging": "stage"}
     source_custom_keys: dict[str, dict[str, str]]
 

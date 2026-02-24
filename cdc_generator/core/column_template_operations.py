@@ -23,14 +23,13 @@ Service YAML structure:
 from dataclasses import dataclass
 from typing import cast
 
-from cdc_generator.core.column_templates import (
-    ColumnTemplate,
-    get_template,
-    validate_template_reference,
-)
 from cdc_generator.core.bloblang_refs import (
     is_bloblang_ref,
     read_bloblang_ref,
+)
+from cdc_generator.core.column_templates import (
+    ColumnTemplate,
+    get_template,
 )
 from cdc_generator.helpers.helpers_logging import (
     print_error,

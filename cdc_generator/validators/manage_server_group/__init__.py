@@ -7,6 +7,7 @@ from .cli_handlers import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_add_server,
+    handle_add_table_exclude,
     handle_info,
     handle_list_extraction_patterns,
     handle_list_servers,
@@ -27,10 +28,12 @@ from .config import (
     load_env_mappings,
     load_schema_exclude_patterns,
     load_server_groups,
+    load_table_exclude_patterns,
     save_database_exclude_patterns,
     save_env_mappings,
     save_schema_exclude_patterns,
     save_server_group_preserving_comments,
+    save_table_exclude_patterns,
 )
 from .db_inspector import (
     list_mssql_databases,
@@ -39,6 +42,7 @@ from .db_inspector import (
 from .filters import (
     infer_service_name,
     should_exclude_schema,
+    should_exclude_table,
     should_ignore_database,
     should_include_database,
 )
@@ -85,6 +89,7 @@ __all__ = [
     'handle_add_ignore_pattern',
     'handle_add_schema_exclude',
     'handle_add_server',
+    'handle_add_table_exclude',
     'handle_info',
     'handle_list_envs',
     'handle_list_extraction_patterns',
@@ -108,6 +113,7 @@ __all__ = [
     'load_schema_exclude_patterns',
     # Config
     'load_server_groups',
+    'load_table_exclude_patterns',
     # YAML Writer
     'parse_existing_comments',
     # Utils
@@ -116,9 +122,11 @@ __all__ = [
     'save_env_mappings',
     'save_schema_exclude_patterns',
     'save_server_group_preserving_comments',
+    'save_table_exclude_patterns',
     # Scaffolding
     'scaffold_project_structure',
     'should_exclude_schema',
+    'should_exclude_table',
     # Filters
     'should_ignore_database',
     'should_include_database',

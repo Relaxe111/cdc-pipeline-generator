@@ -59,6 +59,7 @@ from cdc_generator.cli.completions import (
     complete_target_schema,
     complete_target_tables,
     complete_templates_on_table,
+    complete_track_tables,
     complete_transform_rules,
     complete_transforms_on_table,
 )
@@ -270,6 +271,10 @@ def manage_services_config_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Execution type for source custom key")
 @click.option("--list-schema-excludes", is_flag=True,
               help="List current schema exclude patterns")
+@click.option("--add-to-table-excludes",
+              help="Add pattern to table exclude list")
+@click.option("--list-table-excludes", is_flag=True,
+              help="List current table exclude patterns")
 # -- Environment mappings --
 @click.option("--add-env-mapping",
               help="Add env mapping 'from:to'")
@@ -408,6 +413,10 @@ def manage_source_groups_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Add pattern to database exclude list")
 @click.option("--add-to-schema-excludes",
               help="Add pattern to schema exclude list")
+@click.option("--add-to-table-excludes",
+              help="Add pattern to table exclude list")
+@click.option("--list-table-excludes", is_flag=True,
+              help="List current table exclude patterns")
 @click.option("--add-source-custom-key",
               help="Add/update source custom key name")
 @click.option("--custom-key-value",
@@ -529,7 +538,7 @@ def manage_services_schema_custom_tables_cmd(
               help="List available Bloblang transform refs")
 @click.option("--list-transform-rules", is_flag=True,
               help="Alias for --list-rules")
-def manage_services_schema_transforms_cmd(
+def manage_services_schema_transforms_cmd(  # noqa: PLR0913
     service: str | None,
     sink: str | None,
     sink_table: str | None,
@@ -584,9 +593,58 @@ def manage_services_schema_transforms_cmd(
     add_help_option=False,
     invoke_without_command=True,
 )
+@click.option("--source", shell_complete=complete_existing_services,
+              help="Source service name (optional if only one exists)")
+@click.option("--sink", shell_complete=complete_sink_keys,
+              help="Sink key (optional if source has exactly one sink)")
+@click.option("--track-table", multiple=True,
+              shell_complete=complete_track_tables,
+              help="Track whitelist table(s) as schema.table")
 @click.pass_context
-def manage_services_resources_cmd(ctx: click.Context) -> int:
+def manage_services_resources_cmd(
+    ctx: click.Context,
+    source: str | None,
+    sink: str | None,
+    track_table: tuple[str, ...],
+) -> int:
     """manage-services resources command group."""
+    if ctx.invoked_subcommand is None and track_table:
+        from cdc_generator.helpers.autocompletions.services import (
+            list_existing_services,
+        )
+        from cdc_generator.helpers.autocompletions.sinks import (
+            get_default_sink_for_service,
+        )
+        from cdc_generator.validators.manage_service.schema_saver import (
+            add_tracked_tables,
+        )
+
+        resolved_source = source
+        if not resolved_source:
+            existing_services = list_existing_services()
+            if len(existing_services) == 1:
+                resolved_source = existing_services[0]
+
+        if not resolved_source:
+            click.echo(
+                "❌ --track-table requires --source <service> "
+                + "(or exactly one existing service)"
+            )
+            return 1
+
+        resolved_sink = sink
+        if not resolved_sink:
+            sink_defaults = get_default_sink_for_service(resolved_source)
+            if len(sink_defaults) == 1:
+                resolved_sink = sink_defaults[0]
+
+        target_service = resolved_source
+        if resolved_sink and "." in resolved_sink:
+            target_service = resolved_sink.split(".", 1)[1]
+
+        ok = add_tracked_tables(target_service, list(track_table))
+        return 0 if ok else 1
+
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for manage-services resources")
         click.echo(
@@ -598,6 +656,7 @@ def manage_services_resources_cmd(ctx: click.Context) -> int:
             + "--service directory --inspect-sink sink_asma.chat --all"
         )
         click.echo("   Try: cdc manage-services resources custom-tables --list-services")
+        click.echo("        cdc manage-services resources --source <svc> --track-table <schema.table>")
         click.echo("        cdc manage-services resources column-templates --list")
         click.echo("        cdc manage-services resources transforms --list-rules")
         return 1
@@ -736,15 +795,22 @@ manage_services_resources_cmd.add_command(
               help="Process all schemas")
 @click.option("--save", "--sink-save", is_flag=True,
               help="Save detailed table schemas to YAML")
+@click.option("--track-table", multiple=True,
+              shell_complete=complete_track_tables,
+              help=(
+                  "Add tracked whitelist table(s) as schema.table under "
+                  + "services/_schemas/<service>/tracked-tables.yaml"
+              ))
 @click.option("--env", default="nonprod",
               help="Environment for inspection (nonprod/prod)")
-def manage_services_resources_inspect_cmd(
+def manage_services_resources_inspect_cmd(  # noqa: PLR0913
     service: str | None,
     inspect: bool,
     inspect_sink: str | None,
     schema: str | None,
     all_flag: bool,
     save: bool,
+    track_table: tuple[str, ...],
     env: str,
 ) -> int:
     """manage-services resources inspect handler."""
@@ -767,6 +833,7 @@ def manage_services_resources_inspect_cmd(
         schema=schema,
         all=all_flag,
         save=save,
+        track_table=list(track_table),
         env=env,
     )
 

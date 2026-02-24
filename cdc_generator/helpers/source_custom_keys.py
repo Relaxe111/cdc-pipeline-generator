@@ -122,10 +122,9 @@ def _run_sql_postgres(
         get_postgres_connection,
     )
 
-    with get_postgres_connection(server_config, database=database_name) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(sql_query)
-            row = cursor.fetchone()
+    with get_postgres_connection(server_config, database=database_name) as conn, conn.cursor() as cursor:
+        cursor.execute(sql_query)
+        row = cursor.fetchone()
     return _normalize_row_value(row)
 
 
@@ -138,10 +137,9 @@ def _run_sql_mssql(
         get_mssql_connection,
     )
 
-    with get_mssql_connection(server_config, database=database_name) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(sql_query)
-            row = cursor.fetchone()
+    with get_mssql_connection(server_config, database=database_name) as conn, conn.cursor() as cursor:
+        cursor.execute(sql_query)
+        row = cursor.fetchone()
     return _normalize_row_value(row)
 
 

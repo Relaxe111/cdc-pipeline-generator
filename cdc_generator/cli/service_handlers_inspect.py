@@ -29,6 +29,8 @@ from cdc_generator.validators.manage_service.postgres_inspector import (
     inspect_postgres_schema,
 )
 from cdc_generator.validators.manage_service.schema_saver import (
+    add_tracked_tables,
+    filter_tables_by_tracked,
     save_detailed_schema,
 )
 
@@ -111,7 +113,7 @@ def _schemas_for_per_tenant(
 
     # 2) Fallback: database_ref is a database name in validation_env
     validation_env = str(sg_data.get("validation_env") or "default")
-    for source_name, source_config in sources.items():
+    for _source_name, source_config in sources.items():
         env_data = source_config.get(validation_env)
         if not isinstance(env_data, dict):
             continue
@@ -315,16 +317,13 @@ def _run_inspection(
         return _VALIDATION_ENV_MISSING_EXIT_CODE
 
     if tables:
-        if args.all:
-            tables = [
-                t for t in tables
-                if t["TABLE_SCHEMA"] in allowed_schemas
-            ]
-        else:
-            tables = [
-                t for t in tables
-                if t["TABLE_SCHEMA"] == schema
-            ]
+        tables = [
+            t for t in tables
+            if t["TABLE_SCHEMA"] in allowed_schemas
+        ] if args.all else [
+            t for t in tables
+            if t["TABLE_SCHEMA"] == schema
+        ]
 
         if not tables:
             if args.all:
@@ -340,6 +339,17 @@ def _run_inspection(
             return 1
 
         if args.save:
+            track_table_values = list(getattr(args, "track_table", []) or [])
+            if track_table_values:
+                add_tracked_tables(args.service, track_table_values)
+
+            tables = filter_tables_by_tracked(args.service, tables)
+            if not tables:
+                print_warning(
+                    "No tables matched tracked whitelist for save"
+                )
+                return 1
+
             ok = save_detailed_schema(
                 args.service,
                 args.env,

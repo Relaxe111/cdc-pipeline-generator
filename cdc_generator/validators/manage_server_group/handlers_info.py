@@ -11,7 +11,7 @@ from .config import (
 )
 
 
-def handle_info(args: Namespace) -> int:
+def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
     """Display detailed server group information with colors and formatting.
 
     Args:
@@ -48,6 +48,7 @@ def handle_info(args: Namespace) -> int:
     database_ref = sg_config.get('database_ref')
     db_exclude = sg_config.get('database_exclude_patterns', [])
     schema_exclude = sg_config.get('schema_exclude_patterns', [])
+    table_exclude = sg_config.get('table_exclude_patterns', [])
     description = sg_config.get('description', '')
     include_pattern = sg_config.get('include_pattern')
     environment_aware = sg_config.get('environment_aware', False)
@@ -82,7 +83,7 @@ def handle_info(args: Namespace) -> int:
         print(f"            {Colors.DIM}Kafka:{Colors.RESET} {srv.get('kafka_bootstrap_servers', 'N/A')}")
 
     # Exclude patterns
-    if db_exclude or schema_exclude:
+    if db_exclude or schema_exclude or table_exclude:
         print(f"\n    {Colors.BLUE}🚫 Exclude Patterns:{Colors.RESET}")
         if db_exclude:
             print(f"        {Colors.DIM}Databases:{Colors.RESET}")
@@ -91,6 +92,10 @@ def handle_info(args: Namespace) -> int:
         if schema_exclude:
             print(f"        {Colors.DIM}Schemas:{Colors.RESET}")
             for p in schema_exclude:
+                print(f"            • {p}")
+        if table_exclude:
+            print(f"        {Colors.DIM}Tables:{Colors.RESET}")
+            for p in table_exclude:
                 print(f"            • {p}")
 
     # Sources (unified structure for both patterns)

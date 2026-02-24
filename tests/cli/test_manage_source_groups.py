@@ -394,6 +394,42 @@ class TestCliSchemaExcludes:
         assert "pg_catalog" in output
 
 
+class TestCliTableExcludes:
+    """CLI e2e: table exclude pattern management."""
+
+    def test_list_empty_table_excludes(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc("manage-source-groups", "--list-table-excludes")
+        assert result.returncode == 0
+        assert "No table exclude patterns" in result.stdout
+
+    def test_add_table_exclude(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-to-table-excludes", "tmp",
+        )
+        assert result.returncode == 0
+        assert "tmp" in result.stdout
+
+    def test_add_comma_separated_table_excludes(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-to-table-excludes", "tmp,^zz_.*",
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "tmp" in output
+        assert "^zz_.*" in output
+
+
 class TestCliSourceCustomKeys:
     """CLI e2e: source custom key management."""
 

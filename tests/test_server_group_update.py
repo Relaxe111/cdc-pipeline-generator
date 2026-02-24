@@ -16,6 +16,7 @@ from cdc_generator.validators.manage_server_group.db_inspector import (
     PostgresConnectionError,
 )
 from cdc_generator.validators.manage_server_group.handlers_update import (
+    _apply_updates,
     handle_update,
 )
 
@@ -413,3 +414,75 @@ class TestHandleUpdateSuccess:
         result = handle_update(_ns())
 
         assert result == 1
+
+
+class TestApplyUpdatesAutocompleteCache:
+    """Tests for autocomplete cache generation side effects in _apply_updates."""
+
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.update_server_group_yaml')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.load_server_groups')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.get_single_server_group')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.update_envs_list')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.write_server_group_yaml')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.update_vscode_schema')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.generate_service_autocomplete_definitions')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.update_completions')
+    @patch('cdc_generator.validators.manage_server_group.handlers_update.regenerate_all_validation_schemas')
+    def test_apply_updates_generates_autocomplete_cache(  # noqa: PLR0913
+        self,
+        mock_regen: MagicMock,
+        mock_update_completions: MagicMock,
+        mock_generate_autocomplete: MagicMock,
+        mock_vscode: MagicMock,
+        mock_write_yaml: MagicMock,
+        mock_update_envs: MagicMock,
+        mock_get_single: MagicMock,
+        mock_load_groups: MagicMock,
+        mock_update_yaml: MagicMock,
+    ) -> None:
+        """_apply_updates should trigger service autocomplete cache generation."""
+        mock_update_yaml.return_value = True
+        mock_load_groups.return_value = {"testgroup": {"name": "testgroup"}}
+        mock_get_single.return_value = {"name": "testgroup"}
+        mock_generate_autocomplete.return_value = True
+
+        server_group = {
+            "name": "testgroup",
+            "type": "postgres",
+            "table_exclude_patterns": ["tmp"],
+            "schema_exclude_patterns": ["logs"],
+            "servers": {
+                "default": {
+                    "host": "localhost",
+                    "port": 5432,
+                    "user": "test",
+                    "password": "secret",
+                },
+            },
+        }
+        scanned_databases = [
+            {
+                "name": "directory_dev",
+                "server": "default",
+                "service": "directory",
+                "environment": "nonprod",
+                "customer": "",
+                "schemas": ["public"],
+                "table_count": 10,
+            },
+        ]
+
+        result = _apply_updates(
+            "testgroup",
+            scanned_databases,
+            server_group,
+            scanned_databases,
+        )
+
+        assert result is True
+        mock_generate_autocomplete.assert_called_once_with(
+            server_group,
+            scanned_databases,
+            ["tmp"],
+            ["logs"],
+        )

@@ -26,9 +26,8 @@ def test_get_project_root_raises_when_missing(tmp_path: Path) -> None:
     nested = tmp_path / "a" / "b"
     nested.mkdir(parents=True)
 
-    with patch("pathlib.Path.cwd", return_value=nested):
-        with pytest.raises(FileNotFoundError):
-            setup_local.get_project_root()
+    with patch("pathlib.Path.cwd", return_value=nested), pytest.raises(FileNotFoundError):
+        setup_local.get_project_root()
 
 
 @patch("cdc_generator.cli.setup_local.subprocess.run")

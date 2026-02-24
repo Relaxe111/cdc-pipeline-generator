@@ -7,9 +7,9 @@ Handles:
 - Validating sink group structure
 """
 
-from pathlib import Path
 from datetime import UTC, datetime
 from io import StringIO
+from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from cdc_generator.core.sink_types import (
@@ -20,6 +20,8 @@ from cdc_generator.core.sink_types import (
 )
 from cdc_generator.helpers.yaml_loader import load_yaml_file, yaml
 
+_SERVICES_PREVIEW_LIMIT = 20
+
 
 class StandaloneSinkGroupOptions(TypedDict, total=False):
     """Optional configuration for standalone sink groups."""
@@ -29,6 +31,7 @@ class StandaloneSinkGroupOptions(TypedDict, total=False):
     environment_aware: bool
     database_exclude_patterns: list[str] | None
     schema_exclude_patterns: list[str] | None
+    table_exclude_patterns: list[str] | None
 
 
 def deduce_source_group(sink_group_name: str) -> str | None:
@@ -228,6 +231,7 @@ def _build_sink_file_header_comments() -> list[str]:
         "#   - cdc manage-sink-groups --info <sink-group>         # Show sink-group details",
         "#   - cdc manage-sink-groups --add-to-ignore-list        # Add database exclude patterns",
         "#   - cdc manage-sink-groups --add-to-schema-excludes    # Add schema exclude patterns",
+        "#   - cdc manage-sink-groups --add-to-table-excludes     # Add table exclude patterns",
         "# ",
         "# For detailed documentation, see:",
         "#   - CDC_CLI.md in the implementation repository",
@@ -259,9 +263,11 @@ def _build_sink_group_metadata_comments(
     ]
 
     if services:
-        services_preview = ", ".join(services[:20])
-        if len(services) > 20:
-            services_preview += f", ... (+{len(services) - 20} more)"
+        services_preview = ", ".join(services[:_SERVICES_PREVIEW_LIMIT])
+        if len(services) > _SERVICES_PREVIEW_LIMIT:
+            services_preview += (
+                f", ... (+{len(services) - _SERVICES_PREVIEW_LIMIT} more)"
+            )
         lines.append(f"# Services ({len(services)}): {services_preview}")
 
     if warnings:
@@ -290,7 +296,7 @@ def _extract_sink_group_services(sink_group: SinkGroupConfig) -> list[str]:
     if isinstance(sources, dict):
         service_names = [
             str(service_name).strip()
-            for service_name in cast(dict[str, object], sources).keys()
+            for service_name in cast(dict[str, object], sources)
             if str(service_name).strip()
         ]
         return sorted(set(service_names))
@@ -571,6 +577,7 @@ def create_standalone_sink_group(
     environment_aware = opts.get("environment_aware", False)
     database_exclude_patterns = opts.get("database_exclude_patterns")
     schema_exclude_patterns = opts.get("schema_exclude_patterns")
+    table_exclude_patterns = opts.get("table_exclude_patterns")
 
     sink_group: dict[str, Any] = {
         "source_group": source_group_name,
@@ -587,6 +594,8 @@ def create_standalone_sink_group(
         sink_group["database_exclude_patterns"] = database_exclude_patterns
     if schema_exclude_patterns:
         sink_group["schema_exclude_patterns"] = schema_exclude_patterns
+    if table_exclude_patterns:
+        sink_group["table_exclude_patterns"] = table_exclude_patterns
 
     # Note: servers inherit 'type' from sink group level, no need to specify per-server
 

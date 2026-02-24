@@ -62,6 +62,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_add_server,
+    handle_add_table_exclude,
     handle_info,
     handle_list_envs,
     handle_list_extraction_patterns,
@@ -74,6 +75,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_update,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
+    load_table_exclude_patterns,
 )
 
 # Backward-compat alias for tests/extensions that patch this symbol directly.
@@ -343,6 +345,15 @@ def main() -> int:
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
     parser.add_argument(
+        "--add-to-table-excludes",
+        help=(
+            "Add a pattern to the table exclude list "
+            "(persisted in source-groups.yaml)."
+        ),
+    )
+    parser.add_argument("--list-table-excludes", action="store_true",
+                       help="List current table exclude patterns.")
+    parser.add_argument(
         "--add-source-custom-key",
         metavar="KEY",
         help="Add/update source custom key name used during --update.",
@@ -524,6 +535,22 @@ def main() -> int:
             print_info("  # database_exclude_patterns: ['test', 'dev', 'backup']")
         return 0
 
+    if args.list_table_excludes:
+        patterns = load_table_exclude_patterns()
+        print_header("Table Exclude Patterns")
+        if patterns:
+            print_info(
+                "Tables with names matching these patterns "
+                + "will be excluded during '--update' and autocomplete cache generation:"
+            )
+            for pattern in patterns:
+                print_info(f"  • {pattern}")
+        else:
+            print_warning("No table exclude patterns defined.")
+            print_info("You can add patterns in source-groups.yaml, for example:")
+            print_info("  # table_exclude_patterns: ['tmp', '^zz_.*']")
+        return 0
+
     # Handle add to ignore list
     if args.add_to_ignore_list:
         return handle_add_ignore_pattern(args)
@@ -531,6 +558,9 @@ def main() -> int:
     # Handle add to schema excludes
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
+
+    if args.add_to_table_excludes:
+        return handle_add_table_exclude(args)
 
     if args.add_source_custom_key:
         return _handle_add_source_custom_key(args)

@@ -135,7 +135,7 @@ class ScaffoldArgumentParser(argparse.ArgumentParser):
             if '--extraction-pattern' not in provided_args:
                 missing_items.append(
                     f"  {self.CYAN}🔍 --extraction-pattern{self.RESET} {self.MAGENTA}\"REGEX_PATTERN\"{self.RESET}\n" +
-                    f"      Regex pattern to extract identifiers from database names\n" +
+                    "      Regex pattern to extract identifiers from database names\n" +
                     f"      {self.BLUE}db-per-tenant example:{self.RESET} {self.GREEN}\"^adopus_(?P<customer>[^_]+)$\"{self.RESET}\n" +
                     f"      {self.BLUE}db-shared example:{self.RESET} {self.GREEN}\"^asma_(?P<service>[^_]+)_(?P<env>(test|stage|prod))$\"{self.RESET}\n" +
                     f"      Use empty string {self.GREEN}\"\"{self.RESET} for simple fallback matching (no regex)"

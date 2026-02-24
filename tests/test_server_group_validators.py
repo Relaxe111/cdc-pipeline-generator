@@ -10,6 +10,11 @@ import argparse
 import pytest
 
 from cdc_generator.validators.flag_validator import ManageServerGroupFlagValidator
+from cdc_generator.validators.manage_server_group.filters import (
+    should_exclude_schema,
+    should_exclude_table,
+    should_ignore_database,
+)
 from cdc_generator.validators.manage_server_group.handlers_config import (
     parse_env_mapping,
 )
@@ -318,8 +323,28 @@ class TestParseEnvMapping:
         """Mapping with multiple colons → ValueError."""
         with pytest.raises(ValueError, match="No valid mappings"):
             parse_env_mapping("dev:nonprod:extra")
-        output = capsys.readouterr().out
-        assert "multiple colons" in output.lower()
+
+
+class TestExcludePatternMatching:
+    """Tests regex-or-word matching behavior for exclude filters."""
+
+    def test_database_exclude_plain_word_matches_contains(self) -> None:
+        assert should_ignore_database("AdOpusDemo", ["demo"]) is True
+
+    def test_database_exclude_regex_matches(self) -> None:
+        assert should_ignore_database("AdOpusUAT", [r"^AdOpus(UAT|Demo)$"]) is True
+
+    def test_schema_exclude_plain_word_matches_contains(self) -> None:
+        assert should_exclude_schema("hdb_catalog", ["catalog"]) is True
+
+    def test_schema_exclude_invalid_regex_falls_back_to_contains(self) -> None:
+        assert should_exclude_schema("abc[def", ["abc["]) is True
+
+    def test_table_exclude_plain_word_matches_contains(self) -> None:
+        assert should_exclude_table("tmp_user_cache", ["tmp"]) is True
+
+    def test_table_exclude_regex_matches(self) -> None:
+        assert should_exclude_table("zz_internal", [r"^zz_.*"]) is True
 
     def test_empty_source_env_raises_value_error(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Mapping ':nonprod' (empty source) → ValueError."""

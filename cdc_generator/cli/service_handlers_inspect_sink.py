@@ -11,6 +11,8 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.validators.manage_service.schema_saver import (
+    add_tracked_tables,
+    filter_tables_by_tracked,
     save_sink_schema,
 )
 from cdc_generator.validators.manage_service.sink_inspector import (
@@ -210,6 +212,17 @@ def _run_sink_inspection(
         return 1
 
     if args.save:
+        track_table_values = list(getattr(args, "track_table", []) or [])
+        if track_table_values:
+            add_tracked_tables(target_service, track_table_values)
+
+        tables = filter_tables_by_tracked(target_service, tables)
+        if not tables:
+            print_warning(
+                "No tables matched tracked whitelist for save"
+            )
+            return 1
+
         ok = save_sink_schema(
             target_service,
             sink_key,

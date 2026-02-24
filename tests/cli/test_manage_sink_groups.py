@@ -739,6 +739,52 @@ class TestCliExcludePatterns:
         assert result.returncode == 1
         assert "More than one sink group found" in result.stdout + result.stderr
 
+    def test_add_to_table_excludes_updates_sink_group(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--add-to-table-excludes",
+            "^log,tmp",
+        )
+
+        assert result.returncode == 0
+        content = _read_sink_groups(isolated_project)
+        assert "table_exclude_patterns:" in content
+        assert "- ^log" in content
+        assert "- tmp" in content
+
+    def test_list_table_excludes_shows_patterns(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(
+            isolated_project,
+            _STANDALONE_SINK_GROUPS.replace(
+                "  sources: {}\n",
+                "  table_exclude_patterns:\n"
+                "  - ^log\n"
+                "  sources: {}\n",
+            ),
+        )
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--sink-group",
+            "sink_analytics",
+            "--list-table-excludes",
+        )
+
+        assert result.returncode == 0
+        output = result.stdout + result.stderr
+        assert "Table Exclude Patterns" in output
+        assert "^log" in output
+
 
 class TestCliRemoveSinkGroup:
     """CLI e2e: remove sink group behavior."""
@@ -781,6 +827,7 @@ class TestCliCompletions:
         assert "--update" in output
         assert "--add-to-ignore-list" in output
         assert "--add-to-schema-excludes" in output
+        assert "--add-to-table-excludes" in output
         assert "--validate" in output
 
     def test_update_value_completion_suggests_sink_group_names(

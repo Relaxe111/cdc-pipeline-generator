@@ -8,16 +8,16 @@ from unittest.mock import Mock, patch
 import pytest
 
 from cdc_generator.cli.sink_group import (
-    _build_sink_sources_from_databases,
     _build_server_config,
+    _build_sink_sources_from_databases,
     _check_server_references,
     _load_sink_group_for_server_op,
     _merge_server_sources_update,
     _validate_single_sink_group,
     handle_add_server_command,
-    handle_update_command,
     handle_remove_server_command,
     handle_remove_sink_group_command,
+    handle_update_command,
     handle_update_server_extraction_patterns_command,
 )
 
@@ -265,6 +265,66 @@ class TestHandleUpdateCommandMerge:
         assert sources["chat"]["prod"]["server"] == "prod"
         assert sources["chat"]["dev"]["database"] == "chat_dev"
         assert sources["chat"]["prod"]["database"] == "chat_prod"
+
+    @patch("cdc_generator.cli.sink_group.generate_service_autocomplete_definitions")
+    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group.resolve_sink_group")
+    @patch("cdc_generator.cli.sink_group.load_yaml_file")
+    @patch("cdc_generator.cli.sink_group._fetch_databases")
+    @patch("cdc_generator.cli.sink_group._validate_inspect_args")
+    @patch("cdc_generator.cli.sink_group.get_source_group_file_path")
+    def test_update_generates_autocomplete_definitions(
+        self,
+        _mock_source_file: Mock,
+        mock_validate: Mock,
+        mock_fetch: Mock,
+        mock_load_yaml: Mock,
+        mock_resolve: Mock,
+        _mock_save: Mock,
+        mock_generate_autocomplete: Mock,
+    ) -> None:
+        sink_group_name = "sink_asma"
+        sink_group: dict[str, Any] = {
+            "source_group": "adopus",
+            "pattern": "db-shared",
+            "type": "postgres",
+            "table_exclude_patterns": ["^log"],
+            "schema_exclude_patterns": ["logs"],
+            "servers": {
+                "default": {
+                    "host": "np",
+                    "port": "5432",
+                    "user": "u",
+                    "password": "p",
+                },
+            },
+            "sources": {},
+        }
+        sink_groups: dict[str, Any] = {sink_group_name: sink_group}
+        databases = [
+            {
+                "service": "chat",
+                "name": "chat_dev",
+                "environment": "dev",
+                "schemas": ["public"],
+                "table_count": 10,
+            },
+        ]
+
+        mock_validate.return_value = (sink_groups, sink_group, sink_group_name)
+        mock_load_yaml.return_value = {"adopus": {}}
+        mock_resolve.return_value = sink_group
+        mock_fetch.return_value = databases
+
+        result = handle_update_command(_ns(sink_group="sink_asma", server="default"))
+
+        assert result == 0
+        mock_generate_autocomplete.assert_called_once_with(
+            sink_group,
+            databases,
+            ["^log"],
+            ["logs"],
+        )
 
 
 class TestBuildServerConfig:

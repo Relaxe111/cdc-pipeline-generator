@@ -739,14 +739,14 @@ from .pipeline_templates import (
 )
 
 __all__ = [
-    "get_docker_compose_template",
-    "get_env_example_template",
-    "get_gitignore_template",
-    "get_readme_template",
-    "get_project_structure_doc_template",
-    "get_env_variables_doc_template",
     "get_cdc_cli_doc_template",
     "get_cdc_cli_flow_doc_template",
+    "get_docker_compose_template",
+    "get_env_example_template",
+    "get_env_variables_doc_template",
+    "get_gitignore_template",
+    "get_project_structure_doc_template",
+    "get_readme_template",
     "get_sink_pipeline_template",
     "get_source_pipeline_template",
 ]
