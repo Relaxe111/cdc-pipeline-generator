@@ -49,3 +49,4 @@ Load pattern:
 | 0003 | [Shared data structures for config objects](0003-shared-data-structures.md) | Proposed | 2026-02-06 |
 | 0004 | [Runtime Bloblang validation with sample data](0004-runtime-bloblang-validation.md) | Proposed | 2026-02-08 |
 | 0005 | [Schema management CLI and type definitions](0005-schema-management-and-type-definitions.md) | Proposed | 2026-02-10 |
+| 0006 | [Pattern/CLI audit consolidation and preprod compatibility policy](0006-pattern-cli-audit-and-preprod-compat-policy.md) | Accepted | 2026-02-24 |

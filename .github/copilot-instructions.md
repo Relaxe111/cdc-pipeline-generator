@@ -70,6 +70,7 @@ ADR lifecycle policy (anti-stale):
 | `0003-shared-data-structures.md` | Shared typed config models | TypedDict/dataclass contracts for YAML config |
 | `0004-runtime-bloblang-validation.md` | Runtime Bloblang validation | validating mappings against sample data/runtime checks |
 | `0005-schema-management-and-type-definitions.md` | Schema CLI and type definitions | schema management command design and type catalogs |
+| `0006-pattern-cli-audit-and-preprod-compat-policy.md` | Pattern/CLI audit consolidation + preprod cleanup policy | whether to remove legacy paths/aliases now, and how to treat pattern differences vs UX unification |
 
 When any ADR becomes obsolete, keep only a minimal tombstone entry (status + superseded/replacement link).
 

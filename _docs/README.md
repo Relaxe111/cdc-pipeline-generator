@@ -70,3 +70,4 @@ Implementation docs are kept in their respective repos for deployment-specific c
 - **Main README**: [../README.md](../README.md)
 - **Migration Plan**: [../MIGRATION_PLAN.md](../MIGRATION_PLAN.md)
 - **Examples**: [../examples/](../examples/)
+- **Pattern + CLI Audit Summary**: [./PATTERN_AND_CLI_AUDIT_SUMMARY.md](./PATTERN_AND_CLI_AUDIT_SUMMARY.md)
