@@ -221,7 +221,18 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 def manage_services_config_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-services config passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
-    return execute_grouped_command("manage-services", "config", sys.argv[3:])
+
+    if len(sys.argv) >= _MIN_GROUPED_ARGS and sys.argv[_GROUPED_COMMAND_INDEX] in {
+        "manage-services",
+        "ms",
+    }:
+        return execute_grouped_command(
+            "manage-services",
+            "config",
+            sys.argv[_GROUPED_EXTRA_ARGS_START:],
+        )
+
+    return execute_grouped_command("manage-services", "config", sys.argv[2:])
 
 
 # ============================================================================

@@ -1,4 +1,4 @@
-cdc manage-services config directory	7
-cdc manage-services config directory | flags: --al	7
+cdc manage-services config directory	8
+cdc manage-services config directory | flags: --al	8
 cdc test | flags: --all, --cli	2
 cdc msc | flags: --add-sink-table, --from, --map-column	1
