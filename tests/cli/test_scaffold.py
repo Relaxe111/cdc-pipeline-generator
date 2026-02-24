@@ -101,6 +101,10 @@ EXPECTED_FILES = [
     "docker-compose.yml",
     ".env.example",
     "README.md",
+    "_docs/PROJECT_STRUCTURE.md",
+    "_docs/ENV_VARIABLES.md",
+    "_docs/CDC_CLI.md",
+    "_docs/CDC_CLI_FLOW.md",
     ".gitignore",
     ".vscode/settings.json",
     "services/_schemas/column-templates.yaml",
@@ -506,6 +510,19 @@ class TestScaffoldGeneratedFileContent:
         assert "readmetest" in content.lower()
         assert "db-per-tenant" in content
 
+    def test_cdc_scaffold_readme_references_docs_index_files(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """README.md references generated _docs files with short summaries."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "docsref")
+        content = _read_file(isolated_project, "README.md")
+        assert "_docs/PROJECT_STRUCTURE.md" in content
+        assert "_docs/ENV_VARIABLES.md" in content
+        assert "_docs/CDC_CLI.md" in content
+        assert "_docs/CDC_CLI_FLOW.md" in content
+
     def test_cdc_scaffold_gitignore_contains_expected_patterns(
         self,
         run_cdc: RunCdc,
@@ -829,6 +846,39 @@ class TestScaffoldUpdate:
         updated = gitignore.read_text(encoding="utf-8")
         assert "my-custom-pattern/" in updated, "Custom pattern should be preserved"
         assert ".lsn_cache/" in updated, "Missing pattern should be appended"
+
+    def test_cdc_scaffold_update_recreates_missing_docs_files(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--update creates newly-required scaffold docs if they are missing."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "upddocs")
+
+        docs_file = isolated_project / "_docs" / "ENV_VARIABLES.md"
+        docs_file.unlink(missing_ok=True)
+        assert not docs_file.exists()
+
+        result = run_cdc("scaffold", "--update")
+        assert result.returncode == 0
+        assert docs_file.is_file(), "Missing _docs file should be recreated by --update"
+
+    def test_cdc_scaffold_update_recreates_missing_docker_compose(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--update creates docker-compose.yml when it is missing."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "upddc")
+
+        compose_file = isolated_project / "docker-compose.yml"
+        compose_file.unlink(missing_ok=True)
+        assert not compose_file.exists()
+
+        result = run_cdc("scaffold", "--update")
+        assert result.returncode == 0
+        assert compose_file.is_file(), "Missing docker-compose.yml should be recreated by --update"
+        assert "redpanda" in compose_file.read_text(encoding="utf-8").lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

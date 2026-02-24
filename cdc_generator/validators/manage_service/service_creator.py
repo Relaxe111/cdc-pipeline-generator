@@ -174,9 +174,9 @@ def create_service(
 # {sep}
 # ⚠️  This file is mostly READ-ONLY - modify only through CDC commands:
 #
-#   cdc manage-service --service {service_name} --add-source-table <schema.table>
-#   cdc manage-service --service {service_name} --remove-table <schema.table>
-#   cdc manage-service --create-service {service_name}
+#   cdc manage-services config --service {service_name} --add-source-table <schema.table>
+#   cdc manage-services config --service {service_name} --remove-table <schema.table>
+#   cdc manage-services config --create-service {service_name}
 #
 # 📝 MANUAL EDITS ALLOWED:
 #   - source.tables - You can manually add/edit table entries (use schema.table format)
@@ -215,23 +215,23 @@ def create_service(
                 + "(sources.<customer>.<env>)"
             )
             print_success(
-                "  2. Add CDC tables: cdc manage-service "
+                "  2. Add CDC tables: cdc manage-services config "
                 + f"--service {service_name} "
                 + "--add-source-table <schema.table>"
             )
             print_success(
-                "  3. Validate: cdc manage-service "
+                "  3. Validate: cdc manage-services config "
                 + f"--service {service_name} --validate-config"
             )
             print_success("  4. Generate pipelines: cdc generate")
         else:
             print_success(
-                "  1. Add CDC tables: cdc manage-service "
+                "  1. Add CDC tables: cdc manage-services config "
                 + f"--service {service_name} "
                 + "--add-source-table <schema.table>"
             )
             print_success(
-                "  2. Validate: cdc manage-service "
+                "  2. Validate: cdc manage-services config "
                 + f"--service {service_name} --validate-config"
             )
             print_success("  3. Generate pipelines: cdc generate")

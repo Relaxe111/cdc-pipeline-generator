@@ -8,7 +8,6 @@ Usage:
 
 Commands:
     scaffold              Scaffold a new CDC pipeline project with source group configuration
-    validate              Validate all customer configurations
     manage-services      Manage service config/schema commands
     manage-source-groups Manage source groups configuration
     manage-sink-groups   Manage sink groups configuration
@@ -16,9 +15,6 @@ Commands:
     manage-migrations    Manage migration and DB lifecycle commands
     setup-local          Set up local development environment
     generate-usage-stats Generate command usage stats from _docs/_stats user files
-    reset-local          Reset local environment
-    nuke-local           Complete cleanup of local environment
-    reload-cdc-autocompletions  Reload Fish shell completions after modifying cdc.fish
     help                 Show this help message
     test                 Run project tests (unit and CLI e2e)
 """
@@ -195,84 +191,16 @@ PIPELINE_COMMANDS: dict[str, dict[str, str]] = {
         "description": "Generate Redpanda Connect pipelines",
         "usage": "cdc manage-pipelines generate [customer] [--all] [--force]",
     },
-    "reload": {
-        "runner": "local",
-        "script": "scripts/9-reload-pipelines.py",
-        "description": "Regenerate and reload Redpanda Connect pipelines",
-        "usage": "cdc manage-pipelines reload [customer...]",
-    },
-    "verify": {
-        "runner": "local",
-        "script": "scripts/6-verify-pipeline.py",
-        "description": "Verify pipeline connections",
-        "usage": "cdc manage-pipelines verify <customer> <env>",
-    },
-    "verify-sync": {
-        "runner": "local",
-        "script": "scripts/13-verify-cdc-sync.py",
-        "description": "Verify CDC synchronization and detect gaps",
-        "usage": (
-            "cdc manage-pipelines verify-sync "
-            + "[--customer <name>] [--env <env>] [--table <table>] [--fix]"
-        ),
-    },
-    "stress-test": {
-        "runner": "local",
-        "script": "scripts/7-stress-test.py",
-        "description": "CDC stress test with real-time monitoring",
-        "usage": (
-            "cdc manage-pipelines stress-test "
-            + "--env <env> [customer...] [--tables <table...>] [--records N]"
-        ),
-    },
 }
 
 # manage-migrations subcommands
 MIGRATION_COMMANDS: dict[str, dict[str, str]] = {
-    "enable-cdc": {
-        "runner": "local",
-        "script": "scripts/5-enable-cdc-mssql.py",
-        "description": "Enable CDC on MSSQL tables",
-        "usage": "cdc manage-migrations enable-cdc <customer> <env>",
-    },
-    "apply-replica": {
-        "runner": "local",
-        "script": "scripts/10-migrate-replica.py",
-        "description": "Apply PostgreSQL migrations to replica databases",
-        "usage": "cdc manage-migrations apply-replica <customer> --env <env>",
-    },
-    "clean-cdc": {
-        "runner": "local",
-        "script": "scripts/9-clean-cdc-tables.py",
-        "description": "Clean CDC change tracking tables",
-        "usage": "cdc manage-migrations clean-cdc --env <env> [--table <table>] [--all]",
-    },
     "schema-docs": {
-        "runner": "local",
-        "script": "generate_schema_docs.py",
+        "runner": "generator",
+        "module": "cdc_generator.cli.schema_docs",
+        "script": "cli/schema_docs.py",
         "description": "Generate database schema documentation YAML files",
         "usage": "cdc manage-migrations schema-docs [--env <env>]",
-    },
-}
-
-# Commands that use local scripts (implementation-specific, top-level)
-LOCAL_COMMANDS: dict[str, dict[str, str]] = {
-    "validate": {
-        "script": "scripts/1-validate-customers.py",
-        "description": "Validate all customer YAML configurations",
-    },
-    "reset-local": {
-        "script": "scripts/7-reset-local.py",
-        "description": "Reset local development environment",
-    },
-    "nuke-local": {
-        "script": "scripts/8-nuke-local.py",
-        "description": "Complete cleanup of local environment",
-    },
-    "reload-cdc-autocompletions": {
-        "script": "scripts/reload-cdc-autocompletions.sh",
-        "description": "Reload Fish shell completions after modifying cdc.fish",
-        "usage": "cdc reload-cdc-autocompletions",
     },
 }
 
@@ -319,8 +247,6 @@ def print_help(
 
     print("\n⚡ Aliases:")
     print("  ms                   - alias for manage-services")
-    print("  msc                  - alias for manage-services config")
-    print("  mss                  - alias for manage-services schema")
     print("  msog                 - alias for manage-source-groups")
     print("  msig                 - alias for manage-sink-groups")
     print("  mp                   - alias for manage-pipelines")
@@ -345,13 +271,6 @@ def print_help(
     print("\n🧪 Testing:")
     print("  test                 - Run tests (--cli for e2e, --all for everything)")
     print("  test-coverage        - Show test coverage report by cdc command (-v for details)")
-
-    print("\n🔧 Top-level local script commands:")
-    for cmd, info in LOCAL_COMMANDS.items():
-        desc = info["description"]
-        if "usage" in info:
-            desc += f"\n  {' ' * 20}   Usage: {info['usage']}"
-        print(f"  {cmd:20} - {desc}")
 
     print("\n💡 Tip: Run commands from implementation directory or dev container")
 
@@ -413,51 +332,6 @@ def run_generator_spec(
         return 1
 
 
-def run_local_command(
-    command: str,
-    _paths: ScriptPaths,
-    extra_args: list[str],
-    workspace_root: Path,
-) -> int:
-    """Run a command from local scripts directory.
-
-    Args:
-        command: Command name
-        _paths: Dictionary of script paths (unused, kept for API consistency)
-        extra_args: Additional command-line arguments
-        workspace_root: Current workspace root
-
-    Returns:
-        Exit code
-    """
-    cmd_info = LOCAL_COMMANDS[command]
-
-    return run_local_spec(command, cmd_info, extra_args, workspace_root)
-
-
-def run_local_spec(
-    command_name: str,
-    cmd_info: dict[str, str],
-    extra_args: list[str],
-    workspace_root: Path,
-) -> int:
-    """Run a local-script command from a command spec."""
-    script_path = workspace_root / cmd_info["script"]
-
-    if not script_path.exists():
-        print(f"❌ Error: Script not found: {script_path}")
-        print("   This command requires an implementation workspace.")
-        return 1
-
-    cmd = ["python3", str(script_path), *extra_args]
-
-    try:
-        return _run_subprocess(cmd, cwd=workspace_root)
-    except Exception as e:
-        print(f"❌ Error running {command_name}: {e}")
-        return 1
-
-
 def execute_grouped_command(
     group: str,
     subcommand: str,
@@ -485,7 +359,11 @@ def execute_grouped_command(
     runner = cmd_info.get("runner")
     if runner == "generator":
         return run_generator_spec(command_name, cmd_info, paths, extra_args, workspace_root)
-    return run_local_spec(command_name, cmd_info, extra_args, workspace_root)
+    print(
+        "❌ This command is not available in canonical generator-only mode: "
+        + command_name,
+    )
+    return 1
 
 
 def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
@@ -515,27 +393,6 @@ def _handle_special_commands(command: str, extra_args: list[str]) -> int | None:
     return None
 
 
-def _handle_reload_completions(is_dev_container: bool) -> int:
-    """Handle the reload-cdc-autocompletions command."""
-    if not is_dev_container:
-        print("❌ Error: reload-cdc-autocompletions can only run inside the dev container.")
-        print("   Enter the container with: docker compose exec dev fish")
-        return 1
-
-    try:
-        fish_src = "/workspace/cdc_generator/templates/init/cdc.fish"
-        fish_dst = "/usr/share/fish/vendor_completions.d/cdc.fish"
-        fish_cmd = (
-            f"cp {fish_src} {fish_dst}"
-            f" && . {fish_dst}"
-            " && echo '✓ Fish completions reloaded successfully'"
-        )
-        return _run_subprocess(["fish", "-c", fish_cmd])
-    except Exception as e:
-        print(f"❌ Error reloading completions: {e}")
-        return 1
-
-
 def execute_command(command: str, extra_args: list[str]) -> int:
     """Execute a cdc command using the existing command handlers."""
     # Commands that run without environment detection
@@ -547,14 +404,8 @@ def execute_command(command: str, extra_args: list[str]) -> int:
     workspace_root, _implementation_name, is_dev_container = detect_environment()
     paths = get_script_paths(workspace_root, is_dev_container)
 
-    if command == "reload-cdc-autocompletions":
-        return _handle_reload_completions(is_dev_container)
-
     if command in GENERATOR_COMMANDS:
         return run_generator_command(command, paths, extra_args, workspace_root)
-
-    if command in LOCAL_COMMANDS:
-        return run_local_command(command, paths, extra_args, workspace_root)
 
     print(f"❌ Unknown command: {command}")
     print("\nRun 'cdc help' to see available commands.")
@@ -604,8 +455,6 @@ def _register_commands() -> None:
     """
     from cdc_generator.cli.click_commands import (
         CLICK_COMMANDS,
-        manage_service_cmd,
-        manage_services_schema_cmd,
     )
 
     # Register typed commands (have full Click option declarations)
@@ -619,17 +468,9 @@ def _register_commands() -> None:
         if cmd_obj is not None:
             _click_cli.add_command(cmd_obj, name=alias)
 
-    # Register direct subcommand aliases as top-level shortcuts.
-    _click_cli.add_command(manage_service_cmd, name="msc")
-    _click_cli.add_command(manage_services_schema_cmd, name="mss")
-
     # Register remaining commands as generic passthrough
     typed_names = set(CLICK_COMMANDS.keys())
     for cmd, info in GENERATOR_COMMANDS.items():
-        if cmd not in typed_names:
-            _register_passthrough_command(cmd, info["description"])
-
-    for cmd, info in LOCAL_COMMANDS.items():
         if cmd not in typed_names:
             _register_passthrough_command(cmd, info["description"])
 

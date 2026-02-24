@@ -925,7 +925,7 @@ def get_sink_group_warnings(
         warnings.append(
             f"Sink group '{sink_group_name}' has no 'sources' configured."
             + " It cannot be used as a sink target until services are added."
-            + " Use 'cdc manage-service --service <name> --add-sink"
+            + " Use 'cdc manage-services config --service <name> --add-sink"
             + f" {sink_group_name}.<service>' to add services."
         )
 

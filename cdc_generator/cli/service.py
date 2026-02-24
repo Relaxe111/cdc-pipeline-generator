@@ -130,7 +130,7 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--add-sink-table": (
         "Table name to add to sink (auto-detects service & sink if only one exists)",
         (
-            "cdc msc --add-sink-table --from dbo.Actor "
+            "cdc manage-services config --add-sink-table --from dbo.Actor "
             "--replicate-structure --sink-schema adopus --add-column-template customer_id"
         ),
     ),

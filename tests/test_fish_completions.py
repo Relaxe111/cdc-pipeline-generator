@@ -122,16 +122,14 @@ class TestClickCommandRegistration:
                 f"GENERATOR_COMMANDS[{cmd_name!r}] not registered in Click"
             )
 
-    def test_local_commands_registered(self) -> None:
-        """All LOCAL_COMMANDS must be registered as Click subcommands."""
-        from cdc_generator.cli.commands import LOCAL_COMMANDS
-
+    def test_no_local_script_commands_registered(self) -> None:
+        """Legacy script-backed top-level commands are not registered."""
         cli = _get_click_cli()
         registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
 
-        for cmd_name in LOCAL_COMMANDS:
-            assert cmd_name in registered, (
-                f"LOCAL_COMMANDS[{cmd_name!r}] not registered in Click"
+        for cmd_name in ["validate", "reset-local", "nuke-local", "reload-cdc-autocompletions"]:
+            assert cmd_name not in registered, (
+                f"Legacy local command {cmd_name!r} should not be registered"
             )
 
     def test_special_commands_registered(self) -> None:
@@ -161,7 +159,7 @@ class TestClickCommandRegistration:
         cli = _get_click_cli()
         registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
 
-        for alias in ["ms", "msc", "mss", "msog", "msig", "mp", "mm"]:
+        for alias in ["ms", "msog", "msig", "mp", "mm"]:
             assert alias in registered, (
                 f"Management alias {alias!r} not registered"
             )
@@ -178,9 +176,9 @@ class TestClickCommandRegistration:
         assert commands["mp"] is commands["manage-pipelines"]
         assert commands["mm"] is commands["manage-migrations"]
 
-        # Direct subcommand aliases should be distinct command objects.
-        assert commands["msc"] is not commands["manage-services"]
-        assert commands["mss"] is not commands["manage-services"]
+        # Removed direct subcommand aliases must not exist.
+        assert "msc" not in commands
+        assert "mss" not in commands
 
 
 # ---------------------------------------------------------------------------

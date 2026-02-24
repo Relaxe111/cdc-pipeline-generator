@@ -96,7 +96,7 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 # ============================================================================
 
 @click.command(
-    name="manage-service",
+    name="config",
     cls=SmartCommand,
     smart_groups=MANAGE_SERVICE_GROUPS,
     smart_always=MANAGE_SERVICE_ALWAYS,
@@ -218,20 +218,10 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 @click.option("--remove-column", shell_complete=complete_custom_table_columns,
               help="Remove column from custom table")
 @click.pass_context
-def manage_service_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """Manage-service passthrough (legacy alias for manage-services config)."""
+def manage_services_config_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-services config passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
-
-    if (
-        len(sys.argv) >= _MIN_GROUPED_ARGS
-        and sys.argv[_GROUPED_COMMAND_INDEX] == "manage-services"
-        and sys.argv[_GROUPED_SUBCOMMAND_INDEX] == "config"
-    ):
-        return execute_grouped_command(
-            "manage-services", "config", sys.argv[_GROUPED_EXTRA_ARGS_START:]
-        )
-
-    return execute_grouped_command("manage-services", "config", sys.argv[2:])
+    return execute_grouped_command("manage-services", "config", sys.argv[3:])
 
 
 # ============================================================================
@@ -622,7 +612,7 @@ def manage_services_cmd(ctx: click.Context) -> int:
     return 0
 
 
-manage_services_cmd.add_command(manage_service_cmd, name="config")
+manage_services_cmd.add_command(manage_services_config_cmd, name="config")
 
 
 # ============================================================================

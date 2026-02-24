@@ -930,7 +930,7 @@ Output Structure:
                 "\n❌ Service validation failed. "
                 + "Fix errors before generating pipelines."
             )
-            print("   Run: cdc manage-service --service <name> --validate-config")
+            print("   Run: cdc manage-services config --service <name> --validate-config")
             sys.exit(1)
 
         print("\n  ✅ All service configurations validated successfully\n")

@@ -410,7 +410,7 @@ CDC (Change Data Capture) pipeline for {server_group_name} using Redpanda Connec
 
 4. **Create service configuration**:
    ```bash
-   cdc manage-service --service <service-name> --create-service
+  cdc manage-services config --service <service-name> --create-service
    ```
 
 5. **Generate pipelines**:
@@ -420,12 +420,11 @@ CDC (Change Data Capture) pipeline for {server_group_name} using Redpanda Connec
 
 ## Development
 
-For development work, use the cdc-pipeline-generator dev container:
+All development scripts and logic live in `cdc-pipeline-generator`.
 
 ```bash
 cd ../cdc-pipeline-generator
 docker compose exec dev fish
-cd /implementations/{server_group_name}
 ```
 
 ## Monitoring
@@ -453,7 +452,259 @@ cd /implementations/{server_group_name}
 
 ## Documentation
 
-See the `_docs/` directory for detailed documentation.
+Detailed implementation documentation is generated under `_docs/`:
+
+- `_docs/PROJECT_STRUCTURE.md` — Directory layout, what to edit, and generated output boundaries.
+- `_docs/ENV_VARIABLES.md` — Required/optional environment variables and local runtime defaults.
+- `_docs/CDC_CLI.md` — Command reference for the `cdc` workflow used by this implementation.
+- `_docs/CDC_CLI_FLOW.md` — Practical end-to-end command flow from setup to generation.
+
+Use these docs as the canonical implementation reference; keep root-level docs minimal.
+"""
+
+
+def get_project_structure_doc_template(server_group_name: str, pattern: str) -> str:
+    """Generate _docs/PROJECT_STRUCTURE.md template."""
+    pattern_line = (
+        "One database per tenant/customer"
+        if pattern == "db-per-tenant"
+        else "Shared databases with environment-aware grouping"
+    )
+    return f"""# Project Structure
+
+## Overview
+
+- Implementation: `{server_group_name}`
+- Pattern: `{pattern}`
+- Model: {pattern_line}
+
+## Root Layout
+
+```
+.
+├── services/               # Service-level YAML configs
+├── pipeline-templates/     # Source/sink template YAML files
+├── generated/              # Generated artifacts (do not edit manually)
+├── _docs/                  # Implementation documentation
+├── source-groups.yaml      # Server group definition
+├── docker-compose.yml      # Local runtime infrastructure
+├── .env.example            # Environment variable template
+└── README.md               # Entry-point documentation
+```
+
+## Edit vs Generate
+
+- Edit manually:
+  - `source-groups.yaml`
+  - `services/*.yaml`
+  - `pipeline-templates/*.yaml`
+- Generated/managed:
+  - `generated/**`
+
+## Notes
+
+- Keep documentation files under `_docs/`.
+- Keep only `README.md` at project root for high-level navigation.
+"""
+
+
+def get_env_variables_doc_template(server_group_name: str, source_type: str) -> str:
+    """Generate _docs/ENV_VARIABLES.md template."""
+    source_prefix = "POSTGRES_SOURCE" if source_type == "postgres" else "MSSQL_SOURCE"
+    source_port = "5432" if source_type == "postgres" else "1433"
+    return f"""# Environment Variables
+
+This implementation uses `.env` (from `.env.example`) for local runtime configuration.
+
+## Source Database
+
+- `{source_prefix}_HOST`
+- `{source_prefix}_PORT` (default `{source_port}`)
+- `{source_prefix}_USER`
+- `{source_prefix}_PASSWORD`
+- `{source_prefix}_DB`
+
+## Target PostgreSQL (Local)
+
+- `POSTGRES_LOCAL_USER` (default `postgres`)
+- `POSTGRES_LOCAL_PASSWORD` (default `postgres`)
+- `POSTGRES_LOCAL_DB` (default `{server_group_name}_db`)
+- `POSTGRES_PORT` (default `5432`)
+
+## Kafka / Redpanda
+
+- `KAFKA_BOOTSTRAP_SERVERS`
+- `REDPANDA_BROKERS`
+- `REDPANDA_SCHEMA_REGISTRY`
+
+## Runtime Tuning
+
+- `CDC_BUFFER_SIZE`
+- `CDC_BATCH_TIMEOUT`
+- `CDC_MAX_IN_FLIGHT`
+
+## Workflow
+
+```bash
+cp .env.example .env
+# edit values
+docker compose up -d
+```
+"""
+
+
+def get_cdc_cli_doc_template(server_group_name: str) -> str:
+    """Generate _docs/CDC_CLI.md template."""
+    return f"""# CDC CLI Reference
+
+This implementation uses the normalized canonical CLI surface from `cdc-pipeline-generator`.
+
+## Canonical Top-Level Commands
+
+- `cdc scaffold`
+- `cdc manage-services`
+- `cdc manage-source-groups`
+- `cdc manage-sink-groups`
+- `cdc manage-pipelines`
+- `cdc manage-migrations`
+- `cdc setup-local`
+
+## Approved Aliases
+
+- `ms` -> `manage-services`
+- `msog` -> `manage-source-groups`
+- `msig` -> `manage-sink-groups`
+- `mp` -> `manage-pipelines`
+- `mm` -> `manage-migrations`
+
+## Grouped Canonical Subcommands
+
+- `cdc manage-services config`
+- `cdc manage-services schema`
+- `cdc manage-pipelines generate`
+- `cdc manage-migrations schema-docs`
+
+## manage-source-groups (normalized flags)
+
+### Discovery / Sync
+
+- `--update [SERVER]`
+- `--all` (with `--update`)
+- `--info`
+- `--view-services`
+
+### Server Management
+
+- `--add-server NAME`
+- `--list-servers`
+- `--remove-server NAME`
+- `--set-kafka-topology shared|per-server`
+- Connection args used with add/update server flows: `--host`, `--port`, `--user`, `--password`
+
+### Service/Environment Identification
+
+- `--set-extraction-pattern SERVER PATTERN`
+- `--add-extraction-pattern SERVER PATTERN`
+- `--list-extraction-patterns [SERVER]`
+- `--remove-extraction-pattern SERVER INDEX`
+- Pattern modifiers: `--env`, `--strip-patterns`, `--env-mapping from:to`, `--description`
+
+### Ignore Lists
+
+- `--add-to-ignore-list PATTERN`
+- `--list-ignore-patterns`
+- `--add-to-schema-excludes PATTERN`
+- `--list-schema-excludes`
+
+### Validation + Type Introspection
+
+- `--set-validation-env ENV`
+- `--list-envs`
+- `--introspect-types [--server NAME]`
+- `--db-definitions [--server NAME]`
+
+### Source Custom Keys
+
+- `--add-source-custom-key KEY`
+- `--custom-key-value SQL`
+- `--custom-key-exec-type sql`
+
+## Notes
+
+- Prefer canonical grouped commands in docs and scripts.
+- Use canonical grouped commands only (`manage-services config` and `manage-services schema`).
+- Run commands from this implementation root (`{server_group_name}`) unless command docs state otherwise.
+"""
+
+
+def get_cdc_cli_flow_doc_template(server_group_name: str) -> str:
+    """Generate _docs/CDC_CLI_FLOW.md template."""
+    return f"""# CDC CLI Flow
+
+Scenario-based workflow for `{server_group_name}` using canonical command groups.
+
+## Scenario 1: Add New Source Group
+
+```bash
+cdc scaffold {server_group_name} \
+  --pattern db-per-tenant \
+  --source-type mssql \
+  --extraction-pattern ""
+```
+
+## Scenario 2: Add New Server
+
+```bash
+cdc manage-source-groups \
+  --add-server reporting \
+  --host "$SOURCE_HOST" \
+  --port "$SOURCE_PORT" \
+  --user "$SOURCE_USER" \
+  --password "$SOURCE_PASSWORD"
+```
+
+## Scenario 3: Add / Adjust Server Configuration
+
+```bash
+cdc manage-source-groups --list-servers
+cdc manage-source-groups --set-kafka-topology per-server
+cdc manage-source-groups --set-validation-env nonprod
+```
+
+## Scenario 4: Configure Service/Environment Identification
+
+```bash
+cdc manage-source-groups \
+  --add-extraction-pattern reporting "^(?P<service>[^_]+)_(?P<env>[^_]+)$" \
+  --strip-patterns "_db$" \
+  --env-mapping "prod_adcuris:prod-adcuris" \
+  --description "service_env format"
+
+cdc manage-source-groups --list-extraction-patterns reporting
+```
+
+## Scenario 5: Add Schema and Database Ignore Rules
+
+```bash
+cdc manage-source-groups --add-to-ignore-list "_test"
+cdc manage-source-groups --add-to-schema-excludes "hdb_catalog"
+cdc manage-source-groups --list-ignore-patterns
+cdc manage-source-groups --list-schema-excludes
+```
+
+## Scenario 6: Generate Sources (Discovery from Servers)
+
+```bash
+cdc manage-source-groups --update reporting
+cdc manage-source-groups --update --all
+cdc manage-source-groups --view-services
+```
+
+## Optional Continuation
+
+```bash
+cdc manage-pipelines generate
+```
 """
 
 
@@ -490,6 +741,10 @@ __all__ = [
     "get_env_example_template",
     "get_gitignore_template",
     "get_readme_template",
+    "get_project_structure_doc_template",
+    "get_env_variables_doc_template",
+    "get_cdc_cli_doc_template",
+    "get_cdc_cli_flow_doc_template",
     "get_sink_pipeline_template",
     "get_source_pipeline_template",
 ]

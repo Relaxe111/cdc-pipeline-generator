@@ -214,7 +214,7 @@ def update_service_yaml_header(
 
         final_comment = (
             "# 📝 To verify column names for a specific table:\n"
-            + f"#    cdc manage-service --service {service} "
+            + f"#    cdc manage-services config --service {service} "
             + "--inspect --schema {schema_name}\n"
             + "# "
             + ("=" * 82)

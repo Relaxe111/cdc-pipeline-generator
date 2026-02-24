@@ -5,9 +5,13 @@ import shutil
 from pathlib import Path
 
 from .templates import (
+    get_cdc_cli_doc_template,
+    get_cdc_cli_flow_doc_template,
     get_docker_compose_template,
     get_env_example_template,
+    get_env_variables_doc_template,
     get_gitignore_template,
+    get_project_structure_doc_template,
     get_readme_template,
     get_sink_pipeline_template,
     get_source_pipeline_template,
@@ -186,6 +190,17 @@ def scaffold_project_structure(
         ".gitignore": get_gitignore_template(),
     }
 
+    docs_to_create = {
+        "_docs/PROJECT_STRUCTURE.md": get_project_structure_doc_template(
+            server_group_name, pattern,
+        ),
+        "_docs/ENV_VARIABLES.md": get_env_variables_doc_template(
+            server_group_name, source_type,
+        ),
+        "_docs/CDC_CLI.md": get_cdc_cli_doc_template(server_group_name),
+        "_docs/CDC_CLI_FLOW.md": get_cdc_cli_flow_doc_template(server_group_name),
+    }
+
     # docker-compose.yml should always be created/overwritten with full CDC infrastructure
     # (init template only has basic postgres, server-group scaffold has full Redpanda setup)
     _create_docker_compose(project_root, files_to_create["docker-compose.yml"])
@@ -197,6 +212,15 @@ def scaffold_project_structure(
 
         file_path = project_root / filename
         if not file_path.exists():  # Don't overwrite existing files
+            file_path.write_text(content)
+            print(f"✓ Created file: {filename}")
+        else:
+            print(f"⊘ Skipped (exists): {filename}")
+
+    # Create documentation files under _docs (skip if they exist)
+    for filename, content in docs_to_create.items():
+        file_path = project_root / filename
+        if not file_path.exists():
             file_path.write_text(content)
             print(f"✓ Created file: {filename}")
         else:

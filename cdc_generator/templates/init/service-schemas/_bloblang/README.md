@@ -36,7 +36,7 @@ Use relative paths from the project root with the `file://` prefix.
 Validate all Bloblang references:
 
 ```bash
-cdc manage-service --service <name> --validate-bloblang
+cdc manage-services config --service <name> --validate-bloblang
 ```
 
 Validate one file:

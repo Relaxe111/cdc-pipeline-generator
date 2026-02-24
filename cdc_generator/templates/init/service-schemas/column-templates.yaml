@@ -29,7 +29,7 @@
 #   - Keys are looked up at source level first, then env level
 # ============================================================================
 # Add templates via:
-#   cdc mss column-templates --add <key> --type <pg_type> --value <expr> --value-source <mode>
+#   cdc manage-services schema column-templates --add <key> --type <pg_type> --value <expr> --value-source <mode>
 #
 templates:
   # ---------------------------------------------------------------------------

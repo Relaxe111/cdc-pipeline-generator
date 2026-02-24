@@ -5,8 +5,18 @@ import shutil
 from pathlib import Path
 from typing import cast
 
+import yaml
+
 from cdc_generator.helpers.helpers_logging import print_info, print_success, print_warning
 
+from .templates import (
+    get_cdc_cli_doc_template,
+    get_cdc_cli_flow_doc_template,
+    get_docker_compose_template,
+    get_env_variables_doc_template,
+    get_project_structure_doc_template,
+    get_readme_template,
+)
 from .vscode_settings import (
     create_vscode_settings,
     get_generated_subdirs,
@@ -186,7 +196,7 @@ def update_scaffold(project_root: Path) -> bool:
     - Directory structure (adds new directories, never removes)
     - .vscode/settings.json (merges new settings, preserves existing)
     - .gitignore (appends new patterns, preserves existing)
-    - docker-compose.yml (only if user confirms, creates backup)
+    - docker-compose.yml (creates if missing)
 
     It does NOT modify:
     - source-groups.yaml content (only ensures header exists)
@@ -237,8 +247,96 @@ def update_scaffold(project_root: Path) -> bool:
     else:
         print_warning("⚠️  source-groups.yaml not found - run 'cdc scaffold <name>' first")
 
+    # 7. Ensure scaffold markdown docs exist (README at root, docs under _docs)
+    _ensure_docker_compose_file(project_root)
+
+    # 8. Ensure scaffold markdown docs exist (README at root, docs under _docs)
+    _ensure_scaffold_markdown_files(project_root)
+
     print_success("\n✅ Scaffold update complete!")
     return True
+
+
+def _infer_scaffold_metadata(project_root: Path) -> tuple[str, str, str]:
+    """Infer server group metadata from source-groups.yaml.
+
+    Returns:
+        Tuple of (server_group_name, pattern, source_type)
+    """
+    source_groups_path = project_root / "source-groups.yaml"
+    default_metadata = (project_root.name, "db-per-tenant", "mssql")
+
+    if not source_groups_path.exists():
+        return default_metadata
+
+    try:
+        raw_data: object = yaml.safe_load(source_groups_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return default_metadata
+
+    if not isinstance(raw_data, dict):
+        return default_metadata
+
+    data = cast(dict[str, object], raw_data)
+
+    server_group_name = ""
+    group_data: dict[str, object] | None = None
+    for key, value in data.items():
+        if key == "_metadata":
+            continue
+        if isinstance(value, dict):
+            server_group_name = key
+            group_data = cast(dict[str, object], value)
+            break
+
+    if not server_group_name or group_data is None:
+        return default_metadata
+
+    pattern_value = group_data.get("pattern")
+    source_type_value = group_data.get("type")
+    pattern = str(pattern_value) if pattern_value is not None else "db-per-tenant"
+    source_type = str(source_type_value) if source_type_value is not None else "mssql"
+    return server_group_name, pattern, source_type
+
+
+def _ensure_scaffold_markdown_files(project_root: Path) -> None:
+    """Create missing scaffold markdown files without overwriting existing."""
+    server_group_name, pattern, source_type = _infer_scaffold_metadata(project_root)
+
+    markdown_files = {
+        "README.md": get_readme_template(server_group_name, pattern),
+        "_docs/PROJECT_STRUCTURE.md": get_project_structure_doc_template(
+            server_group_name, pattern,
+        ),
+        "_docs/ENV_VARIABLES.md": get_env_variables_doc_template(
+            server_group_name, source_type,
+        ),
+        "_docs/CDC_CLI.md": get_cdc_cli_doc_template(server_group_name),
+        "_docs/CDC_CLI_FLOW.md": get_cdc_cli_flow_doc_template(server_group_name),
+    }
+
+    for relative_path, content in markdown_files.items():
+        target_path = project_root / relative_path
+        if target_path.exists():
+            print_info(f"⊘ Skipped (exists): {relative_path}")
+            continue
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content, encoding="utf-8")
+        print_success(f"✓ Created file: {relative_path}")
+
+
+def _ensure_docker_compose_file(project_root: Path) -> None:
+    """Create docker-compose.yml if missing during scaffold update."""
+    docker_compose_path = project_root / "docker-compose.yml"
+    if docker_compose_path.exists():
+        print_info("⊘ Skipped (exists): docker-compose.yml")
+        return
+
+    server_group_name, pattern, _source_type = _infer_scaffold_metadata(project_root)
+    content = get_docker_compose_template(server_group_name, pattern)
+    docker_compose_path.write_text(content, encoding="utf-8")
+    print_success("✓ Created file: docker-compose.yml")
 
 
 def _update_vscode_settings(project_root: Path) -> None:

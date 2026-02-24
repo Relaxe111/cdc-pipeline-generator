@@ -203,7 +203,7 @@ def _validate_table_in_schemas(
         print_error(f"No schemas found for sink target '{target_service}'")
         print_info(
             "To fetch schemas, run:\n"
-            + "  cdc manage-service --service <SERVICE>"
+            + "  cdc manage-services config --service <SERVICE>"
             + f" --inspect-sink {sink_key} --all --save"
         )
         print_info(
@@ -219,7 +219,7 @@ def _validate_table_in_schemas(
         )
         print_info(
             "To populate schemas, run:\n"
-            + "  cdc manage-service --service <SERVICE>"
+            + "  cdc manage-services config --service <SERVICE>"
             + f" --inspect-sink {sink_key} --all --save"
         )
         return False
@@ -1475,7 +1475,7 @@ def _load_schemas_for_mapping(
             + f"service-schemas/{source_service}/{src_path}.yaml"
         )
         print_info(
-            "Run: cdc manage-service --service "
+            "Run: cdc manage-services config --service "
             + f"{service} --inspect --all --save"
         )
         return None
@@ -1487,7 +1487,7 @@ def _load_schemas_for_mapping(
             + f"service-schemas/{target_service}/{tgt_path}.yaml"
         )
         print_info(
-            f"Run: cdc manage-service --service {service}"
+            f"Run: cdc manage-services config --service {service}"
             + f" --inspect-sink {sink_key} --all --save"
         )
         return None
