@@ -853,7 +853,7 @@ class TestCliSchemaColumnTemplates:
         _create_project(isolated_project)
         result = run_cdc(
             "manage-services",
-            "schema",
+            "resources",
             "column-templates",
             "--list",
         )
@@ -869,7 +869,7 @@ class TestCliSchemaTransforms:
         _create_project(isolated_project)
         result = run_cdc(
             "manage-services",
-            "schema",
+            "resources",
             "transforms",
             "--list-rules",
         )
