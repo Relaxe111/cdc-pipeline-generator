@@ -15,7 +15,9 @@ from cdc_generator.helpers.psycopg2_loader import (
     ensure_psycopg2,
     has_psycopg2,
 )
-from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.service_schema_paths import (
+    get_service_schema_write_dir,
+)
 
 from .db_inspector_common import get_connection_params, get_service_db_config
 
@@ -68,6 +70,7 @@ def save_detailed_schema_mssql(
                 c.DATA_TYPE,
                 c.CHARACTER_MAXIMUM_LENGTH,
                 c.IS_NULLABLE,
+                c.COLUMN_DEFAULT,
                 CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS IS_PRIMARY_KEY
             FROM INFORMATION_SCHEMA.COLUMNS c
             LEFT JOIN (
@@ -87,11 +90,12 @@ def save_detailed_schema_mssql(
         columns: list[dict[str, Any]] = []
         primary_keys: list[str] = []
         for row in cursor.fetchall():
-            col_name, data_type, _max_len, is_nullable, is_pk = row
+            col_name, data_type, _max_len, is_nullable, default_value, is_pk = row
             columns.append({
                 'name': col_name,
                 'type': data_type,
                 'nullable': is_nullable == 'YES',
+                'default_value': default_value,
                 'primary_key': bool(is_pk),
             })
             if is_pk:
@@ -166,6 +170,7 @@ def save_detailed_schema_postgres(
                 c.data_type,
                 c.character_maximum_length,
                 c.is_nullable,
+                c.column_default,
                 CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key
             FROM information_schema.columns c
             LEFT JOIN (
@@ -190,6 +195,7 @@ def save_detailed_schema_postgres(
                 'name': row['column_name'],
                 'type': row['data_type'],
                 'nullable': row['is_nullable'] == 'YES',
+                'default_value': row.get('column_default'),
                 'primary_key': row['is_primary_key'],
             })
             if row['is_primary_key']:
@@ -219,7 +225,7 @@ def _save_tables_to_yaml(
     """Write table schema data to YAML files.
 
     Groups tables by schema and saves each table to its own
-    YAML file under ``service-schemas/{service}/{schema}/``.
+    YAML file under ``services/_schemas/{service}/{schema}/``.
 
     Args:
         service: Service name (used for output directory)
@@ -236,13 +242,9 @@ def _save_tables_to_yaml(
         tables_by_schema[table_schema][table_name] = table_data
 
     total_saved = 0
+    service_schema_dir = get_service_schema_write_dir(service)
     for schema_name, schema_tables in tables_by_schema.items():
-        output_dir = (
-            get_project_root()
-            / "service-schemas"
-            / service
-            / schema_name
-        )
+        output_dir = service_schema_dir / schema_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for table_name, table_data in schema_tables.items():

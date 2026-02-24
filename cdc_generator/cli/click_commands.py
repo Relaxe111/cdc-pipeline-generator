@@ -91,6 +91,7 @@ _GROUPED_EXTRA_ARGS_START = 3
 _MIN_NESTED_SCHEMA_ARGS = 4
 _NESTED_SCHEMA_SUBCOMMAND_INDEX = 3
 _NESTED_SCHEMA_EXTRA_ARGS_START = 4
+_INSPECT_ALL_SINKS = "__all_sinks__"
 
 
 # ============================================================================
@@ -132,8 +133,17 @@ _NESTED_SCHEMA_EXTRA_ARGS_START = 4
               help="Manage existing source table")
 # -- Inspect / validation --
 @click.option("--inspect", is_flag=True, help="Inspect database schema")
-@click.option("--inspect-sink", "--sink-inspect", is_flag=True,
-              help="Inspect sink database schema (use with --all for all sinks)")
+@click.option("--inspect-sink", "--sink-inspect",
+              shell_complete=complete_sink_keys,
+              is_flag=False,
+              flag_value=_INSPECT_ALL_SINKS,
+              default=None,
+              metavar="SINK_KEY",
+              help=(
+                  "Inspect sink database schema for the selected service. "
+                  + "Provide SINK_KEY for one sink, or use --inspect-sink --all "
+                  + "to inspect all configured sinks."
+              ))
 @click.option("--schema", shell_complete=complete_schemas,
               help="Database schema to inspect or filter")
 @click.option("--save", "--sink-save", is_flag=True,

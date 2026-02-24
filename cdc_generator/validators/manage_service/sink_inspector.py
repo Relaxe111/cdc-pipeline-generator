@@ -25,9 +25,9 @@ def inspect_sink_schema(
 ) -> tuple[list[dict[str, Any]], str, list[str]] | None:
     """Inspect sink database schema to get available tables.
 
-    Resolves the sink connection from sink-groups.yaml and the
-    database name from source-groups.yaml, then queries the
-    database for tables.
+    Resolves the sink connection and target database from
+    sink-groups.yaml (with source-groups fallback), then queries
+    the database for tables.
 
     Args:
         service: Service name

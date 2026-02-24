@@ -20,9 +20,16 @@
 ## 🏛️ Always-On Invariants
 
 - Use `server_group_type` for behavior; never branch on service names.
-- Keep backward compatibility: extend, don’t break existing signatures/flows.
 - Treat generator as the only script/code location; implementations stay YAML/artifacts only.
 - Route detailed constraints to scoped guides below; do not duplicate policy text here.
+
+### Preprod Phase Policy (Temporary)
+
+- Current phase is **preprod** (no production consumers yet).
+- **Do not preserve legacy/backward compatibility by default.**
+- Remove deprecated aliases, legacy paths, and obsolete code immediately when touched.
+- Prefer clean replacement over compatibility shims.
+- This policy is temporary and must be removed when production rollout starts.
 
 ---
 

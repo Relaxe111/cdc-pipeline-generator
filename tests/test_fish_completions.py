@@ -515,6 +515,7 @@ class TestShellCompleteCallbacksWired:
             "--service",
             "--add-source-table",
             "--remove-table",
+            "--inspect-sink",
             "--sink",
             "--add-sink",
             "--add-sink-table",
@@ -584,7 +585,10 @@ class TestSmartCompletion:
         parts = shlex.split(partial_cmd)
         if parts and parts[0] == "cdc":
             parts = parts[1:]
-        incomplete = parts.pop() if parts else ""
+        if partial_cmd.endswith(" "):
+            incomplete = ""
+        else:
+            incomplete = parts.pop() if parts else ""
         comp = ShellComplete(cli, {}, "cdc", "_CDC_COMPLETE")
         return [c.value for c in comp.get_completions(parts, incomplete)]
 
@@ -740,6 +744,37 @@ class TestSmartCompletion:
             "cdc manage-services config directory --inspect-sink --all --"
         )
         assert "--save" in opts
+
+    def test_inspect_sink_value_completion_uses_service_sinks(self) -> None:
+        """After --inspect-sink, suggest sink keys for selected service."""
+        from unittest.mock import patch
+
+        with patch(
+            "cdc_generator.helpers.autocompletions.sinks.list_sink_keys_for_service",
+            return_value=["sink_asma.proxy", "sink_asma.notification"],
+        ):
+            opts = self._complete(
+                "cdc manage-services config --service directory --inspect-sink "
+            )
+
+        assert "sink_asma.proxy" in opts
+        assert "sink_asma.notification" in opts
+
+    def test_inspect_sink_value_completion_autoselects_single_service(self) -> None:
+        """When only one service exists, --inspect-sink suggests that service's sinks."""
+        from unittest.mock import patch
+
+        with patch(
+            "cdc_generator.helpers.autocompletions.services.list_existing_services",
+            return_value=["adopus"],
+        ), patch(
+            "cdc_generator.helpers.autocompletions.sinks.list_sink_keys_for_service",
+            return_value=["sink_asma.directory", "sink_asma.chat"],
+        ):
+            opts = self._complete("cdc manage-services config --inspect-sink ")
+
+        assert "sink_asma.directory" in opts
+        assert "sink_asma.chat" in opts
 
     def test_add_source_table_context(self) -> None:
         opts = self._complete(

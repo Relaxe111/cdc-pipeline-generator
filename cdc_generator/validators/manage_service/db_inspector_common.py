@@ -462,8 +462,9 @@ def _resolve_sink_database_name(
 ) -> str | None:
     """Resolve the database name for a sink target service.
 
-    Looks up source-groups.yaml sources under the sink's source_group
-    to find the database for the target service and environment.
+    Looks up sink-groups.yaml sources first to find the database
+    for the target service and environment. Falls back to
+    source-groups.yaml sources via source_group when needed.
 
     Args:
         sink_group_config: Sink group configuration
@@ -473,30 +474,47 @@ def _resolve_sink_database_name(
     Returns:
         Database name, or None if not found
     """
-    source_group_name = sink_group_config.get("source_group")
-    if not source_group_name:
-        return None
+    service_source: dict[str, Any] | None = None
 
-    try:
-        source_groups = load_server_groups()
-    except (FileNotFoundError, ValueError):
-        return None
+    # Primary lookup: sink-groups.yaml (authoritative for sink targets)
+    sink_sources_raw = sink_group_config.get("sources")
+    sink_sources = (
+        cast(dict[str, Any], sink_sources_raw)
+        if isinstance(sink_sources_raw, dict)
+        else {}
+    )
+    service_source_raw = sink_sources.get(target_service)
+    if isinstance(service_source_raw, dict):
+        service_source = cast(dict[str, Any], service_source_raw)
 
-    source_group = source_groups.get(source_group_name)
-    if not source_group:
-        print_error(
-            f"Source group '{source_group_name}' not found in source-groups.yaml"
-        )
-        return None
+    # Fallback lookup: source-groups.yaml via source_group
+    if service_source is None:
+        source_group_name = sink_group_config.get("source_group")
+        if not source_group_name:
+            return None
 
-    sources = source_group.get("sources", {})
-    service_source = sources.get(target_service)
-    if not service_source:
-        print_error(
-            f"Service '{target_service}' not found in "
-            + f"source group '{source_group_name}' sources"
-        )
-        return None
+        try:
+            source_groups = load_server_groups()
+        except (FileNotFoundError, ValueError):
+            return None
+
+        source_group = source_groups.get(source_group_name)
+        if not source_group:
+            print_error(
+                f"Source group '{source_group_name}' not found in source-groups.yaml"
+            )
+            return None
+
+        sources = source_group.get("sources", {})
+        service_source_raw = sources.get(target_service)
+        if not isinstance(service_source_raw, dict):
+            print_error(
+                f"Service '{target_service}' not found in "
+                + f"sink group sources or source group '{source_group_name}' sources"
+            )
+            return None
+
+        service_source = cast(dict[str, Any], service_source_raw)
 
     # Try exact env match, then fallback aliases
     env_aliases: dict[str, list[str]] = {
@@ -767,7 +785,8 @@ def _resolve_sink_schemas(
 ) -> list[str]:
     """Resolve allowed schemas for a sink target service.
 
-    Looks up schemas from source-groups.yaml sources.
+    Looks up schemas from sink-groups.yaml sources first,
+    then falls back to source-groups.yaml sources.
 
     Args:
         sink_group_config: Sink group configuration
@@ -776,6 +795,18 @@ def _resolve_sink_schemas(
     Returns:
         List of allowed schema names
     """
+    sink_sources_raw = sink_group_config.get("sources")
+    sink_sources = (
+        cast(dict[str, Any], sink_sources_raw)
+        if isinstance(sink_sources_raw, dict)
+        else {}
+    )
+    service_source_raw = sink_sources.get(target_service)
+    if isinstance(service_source_raw, dict):
+        schemas_raw = cast(dict[str, Any], service_source_raw).get("schemas", [])
+        if isinstance(schemas_raw, list):
+            return [str(schema) for schema in schemas_raw]
+
     source_group_name = sink_group_config.get("source_group")
     if not source_group_name:
         return []
@@ -790,5 +821,12 @@ def _resolve_sink_schemas(
         return []
 
     sources = source_group.get("sources", {})
-    service_source = sources.get(target_service, {})
-    return list(service_source.get("schemas", []))
+    service_source_raw = sources.get(target_service, {})
+    if not isinstance(service_source_raw, dict):
+        return []
+
+    schemas_raw = cast(dict[str, Any], service_source_raw).get("schemas", [])
+    if not isinstance(schemas_raw, list):
+        return []
+
+    return [str(schema) for schema in schemas_raw]
