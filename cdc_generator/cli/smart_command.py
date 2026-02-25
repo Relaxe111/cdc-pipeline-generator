@@ -87,7 +87,11 @@ class SmartCommand(click.Command):
         """Override to filter options based on already-typed context flags."""
         # If no smart groups defined, fall back to default behavior
         if not self.smart_groups:
-            return super().shell_complete(ctx, incomplete)
+            return self._inject_legacy_completions(
+                super().shell_complete(ctx, incomplete),
+                ctx,
+                incomplete,
+            )
 
         # Get all default completions from Click
         all_completions = super().shell_complete(ctx, incomplete)
@@ -100,12 +104,37 @@ class SmartCommand(click.Command):
 
         # If no context group flags are active, show entry-point options
         if not active_contexts:
-            return self._filter_to_entry_points(all_completions, all_active)
+            filtered = self._filter_to_entry_points(all_completions, all_active)
+            return self._inject_legacy_completions(filtered, ctx, incomplete)
 
         # Build the set of allowed option names based on active contexts
         allowed = self._build_allowed_set(active_contexts, all_active)
 
-        return [c for c in all_completions if self._is_allowed(c.value, allowed)]
+        filtered = [c for c in all_completions if self._is_allowed(c.value, allowed)]
+        return self._inject_legacy_completions(filtered, ctx, incomplete)
+
+    def _inject_legacy_completions(
+        self,
+        completions: list[CompletionItem],
+        ctx: click.Context,
+        incomplete: str,
+    ) -> list[CompletionItem]:
+        """Inject compatibility-only completions for legacy UX expectations."""
+        if "manage-services config" not in ctx.command_path:
+            return completions
+
+        if not incomplete.startswith("-"):
+            return completions
+
+        if self._get_active_contexts(ctx):
+            return completions
+
+        if any(item.value == "--inspect" for item in completions):
+            return completions
+
+        if "--inspect".startswith(incomplete):
+            completions.append(CompletionItem("--inspect"))
+        return completions
 
     def _get_active_contexts(self, ctx: click.Context) -> set[str]:
         """Find which context *group* flags are set in the current params.
@@ -318,6 +347,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "validate_hierarchy": set(),
     "validate_bloblang": set(),
     "generate_validation": set(),
+    "inspect": {"schema", "all_flag"},
+    "inspect_sink": {"all_flag"},
     # ── Sink lifecycle (standalone) ────────────────────────────
     "add_sink": set(),
     "remove_sink": set(),

@@ -73,7 +73,8 @@ def handle_generate_validation(args: argparse.Namespace) -> int:
         return 1
 
     schema_filter = None if args.all else args.schema
+    env = getattr(args, "env", "nonprod")
     ok = generate_service_validation_schema(
-        args.service, args.env, schema_filter,
+        args.service, env, schema_filter,
     )
     return 0 if ok else 1

@@ -45,7 +45,32 @@ def _resolve_template_file(generator_root: Path, relative_path: Path) -> Path | 
     return None
 
 
-def _copy_template_library_files(project_root: Path) -> None:
+def _resolve_source_group_name(project_root: Path) -> str:
+    """Resolve source group name from source-groups.yaml or fallback."""
+    source_groups_path = project_root / "source-groups.yaml"
+    if not source_groups_path.exists():
+        return "source-group"
+
+    try:
+        raw_data: object = yaml.safe_load(source_groups_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return "source-group"
+
+    if not isinstance(raw_data, dict):
+        return "source-group"
+
+    for key in cast(dict[str, object], raw_data):
+        if key.startswith("_"):
+            continue
+        return key
+
+    return "source-group"
+
+
+def _copy_template_library_files(
+    project_root: Path,
+    source_group_name: str | None = None,
+) -> None:
     """Copy template library files from generator to implementation.
 
     Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
@@ -128,6 +153,43 @@ def _copy_template_library_files(project_root: Path) -> None:
             print_warning(
                 "⚠️  Type mapping template not found in generator: "
                 + filename
+            )
+
+    resolved_source_group_name = source_group_name or _resolve_source_group_name(
+        project_root,
+    )
+    override_template_name = "source-type-overrides.yaml"
+    override_target_name = (
+        f"source-{resolved_source_group_name}-type-overrides.yaml"
+    )
+    override_target_file = (
+        project_root
+        / "services"
+        / "_schemas"
+        / "_definitions"
+        / override_target_name
+    )
+
+    if override_target_file.exists():
+        print_info(
+            "⊘ Skipped (exists): "
+            + f"services/_schemas/_definitions/{override_target_name}"
+        )
+    else:
+        source_file = _resolve_template_file(
+            generator_root,
+            Path("_definitions") / override_template_name,
+        )
+        if source_file is not None:
+            shutil.copy2(source_file, override_target_file)
+            print_success(
+                "✓ Copied source type overrides definition: "
+                + f"services/_schemas/_definitions/{override_target_name}"
+            )
+        else:
+            print_warning(
+                "⚠️  Source type overrides template not found in generator: "
+                + override_template_name
             )
 
 
@@ -237,7 +299,8 @@ def update_scaffold(project_root: Path) -> bool:
     _update_gitignore(project_root)
 
     # 5. Copy template library files if missing
-    _copy_template_library_files(project_root)
+    server_group_name, _pattern, _source_type = _infer_scaffold_metadata(project_root)
+    _copy_template_library_files(project_root, server_group_name)
 
     # 6. Check if source-groups.yaml exists
     server_group_path = project_root / "source-groups.yaml"

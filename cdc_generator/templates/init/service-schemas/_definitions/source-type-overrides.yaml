@@ -1,0 +1,30 @@
+# Source Type Overrides
+# ---------------------
+# Purpose:
+#   Override introspected source column types with an effective type
+#   when domain guarantees allow safe narrowing/normalization.
+#
+# How compatibility uses this file:
+#   1) Read source column type from schema
+#   2) If override exists for source_table.source_column, use effective type
+#   3) Validate against map-{source}-{sink}.yaml rules
+#
+# Scope:
+#   - Source-only by design (no sink-specific exceptions)
+#   - Implementation-local file under services/_schemas/_definitions/
+#   - Scaffold generates: source-<source_group_name>-type-overrides.yaml
+#
+# Format:
+#   overrides:
+#     schema.table:
+#       SourceColumn: effective_type
+#
+# Example:
+#   overrides:
+#     dbo.AdgangLinjer:
+#       Adgangkode: smallint
+
+metadata:
+  version: 1
+
+overrides: {}

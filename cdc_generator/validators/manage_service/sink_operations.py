@@ -10,6 +10,7 @@ Sink key format: {sink_group}.{target_service}
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import (
@@ -35,6 +36,611 @@ _SINK_KEY_PARTS = 2
 # followed by letters, digits, underscores, or dollar signs. Max 63 chars.
 _PG_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_$]*$")
 _PG_IDENTIFIER_MAX_LENGTH = 63
+_TYPE_WITH_ARGS_PATTERN = re.compile(r"^([^()]+)\s*\(.*\)$")
+
+_AUTO_ENGINE = "auto"
+_WILDCARD_SOURCE = "*"
+_MAP_FILE_PATTERNS = (
+    "map-{source}-{sink}.yaml",
+    "map-{source}-to-{sink}.yaml",
+)
+_SOURCE_TYPE_OVERRIDES_PATTERN = "source-{source_group}-type-overrides.yaml"
+_OVERRIDES_ALLOWED_TOP_LEVEL = {"metadata", "overrides"}
+
+_PGSQL_FALLBACK_ALIASES: dict[str, str] = {
+    "int": "integer",
+    "int2": "smallint",
+    "int4": "integer",
+    "int8": "bigint",
+    "decimal": "numeric",
+    "varchar": "character varying",
+    "char": "character",
+    "timestamp": "timestamp without time zone",
+    "timestamptz": "timestamp with time zone",
+    "bool": "boolean",
+    "float4": "real",
+    "float8": "double precision",
+}
+
+_PGSQL_FALLBACK_BASE_TYPES: set[str] = {
+    "smallint",
+    "integer",
+    "bigint",
+    "numeric",
+    "real",
+    "double precision",
+    "boolean",
+    "uuid",
+    "text",
+    "character",
+    "character varying",
+    "date",
+    "time without time zone",
+    "timestamp without time zone",
+    "timestamp with time zone",
+    "bytea",
+    "json",
+    "jsonb",
+    "xml",
+    "user-defined",
+}
+
+
+@dataclass(frozen=True)
+class TypeCompatibilityMap:
+    """Runtime compatibility map for a source/sink engine pair."""
+
+    source_engine: str
+    sink_engine: str
+    mappings: dict[str, str]
+    source_aliases: dict[str, str]
+    sink_aliases: dict[str, str]
+    compatibility: dict[str, set[str]]
+
+
+def _normalize_type_name(raw_type: str, aliases: dict[str, str] | None = None) -> str:
+    """Normalize SQL type names for compatibility comparisons."""
+    normalized = " ".join(raw_type.strip().lower().split())
+    if not normalized:
+        return normalized
+
+    match = _TYPE_WITH_ARGS_PATTERN.match(normalized)
+    if match:
+        normalized = " ".join(match.group(1).split())
+
+    if aliases is None:
+        return normalized
+
+    current = normalized
+    seen: set[str] = set()
+    while current in aliases and current not in seen:
+        seen.add(current)
+        current = aliases[current]
+    return current
+
+
+def _normalize_identifier_name(identifier: str) -> str:
+    """Normalize identifier text for case-insensitive matching."""
+    return identifier.strip().casefold()
+
+
+def _normalize_source_table_key(table_key: str) -> str:
+    """Normalize ``schema.table`` key used by source type overrides."""
+    normalized = " ".join(table_key.strip().split())
+    if "." not in normalized:
+        raise ValueError(
+            "Invalid source-type override table key: "
+            + f"'{table_key}'. Expected 'schema.table'."
+        )
+
+    schema_name, table_name = normalized.split(".", 1)
+    if not schema_name.strip() or not table_name.strip():
+        raise ValueError(
+            "Invalid source-type override table key: "
+            + f"'{table_key}'. Expected non-empty schema and table."
+        )
+
+    return f"{schema_name.strip().casefold()}.{table_name.strip().casefold()}"
+
+
+def _definitions_dir(project_root_key: str) -> str:
+    """Return definitions folder path for compatibility maps."""
+    from pathlib import Path
+
+    return str(Path(project_root_key) / "services" / "_schemas" / "_definitions")
+
+
+def _resolve_map_file_path(
+    project_root_key: str,
+    source_engine: str,
+    sink_engine: str,
+) -> str | None:
+    """Resolve runtime map file path for an engine pair."""
+    from pathlib import Path
+
+    definitions_path = Path(_definitions_dir(project_root_key))
+    for pattern in _MAP_FILE_PATTERNS:
+        candidate = definitions_path / pattern.format(
+            source=source_engine,
+            sink=sink_engine,
+        )
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def _resolve_source_type_overrides_path(project_root_key: str) -> str | None:
+    """Resolve source-group-scoped source type override file path."""
+    from pathlib import Path
+
+    from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+    source_groups_file = Path(project_root_key) / "source-groups.yaml"
+    if not source_groups_file.is_file():
+        return None
+
+    try:
+        source_groups = load_yaml_file(source_groups_file)
+    except Exception as exc:
+        raise ValueError(
+            "Failed to read source groups for source type overrides: "
+            + f"'{source_groups_file}': {exc}"
+        ) from exc
+
+    source_groups_dict = cast(dict[str, object], source_groups)
+    source_group_names = [
+        key
+        for key in source_groups_dict
+        if not key.startswith("_")
+    ]
+    if len(source_group_names) != 1:
+        raise ValueError(
+            "Source type overrides require exactly one source group in "
+            + f"'{source_groups_file}'. Found {len(source_group_names)}."
+        )
+
+    source_group_name = source_group_names[0]
+    candidate_name = _SOURCE_TYPE_OVERRIDES_PATTERN.format(
+        source_group=source_group_name,
+    )
+    candidate = Path(_definitions_dir(project_root_key)) / candidate_name
+    if candidate.is_file():
+        return str(candidate)
+    return None
+
+
+def _extract_aliases(
+    data_dict: dict[str, object],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Extract normalized source/sink aliases from map payload."""
+    aliases_raw = data_dict.get("aliases")
+    source_aliases_raw: object = {}
+    sink_aliases_raw: object = {}
+    if isinstance(aliases_raw, dict):
+        aliases_dict = cast(dict[str, object], aliases_raw)
+        source_aliases_raw = aliases_dict.get("source", {})
+        sink_aliases_raw = aliases_dict.get("sink", {})
+
+    source_aliases: dict[str, str] = {}
+    if isinstance(source_aliases_raw, dict):
+        for key, value in cast(dict[str, object], source_aliases_raw).items():
+            if isinstance(value, str):
+                source_aliases[_normalize_type_name(key)] = _normalize_type_name(value)
+
+    sink_aliases: dict[str, str] = {}
+    if isinstance(sink_aliases_raw, dict):
+        for key, value in cast(dict[str, object], sink_aliases_raw).items():
+            if isinstance(value, str):
+                sink_aliases[_normalize_type_name(key)] = _normalize_type_name(value)
+
+    return source_aliases, sink_aliases
+
+
+def _extract_mappings(
+    data_dict: dict[str, object],
+    mapping_file: object,
+    source_aliases: dict[str, str],
+    sink_aliases: dict[str, str],
+) -> dict[str, str]:
+    """Extract normalized source->sink mappings from payload."""
+    mappings_raw: object = data_dict.get("mappings")
+    if not isinstance(mappings_raw, dict):
+        raise ValueError(
+            "Invalid type compatibility map format: "
+            + f"'{mapping_file}' must define 'mappings:' "
+            + "as a mapping of source_type -> sink_type."
+        )
+
+    mappings: dict[str, str] = {}
+    for key, value in cast(dict[str, object], mappings_raw).items():
+        if isinstance(value, str):
+            normalized_key = _normalize_type_name(key, source_aliases)
+            normalized_value = _normalize_type_name(value, sink_aliases)
+            mappings[normalized_key] = normalized_value
+
+    return mappings
+
+
+def _extract_compatibility(
+    data_dict: dict[str, object],
+    source_aliases: dict[str, str],
+    sink_aliases: dict[str, str],
+) -> dict[str, set[str]]:
+    """Extract normalized compatibility rules from payload."""
+    compatibility_raw = data_dict.get("compatibility")
+    if not isinstance(compatibility_raw, dict):
+        return {}
+
+    compatibility: dict[str, set[str]] = {}
+    for src_type, targets_raw in cast(dict[str, object], compatibility_raw).items():
+        normalized_src = (
+            _WILDCARD_SOURCE
+            if src_type == _WILDCARD_SOURCE
+            else _normalize_type_name(src_type, source_aliases)
+        )
+        targets: set[str] = set()
+        if isinstance(targets_raw, list):
+            for item in cast(list[object], targets_raw):
+                if isinstance(item, str):
+                    targets.add(_normalize_type_name(item, sink_aliases))
+        elif isinstance(targets_raw, str):
+            targets.add(_normalize_type_name(targets_raw, sink_aliases))
+
+        if targets:
+            compatibility[normalized_src] = targets
+
+    return compatibility
+
+
+@lru_cache(maxsize=16)
+def _load_source_type_overrides(project_root_key: str) -> dict[str, dict[str, str]]:
+    """Load and validate source-only effective type overrides."""
+    from pathlib import Path
+
+    from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+    resolved_path = _resolve_source_type_overrides_path(project_root_key)
+    if resolved_path is None:
+        return {}
+
+    override_file = Path(resolved_path)
+
+    try:
+        data = load_yaml_file(override_file)
+    except Exception as exc:
+        raise ValueError(
+            "Failed to read source type overrides: "
+            + f"'{override_file}': {exc}"
+        ) from exc
+
+    raw_data = cast(dict[str, object], data)
+    unknown_top_level = sorted(
+        key for key in raw_data if key not in _OVERRIDES_ALLOWED_TOP_LEVEL
+    )
+    if unknown_top_level:
+        raise ValueError(
+            "Invalid source type overrides format: "
+            + f"'{override_file}' contains unsupported keys: "
+            + ", ".join(unknown_top_level)
+        )
+
+    overrides_raw = raw_data.get("overrides", {})
+    if not isinstance(overrides_raw, dict):
+        raise ValueError(
+            "Invalid source type overrides format: "
+            + f"'{override_file}' must define 'overrides:' as "
+            + "a mapping of source_table -> {source_column: effective_type}."
+        )
+
+    result: dict[str, dict[str, str]] = {}
+    for source_table, columns_raw in cast(dict[str, object], overrides_raw).items():
+        normalized_table = _normalize_source_table_key(source_table)
+
+        if not isinstance(columns_raw, dict):
+            raise ValueError(
+                "Invalid source type overrides format: "
+                + f"table '{source_table}' in '{override_file}' "
+                + "must map to {source_column: effective_type}."
+            )
+
+        normalized_columns: dict[str, str] = {}
+        for source_column, effective_type_raw in cast(dict[str, object], columns_raw).items():
+            normalized_column = _normalize_identifier_name(source_column)
+            if not normalized_column:
+                raise ValueError(
+                    "Invalid source type overrides format: "
+                    + f"table '{source_table}' in '{override_file}' "
+                    + "contains an empty source column key."
+                )
+
+            if not isinstance(effective_type_raw, str):
+                raise ValueError(
+                    "Invalid source type overrides format: "
+                    + f"{source_table}.{source_column} in '{override_file}' "
+                    + "must map to a string effective type."
+                )
+
+            effective_type = _normalize_type_name(effective_type_raw)
+            if not effective_type:
+                raise ValueError(
+                    "Invalid source type overrides format: "
+                    + f"{source_table}.{source_column} in '{override_file}' "
+                    + "has an empty effective type."
+                )
+
+            if normalized_column in normalized_columns:
+                raise ValueError(
+                    "Duplicate source type override key after normalization: "
+                    + f"{source_table}.{source_column} in '{override_file}'."
+                )
+
+            normalized_columns[normalized_column] = effective_type
+
+        result[normalized_table] = normalized_columns
+
+    return result
+
+
+def _resolve_effective_source_type(
+    project_root_key: str,
+    source_type: str,
+    source_table: str | None,
+    source_column: str | None,
+) -> str:
+    """Resolve effective source type using optional source-only overrides."""
+    if not source_table or not source_column:
+        return source_type
+
+    overrides = _load_source_type_overrides(project_root_key)
+    if not overrides:
+        return source_type
+
+    normalized_table = _normalize_source_table_key(source_table)
+    table_overrides = overrides.get(normalized_table)
+    if table_overrides is None:
+        return source_type
+
+    normalized_column = _normalize_identifier_name(source_column)
+    return table_overrides.get(normalized_column, source_type)
+
+
+@lru_cache(maxsize=64)
+def _load_type_compatibility_map(
+    project_root_key: str,
+    source_engine: str,
+    sink_engine: str,
+) -> TypeCompatibilityMap:
+    """Load ``map-{source}-{sink}.yaml`` as compatibility source of truth."""
+    from pathlib import Path
+
+    from cdc_generator.helpers.yaml_loader import load_yaml_file
+
+    resolved_map_path = _resolve_map_file_path(
+        project_root_key,
+        source_engine,
+        sink_engine,
+    )
+    if resolved_map_path is None:
+        raise ValueError(
+            "Type compatibility map not found: "
+            + f"map-{source_engine}-{sink_engine}.yaml "
+            + "(or map-{source}-to-{sink}.yaml). "
+            + "Expected file location: "
+            + "services/_schemas/_definitions/."
+        )
+    mapping_file = Path(resolved_map_path)
+
+    try:
+        data = load_yaml_file(mapping_file)
+    except Exception as exc:
+        raise ValueError(
+            "Failed to read type compatibility map: "
+            + f"'{mapping_file}': {exc}"
+        ) from exc
+
+    data_dict = cast(dict[str, object], data)
+
+    source_aliases, sink_aliases = _extract_aliases(data_dict)
+    mappings = _extract_mappings(
+        data_dict,
+        mapping_file,
+        source_aliases,
+        sink_aliases,
+    )
+    compatibility = _extract_compatibility(
+        data_dict,
+        source_aliases,
+        sink_aliases,
+    )
+
+    return TypeCompatibilityMap(
+        source_engine=source_engine,
+        sink_engine=sink_engine,
+        mappings=mappings,
+        source_aliases=source_aliases,
+        sink_aliases=sink_aliases,
+        compatibility=compatibility,
+    )
+
+
+@lru_cache(maxsize=8)
+def _available_type_map_pairs(project_root_key: str) -> list[tuple[str, str]]:
+    """List available ``(source_engine, sink_engine)`` map pairs."""
+    from pathlib import Path
+
+    definitions_path = Path(_definitions_dir(project_root_key))
+    if not definitions_path.is_dir():
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    for file_path in definitions_path.glob("map-*.yaml"):
+        name = file_path.stem
+        if not name.startswith("map-"):
+            continue
+
+        tail = name[4:]
+        if "-to-" in tail:
+            source_engine, sink_engine = tail.split("-to-", 1)
+        elif "-" in tail:
+            source_engine, sink_engine = tail.split("-", 1)
+        else:
+            continue
+
+        if source_engine and sink_engine:
+            pairs.append((source_engine.casefold(), sink_engine.casefold()))
+
+    return sorted(set(pairs))
+
+
+def _resolve_engine_pair(
+    project_root_key: str,
+    source_type: str,
+    sink_type: str,
+    source_engine: str,
+    sink_engine: str,
+) -> TypeCompatibilityMap:
+    """Resolve concrete engine pair for compatibility checks."""
+    source_engine_norm = source_engine.casefold()
+    sink_engine_norm = sink_engine.casefold()
+
+    if _AUTO_ENGINE not in (source_engine_norm, sink_engine_norm):
+        return _load_type_compatibility_map(
+            project_root_key,
+            source_engine_norm,
+            sink_engine_norm,
+        )
+
+    candidates = _available_type_map_pairs(project_root_key)
+    if not candidates:
+        raise ValueError(
+            "No type compatibility maps found in services/_schemas/_definitions/. "
+            + "Add map-{source}-{sink}.yaml, e.g. map-mssql-pgsql.yaml"
+        )
+
+    scoped_candidates = [
+        (src, sink)
+        for src, sink in candidates
+        if source_engine_norm in (_AUTO_ENGINE, src)
+        and sink_engine_norm in (_AUTO_ENGINE, sink)
+    ]
+    if not scoped_candidates:
+        raise ValueError(
+            "No matching type compatibility map found for requested engines: "
+            + f"source='{source_engine}', sink='{sink_engine}'."
+        )
+
+    source_raw_normalized = _normalize_type_name(source_type)
+    sink_raw_normalized = _normalize_type_name(sink_type)
+    best: TypeCompatibilityMap | None = None
+    best_score = -1
+
+    for src_engine_name, sink_engine_name in scoped_candidates:
+        spec = _load_type_compatibility_map(
+            project_root_key,
+            src_engine_name,
+            sink_engine_name,
+        )
+        source_normalized = _normalize_type_name(
+            source_raw_normalized,
+            spec.source_aliases,
+        )
+        sink_normalized = _normalize_type_name(
+            sink_raw_normalized,
+            spec.sink_aliases,
+        )
+
+        known_source = (
+            source_normalized in spec.mappings
+            or source_normalized in spec.compatibility
+            or _WILDCARD_SOURCE in spec.compatibility
+        )
+        known_sink = (
+            sink_normalized in set(spec.mappings.values())
+            or any(sink_normalized in targets for targets in spec.compatibility.values())
+        )
+        score = int(known_source) + int(known_sink)
+        if score > best_score:
+            best = spec
+            best_score = score
+
+    if best is None:
+        raise ValueError(
+            "Failed to resolve a compatibility map for source/sink types: "
+            + f"'{source_type}' -> '{sink_type}'"
+        )
+
+    return best
+
+
+def _check_with_type_map(
+    spec: TypeCompatibilityMap,
+    source_type: str,
+    sink_type: str,
+) -> bool:
+    """Evaluate compatibility against a resolved compatibility map."""
+    source_normalized = _normalize_type_name(source_type, spec.source_aliases)
+    sink_normalized = _normalize_type_name(sink_type, spec.sink_aliases)
+
+    mapped = spec.mappings.get(source_normalized)
+    if mapped is not None and mapped == sink_normalized:
+        return True
+
+    direct_targets = spec.compatibility.get(source_normalized, set())
+    wildcard_targets = spec.compatibility.get(_WILDCARD_SOURCE, set())
+    return sink_normalized in direct_targets or sink_normalized in wildcard_targets
+
+
+@lru_cache(maxsize=1)
+def _pgsql_native_fallback_map() -> TypeCompatibilityMap:
+    """Fallback compatibility for map-less pgsql↔pgsql contexts."""
+    mappings = {type_name: type_name for type_name in _PGSQL_FALLBACK_BASE_TYPES}
+
+    compatibility: dict[str, set[str]] = {
+        "smallint": {
+            "smallint", "integer", "bigint", "numeric", "real", "double precision",
+        },
+        "integer": {"integer", "bigint", "numeric", "real", "double precision"},
+        "bigint": {"bigint", "numeric", "real", "double precision"},
+        "numeric": {"numeric", "real", "double precision"},
+        "real": {"real", "double precision"},
+        "date": {"date", "timestamp without time zone", "timestamp with time zone"},
+        "timestamp without time zone": {
+            "timestamp without time zone",
+            "timestamp with time zone",
+        },
+    }
+
+    return TypeCompatibilityMap(
+        source_engine="pgsql",
+        sink_engine="pgsql",
+        mappings=mappings,
+        source_aliases=dict(_PGSQL_FALLBACK_ALIASES),
+        sink_aliases=dict(_PGSQL_FALLBACK_ALIASES),
+        compatibility=compatibility,
+    )
+
+
+def _can_use_pgsql_native_fallback(source_type: str, sink_type: str) -> bool:
+    """Return True when both types are recognizable pgsql-native types."""
+    fallback_spec = _pgsql_native_fallback_map()
+    source_normalized = _normalize_type_name(source_type, fallback_spec.source_aliases)
+    sink_normalized = _normalize_type_name(sink_type, fallback_spec.sink_aliases)
+
+    known_sources = (
+        set(fallback_spec.mappings.keys())
+        | set(fallback_spec.compatibility.keys())
+        | {_WILDCARD_SOURCE}
+    )
+    known_sinks = (
+        set(fallback_spec.mappings.values())
+        | {
+            sink_name
+            for target_set in fallback_spec.compatibility.values()
+            for sink_name in target_set
+        }
+    )
+
+    return source_normalized in known_sources and sink_normalized in known_sinks
 
 
 def validate_pg_schema_name(schema: str) -> str | None:
@@ -606,6 +1212,7 @@ def _collect_named_column_types(
 def _analyze_identity_coverage(
     source_types: dict[str, str],
     sink_types: dict[str, str],
+    source_table: str,
     mapped_sink_columns: set[str],
     pre_covered: set[str] | None = None,
 ) -> tuple[set[str], list[tuple[str, str, str]]]:
@@ -624,7 +1231,12 @@ def _analyze_identity_coverage(
         if source_type is None:
             continue
 
-        if _check_identity_type_compatibility(source_type, sink_type):
+        if _check_identity_type_compatibility(
+            source_type,
+            sink_type,
+            source_table=source_table,
+            source_column=sink_col,
+        ):
             identity_covered.add(sink_col)
             continue
 
@@ -636,6 +1248,8 @@ def _analyze_identity_coverage(
 def _check_identity_type_compatibility(
     source_type: str,
     sink_type: str,
+    source_table: str | None = None,
+    source_column: str | None = None,
 ) -> bool:
     """Return True when implicit same-name mapping is type-safe.
 
@@ -643,19 +1257,12 @@ def _check_identity_type_compatibility(
     mapping. We only allow implicit mapping when source/sink types resolve
     to the same canonical type.
     """
-    source_type_normalized = source_type.strip().lower()
-    sink_type_normalized = sink_type.strip().lower()
-
-    try:
-        from cdc_generator.helpers.type_mapper import TypeMapper
-
-        source_mapper = TypeMapper("pgsql", "pgsql")
-        sink_mapper = TypeMapper("pgsql", "pgsql")
-        normalized_source = source_mapper.map_type(source_type_normalized)
-        normalized_sink = sink_mapper.map_type(sink_type_normalized)
-        return normalized_source == normalized_sink
-    except FileNotFoundError:
-        return source_type_normalized == sink_type_normalized
+    return _check_type_compatibility(
+        source_type,
+        sink_type,
+        source_table=source_table,
+        source_column=source_column,
+    )
 
 
 def _find_required_unmapped_sink_columns(
@@ -942,12 +1549,19 @@ def _validate_add_table_schema_compatibility(
         | add_transform_covered
         | accepted_columns_set
     )
-    identity_covered, incompatible_identity = _analyze_identity_coverage(
-        source_types,
-        sink_types,
-        mapped_sink_columns,
-        generated_covered,
-    )
+    try:
+        identity_covered, incompatible_identity = _analyze_identity_coverage(
+            source_types,
+            sink_types,
+            source_table,
+            mapped_sink_columns,
+            generated_covered,
+        )
+    except ValueError as exc:
+        return (
+            "Type compatibility map error: "
+            + str(exc)
+        )
     covered = mapped_sink_columns | generated_covered | identity_covered
     required_unmapped = _find_required_unmapped_sink_columns(
         sink_columns,
@@ -1403,105 +2017,52 @@ def _get_column_type(
 def _check_type_compatibility(
     source_type: str,
     sink_type: str,
-    source_engine: str = "pgsql",
-    sink_engine: str = "pgsql",
+    source_engine: str = _AUTO_ENGINE,
+    sink_engine: str = _AUTO_ENGINE,
+    source_table: str | None = None,
+    source_column: str | None = None,
 ) -> bool:
     """Check if source_type is compatible with sink_type.
 
-    Uses TypeMapper to normalize types, then compares.
+    Uses runtime YAML type map(s) from ``services/_schemas/_definitions/``.
     """
-    source_type_normalized = source_type.strip().lower()
-    sink_type_normalized = sink_type.strip().lower()
-
-    text_like_markers = (
-        "char",
-        "text",
-        "string",
-        "varchar",
-        "nvarchar",
-        "nchar",
-        "citext",
-    )
-    uuid_markers = (
-        "uuid",
-        "uniqueidentifier",
-    )
-    numeric_markers = (
-        "int",
-        "integer",
-        "bigint",
-        "smallint",
-        "tinyint",
-        "numeric",
-        "decimal",
-        "float",
-        "double",
-        "real",
-        "money",
-    )
-
-    source_is_text_like = any(
-        marker in source_type_normalized
-        for marker in text_like_markers
-    )
-    sink_is_text_like = any(
-        marker in sink_type_normalized
-        for marker in text_like_markers
-    )
-    source_is_uuid = any(
-        marker in source_type_normalized
-        for marker in uuid_markers
-    )
-    sink_is_uuid = any(
-        marker in sink_type_normalized
-        for marker in uuid_markers
-    )
-    source_is_numeric = any(
-        marker in source_type_normalized
-        for marker in numeric_markers
-    )
-
-    # String-like SQL types should be mutually compatible.
-    if source_is_text_like and sink_is_text_like:
-        return True
-
-    # PostgreSQL often reports custom domain columns as USER-DEFINED.
-    # Treat this sink type like a loose text-like destination.
-    if sink_type_normalized == "user-defined":
-        return source_is_text_like or source_is_uuid or source_is_numeric
-
-    # Explicit directional convertibility rules requested for map suggestions.
-    if source_is_numeric and sink_is_text_like:
-        return True
-    if source_is_uuid and sink_is_text_like:
-        return True
-    if source_is_text_like and sink_is_uuid:
-        return False
-
-    # Non-text source types should not map into text-like sink columns.
-    if sink_is_text_like and not source_is_text_like:
-        return source_is_uuid or source_is_numeric
-
+    project_root = get_project_root()
     try:
-        from cdc_generator.helpers.type_mapper import TypeMapper
+        spec = _resolve_engine_pair(
+            str(project_root),
+            source_type,
+            sink_type,
+            source_engine,
+            sink_engine,
+        )
+    except ValueError as exc:
+        if (
+            source_engine == _AUTO_ENGINE
+            and sink_engine == _AUTO_ENGINE
+            and "No type compatibility maps found" in str(exc)
+            and _can_use_pgsql_native_fallback(source_type, sink_type)
+        ):
+            spec = _pgsql_native_fallback_map()
+        else:
+            raise
 
-        mapper = TypeMapper(source_engine, sink_engine)
-        mapped = mapper.map_type(source_type)
-        # Normalize both sides for comparison
-        sink_mapper = TypeMapper(sink_engine, sink_engine)
-        normalized_sink = sink_mapper.map_type(sink_type)
-        normalized_mapped = sink_mapper.map_type(mapped)
-        return normalized_mapped == normalized_sink
-    except FileNotFoundError:
-        # No mapping file — fall back to direct string comparison
-        return source_type.lower() == sink_type.lower()
+    effective_source_type = _resolve_effective_source_type(
+        str(project_root),
+        source_type,
+        source_table,
+        source_column,
+    )
+
+    return _check_with_type_map(spec, effective_source_type, sink_type)
 
 
 def check_type_compatibility(
     source_type: str,
     sink_type: str,
-    source_engine: str = "pgsql",
-    sink_engine: str = "pgsql",
+    source_engine: str = _AUTO_ENGINE,
+    sink_engine: str = _AUTO_ENGINE,
+    source_table: str | None = None,
+    source_column: str | None = None,
 ) -> bool:
     """Public compatibility helper for source/sink SQL column types."""
     return _check_type_compatibility(
@@ -1509,6 +2070,8 @@ def check_type_compatibility(
         sink_type,
         source_engine,
         sink_engine,
+        source_table,
+        source_column,
     )
 
 
@@ -1582,12 +2145,78 @@ def _validate_column_mappings(
         # Type compatibility check
         src_type = _get_column_type(source_columns, src_col)
         tgt_type = _get_column_type(sink_columns, tgt_col)
-        if src_type and tgt_type and not _check_type_compatibility(src_type, tgt_type):
-            errors.append(
-                f"Type mismatch: '{src_col}' ({src_type}) "
-                + f"→ '{tgt_col}' ({tgt_type})"
-            )
+        if src_type and tgt_type:
+            if _is_text_like_type(tgt_type) and (
+                _is_numeric_like_type(src_type)
+                or _is_uuid_like_type(src_type)
+            ):
+                continue
+
+            try:
+                is_compatible = _check_type_compatibility(
+                    src_type,
+                    tgt_type,
+                    source_table=source_table,
+                    source_column=src_col,
+                )
+            except ValueError as exc:
+                errors.append(
+                    "Type compatibility map error: "
+                    + str(exc)
+                )
+                continue
+
+            if not is_compatible:
+                errors.append(
+                    f"Type mismatch: '{src_col}' ({src_type}) "
+                    + f"→ '{tgt_col}' ({tgt_type})"
+                )
     return errors
+
+
+def _is_text_like_type(type_name: str) -> bool:
+    """Return True for text-like SQL sink types."""
+    normalized = _normalize_type_name(type_name)
+    return any(
+        marker in normalized
+        for marker in (
+            "char",
+            "text",
+            "string",
+            "varchar",
+            "nvarchar",
+            "nchar",
+            "citext",
+            "user-defined",
+        )
+    )
+
+
+def _is_uuid_like_type(type_name: str) -> bool:
+    """Return True for UUID-like SQL types."""
+    normalized = _normalize_type_name(type_name)
+    return "uuid" in normalized or "uniqueidentifier" in normalized
+
+
+def _is_numeric_like_type(type_name: str) -> bool:
+    """Return True for numeric SQL types."""
+    normalized = _normalize_type_name(type_name)
+    return any(
+        marker in normalized
+        for marker in (
+            "int",
+            "integer",
+            "bigint",
+            "smallint",
+            "tinyint",
+            "numeric",
+            "decimal",
+            "float",
+            "double",
+            "real",
+            "money",
+        )
+    )
 
 
 def _apply_column_mappings(

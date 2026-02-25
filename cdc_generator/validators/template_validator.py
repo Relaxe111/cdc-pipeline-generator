@@ -21,6 +21,7 @@ from cdc_generator.validators.bloblang_parser import (
     extract_column_references,
     extract_root_assignments,
     is_static_expression,
+    strip_bloblang_comments,
     uses_environment_variables,
 )
 
@@ -133,7 +134,8 @@ def _validate_bloblang_syntax(
         return []
 
     # Set dummy env vars so rpk doesn't fail on missing ${VAR} references
-    env_vars = uses_environment_variables(value)
+    normalized_value = strip_bloblang_comments(value)
+    env_vars = uses_environment_variables(normalized_value)
     saved_env: dict[str, str | None] = {}
     for var in env_vars:
         saved_env[var] = os.environ.get(var)
@@ -141,7 +143,10 @@ def _validate_bloblang_syntax(
             os.environ[var] = "__LINT_PLACEHOLDER__"
 
     try:
-        is_valid, error_msg = validate_bloblang_expression(value, item_key)
+        is_valid, error_msg = validate_bloblang_expression(
+            normalized_value,
+            item_key,
+        )
     finally:
         # Restore original env state
         for var, original in saved_env.items():

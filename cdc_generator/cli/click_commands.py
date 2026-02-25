@@ -611,12 +611,21 @@ def manage_services_schema_transforms_cmd(  # noqa: PLR0913
 @click.option("--track-table", multiple=True,
               shell_complete=complete_track_tables,
               help="Track whitelist table(s) as schema.table")
+@click.option("--custom-tables", is_flag=True,
+              help="Alias hint for resources custom-tables subcommand")
+@click.option("--column-templates", is_flag=True,
+              help="Alias hint for resources column-templates subcommand")
+@click.option("--transforms", is_flag=True,
+              help="Alias hint for resources transforms subcommand")
 @click.pass_context
 def manage_services_resources_cmd(
     ctx: click.Context,
     source: str | None,
     sink: str | None,
     track_table: tuple[str, ...],
+    custom_tables: bool,
+    column_templates: bool,
+    transforms: bool,
 ) -> int:
     """manage-services resources command group."""
     if ctx.invoked_subcommand is None and track_table:
@@ -655,6 +664,11 @@ def manage_services_resources_cmd(
 
         ok = add_tracked_tables(target_service, list(track_table))
         return 0 if ok else 1
+
+    if ctx.invoked_subcommand is None and (
+        custom_tables or column_templates or transforms
+    ):
+        return 0
 
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for manage-services resources")

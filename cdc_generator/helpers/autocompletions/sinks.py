@@ -7,6 +7,7 @@ from cdc_generator.helpers.autocompletions.utils import (
     find_directory_upward,
     find_file_upward,
 )
+from cdc_generator.helpers.helpers_logging import print_warning
 from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 from cdc_generator.helpers.yaml_loader import load_yaml_file
 
@@ -17,6 +18,19 @@ except ImportError:
 
 # Constant for schema.table format validation
 SCHEMA_TABLE_PARTS = 2
+_COMPLETION_COMPATIBILITY_WARNINGS: set[str] = set()
+
+
+def _warn_completion_compatibility_error(error_message: str) -> None:
+    """Warn once per unique completion compatibility error."""
+    if error_message in _COMPLETION_COMPATIBILITY_WARNINGS:
+        return
+
+    _COMPLETION_COMPATIBILITY_WARNINGS.add(error_message)
+    print_warning(
+        "Completion compatibility warning: "
+        + error_message
+    )
 
 
 def list_sink_keys_for_service(service_name: str) -> list[str]:
@@ -602,11 +616,23 @@ def list_compatible_target_columns_for_source_column(
 
     target_types = _load_column_type_map(target_service, target_table)
     source_type = source_types[source_column]
-    return sorted(
-        target_col
-        for target_col, target_type in target_types.items()
-        if check_type_compatibility(source_type, target_type)
-    )
+    compatible_targets: list[str] = []
+    for target_col, target_type in target_types.items():
+        try:
+            is_compatible = check_type_compatibility(
+                source_type,
+                target_type,
+                source_table=source_table,
+                source_column=source_column,
+            )
+        except ValueError as exc:
+            _warn_completion_compatibility_error(str(exc))
+            return []
+
+        if is_compatible:
+            compatible_targets.append(target_col)
+
+    return sorted(compatible_targets)
 
 
 def list_compatible_source_columns_for_target_table(
@@ -695,7 +721,7 @@ def list_compatible_map_column_pairs_for_target_prefix(
     if not target_types:
         return []
 
-    compat_cache: dict[tuple[str, str], bool] = {}
+    compat_cache: dict[tuple[str, str, str], bool] = {}
     results: list[str] = []
 
     for target_column in sorted(target_types):
@@ -714,12 +740,18 @@ def list_compatible_map_column_pairs_for_target_prefix(
                 continue
 
             source_type = source_types[source_column]
-            cache_key = (source_type, target_type)
+            cache_key = (source_column.casefold(), source_type, target_type)
             if cache_key not in compat_cache:
-                compat_cache[cache_key] = check_type_compatibility(
-                    source_type,
-                    target_type,
-                )
+                try:
+                    compat_cache[cache_key] = check_type_compatibility(
+                        source_type,
+                        target_type,
+                        source_table=source_table,
+                        source_column=source_column,
+                    )
+                except ValueError as exc:
+                    _warn_completion_compatibility_error(str(exc))
+                    return []
             if not compat_cache[cache_key]:
                 continue
 

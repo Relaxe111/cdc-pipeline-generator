@@ -1,0 +1,77 @@
+# Type compatibility map from PostgreSQL source types to MSSQL sink types.
+
+metadata:
+  version: 1
+
+aliases:
+  source:
+    int2: smallint
+    int4: integer
+    int8: bigint
+    decimal: numeric
+    bool: boolean
+    varchar: character varying
+    char: character
+    timestamptz: timestamp with time zone
+    timestamp: timestamp without time zone
+    float8: double precision
+    float4: real
+  sink:
+    integer: int
+
+mappings:
+  bigint: bigint
+  integer: int
+  smallint: smallint
+  boolean: bit
+  numeric: decimal
+  real: real
+  double precision: float
+  date: date
+  timestamp without time zone: datetime2
+  timestamp with time zone: datetimeoffset
+  time without time zone: time
+  character: nchar
+  character varying: nvarchar
+  text: nvarchar
+  bytea: varbinary
+  uuid: uniqueidentifier
+  xml: xml
+  json: nvarchar
+  jsonb: nvarchar
+
+compatibility:
+  "*":
+  - nvarchar
+  - varchar
+  - nchar
+  smallint:
+  - smallint
+  - int
+  - bigint
+  - decimal
+  - float
+  integer:
+  - int
+  - bigint
+  - decimal
+  - float
+  bigint:
+  - bigint
+  - decimal
+  - float
+  numeric:
+  - decimal
+  - float
+  real:
+  - real
+  - float
+  date:
+  - date
+  - datetime2
+  - datetimeoffset
+  timestamp without time zone:
+  - datetime2
+  - datetimeoffset
+  timestamp with time zone:
+  - datetimeoffset

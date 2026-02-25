@@ -3,6 +3,9 @@
 import json
 import shutil
 from pathlib import Path
+from typing import cast
+
+import yaml
 
 from .templates import (
     get_cdc_cli_doc_template,
@@ -37,7 +40,32 @@ def _resolve_template_file(generator_root: Path, relative_path: Path) -> Path | 
     return None
 
 
-def _copy_template_library_files(project_root: Path) -> None:
+def _resolve_source_group_name(project_root: Path) -> str:
+    """Resolve source group name from source-groups.yaml or fallback."""
+    source_groups_path = project_root / "source-groups.yaml"
+    if not source_groups_path.exists():
+        return "source-group"
+
+    try:
+        raw_data: object = yaml.safe_load(source_groups_path.read_text(encoding="utf-8"))
+    except yaml.YAMLError:
+        return "source-group"
+
+    if not isinstance(raw_data, dict):
+        return "source-group"
+
+    for key in cast(dict[str, object], raw_data):
+        if key.startswith("_"):
+            continue
+        return key
+
+    return "source-group"
+
+
+def _copy_template_library_files(
+    project_root: Path,
+    source_group_name: str | None = None,
+) -> None:
     """Copy template library files from generator to implementation.
 
     Copies column-templates.yaml, transform-rules.yaml, and bloblang examples
@@ -122,6 +150,43 @@ def _copy_template_library_files(project_root: Path) -> None:
                 + filename
             )
 
+    resolved_source_group_name = source_group_name or _resolve_source_group_name(
+        project_root,
+    )
+    override_template_name = "source-type-overrides.yaml"
+    override_target_name = (
+        f"source-{resolved_source_group_name}-type-overrides.yaml"
+    )
+    override_target_file = (
+        project_root
+        / "services"
+        / "_schemas"
+        / "_definitions"
+        / override_target_name
+    )
+
+    if override_target_file.exists():
+        print(
+            "⊘ Skipped (exists): "
+            + f"services/_schemas/_definitions/{override_target_name}"
+        )
+    else:
+        source_file = _resolve_template_file(
+            generator_root,
+            Path("_definitions") / override_template_name,
+        )
+        if source_file is not None:
+            shutil.copy2(source_file, override_target_file)
+            print(
+                "✓ Copied source type overrides definition: "
+                + f"services/_schemas/_definitions/{override_target_name}"
+            )
+        else:
+            print(
+                "⚠ Warning: Source type overrides template not found in generator: "
+                + override_template_name
+            )
+
 
 def scaffold_project_structure(
     server_group_name: str,
@@ -177,7 +242,7 @@ def scaffold_project_structure(
         gitkeep.touch()
 
     # Copy template library files from generator to implementation
-    _copy_template_library_files(project_root)
+    _copy_template_library_files(project_root, server_group_name)
 
     # Create template files
     files_to_create = {
