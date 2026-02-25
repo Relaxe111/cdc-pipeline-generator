@@ -254,6 +254,106 @@ def _get_multi_param_values(ctx: click.Context, name: str) -> list[str]:
     return values
 
 
+def _get_option_values_from_args(ctx: click.Context, option_name: str) -> list[str]:
+    """Collect values passed after a repeated option from raw ``ctx.args``."""
+    values: list[str] = []
+    args_list = list(ctx.args)
+    for index, token in enumerate(args_list):
+        if token != option_name:
+            continue
+        next_index = index + 1
+        if next_index >= len(args_list):
+            continue
+        value = args_list[next_index]
+        if not value or value.startswith("-"):
+            continue
+        values.append(value)
+    return values
+
+
+def _get_selected_map_column_targets(ctx: click.Context) -> set[str]:
+    """Collect mapped target columns from ``--map-column`` entries."""
+    selected_targets: set[str] = set()
+
+    map_values = _get_multi_param_values(ctx, "map_column") + _get_option_values_from_args(
+        ctx,
+        "--map-column",
+    )
+
+    mapped_targets, _mapped_sources, _pending_legacy_source = _mapped_map_column_state(
+        [value for value in map_values if value],
+    )
+    selected_targets.update(mapped_targets)
+    return selected_targets
+
+
+def _get_selected_accept_columns(
+    ctx: click.Context,
+    incomplete: str,
+) -> set[str]:
+    """Collect already selected values from ``--accept-column``."""
+    selected: set[str] = set()
+
+    values = _get_multi_param_values(ctx, "accept_column") + _get_option_values_from_args(
+        ctx,
+        "--accept-column",
+    )
+    for value in values:
+        column_name = value.strip()
+        if not column_name or column_name == incomplete:
+            continue
+        selected.add(column_name.casefold())
+
+    return selected
+
+
+def _get_selected_add_column_template_targets(
+    ctx: click.Context,
+    incomplete: str,
+) -> set[str]:
+    """Collect already selected target columns from add-column-template pairs.
+
+    Supports both parsed params and raw ``ctx.args`` tokens, so repeated
+    ``--add-column-template target:template`` entries in the same command line
+    can be filtered even during completion.
+    """
+    selected_targets: set[str] = set()
+
+    parsed_values = _get_multi_param_values(ctx, "add_column_template")
+    for value in parsed_values:
+        if ":" not in value:
+            continue
+        target_name_raw, template_name_raw = value.split(":", 1)
+        target_name = target_name_raw.strip()
+        template_name = template_name_raw.strip()
+        if not target_name or not template_name:
+            continue
+        if value == incomplete:
+            continue
+        selected_targets.add(target_name.casefold())
+
+    args_list = list(ctx.args)
+    for index, token in enumerate(args_list):
+        if token != "--add-column-template":
+            continue
+        next_index = index + 1
+        if next_index >= len(args_list):
+            continue
+        value = args_list[next_index]
+        if not value or value.startswith("-") or ":" not in value:
+            continue
+        target_name_raw, template_name_raw = value.split(":", 1)
+        target_name = target_name_raw.strip()
+        template_name = template_name_raw.strip()
+        if not target_name or not template_name:
+            continue
+        if value == incomplete:
+            continue
+        selected_targets.add(target_name.casefold())
+
+    return selected_targets
+
+
 def _get_existing_source_column_refs(
     service: str,
     table_spec: str,
@@ -589,14 +689,94 @@ def _sink_target_service(sink_key: str) -> str:
 
 
 def complete_column_templates(
-    _ctx: click.Context,
+    ctx: click.Context,
     _param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
-    """Complete with column template keys from column-templates.yaml."""
+    """Complete column templates (plain or ``target:template`` in add mode)."""
     from cdc_generator.helpers.autocompletions.column_template_completions import (
+        list_compatible_column_template_pairs_for_target_prefix,
+        list_compatible_target_prefixes_for_column_template,
         list_column_template_keys,
     )
+
+    service = _get_service(ctx)
+    sink_key = _get_sink_key_with_default(ctx)
+    sink_table = _get_param(ctx, "sink_table")
+    target_table = _get_param(ctx, "target")
+    from_table = _get_param(ctx, "from_table")
+    add_sink_table = _get_param(ctx, "add_sink_table")
+    sink_schema = _get_param(ctx, "sink_schema")
+
+    is_add_sink_table_mode = bool(add_sink_table)
+    if not is_add_sink_table_mode or not service or not sink_key:
+        return _filter(_safe_call(list_column_template_keys), incomplete)
+
+    source_table, target_table_resolved = _resolve_map_column_tables(
+        service,
+        sink_key,
+        sink_table,
+        target_table,
+        from_table,
+        add_sink_table,
+        sink_schema,
+    )
+    del source_table
+
+    mapped_targets, _mapped_sources, _pending_legacy = _mapped_map_column_state(
+        [value for value in _get_multi_param_values(ctx, "map_column") if value],
+    )
+    selected_template_targets = _get_selected_add_column_template_targets(
+        ctx,
+        incomplete,
+    )
+    blocked_targets = mapped_targets | selected_template_targets
+
+    if not target_table_resolved:
+        return _filter(_safe_call(list_column_template_keys), incomplete)
+
+    if ":" in incomplete:
+        target_prefix, template_prefix = incomplete.split(":", 1)
+        try:
+            pair_suggestions = list_compatible_column_template_pairs_for_target_prefix(
+                sink_key,
+                target_table_resolved,
+                target_prefix,
+                template_prefix,
+                _MAP_COLUMN_MAX_SUGGESTIONS,
+            )
+        except Exception:
+            pair_suggestions = []
+        if pair_suggestions:
+            filtered_pairs: list[str] = []
+            for pair in pair_suggestions:
+                if ":" not in pair:
+                    continue
+                target_name, _template_name = pair.split(":", 1)
+                if target_name.casefold() in blocked_targets:
+                    continue
+                filtered_pairs.append(pair)
+            pair_suggestions = filtered_pairs
+        if pair_suggestions:
+            return _filter(pair_suggestions, incomplete)
+        return _filter(_safe_call(list_column_template_keys), incomplete)
+
+    try:
+        prefix_suggestions = list_compatible_target_prefixes_for_column_template(
+            sink_key,
+            target_table_resolved,
+            _MAP_COLUMN_MAX_SUGGESTIONS,
+        )
+    except Exception:
+        prefix_suggestions = []
+    if prefix_suggestions:
+        prefix_suggestions = [
+            prefix
+            for prefix in prefix_suggestions
+            if prefix[:-1].casefold() not in blocked_targets
+        ]
+    if prefix_suggestions:
+        return _filter(prefix_suggestions, incomplete)
 
     return _filter(_safe_call(list_column_template_keys), incomplete)
 
@@ -1350,6 +1530,62 @@ def complete_include_sink_columns(
         _safe_call(list_columns_for_table, service, parts[0], parts[1]),
         incomplete,
     )
+
+
+def complete_accept_column(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete --accept-column with uncovered sink target columns."""
+    service = _get_service(ctx)
+    sink_key = _get_sink_key_with_default(ctx)
+    sink_table = _get_param(ctx, "sink_table")
+    target_table = _get_param(ctx, "target")
+    from_table = _get_param(ctx, "from_table")
+    add_sink_table = _get_param(ctx, "add_sink_table")
+    sink_schema = _get_param(ctx, "sink_schema")
+
+    if not service or not sink_key or not add_sink_table:
+        return []
+
+    source_table, target_table_resolved = _resolve_map_column_tables(
+        service,
+        sink_key,
+        sink_table,
+        target_table,
+        from_table,
+        add_sink_table,
+        sink_schema,
+    )
+    del source_table
+
+    if not target_table_resolved:
+        return []
+
+    from cdc_generator.helpers.autocompletions.sinks import (
+        list_target_columns_for_sink_table,
+    )
+
+    target_columns = _safe_call(
+        list_target_columns_for_sink_table,
+        sink_key,
+        target_table_resolved,
+    )
+
+    blocked_columns = (
+        _get_selected_map_column_targets(ctx)
+        | _get_selected_add_column_template_targets(ctx, incomplete)
+        | _get_selected_accept_columns(ctx, incomplete)
+    )
+
+    remaining_columns = [
+        column_name
+        for column_name in target_columns
+        if column_name.casefold() not in blocked_columns
+    ]
+
+    return _filter(remaining_columns, incomplete)
 
 
 # ---------------------------------------------------------------------------

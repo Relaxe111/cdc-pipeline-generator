@@ -343,6 +343,7 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
         "sink", "from", "from_table", "target", "target_exists",
         "target_schema", "sink_schema", "replicate_structure",
         "map_column", "include_sink_columns", "all", "add_column_template",
+        "add_transform", "accept_column",
     },
     # ── Remove sink table ──────────────────────────────────────
     "remove_sink_table": {"sink"},
@@ -406,7 +407,8 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
     "add_column_template": {"sink_table_or_add"},
     "remove_column_template": {"sink_table"},
     "list_column_templates": {"sink_table"},
-    "add_transform": {"sink_table"},
+    "add_transform": {"sink_table_or_add"},
+    "accept_column": {"add_sink_table"},
     "remove_transform": {"sink_table"},
     "list_transforms": {"sink_table"},
     # ── Column template details require --add-column-template ──

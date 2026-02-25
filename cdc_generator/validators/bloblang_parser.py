@@ -9,6 +9,50 @@ from __future__ import annotations
 import re
 
 
+def strip_bloblang_comments(bloblang: str) -> str:
+    """Remove line comments (``#`` and ``//``) outside quoted strings."""
+    stripped_lines: list[str] = []
+
+    for line in bloblang.splitlines():
+        in_single = False
+        in_double = False
+        escaped = False
+        comment_start: int | None = None
+
+        for index, char in enumerate(line):
+            if escaped:
+                escaped = False
+                continue
+
+            if char == "\\":
+                escaped = True
+                continue
+
+            if char == "'" and not in_double:
+                in_single = not in_single
+                continue
+
+            if char == '"' and not in_single:
+                in_double = not in_double
+                continue
+
+            if in_single or in_double:
+                continue
+
+            if char == "#":
+                comment_start = index
+                break
+
+            if char == "/" and index + 1 < len(line) and line[index + 1] == "/":
+                comment_start = index
+                break
+
+        content = line if comment_start is None else line[:comment_start]
+        stripped_lines.append(content)
+
+    return "\n".join(stripped_lines)
+
+
 def extract_column_references(bloblang: str) -> set[str]:
     """Extract all column references from a Bloblang expression.
 
@@ -38,16 +82,17 @@ def extract_column_references(bloblang: str) -> set[str]:
         {'type', 'value_a', 'value_b'}
     """
     columns: set[str] = set()
+    normalized_bloblang = strip_bloblang_comments(bloblang)
 
     # Pattern 1: this.column_name (dot notation)
     # Matches: this.column_name, this.nested.field
     # Captures only the first level: customer_id, nested
     dot_pattern = r'\bthis\.([a-zA-Z_][a-zA-Z0-9_]*)'
-    columns.update(re.findall(dot_pattern, bloblang))
+    columns.update(re.findall(dot_pattern, normalized_bloblang))
 
     # Pattern 2: this["column"] or this['column'] (bracket notation)
     bracket_pattern = r'\bthis\[(["\'])([^"\']+)\1\]'
-    bracket_matches = re.findall(bracket_pattern, bloblang)
+    bracket_matches = re.findall(bracket_pattern, normalized_bloblang)
     columns.update(match[1] for match in bracket_matches)
 
     return set(columns)
@@ -109,7 +154,7 @@ def extract_metadata_references(bloblang: str) -> set[str]:
     """
     # Match meta("field_name") or meta('field_name')
     pattern = r'meta\((["\'])([^"\']+)\1\)'
-    matches = re.findall(pattern, bloblang)
+    matches = re.findall(pattern, strip_bloblang_comments(bloblang))
     return {match[1] for match in matches}
 
 
@@ -134,7 +179,7 @@ def uses_environment_variables(bloblang: str) -> set[str]:
         {'DB_HOST', 'DB_PORT'}
     """
     pattern = r'\$\{([A-Z_][A-Z0-9_]*)\}'
-    return set(re.findall(pattern, bloblang))
+    return set(re.findall(pattern, strip_bloblang_comments(bloblang)))
 
 
 def extract_root_assignments(bloblang: str) -> set[str]:
@@ -158,4 +203,4 @@ def extract_root_assignments(bloblang: str) -> set[str]:
         {'profile'}
     """
     pattern = r'\broot\.([a-zA-Z_][a-zA-Z0-9_]*)\b\s*='
-    return set(re.findall(pattern, bloblang))
+    return set(re.findall(pattern, strip_bloblang_comments(bloblang)))

@@ -341,10 +341,11 @@ def _add_column_template_args(parser: ServiceArgumentParser) -> None:
     )
     parser.add_argument(
         "--add-transform",
+        "--add-transfrom",
         metavar="RULE",
         help=(
             "Add transform rule to sink table "
-            + "(requires --sink-table)"
+            + "(requires --sink-table or can be used with --add-sink-table)"
         ),
     )
     parser.add_argument(
@@ -585,6 +586,15 @@ def _build_parser() -> ServiceArgumentParser:
         nargs="+",
         metavar="COL",
         help="Only sync these columns to sink",
+    )
+    parser.add_argument(
+        "--accept-column",
+        action="append",
+        metavar="SINK_COL",
+        help=(
+            "Allow specific required sink columns to remain unmapped during "
+            + "--add-sink-table compatibility checks (repeatable)"
+        ),
     )
     parser.add_argument(
         "--list-sinks",

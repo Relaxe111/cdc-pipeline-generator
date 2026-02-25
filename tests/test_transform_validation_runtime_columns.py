@@ -89,3 +89,67 @@ def test_rejects_unknown_runtime_reference(
         )
 
     assert is_valid is False
+
+
+def test_ignores_hash_comment_runtime_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Commented ``# this.*`` references are ignored by validation."""
+    monkeypatch.chdir(tmp_path)
+
+    ref = _write_bloblang(
+        tmp_path,
+        tmp_path / "services" / "_bloblang" / "examples" / "commented_hash.blobl",
+        'root._x = this.name\n# this.Frilanser\n',
+    )
+
+    schema = TableSchema(
+        table_name="customers",
+        schema_name="public",
+        columns={"name": "text"},
+    )
+
+    with patch(
+        "cdc_generator.validators.template_validator.get_source_table_schema",
+        return_value=schema,
+    ):
+        is_valid = validate_transforms_for_table(
+            "svc",
+            "public.customers",
+            [ref],
+        )
+
+    assert is_valid is True
+
+
+def test_ignores_slash_comment_runtime_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Commented ``// this.*`` references are ignored by validation."""
+    monkeypatch.chdir(tmp_path)
+
+    ref = _write_bloblang(
+        tmp_path,
+        tmp_path / "services" / "_bloblang" / "examples" / "commented_slash.blobl",
+        'root._x = this.name\n// this.Patient\n',
+    )
+
+    schema = TableSchema(
+        table_name="customers",
+        schema_name="public",
+        columns={"name": "text"},
+    )
+
+    with patch(
+        "cdc_generator.validators.template_validator.get_source_table_schema",
+        return_value=schema,
+    ):
+        is_valid = validate_transforms_for_table(
+            "svc",
+            "public.customers",
+            [ref],
+        )
+
+    assert is_valid is True

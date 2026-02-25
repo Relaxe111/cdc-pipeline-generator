@@ -725,6 +725,13 @@ class TestSmartCompletion:
         )
         assert "--add-column-template" in opts
 
+    def test_add_transform_appears_with_add_sink_table(self) -> None:
+        """--add-transform appears when --add-sink-table is active."""
+        opts = self._complete(
+            "cdc manage-services config --sink asma --add-sink-table pub.Actor --"
+        )
+        assert "--add-transform" in opts
+
     def test_column_name_appears_with_add_sink_table_and_add_column_template(self) -> None:
         """--column-name appears when --add-sink-table and --add-column-template are active."""
         opts = self._complete(

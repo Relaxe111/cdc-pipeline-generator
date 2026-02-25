@@ -21,6 +21,9 @@ from cdc_generator.validators.manage_service.sink_operations import (
     remove_sink_table,
     validate_sinks,
 )
+from cdc_generator.validators.manage_service.sink_template_ops import (
+    add_transform_to_table,
+)
 
 _MAP_COLUMN_PAIR_PARTS = 2
 
@@ -129,6 +132,17 @@ def _build_table_opts(
     map_column_pairs: list[tuple[str, str]] | None = None,
 ) -> dict[str, object]:
     """Build add_sink_table options from CLI args."""
+    def _parse_template_selector(raw_value: str) -> tuple[str, str | None]:
+        if ":" not in raw_value:
+            return raw_value, None
+
+        target_column, template_key = raw_value.split(":", 1)
+        target_column_name = target_column.strip()
+        template_name = template_key.strip()
+        if target_column_name and template_name:
+            return template_name, target_column_name
+        return raw_value, None
+
     def _normalize_sink_schema_token(raw_value: str) -> str:
         if raw_value.startswith("custom:"):
             return raw_value.split(":", 1)[1]
@@ -149,13 +163,83 @@ def _build_table_opts(
         table_opts["target_schema"] = args.target_schema
     if args.include_sink_columns:
         table_opts["include_columns"] = args.include_sink_columns
+    accepted_columns = getattr(args, "accept_column", None)
+    if accepted_columns:
+        if isinstance(accepted_columns, list | tuple):
+            table_opts["accepted_columns"] = [
+                str(value) for value in accepted_columns if str(value).strip()
+            ]
+        else:
+            single_value = str(accepted_columns).strip()
+            if single_value:
+                table_opts["accepted_columns"] = [single_value]
     if hasattr(args, "add_column_template") and args.add_column_template:
-        table_opts["column_template"] = args.add_column_template
+        template_key, target_column_override = _parse_template_selector(
+            str(args.add_column_template),
+        )
+        table_opts["column_template"] = template_key
         if hasattr(args, "column_name") and args.column_name:
             table_opts["column_template_name"] = args.column_name
+        elif target_column_override:
+            table_opts["column_template_name"] = target_column_override
         if hasattr(args, "value") and args.value:
             table_opts["column_template_value"] = args.value
+    if hasattr(args, "add_transform") and args.add_transform:
+        table_opts["add_transform"] = args.add_transform
     return table_opts
+
+
+def _resolve_effective_sink_table_key(
+    table_name: str,
+    sink_schema: str | None,
+) -> str:
+    """Resolve final sink table key after optional --sink-schema override."""
+    if sink_schema is None:
+        return table_name
+
+    normalized_sink_schema = (
+        sink_schema.split(":", 1)[1]
+        if sink_schema.startswith("custom:")
+        else sink_schema
+    )
+
+    if "." not in table_name:
+        return table_name
+
+    _schema, table_part = table_name.split(".", 1)
+    return f"{normalized_sink_schema}.{table_part}"
+
+
+def _apply_transform_after_add(
+    args: argparse.Namespace,
+    sink_key: str,
+    table_name: str,
+) -> bool:
+    """Apply add-time transform to a newly created sink table entry."""
+    add_transform = getattr(args, "add_transform", None)
+    if not add_transform:
+        return True
+
+    final_table_key = _resolve_effective_sink_table_key(
+        table_name,
+        getattr(args, "sink_schema", None),
+    )
+    skip_validation = bool(getattr(args, "skip_validation", False))
+    if add_transform_to_table(
+        args.service,
+        sink_key,
+        final_table_key,
+        str(add_transform),
+        skip_validation,
+    ):
+        return True
+
+    print_error(
+        f"Failed to add transform '{add_transform}' to '{final_table_key}'. "
+        + "Rolling back sink table add."
+    )
+    remove_sink_table(args.service, sink_key, final_table_key)
+    return False
 
 
 def _parse_map_column_pairs(
@@ -249,7 +333,7 @@ def _handle_from_all_add_table(
                 sink_key,
                 src_table,
                 table_opts=table_opts,
-            ):
+            ) and _apply_transform_after_add(args, sink_key, src_table):
                 success_count += 1
 
     if success_count > 0:
@@ -485,7 +569,7 @@ def handle_sink_add_table(args: argparse.Namespace) -> int:
             sink_key,
             table_name,
             table_opts=table_opts,
-        ):
+        ) and _apply_transform_after_add(args, sink_key, table_name):
             success_count += 1
 
     if success_count > 0:

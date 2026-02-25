@@ -1076,6 +1076,175 @@ class TestCliManageServiceCompletions:
         assert "source_table" in out
         assert "sync_timestamp" in out
 
+    def test_add_column_template_suggests_target_prefixes_in_add_sink_table_mode(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """In add-sink-table mode, template completion starts with target column prefixes."""
+        from cdc_generator.core import column_templates as column_templates_module
+
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        column_templates_module.clear_cache()
+
+        _create_project(isolated_project, with_sink=True)
+
+        schemas_dir = isolated_project / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True, exist_ok=True)
+        (schemas_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  tenant_id:\n"
+            "    name: tenant_id\n"
+            "    type: uuid\n"
+            "    value: uuid_v4()\n"
+            "  source_table:\n"
+            "    name: _source_table\n"
+            "    type: text\n"
+            "    value: meta(\"table\")\n"
+        )
+
+        target_schema_dir = (
+            isolated_project / "service-schemas" / "chat" / "public"
+        )
+        target_schema_dir.mkdir(parents=True, exist_ok=True)
+        (target_schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: customer_id\n"
+            "    type: uuid\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc manage-services config "
+                + "--service proxy "
+                + "--sink sink_asma.chat "
+                + "--add-sink-table public.customer_user "
+                + "--from dbo.Actor "
+                + "--target-exists true "
+                + "--add-column-template c"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "customer_id:" in out
+
+    def test_add_column_template_suggests_compatible_target_template_pairs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """In add-sink-table mode, `target:` suggests compatible template keys."""
+        from cdc_generator.core import column_templates as column_templates_module
+
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        column_templates_module.clear_cache()
+
+        _create_project(isolated_project, with_sink=True)
+
+        schemas_dir = isolated_project / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True, exist_ok=True)
+        (schemas_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  tenant_id:\n"
+            "    name: tenant_id\n"
+            "    type: uuid\n"
+            "    value: uuid_v4()\n"
+            "  source_table:\n"
+            "    name: _source_table\n"
+            "    type: text\n"
+            "    value: meta(\"table\")\n"
+        )
+
+        target_schema_dir = (
+            isolated_project / "service-schemas" / "chat" / "public"
+        )
+        target_schema_dir.mkdir(parents=True, exist_ok=True)
+        (target_schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: customer_id\n"
+            "    type: uuid\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc manage-services config "
+                + "--service proxy "
+                + "--sink sink_asma.chat "
+                + "--add-sink-table public.customer_user "
+                + "--from dbo.Actor "
+                + "--target-exists true "
+                + "--add-column-template customer_id:t"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "customer_id:tenant_id" in out
+
+    def test_add_column_template_hides_targets_already_mapped_by_map_column(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--add-column-template` should hide targets already used in --map-column."""
+        from cdc_generator.core import column_templates as column_templates_module
+
+        monkeypatch.setattr(column_templates_module, "_templates_file", None)
+        column_templates_module.clear_cache()
+
+        _create_project(isolated_project, with_sink=True)
+
+        schemas_dir = isolated_project / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True, exist_ok=True)
+        (schemas_dir / "column-templates.yaml").write_text(
+            "templates:\n"
+            "  tenant_id:\n"
+            "    name: tenant_id\n"
+            "    type: uuid\n"
+            "    value: uuid_v4()\n"
+        )
+
+        target_schema_dir = (
+            isolated_project / "service-schemas" / "chat" / "public"
+        )
+        target_schema_dir.mkdir(parents=True, exist_ok=True)
+        (target_schema_dir / "customer_user.yaml").write_text(
+            "columns:\n"
+            "  - name: customer_id\n"
+            "    type: uuid\n"
+            "  - name: user_id\n"
+            "    type: uuid\n"
+        )
+
+        original_cwd = Path.cwd()
+        os.chdir(isolated_project)
+        try:
+            result = run_cdc_completion(
+                "cdc manage-services config "
+                + "--service proxy "
+                + "--sink sink_asma.chat "
+                + "--add-sink-table public.customer_user "
+                + "--from dbo.Actor "
+                + "--target-exists true "
+                + "--map-column customer_id:KundeId "
+                + "--add-column-template u"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        out = result.stdout
+        assert "customer_id:" not in out
+        assert "user_id:" in out
+
+
     def test_msc_map_column_suggests_sink_source_pairs(
         self,
         run_cdc_completion: RunCdcCompletion,

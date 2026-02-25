@@ -140,6 +140,11 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "modify_custom_table": None,
         "add_column": None,
         "remove_column": None,
+        "add_column_template": None,
+        "column_name": None,
+        "value": None,
+        "add_transform": None,
+        "skip_validation": False,
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -553,6 +558,113 @@ class TestHandleSinkAddTable:
             table_opts["column_template_value"]
             == "{adopus.sources.*.customer_id}"
         )
+
+    def test_add_column_template_target_template_format_is_forwarded(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """`target:template` format maps to template key + column_name override."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="true",
+            from_table="public.users",
+            add_column_template="customer_id:tenant_id",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        call_kwargs = add_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["column_template"] == "tenant_id"
+        assert table_opts["column_template_name"] == "customer_id"
+
+    def test_add_transform_is_applied_after_add_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--add-transform on --add-sink-table applies validated transform."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="false",
+            from_table="public.users",
+            add_transform="file://services/_bloblang/examples/user_class_splitter.blobl",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock, patch(
+            "cdc_generator.cli.service_handlers_sink.add_transform_to_table",
+            return_value=True,
+        ) as transform_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        assert add_mock.call_count == 1
+        transform_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.orders",
+            "file://services/_bloblang/examples/user_class_splitter.blobl",
+            False,
+        )
+
+    def test_add_transform_failure_rolls_back_added_table(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """Transform validation failure rolls back newly added sink table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="false",
+            from_table="public.users",
+            add_transform="file://services/_bloblang/examples/user_class_splitter.blobl",
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ), patch(
+            "cdc_generator.cli.service_handlers_sink.add_transform_to_table",
+            return_value=False,
+        ), patch(
+            "cdc_generator.cli.service_handlers_sink.remove_sink_table",
+            return_value=True,
+        ) as rollback_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 1
+        rollback_mock.assert_called_once_with(
+            "proxy",
+            "sink_asma.chat",
+            "public.orders",
+        )
+
+    def test_accept_column_is_forwarded(
+        self, project_dir: Path, service_with_sink: Path,
+    ) -> None:
+        """--accept-column values are forwarded during add-sink-table."""
+        args = _ns(
+            sink="sink_asma.chat",
+            add_sink_table="public.orders",
+            target_exists="true",
+            from_table="public.users",
+            accept_column=["user_id", "region"],
+        )
+        with patch(
+            "cdc_generator.cli.service_handlers_sink.add_sink_table",
+            return_value=True,
+        ) as add_mock:
+            result = handle_sink_add_table(args)
+
+        assert result == 0
+        call_kwargs = add_mock.call_args.kwargs
+        table_opts = call_kwargs["table_opts"]
+        assert isinstance(table_opts, dict)
+        assert table_opts["accepted_columns"] == ["user_id", "region"]
 
     def test_all_mode_requires_replicate_structure(
         self, project_dir: Path, service_multi_sink: Path,

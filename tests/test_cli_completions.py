@@ -11,6 +11,8 @@ from click.shell_completion import CompletionItem
 
 from cdc_generator.cli.completions import (
     complete_available_sink_keys,
+    complete_accept_column,
+    complete_column_templates,
     complete_map_column,
     complete_target_schema,
 )
@@ -468,3 +470,121 @@ def test_complete_map_column_pair_step_excludes_mapped_sources(
     )
 
     assert _values(items) == ["pnr:empno", "pnr:extraNotat"]
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.column_template_completions."
+    "list_compatible_target_prefixes_for_column_template"
+)
+@patch(
+    "cdc_generator.helpers.autocompletions.column_template_completions."
+    "list_compatible_column_template_pairs_for_target_prefix"
+)
+def test_complete_column_templates_excludes_mapped_and_selected_targets(
+    mock_pair_helper: Mock,
+    mock_prefix_helper: Mock,
+) -> None:
+    """Prefix suggestions hide targets already used by map or template pair."""
+    mock_prefix_helper.return_value = ["customer_id:", "region_id:", "user_id:"]
+    mock_pair_helper.return_value = []
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "add_sink_table": "public.customer_user",
+                "from_table": "dbo.Actor",
+                "map_column": ["customer_id:KundeId"],
+                "add_column_template": ["region_id:tenant_region"],
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_column_templates(
+        ctx,
+        cast(click.Parameter, None),
+        "",
+    )
+
+    assert _values(items) == ["user_id:"]
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_target_columns_for_sink_table"
+)
+def test_complete_accept_column_excludes_covered_targets(
+    mock_target_columns: Mock,
+) -> None:
+    """--accept-column shows sink target columns left after map/template/accept."""
+    mock_target_columns.return_value = [
+        "customer_id",
+        "email",
+        "journal_role",
+        "user_id",
+    ]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "add_sink_table": "public.customer_user",
+                "from_table": "dbo.Actor",
+                "map_column": ["email:epost"],
+                "add_column_template": ["customer_id:customer_id"],
+                "accept_column": ["journal_role"],
+            },
+            args=[],
+        ),
+    )
+
+    items = complete_accept_column(
+        ctx,
+        cast(click.Parameter, None),
+        "",
+    )
+
+    assert _values(items) == ["user_id"]
+
+
+@patch(
+    "cdc_generator.helpers.autocompletions.sinks.list_target_columns_for_sink_table"
+)
+def test_complete_accept_column_considers_left_side_raw_args(
+    mock_target_columns: Mock,
+) -> None:
+    """Raw left-side args are considered when filtering accept-column suggestions."""
+    mock_target_columns.return_value = ["customer_id", "email", "journal_role"]
+
+    ctx = cast(
+        click.Context,
+        SimpleNamespace(
+            params={
+                "service": "myservice",
+                "sink": "sink_asma.proxy",
+                "add_sink_table": "public.customer_user",
+                "from_table": "dbo.Actor",
+                "map_column": None,
+                "add_column_template": None,
+                "accept_column": None,
+            },
+            args=[
+                "--map-column", "email:epost",
+                "--add-column-template", "customer_id:customer_id",
+            ],
+        ),
+    )
+
+    items = complete_accept_column(
+        ctx,
+        cast(click.Parameter, None),
+        "",
+    )
+
+    assert _values(items) == ["journal_role"]
+
+

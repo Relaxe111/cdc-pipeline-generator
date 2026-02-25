@@ -108,6 +108,8 @@ class TableConfigOptions:
     column_template: str | None = None
     column_template_name: str | None = None
     column_template_value: str | None = None
+    add_transform: str | None = None
+    accepted_columns: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +583,10 @@ def _is_required_sink_column(column: dict[str, Any]) -> bool:
     """
     is_pk = bool(column.get("primary_key", False))
     nullable = bool(column.get("nullable", True))
-    has_default = column.get("default") is not None
+    has_default = (
+        column.get("default") is not None
+        or column.get("default_value") is not None
+    )
     return (is_pk or not nullable) and not has_default
 
 
@@ -602,13 +607,17 @@ def _analyze_identity_coverage(
     source_types: dict[str, str],
     sink_types: dict[str, str],
     mapped_sink_columns: set[str],
+    pre_covered: set[str] | None = None,
 ) -> tuple[set[str], list[tuple[str, str, str]]]:
     """Return identity-compatible and identity-incompatible sink columns."""
     identity_covered: set[str] = set()
     incompatible_identity: list[tuple[str, str, str]] = []
+    already_covered: set[str] = (
+        pre_covered if pre_covered is not None else set()
+    )
 
     for sink_col, sink_type in sink_types.items():
-        if sink_col in mapped_sink_columns:
+        if sink_col in mapped_sink_columns or sink_col in already_covered:
             continue
 
         source_type = source_types.get(sink_col)
@@ -666,6 +675,154 @@ def _find_required_unmapped_sink_columns(
     return required_unmapped
 
 
+def _validate_accepted_columns(
+    accepted_columns: list[str],
+    sink_columns: list[dict[str, Any]],
+) -> str | None:
+    """Validate --accept-column values reference known sink columns."""
+    sink_column_names = {
+        str(col.get("name"))
+        for col in sink_columns
+        if isinstance(col.get("name"), str)
+    }
+    invalid = sorted(
+        column_name
+        for column_name in accepted_columns
+        if column_name not in sink_column_names
+    )
+    if not invalid:
+        return None
+
+    available = ", ".join(sorted(sink_column_names))
+    return (
+        "Invalid --accept-column value(s): "
+        + ", ".join(invalid)
+        + f"\nAvailable sink columns: {available}"
+    )
+
+
+def _collect_column_template_coverage(opts: TableConfigOptions) -> set[str]:
+    """Collect sink column names covered by add-time column template options."""
+    if not opts.column_template:
+        return set()
+
+    if opts.column_template_name:
+        return {opts.column_template_name}
+
+    try:
+        from cdc_generator.core.column_templates import get_template
+
+        template = get_template(opts.column_template)
+    except (FileNotFoundError, ValueError):
+        template = None
+
+    if template is None:
+        return {opts.column_template}
+
+    return {template.name, opts.column_template}
+
+
+def _collect_add_transform_coverage(opts: TableConfigOptions) -> set[str]:
+    """Collect sink column names covered by add-time transform option."""
+    if not opts.add_transform:
+        return set()
+
+    return _collect_transform_coverage_from_entries(
+        [{"bloblang_ref": opts.add_transform}],
+    )
+
+
+def _extract_bloblang_output_columns(bloblang: str) -> set[str]:
+    """Extract probable output column names from Bloblang transform content."""
+    from cdc_generator.validators.bloblang_parser import (
+        strip_bloblang_comments,
+    )
+
+    normalized_bloblang = strip_bloblang_comments(bloblang)
+    output_columns: set[str] = set()
+
+    for match in re.finditer(
+        r"root\.([a-zA-Z_][a-zA-Z0-9_$]*)\s*=",
+        normalized_bloblang,
+    ):
+        output_columns.add(match.group(1))
+
+    for merge_match in re.finditer(
+        r"merge\(\s*\{(.*?)\}\s*\)",
+        normalized_bloblang,
+        re.DOTALL,
+    ):
+        body = merge_match.group(1)
+        for key_match in re.finditer(r"[\"']([a-zA-Z_][a-zA-Z0-9_$]*)[\"']\s*:", body):
+            output_columns.add(key_match.group(1))
+
+    return output_columns
+
+
+def _collect_transform_coverage_from_entries(
+    transforms: list[object],
+) -> set[str]:
+    """Collect sink column names produced by transform entries."""
+    covered: set[str] = set()
+
+    for item in transforms:
+        if not isinstance(item, dict):
+            continue
+
+        entry = cast(dict[str, object], item)
+
+        expected_output = entry.get("expected_output_column")
+        if isinstance(expected_output, str) and expected_output:
+            covered.add(expected_output)
+
+        rule_name = entry.get("rule")
+        if isinstance(rule_name, str) and rule_name:
+            try:
+                from cdc_generator.core.transform_rules import get_rule
+
+                rule = get_rule(rule_name)
+            except (FileNotFoundError, ValueError):
+                rule = None
+
+            if (
+                rule is not None
+                and rule.output_column is not None
+            ):
+                covered.add(rule.output_column.name)
+
+        bloblang_ref = entry.get("bloblang_ref")
+        if isinstance(bloblang_ref, str) and bloblang_ref:
+            try:
+                from cdc_generator.core.bloblang_refs import read_bloblang_ref
+
+                bloblang = read_bloblang_ref(bloblang_ref)
+            except (FileNotFoundError, ValueError):
+                bloblang = None
+
+            if isinstance(bloblang, str) and bloblang:
+                covered.update(_extract_bloblang_output_columns(bloblang))
+
+    return covered
+
+
+def _collect_source_transform_coverage(
+    config: dict[str, object],
+    source_table: str,
+) -> set[str]:
+    """Collect sink column names covered by source-table transform rules."""
+    source_tables = _get_source_tables_dict(config)
+    source_cfg_raw = source_tables.get(source_table)
+    if not isinstance(source_cfg_raw, dict):
+        return set()
+
+    source_cfg = cast(dict[str, object], source_cfg_raw)
+    transforms_raw = source_cfg.get("transforms")
+    if not isinstance(transforms_raw, list):
+        return set()
+
+    return _collect_transform_coverage_from_entries(cast(list[object], transforms_raw))
+
+
 def _build_add_table_compatibility_guidance(
     source_table: str,
     sink_table: str,
@@ -711,6 +868,7 @@ def _build_add_table_compatibility_guidance(
 
 
 def _validate_add_table_schema_compatibility(
+    config: dict[str, object],
     service: str,
     sink_key: str,
     source_fallback_table: str,
@@ -761,13 +919,36 @@ def _validate_add_table_schema_compatibility(
 
     source_types = _collect_named_column_types(source_columns)
     sink_types = _collect_named_column_types(sink_columns)
+    accepted_columns = opts.accepted_columns or []
+    accepted_columns_set = {
+        column_name.strip()
+        for column_name in accepted_columns
+        if column_name.strip()
+    }
+    accepted_validation_error = _validate_accepted_columns(
+        sorted(accepted_columns_set),
+        sink_columns,
+    )
+    if accepted_validation_error:
+        return accepted_validation_error
+
     mapped_sink_columns = set(explicit_mappings.values())
+    template_covered = _collect_column_template_coverage(opts)
+    transform_covered = _collect_source_transform_coverage(config, source_table)
+    add_transform_covered = _collect_add_transform_coverage(opts)
+    generated_covered = (
+        template_covered
+        | transform_covered
+        | add_transform_covered
+        | accepted_columns_set
+    )
     identity_covered, incompatible_identity = _analyze_identity_coverage(
         source_types,
         sink_types,
         mapped_sink_columns,
+        generated_covered,
     )
-    covered = mapped_sink_columns | identity_covered
+    covered = mapped_sink_columns | generated_covered | identity_covered
     required_unmapped = _find_required_unmapped_sink_columns(
         sink_columns,
         covered,
@@ -895,9 +1076,20 @@ def add_sink_table(
             if "column_template_value" in opts
             else None
         ),
+        add_transform=(
+            str(opts["add_transform"])
+            if "add_transform" in opts
+            else None
+        ),
+        accepted_columns=(
+            cast(list[str], opts["accepted_columns"])
+            if "accepted_columns" in opts
+            else None
+        ),
     )
 
     compatibility_error = _validate_add_table_schema_compatibility(
+        config,
         service,
         sink_key,
         table_key,

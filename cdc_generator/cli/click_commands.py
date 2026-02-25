@@ -28,6 +28,7 @@ import click
 from cdc_generator.cli.completions import (
     complete_add_custom_sink_table,
     complete_add_sink_table,
+    complete_accept_column,
     complete_available_envs,
     complete_available_services,
     complete_available_sink_keys,
@@ -186,6 +187,9 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
 @click.option("--include-sink-columns",
               shell_complete=complete_include_sink_columns,
               help="Only sync these columns to sink")
+@click.option("--accept-column", multiple=True,
+              shell_complete=complete_accept_column,
+              help="Allow required sink columns to remain unmapped")
 @click.option("--list-sinks", is_flag=True,
               help="List all sink configurations")
 @click.option("--validate-sinks", is_flag=True,
@@ -200,6 +204,9 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
               help="List column templates on sink table")
 @click.option("--column-name", help="Override column name for template")
 @click.option("--value", help="Override column value for template")
+@click.option("--add-transform", "--add-transfrom",
+              shell_complete=complete_transform_rules,
+              help="Add transform Bloblang ref to sink table")
 @click.option("--skip-validation", is_flag=True,
               help="Skip database schema validation")
 # -- Custom sink table --

@@ -675,3 +675,350 @@ def test_add_sink_table_replicate_structure_skips_compatibility_check(
     )
 
     assert result is True
+
+
+def test_add_sink_table_accepts_required_columns_with_defaults(
+    monkeypatch: Any,
+) -> None:
+    """Non-null sink columns with defaults should not require source mapping."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+
+    def _load_cols(_service: str, _table: str) -> list[dict[str, object]]:
+        if _service == "test_service":
+            return [
+                {"name": "name", "type": "text", "nullable": False},
+            ]
+        return [
+            {
+                "name": "id",
+                "type": "uuid",
+                "nullable": False,
+                "default_value": "gen_random_uuid()",
+            },
+            {
+                "name": "region",
+                "type": "text",
+                "nullable": False,
+                "default": "'global'::text",
+            },
+            {"name": "name", "type": "text", "nullable": False},
+        ]
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        _load_cols,
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_accepts_required_column_from_column_template(
+    monkeypatch: Any,
+) -> None:
+    """A required sink column can be covered by add-time column template output."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "actno", "type": "integer", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "customer_id", "type": "uuid", "nullable": False},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+            "column_template": "customer_id",
+            "column_template_name": "customer_id",
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_accepts_required_column_from_source_transform(
+    monkeypatch: Any,
+) -> None:
+    """A required sink column can be covered by source transform rule output."""
+    config = _create_test_service_config()
+    source_tables = cast(
+        dict[str, object],
+        cast(dict[str, object], config["source"])["tables"],
+    )
+    source_tables["public.customer_user"] = {
+        "transforms": [{"rule": "user_class_splitter"}],
+    }
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "user_class", "type": "text", "nullable": False},
+        ],
+    )
+
+    class _Output:
+        name = "user_class"
+
+    class _Rule:
+        output_column = _Output()
+
+    monkeypatch.setattr(
+        "cdc_generator.core.transform_rules.get_rule",
+        lambda _key: _Rule(),
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_accepts_required_column_from_add_transform_option(
+    monkeypatch: Any,
+) -> None:
+    """Add-time --add-transform output should satisfy required sink columns."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "user_class", "type": "text", "nullable": False},
+        ],
+    )
+    monkeypatch.setattr(
+        "cdc_generator.core.bloblang_refs.read_bloblang_ref",
+        lambda _ref: 'root = this.merge({"user_class":"Patient"})',
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+            "add_transform": "file://services/_bloblang/examples/user_class_splitter.blobl",
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_rejects_required_column_from_commented_transform_output(
+    monkeypatch: Any,
+) -> None:
+    """Commented merge/root outputs must not satisfy required sink columns."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "user_class", "type": "text", "nullable": False},
+        ],
+    )
+    monkeypatch.setattr(
+        "cdc_generator.core.bloblang_refs.read_bloblang_ref",
+        lambda _ref: '\n'.join([
+            'let results = []',
+            '# root.user_class = "Patient"',
+            '# $results.append(this.merge({"user_class":"Patient"}))',
+            'root = this',
+        ]),
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+            "add_transform": "file://services/_bloblang/examples/user_class_splitter.blobl",
+        },
+    )
+
+    assert result is False
+
+
+def test_add_sink_table_accepts_required_column_via_accept_column(
+    monkeypatch: Any,
+) -> None:
+    """accepted_columns should allow explicit bypass for required unmapped sink columns."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "user_id", "type": "uuid", "nullable": False},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+            "accepted_columns": ["user_id"],
+        },
+    )
+
+    assert result is True
+
+
+def test_add_sink_table_rejects_invalid_accept_column_name(
+    monkeypatch: Any,
+) -> None:
+    """accepted_columns should fail fast on unknown sink column names."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: [
+            {"name": "id", "type": "uuid", "nullable": False},
+        ]
+        if _service == "test_service"
+        else [
+            {"name": "user_id", "type": "uuid", "nullable": False},
+        ],
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="public.customer_user",
+        table_opts={
+            "target_exists": True,
+            "from": "public.customer_user",
+            "accepted_columns": ["missing_col"],
+        },
+    )
+
+    assert result is False
