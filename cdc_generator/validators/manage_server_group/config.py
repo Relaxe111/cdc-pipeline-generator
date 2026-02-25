@@ -337,6 +337,26 @@ def load_table_exclude_patterns() -> list[str]:
         return []
 
 
+def load_table_include_patterns() -> list[str]:
+    """Load table include patterns from source-groups.yaml.
+
+    Format: server_group_name as root key with table_include_patterns field.
+    """
+    try:
+        with SERVER_GROUPS_FILE.open() as f:
+            config = yaml.safe_load(f)  # type: ignore[misc]
+
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                patterns = cast(list[str] | None, group_data.get('table_include_patterns'))  # type: ignore[misc]
+                if patterns:
+                    return patterns
+
+        return []
+    except Exception:
+        return []
+
+
 def save_table_exclude_patterns(patterns: list[str]) -> None:
     """Save table exclude patterns to source-groups.yaml.
 
@@ -350,6 +370,21 @@ def save_table_exclude_patterns(patterns: list[str]) -> None:
         raise RuntimeError("No server group found to update")
 
     save_server_group_preserving_comments(updater, "save table exclude patterns")
+
+
+def save_table_include_patterns(patterns: list[str]) -> None:
+    """Save table include patterns to source-groups.yaml.
+
+    Uses centralized save function to preserve header comments.
+    """
+    def updater(config: dict[str, Any]) -> None:
+        for group_data in config.values():
+            if isinstance(group_data, dict) and 'pattern' in group_data:
+                group_data['table_include_patterns'] = patterns
+                return
+        raise RuntimeError("No server group found to update")
+
+    save_server_group_preserving_comments(updater, "save table include patterns")
 
 
 def load_env_mappings() -> dict[str, str]:

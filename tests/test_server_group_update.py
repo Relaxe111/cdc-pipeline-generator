@@ -449,6 +449,7 @@ class TestApplyUpdatesAutocompleteCache:
         server_group = {
             "name": "testgroup",
             "type": "postgres",
+            "table_include_patterns": ["^core_"],
             "table_exclude_patterns": ["tmp"],
             "schema_exclude_patterns": ["logs"],
             "servers": {
@@ -477,12 +478,14 @@ class TestApplyUpdatesAutocompleteCache:
             scanned_databases,
             server_group,
             scanned_databases,
+            ["^core_"],
         )
 
         assert result is True
         mock_generate_autocomplete.assert_called_once_with(
             server_group,
             scanned_databases,
+            ["^core_"],
             ["tmp"],
             ["logs"],
         )

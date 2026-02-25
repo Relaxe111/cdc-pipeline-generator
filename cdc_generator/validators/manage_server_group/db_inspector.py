@@ -21,6 +21,7 @@ from cdc_generator.helpers.psycopg2_loader import (
 from .filters import (
     should_exclude_schema,
     should_exclude_table,
+    should_include_table,
     should_ignore_database,
     should_include_database,
 )
@@ -427,6 +428,7 @@ def list_mssql_databases(
     include_pattern: str | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
+    table_include_patterns: list[str] | None = None,
     table_exclude_patterns: list[str] | None = None,
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
@@ -438,6 +440,7 @@ def list_mssql_databases(
         include_pattern: Regex pattern to include only matching databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_include_patterns: Patterns to include tables
         table_exclude_patterns: Patterns to exclude tables
         server_name: Name of this server (for multi-server support)
     """
@@ -502,12 +505,16 @@ def list_mssql_databases(
                 databases_with_ignored_schemas += 1
 
             table_patterns = table_exclude_patterns or []
+            table_include = table_include_patterns or []
             table_count = 0
             ignored_tables_for_db = 0
             for schema_name, table_name in all_table_rows:
                 if schema_name not in schemas:
                     continue
                 if should_exclude_table(table_name, table_patterns):
+                    ignored_tables_for_db += 1
+                    continue
+                if not should_include_table(table_name, table_include):
                     ignored_tables_for_db += 1
                     continue
                 table_count += 1
@@ -569,6 +576,7 @@ def list_postgres_databases(  # noqa: PLR0915
     include_pattern: str | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
+    table_include_patterns: list[str] | None = None,
     table_exclude_patterns: list[str] | None = None,
     server_name: str = "default",
 ) -> list[DatabaseInfo]:
@@ -580,6 +588,7 @@ def list_postgres_databases(  # noqa: PLR0915
         include_pattern: Regex pattern to include only matching databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_include_patterns: Patterns to include tables
         table_exclude_patterns: Patterns to exclude tables
         server_name: Name of this server (for multi-server support)
     """
@@ -667,12 +676,16 @@ def list_postgres_databases(  # noqa: PLR0915
                 if isinstance(row[0], str) and isinstance(row[1], str)
             ]
             table_patterns = table_exclude_patterns or []
+            table_include = table_include_patterns or []
             table_count = 0
             ignored_tables_for_db = 0
             for schema_name, table_name in all_table_rows:
                 if schema_name not in schemas:
                     continue
                 if should_exclude_table(table_name, table_patterns):
+                    ignored_tables_for_db += 1
+                    continue
+                if not should_include_table(table_name, table_include):
                     ignored_tables_for_db += 1
                     continue
                 table_count += 1

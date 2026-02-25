@@ -45,6 +45,7 @@ class ManageServerGroupFlagValidator:
         'set_kafka_topology',
         'add_to_ignore_list', 'list_ignore_patterns',
         'add_to_schema_excludes', 'list_schema_excludes',
+        'add_to_table_includes', 'list_table_includes',
         'add_to_table_excludes', 'list_table_excludes',
         'add_source_custom_key',
         'add_env_mapping', 'list_env_mappings',
@@ -56,6 +57,7 @@ class ManageServerGroupFlagValidator:
         'list_servers',
         'list_ignore_patterns',
         'list_schema_excludes',
+        'list_table_includes',
         'list_table_excludes',
         'list_env_mappings',
     })

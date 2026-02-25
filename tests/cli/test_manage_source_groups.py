@@ -430,6 +430,42 @@ class TestCliTableExcludes:
         assert "^zz_.*" in output
 
 
+class TestCliTableIncludes:
+    """CLI e2e: table include pattern management."""
+
+    def test_list_empty_table_includes(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc("manage-source-groups", "--list-table-includes")
+        assert result.returncode == 0
+        assert "No table include patterns" in result.stdout
+
+    def test_add_table_include(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-to-table-includes", "^core_",
+        )
+        assert result.returncode == 0
+        assert "^core_" in result.stdout
+
+    def test_add_comma_separated_table_includes(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--add-to-table-includes", "^core_,customer",
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "^core_" in output
+        assert "customer" in output
+
+
 class TestCliSourceCustomKeys:
     """CLI e2e: source custom key management."""
 

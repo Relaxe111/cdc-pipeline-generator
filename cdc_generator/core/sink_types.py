@@ -134,6 +134,7 @@ class SinkGroupStandalone(TypedDict, total=False):
     # Discovery/filtering patterns (same as source groups)
     database_exclude_patterns: list[str]  # regex patterns for excluding databases
     schema_exclude_patterns: list[str]  # regex patterns for excluding schemas
+    table_include_patterns: list[str]  # regex patterns for including tables
     table_exclude_patterns: list[str]  # regex patterns for excluding tables
     # Required:
     servers: dict[str, SinkServerConfig]
@@ -188,6 +189,7 @@ class ResolvedSinkGroup(TypedDict, total=False):
     description: str
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]
+    table_include_patterns: list[str]
     table_exclude_patterns: list[str]
     servers: dict[str, ResolvedSinkServer]
     sources: dict[str, SinkSource]

@@ -271,6 +271,10 @@ def manage_services_config_cmd(_ctx: click.Context, **_kwargs: object) -> int:
               help="Execution type for source custom key")
 @click.option("--list-schema-excludes", is_flag=True,
               help="List current schema exclude patterns")
+@click.option("--add-to-table-includes",
+              help="Add pattern to table include list")
+@click.option("--list-table-includes", is_flag=True,
+              help="List current table include patterns")
 @click.option("--add-to-table-excludes",
               help="Add pattern to table exclude list")
 @click.option("--list-table-excludes", is_flag=True,

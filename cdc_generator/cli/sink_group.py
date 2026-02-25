@@ -693,6 +693,9 @@ def _fetch_databases(
             schema_exclude_patterns=resolved.get(
                 "schema_exclude_patterns"
             ),
+            table_include_patterns=resolved.get(
+                "table_include_patterns"
+            ),
             table_exclude_patterns=resolved.get(
                 "table_exclude_patterns"
             ),
@@ -708,6 +711,9 @@ def _fetch_databases(
             ),
             schema_exclude_patterns=resolved.get(
                 "schema_exclude_patterns"
+            ),
+            table_include_patterns=resolved.get(
+                "table_include_patterns"
             ),
             table_exclude_patterns=resolved.get(
                 "table_exclude_patterns"
@@ -971,8 +977,9 @@ def handle_update_command(args: argparse.Namespace) -> int:
     generate_service_autocomplete_definitions(
         cast(Any, resolved),
         cast(list[dict[str, Any]], databases),
-        cast(list[str], resolved.get("table_exclude_patterns", [])),
-        cast(list[str], resolved.get("schema_exclude_patterns", [])),
+        table_include_patterns=cast(list[str], resolved.get("table_include_patterns", [])),
+        table_exclude_patterns=cast(list[str], resolved.get("table_exclude_patterns", [])),
+        schema_exclude_patterns=cast(list[str], resolved.get("schema_exclude_patterns", [])),
     )
 
     print_success(

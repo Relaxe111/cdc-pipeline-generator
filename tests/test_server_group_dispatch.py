@@ -184,6 +184,27 @@ class TestMainDispatch:
         assert mock_handler.called
         assert result == 0
 
+    @patch("cdc_generator.cli.source_group.handle_add_table_include")
+    @patch("cdc_generator.cli.source_group.validate_manage_server_group_flags")
+    @patch("sys.argv", ["cdc", "--add-to-table-includes", "^core_"])
+    def test_add_table_includes_dispatches_to_handler(
+        self,
+        mock_validator: Mock,
+        mock_handler: Mock,
+    ) -> None:
+        """--add-to-table-includes → dispatches to handle_add_table_include()."""
+        from cdc_generator.cli.source_group import main
+
+        mock_result = Mock()
+        mock_result.level = "ok"
+        mock_validator.return_value = mock_result
+        mock_handler.return_value = 0
+
+        result = main()
+
+        assert mock_handler.called
+        assert result == 0
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Validation errors
@@ -310,6 +331,29 @@ class TestInlineHandlers:
         mock_result.level = "ok"
         mock_validator.return_value = mock_result
         mock_load.return_value = ["tmp", "^zz_.*"]
+
+        result = main()
+
+        assert result == 0
+        assert mock_print_info.called
+
+    @patch("cdc_generator.cli.source_group.print_info")
+    @patch("cdc_generator.cli.source_group.load_table_include_patterns")
+    @patch("cdc_generator.cli.source_group.validate_manage_server_group_flags")
+    @patch("sys.argv", ["cdc", "--list-table-includes"])
+    def test_list_table_includes_inline_handler(
+        self,
+        mock_validator: Mock,
+        mock_load: Mock,
+        mock_print_info: Mock,
+    ) -> None:
+        """--list-table-includes → inline handler lists patterns."""
+        from cdc_generator.cli.source_group import main
+
+        mock_result = Mock()
+        mock_result.level = "ok"
+        mock_validator.return_value = mock_result
+        mock_load.return_value = ["^core_", "customer"]
 
         result = main()
 

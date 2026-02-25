@@ -19,7 +19,7 @@ from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.helpers.yaml_loader import yaml
 
 from .db_inspector import get_mssql_connection, get_postgres_connection
-from .filters import should_exclude_schema, should_exclude_table
+from .filters import should_exclude_schema, should_exclude_table, should_include_table
 from .types import DatabaseInfo, ServerConfig, ServerGroupConfig
 
 
@@ -142,6 +142,7 @@ def _fetch_tables_by_schema(
 def generate_service_autocomplete_definitions(
     server_group: ServerGroupConfig,
     scanned_databases: list[DatabaseInfo],
+    table_include_patterns: list[str] | None = None,
     table_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
 ) -> bool:
@@ -201,7 +202,10 @@ def generate_service_autocomplete_definitions(
             filtered_table_names = [
                 table_name
                 for table_name in table_names
-                if not should_exclude_table(table_name, table_exclude_patterns)
+                if (
+                    should_include_table(table_name, table_include_patterns)
+                    and not should_exclude_table(table_name, table_exclude_patterns)
+                )
             ]
             aggregated[service_name].setdefault(schema_name, set())
             aggregated[service_name][schema_name].update(filtered_table_names)

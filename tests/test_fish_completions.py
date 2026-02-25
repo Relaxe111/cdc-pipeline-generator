@@ -347,6 +347,13 @@ class TestManageSourceGroupsOptions:
         for opt in ["--add-to-table-excludes", "--list-table-excludes"]:
             assert opt in opts, f"Missing option: {opt}"
 
+    def test_has_table_include_options(self) -> None:
+        """Table include options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-source-groups"])
+        for opt in ["--add-to-table-includes", "--list-table-includes"]:
+            assert opt in opts, f"Missing option: {opt}"
+
 
 class TestManageSinkGroupsOptions:
     """manage-sink-groups must have typed Click option declarations."""

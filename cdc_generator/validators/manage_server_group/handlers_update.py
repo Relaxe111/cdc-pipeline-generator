@@ -96,6 +96,7 @@ def _inspect_server_databases(  # noqa: PLR0913
     include_pattern: str | None,
     database_exclude_patterns: list[str],
     schema_exclude_patterns: list[str],
+    table_include_patterns: list[str],
     table_exclude_patterns: list[str],
 ) -> list[DatabaseInfo] | None:
     """Inspect a single server and return its databases.
@@ -108,6 +109,7 @@ def _inspect_server_databases(  # noqa: PLR0913
         include_pattern: Optional regex to filter databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
+        table_include_patterns: Patterns to include tables
         table_exclude_patterns: Patterns to exclude tables
 
     Returns:
@@ -129,6 +131,7 @@ def _inspect_server_databases(  # noqa: PLR0913
             include_pattern,
             database_exclude_patterns,
             schema_exclude_patterns,
+            table_include_patterns,
             table_exclude_patterns,
             server_name=server_name,
         )
@@ -139,6 +142,7 @@ def _inspect_server_databases(  # noqa: PLR0913
             include_pattern,
             database_exclude_patterns,
             schema_exclude_patterns,
+            table_include_patterns,
             table_exclude_patterns,
             server_name=server_name,
         )
@@ -250,6 +254,7 @@ def _apply_updates(
     all_databases: list[DatabaseInfo],
     server_group: ServerGroupConfig,
     scanned_databases: list[DatabaseInfo],
+    table_include_patterns: list[str],
 ) -> bool:
     """Apply database updates to YAML, schemas, and completions.
 
@@ -288,6 +293,7 @@ def _apply_updates(
     generate_service_autocomplete_definitions(
         server_group,
         scanned_databases,
+        table_include_patterns,
         cast(list[str], server_group.get('table_exclude_patterns', [])),
         cast(list[str], server_group.get('schema_exclude_patterns', [])),
     )
@@ -430,6 +436,10 @@ def handle_update(args: Namespace) -> int:
             # Get exclude patterns (typed in ServerGroupConfig)
             database_exclude_patterns = server_group.get('database_exclude_patterns', [])
             schema_exclude_patterns = server_group.get('schema_exclude_patterns', [])
+            table_include_patterns = cast(
+                list[str],
+                server_group.get('table_include_patterns', []),
+            )
             table_exclude_patterns = cast(
                 list[str],
                 server_group.get('table_exclude_patterns', []),
@@ -470,6 +480,7 @@ def handle_update(args: Namespace) -> int:
                     include_pattern,
                     database_exclude_patterns,
                     schema_exclude_patterns,
+                    table_include_patterns,
                     table_exclude_patterns,
                 )
                 if databases is None:
@@ -516,6 +527,7 @@ def handle_update(args: Namespace) -> int:
                 all_databases,
                 server_group,
                 scanned_databases,
+                table_include_patterns,
             ):
                 result = 0
             break

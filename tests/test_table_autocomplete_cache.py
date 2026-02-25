@@ -203,3 +203,53 @@ def test_generate_service_autocomplete_definitions_prunes_excluded_schema_from_e
     assert result is True
     saved = load_yaml_file(target)
     assert saved == {"public": ["users"]}
+
+
+def test_generate_service_autocomplete_definitions_exclude_precedence_over_include(
+    tmp_path: Path,
+) -> None:
+    """Excludes tables even when they also match include patterns."""
+    defs_dir = tmp_path / "services" / "_schemas" / "_definitions"
+    defs_dir.mkdir(parents=True)
+    target = defs_dir / "directory-autocompletes.yaml"
+
+    server_group = {
+        "type": "mssql",
+        "servers": {
+            "default": {
+                "host": "x",
+                "port": 1433,
+                "user": "u",
+                "password": "p",
+            },
+        },
+    }
+    scanned_databases = [
+        {
+            "name": "directory_db",
+            "server": "default",
+            "service": "directory",
+            "environment": "default",
+            "customer": "",
+            "schemas": ["public"],
+            "table_count": 3,
+        },
+    ]
+
+    with patch(
+        "cdc_generator.validators.manage_server_group.autocomplete_definitions._definitions_dir",
+        return_value=defs_dir,
+    ), patch(
+        "cdc_generator.validators.manage_server_group.autocomplete_definitions._fetch_tables_by_schema",
+        return_value={"public": ["core_users", "core_logs", "legacy_table"]},
+    ):
+        result = generate_service_autocomplete_definitions(
+            server_group,
+            scanned_databases,
+            table_include_patterns=["^core_"],
+            table_exclude_patterns=["logs"],
+        )
+
+    assert result is True
+    saved = load_yaml_file(target)
+    assert saved == {"public": ["core_users"]}

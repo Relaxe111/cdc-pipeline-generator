@@ -53,6 +53,17 @@ def should_exclude_table(table_name: str, exclude_patterns: list[str] | None) ->
     return any(_matches_pattern(table_name, pattern) for pattern in exclude_patterns)
 
 
+def should_include_table(table_name: str, include_patterns: list[str] | None) -> bool:
+    """Check if table name matches include patterns.
+
+    If no include patterns are configured, all tables are included.
+    """
+    if not include_patterns:
+        return True
+
+    return any(_matches_pattern(table_name, pattern) for pattern in include_patterns)
+
+
 def infer_service_name(database_name: str) -> str:
     """Infer service name from database name following pattern: {service}_db_{environment}
 

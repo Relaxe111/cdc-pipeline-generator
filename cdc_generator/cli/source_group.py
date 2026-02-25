@@ -62,6 +62,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_add_server,
+    handle_add_table_include,
     handle_add_table_exclude,
     handle_info,
     handle_list_envs,
@@ -75,6 +76,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_update,
     load_database_exclude_patterns,
     load_schema_exclude_patterns,
+    load_table_include_patterns,
     load_table_exclude_patterns,
 )
 
@@ -345,6 +347,15 @@ def main() -> int:
     parser.add_argument("--list-schema-excludes", action="store_true",
                        help="List current schema exclude patterns.")
     parser.add_argument(
+        "--add-to-table-includes",
+        help=(
+            "Add a pattern to the table include list "
+            "(persisted in source-groups.yaml)."
+        ),
+    )
+    parser.add_argument("--list-table-includes", action="store_true",
+                       help="List current table include patterns.")
+    parser.add_argument(
         "--add-to-table-excludes",
         help=(
             "Add a pattern to the table exclude list "
@@ -535,6 +546,23 @@ def main() -> int:
             print_info("  # database_exclude_patterns: ['test', 'dev', 'backup']")
         return 0
 
+    if args.list_table_includes:
+        patterns = load_table_include_patterns()
+        print_header("Table Include Patterns")
+        if patterns:
+            print_info(
+                "Only tables with names matching these patterns "
+                + "will be included during '--update' and autocomplete cache generation:"
+            )
+            for pattern in patterns:
+                print_info(f"  • {pattern}")
+            print_info("\nIf a table matches both include and exclude patterns, exclude wins.")
+        else:
+            print_warning("No table include patterns defined.")
+            print_info("You can add patterns in source-groups.yaml, for example:")
+            print_info("  # table_include_patterns: ['^core_', 'customer']")
+        return 0
+
     if args.list_table_excludes:
         patterns = load_table_exclude_patterns()
         print_header("Table Exclude Patterns")
@@ -558,6 +586,9 @@ def main() -> int:
     # Handle add to schema excludes
     if args.add_to_schema_excludes:
         return handle_add_schema_exclude(args)
+
+    if args.add_to_table_includes:
+        return handle_add_table_include(args)
 
     if args.add_to_table_excludes:
         return handle_add_table_exclude(args)

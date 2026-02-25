@@ -31,6 +31,7 @@ class StandaloneSinkGroupOptions(TypedDict, total=False):
     environment_aware: bool
     database_exclude_patterns: list[str] | None
     schema_exclude_patterns: list[str] | None
+    table_include_patterns: list[str] | None
     table_exclude_patterns: list[str] | None
 
 
@@ -577,6 +578,7 @@ def create_standalone_sink_group(
     environment_aware = opts.get("environment_aware", False)
     database_exclude_patterns = opts.get("database_exclude_patterns")
     schema_exclude_patterns = opts.get("schema_exclude_patterns")
+    table_include_patterns = opts.get("table_include_patterns")
     table_exclude_patterns = opts.get("table_exclude_patterns")
 
     sink_group: dict[str, Any] = {
@@ -594,6 +596,8 @@ def create_standalone_sink_group(
         sink_group["database_exclude_patterns"] = database_exclude_patterns
     if schema_exclude_patterns:
         sink_group["schema_exclude_patterns"] = schema_exclude_patterns
+    if table_include_patterns:
+        sink_group["table_include_patterns"] = table_include_patterns
     if table_exclude_patterns:
         sink_group["table_exclude_patterns"] = table_exclude_patterns
 

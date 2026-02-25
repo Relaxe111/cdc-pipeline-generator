@@ -13,10 +13,12 @@ from .config import (
     load_database_exclude_patterns,
     load_env_mappings,
     load_schema_exclude_patterns,
+    load_table_include_patterns,
     load_table_exclude_patterns,
     save_database_exclude_patterns,
     save_env_mappings,
     save_schema_exclude_patterns,
+    save_table_include_patterns,
     save_table_exclude_patterns,
 )
 
@@ -175,6 +177,49 @@ def handle_add_table_exclude(args: Namespace) -> int:
         return 1
 
     print_info(f"\nCurrent table exclude patterns: {patterns}")
+    return 0
+
+
+def handle_add_table_include(args: Namespace) -> int:
+    """Handle adding pattern(s) to the table include list.
+
+    Supports comma-separated patterns for bulk addition.
+    """
+    if not args.add_to_table_includes:
+        print_error("No pattern specified")
+        return 1
+
+    patterns = load_table_include_patterns()
+    input_patterns = [p.strip() for p in args.add_to_table_includes.split(',')]
+
+    added: list[str] = []
+    skipped: list[str] = []
+
+    for pattern in input_patterns:
+        if not pattern:
+            continue
+
+        if pattern in patterns:
+            skipped.append(pattern)
+            continue
+
+        patterns.append(pattern)
+        added.append(pattern)
+
+    if added:
+        save_table_include_patterns(patterns)
+        print_success(f"✓ Added {len(added)} pattern(s) to table include list:")
+        for pattern in added:
+            print_info(f"  • {pattern}")
+
+    if skipped:
+        print_warning(f"Already in list ({len(skipped)}): {', '.join(skipped)}")
+
+    if not added and not skipped:
+        print_error("No valid patterns provided")
+        return 1
+
+    print_info(f"\nCurrent table include patterns: {patterns}")
     return 0
 
 

@@ -322,8 +322,9 @@ class TestHandleUpdateCommandMerge:
         mock_generate_autocomplete.assert_called_once_with(
             sink_group,
             databases,
-            ["^log"],
-            ["logs"],
+            table_include_patterns=[],
+            table_exclude_patterns=["^log"],
+            schema_exclude_patterns=["logs"],
         )
 
 

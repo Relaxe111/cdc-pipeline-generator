@@ -48,6 +48,7 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
     database_ref = sg_config.get('database_ref')
     db_exclude = sg_config.get('database_exclude_patterns', [])
     schema_exclude = sg_config.get('schema_exclude_patterns', [])
+    table_include = sg_config.get('table_include_patterns', [])
     table_exclude = sg_config.get('table_exclude_patterns', [])
     description = sg_config.get('description', '')
     include_pattern = sg_config.get('include_pattern')
@@ -82,8 +83,14 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
         print(f"            {Colors.DIM}User:{Colors.RESET} {srv.get('user', 'N/A')}")
         print(f"            {Colors.DIM}Kafka:{Colors.RESET} {srv.get('kafka_bootstrap_servers', 'N/A')}")
 
-    # Exclude patterns
-    if db_exclude or schema_exclude or table_exclude:
+    # Include / exclude patterns
+    if db_exclude or schema_exclude or table_include or table_exclude:
+        if table_include:
+            print(f"\n    {Colors.BLUE}✅ Include Patterns:{Colors.RESET}")
+            print(f"        {Colors.DIM}Tables:{Colors.RESET}")
+            for p in table_include:
+                print(f"            • {p}")
+
         print(f"\n    {Colors.BLUE}🚫 Exclude Patterns:{Colors.RESET}")
         if db_exclude:
             print(f"        {Colors.DIM}Databases:{Colors.RESET}")
