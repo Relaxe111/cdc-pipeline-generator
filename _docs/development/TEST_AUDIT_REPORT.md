@@ -14,15 +14,18 @@
 |--------|-------|
 | Test files | 75 (63 unit + 12 CLI) |
 | Total test cases (collected) | 1,366 |
+| Total test cases (tracked by `cdc test-coverage`) | 1,343 (242 CLI e2e + 1,101 unit) |
 | Tests passing | 1,365 / 1,366 ✅ |
 | Tests skipped | 1 (conditional: `test_cleanup_strategy.py`) |
 | Tests failing | 0 |
+| Command coverage | **7 / 11 commands (64%)** |
+| E2E command coverage | **5 / 11 commands (45%)** |
+| Test progress vs targets | **1,343 / 1,139 (100%+)** |
 | Dead / assert-nothing tests | **5** |
 | False-result tests | **2** |
 | Duplicate / overlapping tests | **6 pairs** |
 | Self-referential tests | **8** (test their own mock data, not production code) |
-| Untested source modules (0 tests) | **40 modules (~7,500 lines)** |
-| Critical untested modules (>300 lines) | **6 modules (~2,900 lines)** |
+| Untested commands | **4** (`generate-usage-stats`, `manage-pipelines-generate`, `manage-services-resources`, `manage-migrations-schema-docs`) |
 
 ---
 
@@ -147,48 +150,37 @@ Files with only 1 test — consider merging into related test files:
 
 ---
 
-## 7. Test Coverage Gaps
+## 7. Test Coverage (`cdc test-coverage`)
 
-### 7.1 Critical: Zero Test Coverage (>300 lines)
+Coverage is measured by **command surface** using the built-in `cdc test-coverage` tool,
+which maps every test to its corresponding `cdc` subcommand.
 
-| Module | Lines | Risk |
-|--------|------:|------|
-| `cdc_generator/core/pipeline_generator.py` | 978 | **CRITICAL** — the central pipeline generation engine |
-| `cdc_generator/cli/smart_command.py` | 567 | Smart dispatch routing |
-| `cdc_generator/validators/manage_service/schema_generator/mini_schema_generators.py` | 387 | Schema generation |
-| `cdc_generator/validators/manage_server_group/metadata_comments.py` | 336 | YAML metadata comments |
-| `cdc_generator/cli/scaffold_command.py` | 334 | Scaffolding CLI |
-| `cdc_generator/helpers/helpers_batch.py` | 333 | Batch processing (staging INSERT) |
+### 7.1 Coverage by Command
 
-### 7.2 High: Zero Test Coverage (100–300 lines)
+| Command | E2E | Unit | Total | Target | Progress |
+|---------|----:|-----:|------:|-------:|---------:|
+| `cdc scaffold` | 53 | 5 | 58 | 80 | 72% 🔶 |
+| `cdc manage-source-groups` | 45 | 93 | 138 | 171 | 81% ✅ |
+| `cdc manage-sink-groups` | 43 | 75 | 118 | 148 | 80% ✅ |
+| `cdc setup-local` | 4 | 11 | 15 | 12 | 100% ✅ |
+| `cdc generate-usage-stats` | 0 | 0 | 0 | 26 | 0% ❌ |
+| `cdc test` | 0 | 4 | 4 | — | ✅ |
+| `cdc help` | 0 | 33 | 33 | — | ✅ |
+| `cdc manage-pipelines generate` | 0 | 0 | 0 | 70 | 0% ❌ |
+| `cdc manage-services config` | 59 | 451 | 510 | 613 | 83% ✅ |
+| `cdc manage-services resources` | 0 | 0 | 0 | 12 | 0% ❌ |
+| `cdc manage-migrations schema-docs` | 0 | 0 | 0 | 7 | 0% ❌ |
 
-| Module | Lines | Purpose |
-|--------|------:|---------|
-| `cdc_generator/validators/manage_server_group/yaml_writer.py` | 326 | YAML output |
-| `cdc_generator/helpers/helpers_mssql.py` | 321 | MSSQL utilities |
-| `cdc_generator/validators/manage_service/service_creator.py` | 292 | Service creation |
-| `cdc_generator/validators/manage_service/schema_generator/schema_properties.py` | 291 | Schema properties |
-| `cdc_generator/helpers/helpers_env.py` | 286 | Environment helpers |
-| `cdc_generator/validators/manage_service/schema_generator/validation_schema_builder.py` | 251 | Schema builder |
-| `cdc_generator/core/service_sink_types.py` | 220 | Type definitions |
-| `cdc_generator/validators/manage_server_group/handlers_validation_env.py` | 210 | Env validation |
-| `cdc_generator/validators/bloblang_parser.py` | 206 | Bloblang parsing |
-| `cdc_generator/cli/schema_docs.py` | 202 | Schema documentation |
-| `cdc_generator/core/sink_types.py` | 197 | Sink type system |
-| `cdc_generator/validators/manage_service/sink_inspector.py` | 188 | Sink inspection |
-| `cdc_generator/validators/manage_server_group/db_shared_formatter.py` | 186 | db-shared formatting |
-| `cdc_generator/validators/manage_server_group/utils.py` | 174 | Server group utils |
-| `cdc_generator/validators/manage_server_group/output_builder.py` | 162 | Output formatting |
-| `cdc_generator/helpers/update_compose.py` | 161 | docker-compose updates |
-| `cdc_generator/validators/manage_service/schema_generator/legacy_db_inspector.py` | 149 | Legacy DB inspection |
-| `cdc_generator/validators/manage_server_group/stats_calculator.py` | 148 | Statistics |
-| `cdc_generator/validators/manage_server_group/yaml_builder.py` | 148 | YAML building |
-| `cdc_generator/validators/manage_server_group/comment_processor.py` | 142 | Comment processing |
-| `cdc_generator/helpers/helpers_pattern_matcher.py` | 131 | Pattern matching |
-| `cdc_generator/helpers/psycopg2_loader.py` | 129 | psycopg2 loading |
-| `cdc_generator/helpers/mssql_loader.py` | 113 | MSSQL loading |
-| `cdc_generator/core/bloblang_refs.py` | 100 | Bloblang references |
-| `cdc_generator/helpers/psycopg2_stub.py` | 100 | psycopg2 stub |
+**Summary:** 7/11 commands covered (64%), 5/11 with E2E tests (45%).
+
+### 7.2 Uncovered Commands
+
+| Command | Lines | Priority |
+|---------|------:|----------|
+| `manage-pipelines generate` | 978 | **P0** — core pipeline engine, most critical gap |
+| `manage-services resources` | ~500 | **P1** — inspect, custom-tables, column-templates, transforms |
+| `generate-usage-stats` | ~200 | P2 — reporting utility |
+| `manage-migrations schema-docs` | ~200 | P2 — documentation generation |
 
 ### 7.3 Functional Gaps
 
@@ -205,15 +197,13 @@ Beyond module-level gaps, these **functional areas** lack test coverage:
 | Docker-compose generation | Medium | `update_compose.py` untested |
 | Service creation flow | Medium | `service_creator.py` untested (CLI tests cover partially) |
 
-### 7.4 Estimated Coverage
+### 7.4 Coverage Note
 
-| Category | Tested Modules | Untested Modules | Coverage Estimate |
-|----------|---------------:|------------------:|------------------:|
-| `cli/` | 6 | 6 | ~50% |
-| `core/` | 3 | 5 | ~38% |
-| `helpers/` | 8 | 13 | ~38% |
-| `validators/` | 8 | 17 | ~32% |
-| **Total** | **25** | **41** | **~38%** |
+Many source modules that lack *direct* unit tests are still exercised
+indirectly through CLI e2e and integration tests. The `cdc test-coverage`
+tool tracks coverage by **command surface** (how many `cdc` subcommands
+have tests), which gives 64% command coverage. Individual module-level
+coverage would require `pytest --cov` instrumentation.
 
 ---
 
@@ -244,13 +234,10 @@ Beyond module-level gaps, these **functional areas** lack test coverage:
 
 | # | Module | Lines | Recommended Tests |
 |---|--------|------:|-------------------|
-| 1 | `pipeline_generator.py` | 978 | Unit tests for template substitution, field generation, per-table pipeline output |
-| 2 | `helpers_batch.py` | 333 | Unit tests for `build_staging_case()`, staging INSERT generation |
-| 3 | `service_sink_types.py` | 220 | Type definition validation, config parsing |
-| 4 | `bloblang_parser.py` | 206 | Bloblang syntax parsing, reference extraction |
-| 5 | `helpers_env.py` | 286 | Environment variable resolution, defaults |
-| 6 | `service_creator.py` | 292 | Service YAML scaffolding, defaults |
-| 7 | `smart_command.py` | 567 | Dispatch routing, command resolution |
+| 1 | `manage-pipelines generate` | 978 | Unit tests for template substitution, field generation, per-table pipeline output |
+| 2 | `manage-services resources` | ~500 | inspect, custom-tables, column-templates, transforms |
+| 3 | `generate-usage-stats` | ~200 | Stats generation and output |
+| 4 | `manage-migrations schema-docs` | ~200 | Schema doc generation |
 
 ---
 

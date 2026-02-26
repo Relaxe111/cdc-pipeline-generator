@@ -6,7 +6,7 @@ by ``cdc`` subcommand, showing how many test scenarios exist for each
 command and what percentage of the known command surface is covered.
 
 Commands and their descriptions are **auto-discovered** from
-``cdc_generator.cli.commands`` (GENERATOR_COMMANDS / LOCAL_COMMANDS) and
+``cdc_generator.cli.commands`` (GENERATOR_COMMANDS) and
 the special-command dispatch, so adding a new ``cdc`` subcommand is
 automatically reflected here — no manual list maintenance needed.
 
@@ -29,7 +29,6 @@ from typing import NamedTuple
 
 from cdc_generator.cli.commands import (
     GENERATOR_COMMANDS,
-    LOCAL_COMMANDS,
     MIGRATION_COMMANDS,
     PIPELINE_COMMANDS,
     SERVICE_COMMANDS,
@@ -41,7 +40,7 @@ from cdc_generator.helpers.helpers_logging import Colors
 # ---------------------------------------------------------------------------
 
 # Special library commands that are dispatched in _handle_special_commands()
-# but don't appear in GENERATOR_COMMANDS or LOCAL_COMMANDS.
+# but don't appear in GENERATOR_COMMANDS.
 _SPECIAL_LIBRARY_COMMANDS: dict[str, str] = {
     "test": "Run project tests",
     "test-coverage": "Show test coverage report by cdc command",
@@ -53,7 +52,7 @@ def _discover_commands() -> list[tuple[str, str, bool]]:
     """Build the known-commands list from authoritative sources.
 
     Returns a list of ``(command, description, is_library)`` tuples,
-    sourced from ``GENERATOR_COMMANDS``, ``LOCAL_COMMANDS`` and the
+    sourced from ``GENERATOR_COMMANDS`` and the
     small ``_SPECIAL_LIBRARY_COMMANDS`` set.
     """
     commands: list[tuple[str, str, bool]] = []
@@ -66,10 +65,6 @@ def _discover_commands() -> list[tuple[str, str, bool]]:
     for cmd, desc in _SPECIAL_LIBRARY_COMMANDS.items():
         if cmd not in GENERATOR_COMMANDS:
             commands.append((cmd, desc, True))
-
-    # Local/script commands from LOCAL_COMMANDS
-    for cmd, info in LOCAL_COMMANDS.items():
-        commands.append((cmd, info["description"], False))
 
     # Grouped pipeline subcommands
     for subcmd, info in PIPELINE_COMMANDS.items():
@@ -752,9 +747,11 @@ class CoverageReport:
                     print(f"      {c.DIM}• {test}{c.RESET}")
 
     def _print_local_section(self, verbose: bool) -> None:
-        """Print local/script command coverage (if any are tested)."""
+        """Print local/script command coverage (if any exist)."""
         c = Colors
         local_commands = [cmd for cmd, _, is_lib in KNOWN_COMMANDS if not is_lib]
+        if not local_commands:
+            return
         command_col_width = max(
             len("Local/Script Commands"),
             *(len(f"cdc {cmd}") for cmd in local_commands),
