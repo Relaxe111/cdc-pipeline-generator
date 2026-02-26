@@ -353,14 +353,25 @@ def _load_source_type_overrides(project_root_key: str) -> dict[str, dict[str, st
                     + "contains an empty source column key."
                 )
 
-            if not isinstance(effective_type_raw, str):
+            if isinstance(effective_type_raw, str):
+                effective_type = _normalize_type_name(effective_type_raw)
+            elif isinstance(effective_type_raw, dict):
+                entry_raw = cast(dict[str, object], effective_type_raw)
+                type_value_raw = entry_raw.get("type", entry_raw.get("effective_type"))
+                if not isinstance(type_value_raw, str):
+                    raise ValueError(
+                        "Invalid source type overrides format: "
+                        + f"{source_table}.{source_column} in '{override_file}' "
+                        + "must define 'type' as a string."
+                    )
+                effective_type = _normalize_type_name(type_value_raw)
+            else:
                 raise ValueError(
                     "Invalid source type overrides format: "
                     + f"{source_table}.{source_column} in '{override_file}' "
-                    + "must map to a string effective type."
+                    + "must map to a string type or object with 'type'."
                 )
 
-            effective_type = _normalize_type_name(effective_type_raw)
             if not effective_type:
                 raise ValueError(
                     "Invalid source type overrides format: "
@@ -431,14 +442,20 @@ def _load_type_compatibility_map(
     mapping_file = Path(resolved_map_path)
 
     try:
-        data = load_yaml_file(mapping_file)
+        data_raw = cast(object, load_yaml_file(mapping_file))
     except Exception as exc:
         raise ValueError(
             "Failed to read type compatibility map: "
             + f"'{mapping_file}': {exc}"
         ) from exc
 
-    data_dict = cast(dict[str, object], data)
+    if not isinstance(data_raw, dict):
+        raise ValueError(
+            "Invalid type compatibility map format: "
+            + f"'{mapping_file}' must contain a YAML mapping at the top level."
+        )
+
+    data_dict = cast(dict[str, object], data_raw)
 
     source_aliases, sink_aliases = _extract_aliases(data_dict)
     mappings = _extract_mappings(
@@ -533,13 +550,21 @@ def _resolve_engine_pair(
     sink_raw_normalized = _normalize_type_name(sink_type)
     best: TypeCompatibilityMap | None = None
     best_score = -1
+    candidate_load_errors: list[str] = []
 
     for src_engine_name, sink_engine_name in scoped_candidates:
-        spec = _load_type_compatibility_map(
-            project_root_key,
-            src_engine_name,
-            sink_engine_name,
-        )
+        try:
+            spec = _load_type_compatibility_map(
+                project_root_key,
+                src_engine_name,
+                sink_engine_name,
+            )
+        except ValueError as exc:
+            candidate_load_errors.append(
+                f"{src_engine_name}->{sink_engine_name}: {exc}"
+            )
+            continue
+
         source_normalized = _normalize_type_name(
             source_raw_normalized,
             spec.source_aliases,
@@ -564,6 +589,13 @@ def _resolve_engine_pair(
             best_score = score
 
     if best is None:
+        if candidate_load_errors:
+            raise ValueError(
+                "No usable type compatibility map found for source/sink types: "
+                + f"'{source_type}' -> '{sink_type}'. "
+                + "Invalid map candidates: "
+                + "; ".join(candidate_load_errors)
+            )
         raise ValueError(
             "Failed to resolve a compatibility map for source/sink types: "
             + f"'{source_type}' -> '{sink_type}'"

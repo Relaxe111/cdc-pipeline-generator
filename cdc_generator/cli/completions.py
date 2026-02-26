@@ -1009,11 +1009,10 @@ def complete_set_source_override(
         return []
 
     from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        get_allowed_source_types,
         list_overridden_column_refs,
         list_source_column_refs,
+        list_valid_override_types_for_column,
         normalize_source_column_ref,
-        validate_override_type_for_column,
     )
 
     source_refs = _safe_call(list_source_column_refs, service)
@@ -1036,6 +1035,11 @@ def complete_set_source_override(
             for normalized_ref, ref_display in ref_display_by_normalized.items()
             if normalized_ref not in overridden_refs
         ]
+        candidates.extend(
+            f"{ref_display}:"
+            for normalized_ref, ref_display in ref_display_by_normalized.items()
+            if normalized_ref not in overridden_refs
+        )
         return _filter(candidates, incomplete)
 
     ref_part, type_part = incomplete.rsplit(":", 1)
@@ -1056,17 +1060,12 @@ def complete_set_source_override(
     }
 
     candidates: list[str] = []
-    for type_name in _safe_call(get_allowed_source_types):
+    for type_name in _safe_call(list_valid_override_types_for_column, service, normalized_ref):
         normalized_type = type_name.strip().casefold()
         if not normalized_type or normalized_type in selected_types:
             continue
 
         if not normalized_type.startswith(type_part.casefold()):
-            continue
-
-        try:
-            validate_override_type_for_column(service, normalized_ref, normalized_type)
-        except Exception:
             continue
 
         candidates.append(f"{display_ref}:{normalized_type}")
@@ -1135,9 +1134,8 @@ def complete_source_override_type_for_ref(
         source_ref = source_ref.split(":", 1)[0]
 
     from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        get_allowed_source_types,
+        list_valid_override_types_for_column,
         normalize_source_column_ref,
-        validate_override_type_for_column,
     )
 
     try:
@@ -1146,15 +1144,15 @@ def complete_source_override_type_for_ref(
         return []
 
     candidates: list[str] = []
-    for type_name in _safe_call(get_allowed_source_types):
+    for type_name in _safe_call(
+        list_valid_override_types_for_column,
+        service,
+        normalized_ref,
+    ):
         normalized_type = type_name.strip().casefold()
         if not normalized_type:
             continue
         if not normalized_type.startswith(incomplete.casefold()):
-            continue
-        try:
-            validate_override_type_for_column(service, normalized_ref, normalized_type)
-        except Exception:
             continue
         candidates.append(normalized_type)
 

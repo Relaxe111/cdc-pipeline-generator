@@ -560,10 +560,28 @@ class TestSourceTypeOverrideCli:
             "source-overrides",
             "set",
             "dbo.Actor.actno:int",
+            "--reason",
+            "Test reason",
             "--service",
             "adopus",
         )
         assert set_result.returncode == 0
+        set_output = set_result.stdout + set_result.stderr
+        assert "from 'int' to 'int'" in set_output
+        assert "Reason: Test reason" in set_output
+
+        overrides_file = (
+            isolated_project
+            / "services"
+            / "_schemas"
+            / "_definitions"
+            / "source-adopus-type-overrides.yaml"
+        )
+        overrides_text = overrides_file.read_text(encoding="utf-8")
+        assert "dbo.Actor:" in overrides_text
+        assert "actno:" in overrides_text
+        assert "type: int" in overrides_text
+        assert "reason: Test reason" in overrides_text
 
         list_result = run_cdc(
             "mss",
@@ -594,3 +612,20 @@ class TestSourceTypeOverrideCli:
         )
         assert final_list.returncode == 0
         assert "No source type overrides configured" in final_list.stdout
+
+    def test_completion_types_fallback_to_map_when_engine_definitions_missing(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_override_test_data(isolated_project)
+
+        definitions_dir = isolated_project / "services" / "_schemas" / "_definitions"
+        (definitions_dir / "mssql.yaml").unlink()
+
+        result = run_cdc_completion(
+            "cdc mss source-overrides set --service adopus dbo.Actor.actno:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "dbo.Actor.actno:int" in output

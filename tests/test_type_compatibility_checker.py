@@ -153,6 +153,40 @@ def test_checker_uses_project_compatibility_overrides(
     assert check_type_compatibility("int", "smallint") is True
 
 
+def test_checker_ignores_invalid_unrelated_map_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid reverse map file must not break forward compatibility checks."""
+    definitions = tmp_path / "services" / "_schemas" / "_definitions"
+    definitions.mkdir(parents=True)
+    (tmp_path / "source-groups.yaml").write_text("adopus: {}\n", encoding="utf-8")
+
+    (definitions / "map-mssql-pgsql.yaml").write_text(
+        "\n".join(
+            [
+                "metadata:",
+                "mappings:",
+                "  int: integer",
+                "compatibility:",
+                "  int:",
+                "  - integer",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    (definitions / "map-pgsql-mssql.yaml").write_text("", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    _load_type_compatibility_map.cache_clear()
+    _available_type_map_pairs.cache_clear()
+    _load_source_type_overrides.cache_clear()
+
+    assert check_type_compatibility("int", "integer") is True
+
+
 def test_checker_requires_runtime_map_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

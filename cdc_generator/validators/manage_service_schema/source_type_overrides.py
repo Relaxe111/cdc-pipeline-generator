@@ -6,6 +6,7 @@ Provides read/update helpers for
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
 
@@ -112,7 +113,7 @@ def _resolve_single_source_group() -> tuple[str, dict[str, Any]]:
 
 def _resolve_source_engine(source_group: dict[str, Any]) -> str:
     """Resolve normalized source engine key used by definitions files."""
-    raw_source_type = source_group.get("source_type")
+    raw_source_type = source_group.get("source_type", source_group.get("type"))
     source_type = str(raw_source_type).strip().casefold()
     if source_type in {"postgres", "postgresql", "pgsql"}:
         return "pgsql"
@@ -129,7 +130,50 @@ def get_allowed_source_types() -> list[str]:
     """Return allowed canonical source types for current source engine."""
     _source_group_name, source_group = _resolve_single_source_group()
     source_engine = _resolve_source_engine(source_group)
-    return get_all_type_names(source_engine)
+    from_definitions = get_all_type_names(source_engine)
+    if from_definitions:
+        return from_definitions
+
+    return _extract_source_types_from_maps(source_engine)
+
+
+def _extract_source_types_from_maps(source_engine: str) -> list[str]:
+    """Extract source-side type names from map files as fallback."""
+    discovered: set[str] = set()
+    for map_file in _map_file_candidates_for_source_engine(source_engine):
+        map_raw = load_yaml_file(map_file)
+        map_data = cast(dict[str, object], map_raw)
+
+        mappings_raw = map_data.get("mappings")
+        if isinstance(mappings_raw, dict):
+            for source_type in cast(dict[str, object], mappings_raw):
+                discovered.add(_normalize_type_name(source_type))
+
+        compatibility_raw = map_data.get("compatibility")
+        if isinstance(compatibility_raw, dict):
+            for source_type in cast(dict[str, object], compatibility_raw):
+                if source_type != _WILDCARD_SOURCE:
+                    discovered.add(_normalize_type_name(source_type))
+
+        aliases_raw = map_data.get("aliases")
+        if isinstance(aliases_raw, dict):
+            source_aliases_raw = cast(dict[str, object], aliases_raw).get("source")
+            if isinstance(source_aliases_raw, dict):
+                for source_alias in cast(dict[str, object], source_aliases_raw):
+                    discovered.add(_normalize_type_name(source_alias))
+
+    return sorted(
+        source_type
+        for source_type in discovered
+        if source_type
+    )
+
+
+@lru_cache(maxsize=32)
+def _load_map_payload(map_path: str) -> dict[str, object]:
+    """Load map YAML payload once per file path."""
+    map_raw = load_yaml_file(Path(map_path))
+    return cast(dict[str, object], map_raw)
 
 
 def resolve_overrides_file_path() -> Path:
@@ -161,19 +205,50 @@ def _sort_overrides(overrides: dict[str, dict[str, str]]) -> dict[str, dict[str,
     return result
 
 
-def load_source_type_overrides() -> tuple[Path, dict[str, object], dict[str, dict[str, str]]]:
+def _parse_override_entry(raw_entry: object) -> tuple[str, str | None]:
+    """Parse override entry from string or object form.
+
+    Supported forms:
+    - ``column: type``
+    - ``column: {type: <type>, reason: <reason>}``
+    """
+    if isinstance(raw_entry, str):
+        normalized_type = " ".join(raw_entry.strip().lower().split())
+        return normalized_type, None
+
+    if not isinstance(raw_entry, dict):
+        return "", None
+
+    entry = cast(dict[str, object], raw_entry)
+    type_raw = entry.get("type", entry.get("effective_type"))
+    if not isinstance(type_raw, str):
+        return "", None
+
+    reason_raw = entry.get("reason")
+    reason_text = str(reason_raw).strip() if isinstance(reason_raw, str) else None
+    normalized_type = " ".join(type_raw.strip().lower().split())
+    return normalized_type, reason_text
+
+
+def load_source_type_overrides() -> tuple[
+    Path,
+    dict[str, object],
+    dict[str, dict[str, str]],
+    dict[str, dict[str, str]],
+]:
     """Load source type overrides file, returning path + full data + normalized overrides."""
     override_path = resolve_overrides_file_path()
 
     if override_path.is_file():
-        raw_data = load_yaml_file(override_path)
-        data = cast(dict[str, object], raw_data)
+        raw_data = cast(dict[str, object], load_yaml_file(override_path))
+        data = raw_data if raw_data else _build_initial_overrides_data()
     else:
         data = _build_initial_overrides_data()
 
     overrides_raw = data.get("overrides", {})
     overrides_data = cast(dict[str, object], overrides_raw)
     overrides: dict[str, dict[str, str]] = {}
+    reasons: dict[str, dict[str, str]] = {}
 
     for table_raw, column_map_raw in overrides_data.items():
         if not isinstance(column_map_raw, dict):
@@ -181,23 +256,28 @@ def load_source_type_overrides() -> tuple[Path, dict[str, object], dict[str, dic
         table_key = normalize_source_column_ref(f"{table_raw}.x").rsplit(".", 1)[0]
 
         normalized_columns: dict[str, str] = {}
+        normalized_reasons: dict[str, str] = {}
         for col_raw, type_raw in cast(dict[str, object], column_map_raw).items():
-            if not isinstance(type_raw, str):
+            effective_type, reason = _parse_override_entry(type_raw)
+            if not effective_type:
                 continue
             column_name = col_raw.strip().casefold()
-            normalized_type = " ".join(type_raw.strip().lower().split())
-            if column_name and normalized_type:
-                normalized_columns[column_name] = normalized_type
+            if column_name:
+                normalized_columns[column_name] = effective_type
+                if reason:
+                    normalized_reasons[column_name] = reason
 
         overrides[table_key] = normalized_columns
+        if normalized_reasons:
+            reasons[table_key] = normalized_reasons
 
-    return override_path, data, overrides
+    return override_path, data, overrides, reasons
 
 
 def list_override_refs(service: str) -> list[str]:
     """Return override refs as ``schema.table.column:type`` for display."""
     _ensure_service_exists(service)
-    _override_path, _data, overrides = load_source_type_overrides()
+    _override_path, _data, overrides, _reasons = load_source_type_overrides()
     source_ref_display_map = {
         normalize_source_column_ref(ref): ref
         for ref in list_source_column_refs(service)
@@ -215,7 +295,7 @@ def list_override_refs(service: str) -> list[str]:
 def list_overridden_column_refs(service: str) -> list[str]:
     """Return overridden refs as ``schema.table.column``."""
     _ensure_service_exists(service)
-    _override_path, _data, overrides = load_source_type_overrides()
+    _override_path, _data, overrides, _reasons = load_source_type_overrides()
     source_ref_display_map = {
         normalize_source_column_ref(ref): ref
         for ref in list_source_column_refs(service)
@@ -232,23 +312,40 @@ def list_overridden_column_refs(service: str) -> list[str]:
 def list_source_column_refs(service: str) -> list[str]:
     """Return available source refs as ``schema.table.column`` from schema files."""
     _ensure_service_exists(service)
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_columns_for_table,
-        list_source_tables_for_service,
-    )
+    config = load_service_config(service)
+    source_raw = config.get("source")
+    source_cfg = cast(dict[str, object], source_raw) if isinstance(source_raw, dict) else {}
+    tables_raw = source_cfg.get("tables")
+    source_tables = cast(dict[str, object], tables_raw) if isinstance(tables_raw, dict) else {}
+    source_table_keys = {table_name.casefold() for table_name in source_tables}
 
     refs_by_normalized: dict[str, str] = {}
-    for table_key in list_source_tables_for_service(service):
-        parts = table_key.split(".", 1)
-        if len(parts) != 2:  # noqa: PLR2004
+    for schema_dir in get_service_schema_read_dirs(service):
+        if not schema_dir.is_dir():
             continue
-        schema_name, table_name = parts
 
-        for col_ref in list_columns_for_table(service, schema_name, table_name):
-            normalized_ref = normalize_source_column_ref(col_ref)
-            display_parts = [part.strip() for part in col_ref.split(".")]
-            display_ref = ".".join(display_parts)
-            refs_by_normalized.setdefault(normalized_ref, display_ref)
+        for schema_path in sorted(path for path in schema_dir.iterdir() if path.is_dir()):
+            schema_name = schema_path.name
+            for table_file in sorted(schema_path.glob("*.yaml")):
+                table_name = table_file.stem
+                table_ref = f"{schema_name}.{table_name}"
+                if table_ref.casefold() not in source_table_keys:
+                    continue
+
+                table_data = load_yaml_file(table_file)
+                columns_raw = table_data.get("columns", [])
+                columns = cast(list[object], columns_raw) if isinstance(columns_raw, list) else []
+                for column_raw in columns:
+                    if not isinstance(column_raw, dict):
+                        continue
+                    column = cast(dict[str, object], column_raw)
+                    column_name_raw = column.get("name")
+                    if not isinstance(column_name_raw, str):
+                        continue
+
+                    display_ref = f"{schema_name}.{table_name}.{column_name_raw}"
+                    normalized_ref = normalize_source_column_ref(display_ref)
+                    refs_by_normalized.setdefault(normalized_ref, display_ref)
 
     return sorted(refs_by_normalized.values(), key=str.casefold)
 
@@ -562,11 +659,50 @@ def _has_direct_type_overlap(source_type: str, target_type: str) -> bool:
     _source_group_name, source_group = _resolve_single_source_group()
     source_engine = _resolve_source_engine(source_group)
     for map_file in _map_file_candidates_for_source_engine(source_engine):
-        map_raw = load_yaml_file(map_file)
-        map_data = cast(dict[str, object], map_raw)
+        map_data = _load_map_payload(str(map_file))
         if _map_payload_has_overlap(map_data, source_type, target_type):
             return True
     return False
+
+
+def _has_compatible_overlap_for_targets(
+    override_type: str,
+    target_types: list[str],
+) -> bool:
+    """Check overlap + compatibility for all target types in one pass."""
+    for target_type in target_types:
+        if not _has_direct_type_overlap(override_type, target_type):
+            return False
+        if not check_type_compatibility(override_type, target_type):
+            return False
+    return True
+
+
+def list_valid_override_types_for_column(service: str, source_ref: str) -> list[str]:
+    """Return compatible override type suggestions for one source column."""
+    _ensure_service_exists(service)
+
+    normalized_ref = normalize_source_column_ref(source_ref)
+    schema_name, table_name, column_name = normalized_ref.split(".", 2)
+    source_table = f"{schema_name}.{table_name}"
+
+    source_column_refs = {
+        normalize_source_column_ref(ref)
+        for ref in list_source_column_refs(service)
+    }
+    if normalized_ref not in source_column_refs:
+        return []
+
+    target_types = _iter_target_type_usages(service, source_table, column_name)
+    allowed_types = get_allowed_source_types()
+    if not target_types:
+        return sorted(set(allowed_types), key=str.casefold)
+
+    return [
+        override_type
+        for override_type in allowed_types
+        if _has_compatible_overlap_for_targets(override_type, target_types)
+    ]
 
 
 def validate_override_type_for_column(
@@ -601,29 +737,31 @@ def validate_override_type_for_column(
         )
 
     target_types = _iter_target_type_usages(service, source_table, column_name)
-    for target_type in target_types:
-        if not _has_direct_type_overlap(override_type, target_type):
-            raise ValueError(
-                "Override type '"
-                + override_type
-                + "' has no direct compatibility overlap for "
-                + normalized_ref
-                + f" (target type '{target_type}')."
-            )
-        if not check_type_compatibility(override_type, target_type):
-            raise ValueError(
-                "Override type '"
-                + override_type
-                + "' is incompatible with existing sink mapping for "
-                + normalized_ref
-                + f" (target type '{target_type}')."
-            )
+    if not _has_compatible_overlap_for_targets(override_type, target_types):
+        raise ValueError(
+            "Override type '"
+            + override_type
+            + "' is incompatible with existing sink mapping for "
+            + normalized_ref
+            + "."
+        )
 
 
-def set_source_override(service: str, spec: str) -> bool:
+def _current_source_type_for_ref(service: str, normalized_ref: str) -> str:
+    """Return current source schema type for normalized ref, or unknown marker."""
+    display_ref = resolve_source_ref_display(service, normalized_ref)
+    display_parts = [part.strip() for part in display_ref.split(".")]
+    source_table = f"{display_parts[0]}.{display_parts[1]}"
+    column_name = display_parts[2]
+    source_types = _load_table_column_types(service, source_table)
+    return source_types.get(column_name.casefold(), "<unknown>")
+
+
+def set_source_override(service: str, spec: str, reason: str | None = None) -> bool:
     """Set source type override from ``schema.table.column:type`` specification."""
     normalized_ref, override_type = parse_set_override_spec(spec)
     validate_override_type_for_column(service, normalized_ref, override_type)
+    current_type = _current_source_type_for_ref(service, normalized_ref)
 
     display_ref = resolve_source_ref_display(service, normalized_ref)
     display_parts = [part.strip() for part in display_ref.split(".")]
@@ -633,8 +771,9 @@ def set_source_override(service: str, spec: str) -> bool:
     source_table = normalized_ref.rsplit(".", 1)[0]
     source_column = normalized_ref.rsplit(".", 1)[1]
 
-    override_path, file_data, overrides = load_source_type_overrides()
+    override_path, file_data, overrides, reasons_by_table = load_source_type_overrides()
     table_overrides = overrides.setdefault(source_table, {})
+    table_reasons = reasons_by_table.setdefault(source_table, {})
     existing_type = table_overrides.get(source_column)
     if existing_type is not None:
         if existing_type == override_type:
@@ -651,21 +790,36 @@ def set_source_override(service: str, spec: str) -> bool:
         return False
 
     table_overrides[source_column] = override_type
+    if reason:
+        table_reasons[source_column] = reason
     sorted_overrides = _sort_overrides(overrides)
 
-    display_overrides: dict[str, dict[str, str]] = {}
+    display_overrides: dict[str, dict[str, object]] = {}
     for table_name, columns in sorted_overrides.items():
         for column_name, mapped_type in columns.items():
             normalized_key = f"{table_name}.{column_name}"
+            column_reason = reasons_by_table.get(table_name, {}).get(column_name)
+
+            def _entry_payload(value_type: str, value_reason: str | None) -> object:
+                if value_reason:
+                    return {"type": value_type, "reason": value_reason}
+                return value_type
+
             if normalized_key == normalized_ref:
-                display_overrides.setdefault(display_table, {})[display_column] = mapped_type
+                display_overrides.setdefault(display_table, {})[display_column] = _entry_payload(
+                    mapped_type,
+                    reason,
+                )
                 continue
 
             display_key = resolve_source_ref_display(service, normalized_key)
             display_key_parts = [part.strip() for part in display_key.split(".")]
             display_table_name = f"{display_key_parts[0]}.{display_key_parts[1]}"
             display_column_name = display_key_parts[2]
-            display_overrides.setdefault(display_table_name, {})[display_column_name] = mapped_type
+            display_overrides.setdefault(display_table_name, {})[display_column_name] = _entry_payload(
+                mapped_type,
+                column_reason,
+            )
 
     sorted_display_overrides = {
         table_name: {
@@ -680,7 +834,12 @@ def set_source_override(service: str, spec: str) -> bool:
     new_data["overrides"] = sorted_display_overrides
     save_yaml_file(cast(dict[str, Any], new_data), override_path)
 
-    print_success(f"Set source override: {display_ref}:{override_type}")
+    print_success(
+        "Source type overridden: "
+        + f"{display_ref} from '{current_type}' to '{override_type}'"
+    )
+    if reason:
+        print_info(f"Reason: {reason}")
     print_info(f"Saved: {override_path.relative_to(get_project_root())}")
     return True
 
@@ -692,19 +851,51 @@ def remove_source_override(service: str, source_ref: str) -> bool:
     source_table = normalized_ref.rsplit(".", 1)[0]
     source_column = normalized_ref.rsplit(".", 1)[1]
 
-    override_path, file_data, overrides = load_source_type_overrides()
+    override_path, file_data, overrides, reasons_by_table = load_source_type_overrides()
     table_overrides = overrides.get(source_table)
     if table_overrides is None or source_column not in table_overrides:
         print_error("Source override not found: " + normalized_ref)
         return False
 
     del table_overrides[source_column]
+    table_reasons = reasons_by_table.get(source_table)
+    if table_reasons and source_column in table_reasons:
+        del table_reasons[source_column]
+        if not table_reasons:
+            del reasons_by_table[source_table]
+
     if not table_overrides:
         del overrides[source_table]
 
     new_data = dict(file_data)
     new_data["metadata"] = new_data.get("metadata", {"version": 1})
-    new_data["overrides"] = _sort_overrides(overrides)
+    sorted_overrides = _sort_overrides(overrides)
+    display_overrides: dict[str, dict[str, object]] = {}
+    for table_name, columns in sorted_overrides.items():
+        for column_name, mapped_type in columns.items():
+            normalized_key = f"{table_name}.{column_name}"
+            display_key = resolve_source_ref_display(service, normalized_key)
+            display_key_parts = [part.strip() for part in display_key.split(".")]
+            display_table_name = f"{display_key_parts[0]}.{display_key_parts[1]}"
+            display_column_name = display_key_parts[2]
+            column_reason = reasons_by_table.get(table_name, {}).get(column_name)
+            if column_reason:
+                entry_payload: object = {
+                    "type": mapped_type,
+                    "reason": column_reason,
+                }
+            else:
+                entry_payload = mapped_type
+            display_overrides.setdefault(display_table_name, {})[display_column_name] = entry_payload
+
+    sorted_display_overrides = {
+        table_name: {
+            column_name: columns[column_name]
+            for column_name in sorted(columns.keys(), key=str.casefold)
+        }
+        for table_name, columns in sorted(display_overrides.items(), key=lambda item: item[0].casefold())
+    }
+    new_data["overrides"] = sorted_display_overrides
     save_yaml_file(cast(dict[str, Any], new_data), override_path)
 
     display_ref = resolve_source_ref_display(service, normalized_ref)

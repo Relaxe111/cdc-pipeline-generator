@@ -784,8 +784,8 @@ def manage_services_source_overrides_cmd(
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for source-overrides")
         click.echo("   Try: cdc mss source-overrides list [--service <svc>]")
-        click.echo("        cdc mss source-overrides set <schema.table.column:type> [--service <svc>]")
-        click.echo("        cdc mss source-overrides set <schema.table.column> <type> [--service <svc>]")
+        click.echo("        cdc mss source-overrides set <schema.table.column:type> --reason <text> [--service <svc>]")
+        click.echo("        cdc mss source-overrides set <schema.table.column> <type> --reason <text> [--service <svc>]")
         click.echo("        cdc mss source-overrides remove <schema.table.column> [--service <svc>]")
         return 1
 
@@ -804,6 +804,8 @@ def manage_services_source_overrides_cmd(
               help="Service name")
 @click.option("--source", shell_complete=complete_existing_services,
               help="Alias for --service")
+@click.option("--reason", required=True,
+              help="Required reason for applying this source type override")
 @click.pass_context
 def manage_services_source_overrides_set_cmd(
     ctx: click.Context,
@@ -811,6 +813,7 @@ def manage_services_source_overrides_set_cmd(
     override_type: str | None,
     service: str | None,
     source: str | None,
+    reason: str,
 ) -> int:
     """Set a source type override via canonical subcommand."""
     from cdc_generator.validators.manage_service_schema.source_type_overrides import (
@@ -826,7 +829,7 @@ def manage_services_source_overrides_set_cmd(
 
     spec = source_spec if override_type is None else f"{source_spec}:{override_type}"
     try:
-        return 0 if set_source_override_entry(resolved_service, spec) else 1
+        return 0 if set_source_override_entry(resolved_service, spec, reason) else 1
     except ValueError as exc:
         click.echo(f"❌ {exc}")
         return 1

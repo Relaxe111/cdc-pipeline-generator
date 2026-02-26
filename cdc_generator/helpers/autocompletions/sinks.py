@@ -593,6 +593,33 @@ def _load_column_type_map(service_name: str, table_key: str) -> dict[str, str]:
     return {}
 
 
+def _is_completion_type_compatible(
+    source_type: str,
+    target_type: str,
+    source_table: str,
+    source_column: str,
+) -> bool:
+    """Check completion compatibility using base and override source types.
+
+    Completion should suggest mappings that are compatible with either:
+    - the source schema type, or
+    - the configured source-type override.
+    """
+    from cdc_generator.validators.manage_service.sink_operations import (
+        check_type_compatibility,
+    )
+
+    if check_type_compatibility(source_type, target_type):
+        return True
+
+    return check_type_compatibility(
+        source_type,
+        target_type,
+        source_table=source_table,
+        source_column=source_column,
+    )
+
+
 def list_compatible_target_columns_for_source_column(
     service_name: str,
     sink_key: str,
@@ -601,10 +628,6 @@ def list_compatible_target_columns_for_source_column(
     source_column: str,
 ) -> list[str]:
     """List target columns that are type-compatible with the source column."""
-    from cdc_generator.validators.manage_service.sink_operations import (
-        check_type_compatibility,
-    )
-
     source_types = _load_column_type_map(service_name, source_table)
     if source_column not in source_types:
         return []
@@ -619,11 +642,11 @@ def list_compatible_target_columns_for_source_column(
     compatible_targets: list[str] = []
     for target_col, target_type in target_types.items():
         try:
-            is_compatible = check_type_compatibility(
+            is_compatible = _is_completion_type_compatible(
                 source_type,
                 target_type,
-                source_table=source_table,
-                source_column=source_column,
+                source_table,
+                source_column,
             )
         except ValueError as exc:
             _warn_completion_compatibility_error(str(exc))
@@ -698,10 +721,6 @@ def list_compatible_map_column_pairs_for_target_prefix(
     limit: int = 40,
 ) -> list[str]:
     """Return up to ``limit`` ``target:source`` pairs for a target prefix."""
-    from cdc_generator.validators.manage_service.sink_operations import (
-        check_type_compatibility,
-    )
-
     if limit <= 0:
         return []
 
@@ -722,41 +741,56 @@ def list_compatible_map_column_pairs_for_target_prefix(
         return []
 
     compat_cache: dict[tuple[str, str, str], bool] = {}
-    results: list[str] = []
 
-    for target_column in sorted(target_types):
-        if (
-            target_prefix_normalized
-            and not target_column.casefold().startswith(target_prefix_normalized)
-        ):
-            continue
-
-        target_type = target_types[target_column]
-        for source_column in sorted(source_types):
+    def _collect_pairs(
+        resolved_target_prefix: str,
+        resolved_source_prefix: str,
+    ) -> list[str]:
+        results: list[str] = []
+        for target_column in sorted(target_types):
             if (
-                source_prefix_normalized
-                and not source_column.casefold().startswith(source_prefix_normalized)
+                resolved_target_prefix
+                and not target_column.casefold().startswith(resolved_target_prefix)
             ):
                 continue
 
-            source_type = source_types[source_column]
-            cache_key = (source_column.casefold(), source_type, target_type)
-            if cache_key not in compat_cache:
-                try:
-                    compat_cache[cache_key] = check_type_compatibility(
-                        source_type,
-                        target_type,
-                        source_table=source_table,
-                        source_column=source_column,
-                    )
-                except ValueError as exc:
-                    _warn_completion_compatibility_error(str(exc))
-                    return []
-            if not compat_cache[cache_key]:
-                continue
+            target_type = target_types[target_column]
+            for source_column in sorted(source_types):
+                if (
+                    resolved_source_prefix
+                    and not source_column.casefold().startswith(resolved_source_prefix)
+                ):
+                    continue
 
-            results.append(f"{target_column}:{source_column}")
-            if len(results) >= limit:
-                return results
+                source_type = source_types[source_column]
+                cache_key = (source_column.casefold(), source_type, target_type)
+                if cache_key not in compat_cache:
+                    try:
+                        compat_cache[cache_key] = _is_completion_type_compatible(
+                            source_type,
+                            target_type,
+                            source_table,
+                            source_column,
+                        )
+                    except ValueError as exc:
+                        _warn_completion_compatibility_error(str(exc))
+                        return []
+                if not compat_cache[cache_key]:
+                    continue
 
-    return results
+                results.append(f"{target_column}:{source_column}")
+                if len(results) >= limit:
+                    return results
+        return results
+
+    strict_results = _collect_pairs(
+        target_prefix_normalized,
+        source_prefix_normalized,
+    )
+    if strict_results:
+        return strict_results
+
+    if source_prefix_normalized:
+        return []
+
+    return _collect_pairs("", target_prefix_normalized)
