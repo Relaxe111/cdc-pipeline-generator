@@ -360,22 +360,22 @@ def filter_databases_by_pattern(
 
 ### 1. Pattern-Agnostic Code
 
-**Always use `server_group_type` field, never hardcode:**
+**Always use `pattern` field, never hardcode:**
 
 ```python
 # ✅ GOOD - Pattern-agnostic
 def get_database_for_environment(
     service_config: dict,
     environment: str,
-    server_group_type: str
+    pattern: str
 ) -> Optional[str]:
     """Get database name for service in specific environment."""
-    if server_group_type == 'db-shared':
+    if pattern == 'db-shared':
         return service_config.get(environment, {}).get('database')
-    elif server_group_type == 'db-per-tenant':
+    elif pattern == 'db-per-tenant':
         return get_tenant_database(service_config, environment)
     else:
-        raise ValueError(f"Unknown pattern: {server_group_type}")
+        raise ValueError(f"Unknown pattern: {pattern}")
 
 # ❌ AVOID - Hardcoded assumptions
 def get_database_for_asma(service_config: dict, environment: str) -> str:

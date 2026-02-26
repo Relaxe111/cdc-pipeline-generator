@@ -25,7 +25,7 @@ Instead:
 | **NO `type: ignore`** | Write explicit types instead | Forces runtime checks, prevents silent fails |
 | **Runtime Validation** | Check YAML/JSON before use | Structure may be invalid/missing |
 | **PostgreSQL Quotes** | Always `"schema"."table"` | Preserves MSSQL PascalCase |
-| **Pattern-Agnostic** | Never hardcode asma/adopus | Use `server_group_type` field |
+| **Pattern-Agnostic** | Never hardcode asma/adopus | Use `pattern` field |
 | **YAML Preservation** | Use `ruamel.yaml` | Preserve comments/structure |
 | **YAML Loader** | Use `helpers/yaml_loader.py` | Use stubbed loader, no direct `yaml` import |
 | **No Implicit Concat** | Use `+` or single f-string | ISC001: implicit string concat breaks linting |
@@ -94,10 +94,10 @@ msg = " ".join(["Server not found in", "sink group"])
 ### 1. Pattern-Agnostic
 
 ```python
-# ✅ Use server_group_type
-if server_group_type == 'db-shared':
+# ✅ Use pattern
+if pattern == 'db-shared':
     return config.get(env, {}).get('database')
-elif server_group_type == 'db-per-tenant':
+elif pattern == 'db-per-tenant':
     return get_tenant_database(config, env)
 ```
 

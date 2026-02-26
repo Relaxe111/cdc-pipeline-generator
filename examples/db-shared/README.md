@@ -48,12 +48,12 @@ Source (PostgreSQL):                Kafka:                      Sink (PostgreSQL
 
 ### 1. source-groups.yaml
 
-Defines the server group with `server_group_type: db-shared`:
+Defines the server group with `pattern: db-shared`:
 
 ```yaml
 server_groups:
   - name: asma
-    server_group_type: db-shared  # Key: defines pattern
+    pattern: db-shared  # Key: defines pattern
     service: directory
     server:
       type: postgres

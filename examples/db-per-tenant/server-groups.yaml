@@ -11,7 +11,7 @@
 
 server_groups:
   - name: adopus
-    server_group_type: db-per-tenant
+    pattern: db-per-tenant
     service: adopus
     database_ref: AdOpusTest  # Reference database for schema validation
     

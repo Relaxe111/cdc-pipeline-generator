@@ -48,12 +48,12 @@ Source (MSSQL):                     Kafka:                      Sink (PostgreSQL
 
 ### 1. source-groups.yaml
 
-Defines the server group with `server_group_type: db-per-tenant`:
+Defines the server group with `pattern: db-per-tenant`:
 
 ```yaml
 server_groups:
   - name: adopus
-    server_group_type: db-per-tenant  # Key: defines pattern
+    pattern: db-per-tenant  # Key: defines pattern
     service: adopus
     database_ref: AdOpusTest           # Reference DB for validation
     include_pattern: AdOpus*            # Match customer databases

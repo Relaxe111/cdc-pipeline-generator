@@ -26,7 +26,7 @@ def test_merge_customer_config_derives_environments_from_source_groups(
         tmp_path / "source-groups.yaml",
         """
 adopus:
-  server_group_type: db-per-tenant
+  pattern: db-per-tenant
   servers:
     default:
       host: mssql-host
@@ -86,7 +86,7 @@ def test_merge_customer_config_without_source_entry_returns_empty_environments(
         tmp_path / "source-groups.yaml",
         """
 adopus:
-  server_group_type: db-per-tenant
+  pattern: db-per-tenant
   sources:
     AVProd:
       schemas:
@@ -185,7 +185,7 @@ adopus:
         tmp_path / "source-groups.yaml",
         """
 adopus:
-  server_group_type: db-per-tenant
+  pattern: db-per-tenant
   sources:
     AVProd:
       default:

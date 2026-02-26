@@ -10,7 +10,7 @@ def test_list_schemas_for_service_reads_schema_directories(tmp_path: Path) -> No
     (tmp_path / "source-groups.yaml").write_text(
         """
 adopus:
-  server_group_type: db-per-tenant
+  pattern: db-per-tenant
   sources:
     AVProd:
       prod:

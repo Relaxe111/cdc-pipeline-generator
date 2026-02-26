@@ -193,7 +193,7 @@ def detect_service_mode(service: str) -> str:
     """Detect service mode (db-per-tenant or shared-db).
 
     Supports both:
-    - New: server_group field resolved via source-groups server_group_type/pattern
+    - New: server_group field resolved via source-groups pattern
     - Legacy: mode field (direct value)
     """
     from cdc_generator.helpers.service_config import load_service_config
@@ -220,7 +220,7 @@ def detect_service_mode(service: str) -> str:
                 group_cfg = groups.get(server_group)
                 if isinstance(group_cfg, dict):
                     resolved = _normalize_mode(
-                        group_cfg.get('server_group_type', group_cfg.get('pattern', ''))
+                        group_cfg.get('pattern', '')
                     )
                     if resolved is not None:
                         return resolved

@@ -31,7 +31,7 @@ def _write_source_groups(root: Path) -> None:
     """Write minimal source-groups.yaml for testing."""
     (root / "source-groups.yaml").write_text(
         "test_group:\n"
-        "  server_group_type: db-shared\n"
+        "  pattern: db-shared\n"
         "  source_type: postgres\n"
         "  sources:\n"
         "    default:\n"

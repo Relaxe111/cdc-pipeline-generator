@@ -95,8 +95,8 @@ def _extract_server_group(
 
 
 def _normalize_group_pattern(sg_dict: dict[str, object]) -> str:
-    """Resolve group pattern from supported keys."""
-    raw_pattern = sg_dict.get("server_group_type", sg_dict.get("pattern", ""))
+    """Resolve group pattern."""
+    raw_pattern = sg_dict.get("pattern", "")
     return str(raw_pattern).strip().lower()
 
 

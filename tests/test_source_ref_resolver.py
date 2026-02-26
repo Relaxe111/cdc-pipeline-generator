@@ -23,7 +23,7 @@ def _make_db_shared_config() -> dict[str, Any]:
     """Source-group config for db-shared pattern (like asma)."""
     return {
         "asma": {
-            "server_group_type": "db-shared",
+            "pattern": "db-shared",
             "database_type": "postgres",
             "sources": {
                 "directory": {
@@ -47,7 +47,7 @@ def _make_db_per_tenant_config() -> dict[str, Any]:
     """Source-group config for db-per-tenant pattern (like adopus)."""
     return {
         "adopus": {
-            "server_group_type": "db-per-tenant",
+            "pattern": "db-per-tenant",
             "database_type": "mssql",
             "sources": {
                 "AVProd": {
@@ -69,7 +69,7 @@ def _make_missing_key_config() -> dict[str, Any]:
     """Source-group config where a key is missing in one env."""
     return {
         "broken": {
-            "server_group_type": "db-shared",
+            "pattern": "db-shared",
             "sources": {
                 "svc": {
                     "schemas": ["public"],
@@ -245,7 +245,7 @@ class TestResolveSourceRef:
             resolve_source_ref(ref, "directory", config=config)
 
     def test_no_sources_section_raises(self) -> None:
-        config: dict[str, Any] = {"grp": {"server_group_type": "db-shared"}}
+        config: dict[str, Any] = {"grp": {"pattern": "db-shared"}}
         ref = SourceRef(group="grp", key="x", raw="{grp.sources.*.x}")
         with pytest.raises(SourceRefError, match="no 'sources' section"):
             resolve_source_ref(ref, "svc", config=config)

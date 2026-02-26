@@ -45,7 +45,7 @@ def list_available_services_from_server_group() -> list[str]:
         Expected YAML structure:
                 server_group_name:
                     pattern: "db-shared" | "db-per-tenant"
-                    server_group_type: "db-shared" | "db-per-tenant"  # optional alias
+
                     sources:
                         service1: {...}
                         service2: {...}
@@ -71,7 +71,7 @@ def list_available_services_from_server_group() -> list[str]:
         all_source_names: set[str] = set()
         for group_name, group_data in config.items():
             if isinstance(group_data, dict) and (
-                'pattern' in group_data or 'server_group_type' in group_data
+                'pattern' in group_data
             ):
                 group_dict = cast(dict[str, Any], group_data)
                 group_pattern = _normalize_group_pattern(group_dict)
@@ -114,8 +114,8 @@ def list_available_services_from_server_group() -> list[str]:
 
 
 def _normalize_group_pattern(group_dict: dict[str, Any]) -> str:
-    """Resolve server group pattern from either key variant."""
-    raw_pattern = group_dict.get("server_group_type", group_dict.get("pattern", ""))
+    """Resolve server group pattern."""
+    raw_pattern = group_dict.get("pattern", "")
     return str(raw_pattern).strip().lower()
 
 

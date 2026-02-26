@@ -456,7 +456,7 @@ def _write_source_override_test_data(root: Path) -> None:
     (root / "source-groups.yaml").write_text(
         "adopus:\n"
         "  source_type: mssql\n"
-        "  server_group_type: db-per-tenant\n"
+        "  pattern: db-per-tenant\n"
         "  sources: {}\n"
     )
 

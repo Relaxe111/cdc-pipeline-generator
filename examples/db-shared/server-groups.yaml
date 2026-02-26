@@ -12,7 +12,7 @@
 
 server_groups:
   - name: asma
-    server_group_type: db-shared
+    pattern: db-shared
     service: directory
     
     description: ASMA directory service (single database, multi-tenant)

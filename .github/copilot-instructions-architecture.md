@@ -16,7 +16,7 @@
 ### 1. Open/Closed Principle
 Open for extension, closed for modification
 - Use optional parameters with defaults instead of changing signatures
-- Use strategy pattern for varying behavior (e.g., `server_group_type`)
+- Use strategy pattern for varying behavior (e.g., `pattern`)
 
 ### 2. Single Responsibility
 Each function/module does ONE thing well
@@ -72,7 +72,7 @@ def generate_pipeline_with_metadata(service, customer):
 
 ## Service Architecture
 
-### How server_group_type drives pipeline generation
+### How pattern drives pipeline generation
 
 **db-per-tenant:**
 - For each customer in service → generates 1 source + 1 sink pipeline
@@ -97,7 +97,7 @@ def generate_pipeline_with_metadata(service, customer):
 ```yaml
 server_groups:
   adopus:
-    server_group_type: db-per-tenant
+    pattern: db-per-tenant
     server_type: mssql
     database_ref: AdOpusTest  # For schema inspection
 ```

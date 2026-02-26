@@ -116,7 +116,7 @@ def deduce_kafka_topology(
     source_group_name: str | None,
     source_groups: dict[str, Any],
 ) -> str | None:
-    """Deduce kafka_topology from source group's server_group_type.
+    """Deduce kafka_topology from source group's pattern.
 
     Args:
         source_group_name: Name of the source group
@@ -133,11 +133,11 @@ def deduce_kafka_topology(
         return None
 
     source_group = source_groups[source_group_name]
-    server_group_type = source_group.get("server_group_type")
+    pattern = source_group.get("pattern")
 
-    if server_group_type == "db-per-tenant":
+    if pattern == "db-per-tenant":
         return "multi-tenant"
-    if server_group_type == "db-shared":
+    if pattern == "db-shared":
         return "per-server"
 
     return None
@@ -423,7 +423,7 @@ def resolve_sink_group(
     - source_group: from sink group name (strip 'sink_' prefix)
     - pattern: 'inherited' if any server has source_ref
     - type: from first server's type or connection string
-    - kafka_topology: from source group's server_group_type
+    - kafka_topology: from source group's pattern
 
     Args:
         sink_group_name: Name of the sink group

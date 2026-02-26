@@ -215,7 +215,7 @@ def get_server_group_for_service(
 
         # db-per-tenant: service can be modeled as the server-group root key,
         # while sources contain customer entries only.
-        pattern = str(sg_data.get('server_group_type', sg_data.get('pattern', '')))
+        pattern = str(sg_data.get('pattern', ''))
         if pattern == 'db-per-tenant' and sg_name == service_name:
             return sg_name
 

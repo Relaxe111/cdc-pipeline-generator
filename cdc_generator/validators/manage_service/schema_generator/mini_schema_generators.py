@@ -34,7 +34,7 @@ def generate_service_enum_schema() -> bool:
         services: set[str] = set()
 
         for group_name, group in data.get('server_group', {}).items():
-            group_type = group.get('server_group_type')
+            group_type = group.get('pattern')
 
             if group_type == 'db-per-tenant':
                 # For db-per-tenant: group name IS the service name

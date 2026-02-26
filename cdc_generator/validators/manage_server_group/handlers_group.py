@@ -162,7 +162,7 @@ def list_server_groups() -> None:
 
     for group in server_groups:
         name = str(group.get('name', 'unknown'))
-        group_type = str(group.get('server_group_type', 'unknown'))
+        group_type = str(group.get('pattern', 'unknown'))
         server_obj = group.get('server')
         if isinstance(server_obj, dict):
             server_data = cast(dict[str, Any], server_obj)

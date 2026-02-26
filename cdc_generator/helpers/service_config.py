@@ -110,8 +110,8 @@ def _load_source_groups_file() -> dict[str, object]:
 
 
 def _resolve_server_group_pattern(server_group: dict[str, Any]) -> str:
-    """Resolve normalized server group pattern from supported keys."""
-    raw_pattern = server_group.get('server_group_type', server_group.get('pattern', ''))
+    """Resolve normalized server group pattern."""
+    raw_pattern = server_group.get('pattern', '')
     return str(raw_pattern).strip().lower()
 
 

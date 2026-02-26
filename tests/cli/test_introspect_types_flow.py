@@ -32,7 +32,7 @@ def _write_source_groups(root: Path, source_type: str = "postgres") -> None:
     """Write source-groups.yaml with specified source type."""
     (root / "source-groups.yaml").write_text(
         f"test_group:\n"
-        f"  server_group_type: db-shared\n"
+        f"  pattern: db-shared\n"
         f"  source_type: {source_type}\n"
         "  sources:\n"
         "    default:\n"

@@ -10,7 +10,7 @@
 
 **CRITICAL:** All scripts and logic live here. Implementations (adopus/asma) contain ONLY YAML files and generated artifacts.
 
-| server_group_type | Architecture | Example |
+| pattern | Architecture | Example |
 |-------------------|--------------|---------|
 | `db-per-tenant` | One server → N pipelines (1 per customer) | adopus-cdc-pipeline |
 | `db-shared` | One server → 1 pipeline (all customers) | asma-cdc-pipeline |
@@ -19,7 +19,7 @@
 
 ## 🏛️ Always-On Invariants
 
-- Use `server_group_type` for behavior; never branch on service names.
+- Use `pattern` for behavior; never branch on service names.
 - Treat generator as the only script/code location; implementations stay YAML/artifacts only.
 - Route detailed constraints to scoped guides below; do not duplicate policy text here.
 
