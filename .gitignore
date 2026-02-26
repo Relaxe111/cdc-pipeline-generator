@@ -63,9 +63,6 @@ service-schemas/
 # Docker
 .dockerignore
 
-# Temporary working docs (not for git)
-_docs-migrations/
-
 # Added by cdc scaffold --update
 *.pyc
 .lsn_cache/
