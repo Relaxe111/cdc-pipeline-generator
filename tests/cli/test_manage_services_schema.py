@@ -310,6 +310,7 @@ class TestCliCompletions:
         assert "custom-tables" in output
         assert "column-templates" in output
         assert "transforms" in output
+        assert "source-overrides" in output
 
     def test_custom_tables_service_completion_uses_schema_services(
         self,
@@ -449,3 +450,147 @@ class TestCliCompletions:
         assert result.returncode == 0
         output = result.stdout
         assert "user_id:bigint:pk:nullable" not in output
+
+
+def _write_source_override_test_data(root: Path) -> None:
+    (root / "source-groups.yaml").write_text(
+        "adopus:\n"
+        "  source_type: mssql\n"
+        "  server_group_type: db-per-tenant\n"
+        "  sources: {}\n"
+    )
+
+    services_dir = root / "services"
+    services_dir.mkdir(parents=True, exist_ok=True)
+    (services_dir / "adopus.yaml").write_text(
+        "adopus:\n"
+        "  source:\n"
+        "    tables:\n"
+        "      dbo.Actor: {}\n"
+        "  sinks:\n"
+        "    sink_asma.chat:\n"
+        "      tables:\n"
+        "        public.actor:\n"
+        "          from: dbo.Actor\n"
+        "          map_columns:\n"
+        "            - actor_id:actno\n"
+    )
+
+    definitions_dir = services_dir / "_schemas" / "_definitions"
+    definitions_dir.mkdir(parents=True, exist_ok=True)
+    (definitions_dir / "mssql.yaml").write_text(
+        "categories:\n"
+        "  numeric:\n"
+        "    types:\n"
+        "      - int\n"
+        "      - bigint\n"
+        "  text:\n"
+        "    types:\n"
+        "      - text\n"
+    )
+    (definitions_dir / "map-mssql-pgsql.yaml").write_text(
+        "metadata:\n"
+        "  version: 1\n"
+        "mappings:\n"
+        "  int: integer\n"
+        "  bigint: bigint\n"
+        "  text: text\n"
+    )
+
+    source_schema_dir = services_dir / "_schemas" / "adopus" / "dbo"
+    source_schema_dir.mkdir(parents=True, exist_ok=True)
+    (source_schema_dir / "Actor.yaml").write_text(
+        "columns:\n"
+        "  - name: actno\n"
+        "    type: int\n"
+        "  - name: name\n"
+        "    type: text\n"
+    )
+
+    target_schema_dir = services_dir / "_schemas" / "chat" / "public"
+    target_schema_dir.mkdir(parents=True, exist_ok=True)
+    (target_schema_dir / "actor.yaml").write_text(
+        "columns:\n"
+        "  - name: actor_id\n"
+        "    type: integer\n"
+    )
+
+
+class TestSourceTypeOverrideCli:
+    """CLI e2e coverage for source type override management."""
+
+    def test_completion_suggests_source_column_refs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_override_test_data(isolated_project)
+
+        result = run_cdc_completion(
+            "cdc mss source-overrides set --service adopus dbo.Actor."
+        )
+        assert result.returncode == 0
+        assert "dbo.Actor.actno" in result.stdout
+        assert "dbo.Actor.name" in result.stdout
+
+    def test_completion_suggests_allowed_source_types(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_override_test_data(isolated_project)
+
+        result = run_cdc_completion(
+            "cdc mss source-overrides set --service adopus dbo.Actor.actno:"
+        )
+        assert result.returncode == 0
+        output = result.stdout
+        assert "dbo.Actor.actno:int" in output
+        assert "dbo.Actor.actno:uuid" not in output
+
+    def test_set_list_remove_source_override(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_override_test_data(isolated_project)
+
+        set_result = run_cdc(
+            "mss",
+            "source-overrides",
+            "set",
+            "dbo.Actor.actno:int",
+            "--service",
+            "adopus",
+        )
+        assert set_result.returncode == 0
+
+        list_result = run_cdc(
+            "mss",
+            "source-overrides",
+            "list",
+            "--service",
+            "adopus",
+        )
+        assert list_result.returncode == 0
+        assert "dbo.Actor.actno:int" in list_result.stdout
+
+        remove_result = run_cdc(
+            "mss",
+            "source-overrides",
+            "remove",
+            "dbo.actor.actno",
+            "--service",
+            "adopus",
+        )
+        assert remove_result.returncode == 0
+
+        final_list = run_cdc(
+            "mss",
+            "source-overrides",
+            "list",
+            "--service",
+            "adopus",
+        )
+        assert final_list.returncode == 0
+        assert "No source type overrides configured" in final_list.stdout

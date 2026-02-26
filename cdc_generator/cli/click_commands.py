@@ -46,7 +46,10 @@ from cdc_generator.cli.completions import (
     complete_non_inherited_sink_group_names,
     complete_pg_types,
     complete_remove_sink_table,
+    complete_remove_source_override,
     complete_schema_services,
+    complete_source_override_type_for_ref,
+    complete_set_source_override,
     complete_schemas,
     complete_server_group_names,
     complete_server_names,
@@ -604,6 +607,8 @@ def manage_services_schema_transforms_cmd(  # noqa: PLR0913
     add_help_option=False,
     invoke_without_command=True,
 )
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name (alias for --source)")
 @click.option("--source", shell_complete=complete_existing_services,
               help="Source service name (optional if only one exists)")
 @click.option("--sink", shell_complete=complete_sink_keys,
@@ -617,17 +622,64 @@ def manage_services_schema_transforms_cmd(  # noqa: PLR0913
               help="Alias hint for resources column-templates subcommand")
 @click.option("--transforms", is_flag=True,
               help="Alias hint for resources transforms subcommand")
+@click.option("--list-source-overrides", is_flag=True,
+              help="List source type overrides")
+@click.option("--set-source-override", "--set-source-ovveride",
+              shell_complete=complete_set_source_override,
+              help="Set source override as schema.table.column:type")
+@click.option("--remove-source-override",
+              shell_complete=complete_remove_source_override,
+              help="Remove source override for schema.table.column")
 @click.pass_context
 def manage_services_resources_cmd(
     ctx: click.Context,
+    service: str | None,
     source: str | None,
     sink: str | None,
     track_table: tuple[str, ...],
     custom_tables: bool,
     column_templates: bool,
     transforms: bool,
+    list_source_overrides: bool,
+    set_source_override: str | None,
+    remove_source_override: str | None,
 ) -> int:
     """manage-services resources command group."""
+    if ctx.invoked_subcommand is None and (
+        list_source_overrides
+        or set_source_override
+        or remove_source_override
+    ):
+        from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+            autodetect_single_service,
+            print_source_overrides,
+            remove_source_override as remove_source_override_entry,
+            set_source_override as set_source_override_entry,
+        )
+
+        resolved_source = source or service
+        if not resolved_source:
+            resolved_source = autodetect_single_service()
+
+        if not resolved_source:
+            click.echo(
+                "❌ Source override actions require --service <name> "
+                + "(or --source <name>) when multiple services exist"
+            )
+            return 1
+
+        try:
+            if list_source_overrides:
+                print_source_overrides(resolved_source)
+                return 0
+            if set_source_override:
+                return 0 if set_source_override_entry(resolved_source, set_source_override) else 1
+            if remove_source_override:
+                return 0 if remove_source_override_entry(resolved_source, remove_source_override) else 1
+        except ValueError as exc:
+            click.echo(f"❌ {exc}")
+            return 1
+
     if ctx.invoked_subcommand is None and track_table:
         from cdc_generator.helpers.autocompletions.services import (
             list_existing_services,
@@ -639,7 +691,7 @@ def manage_services_resources_cmd(
             add_tracked_tables,
         )
 
-        resolved_source = source
+        resolved_source = source or service
         if not resolved_source:
             existing_services = list_existing_services()
             if len(existing_services) == 1:
@@ -682,11 +734,175 @@ def manage_services_resources_cmd(
         )
         click.echo("   Try: cdc manage-services resources custom-tables --list-services")
         click.echo("        cdc manage-services resources --source <svc> --track-table <schema.table>")
+        click.echo("        cdc mss source-overrides list --service <svc>")
+        click.echo("        cdc mss --service <svc> --set-source-override <schema.table.column:type>")
         click.echo("        cdc manage-services resources column-templates --list")
         click.echo("        cdc manage-services resources transforms --list-rules")
         return 1
 
     return 0
+
+
+def _resolve_source_override_service(
+    service: str | None,
+    source: str | None,
+    parent_service: str | None,
+) -> str:
+    """Resolve service for source-overrides subcommands."""
+    resolved = service or source or parent_service
+    if resolved:
+        return resolved
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        autodetect_single_service,
+    )
+
+    return autodetect_single_service()
+
+
+@click.group(
+    name="source-overrides",
+    help="Manage source type overrides",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+    invoke_without_command=True,
+)
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name")
+@click.option("--source", shell_complete=complete_existing_services,
+              help="Alias for --service")
+@click.pass_context
+def manage_services_source_overrides_cmd(
+    ctx: click.Context,
+    service: str | None,
+    source: str | None,
+) -> int:
+    """manage-services resources source-overrides command group."""
+    ctx.ensure_object(dict)
+    ctx.obj["source_overrides_service"] = service or source
+
+    if ctx.invoked_subcommand is None:
+        click.echo("❌ Missing subcommand for source-overrides")
+        click.echo("   Try: cdc mss source-overrides list [--service <svc>]")
+        click.echo("        cdc mss source-overrides set <schema.table.column:type> [--service <svc>]")
+        click.echo("        cdc mss source-overrides set <schema.table.column> <type> [--service <svc>]")
+        click.echo("        cdc mss source-overrides remove <schema.table.column> [--service <svc>]")
+        return 1
+
+    return 0
+
+
+@manage_services_source_overrides_cmd.command(
+    name="set",
+    help="Set source override for one column",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.argument("source_spec", shell_complete=complete_set_source_override)
+@click.argument("override_type", required=False, shell_complete=complete_source_override_type_for_ref)
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name")
+@click.option("--source", shell_complete=complete_existing_services,
+              help="Alias for --service")
+@click.pass_context
+def manage_services_source_overrides_set_cmd(
+    ctx: click.Context,
+    source_spec: str,
+    override_type: str | None,
+    service: str | None,
+    source: str | None,
+) -> int:
+    """Set a source type override via canonical subcommand."""
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        set_source_override as set_source_override_entry,
+    )
+
+    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
+    parent_service = str(parent_obj.get("source_overrides_service") or "")
+    resolved_service = _resolve_source_override_service(service, source, parent_service)
+    if not resolved_service:
+        click.echo("❌ source-overrides set requires --service when multiple services exist")
+        return 1
+
+    spec = source_spec if override_type is None else f"{source_spec}:{override_type}"
+    try:
+        return 0 if set_source_override_entry(resolved_service, spec) else 1
+    except ValueError as exc:
+        click.echo(f"❌ {exc}")
+        return 1
+
+
+@manage_services_source_overrides_cmd.command(
+    name="remove",
+    help="Remove source override for one column",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.argument("source_ref", shell_complete=complete_remove_source_override)
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name")
+@click.option("--source", shell_complete=complete_existing_services,
+              help="Alias for --service")
+@click.pass_context
+def manage_services_source_overrides_remove_cmd(
+    ctx: click.Context,
+    source_ref: str,
+    service: str | None,
+    source: str | None,
+) -> int:
+    """Remove a source type override via canonical subcommand."""
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        remove_source_override as remove_source_override_entry,
+    )
+
+    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
+    parent_service = str(parent_obj.get("source_overrides_service") or "")
+    resolved_service = _resolve_source_override_service(service, source, parent_service)
+    if not resolved_service:
+        click.echo("❌ source-overrides remove requires --service when multiple services exist")
+        return 1
+
+    try:
+        return 0 if remove_source_override_entry(resolved_service, source_ref) else 1
+    except ValueError as exc:
+        click.echo(f"❌ {exc}")
+        return 1
+
+
+@manage_services_source_overrides_cmd.command(
+    name="list",
+    help="List configured source overrides",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--service", shell_complete=complete_existing_services,
+              help="Service name")
+@click.option("--source", shell_complete=complete_existing_services,
+              help="Alias for --service")
+@click.pass_context
+def manage_services_source_overrides_list_cmd(
+    ctx: click.Context,
+    service: str | None,
+    source: str | None,
+) -> int:
+    """List source type overrides via canonical subcommand."""
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        print_source_overrides,
+    )
+
+    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
+    parent_service = str(parent_obj.get("source_overrides_service") or "")
+    resolved_service = _resolve_source_override_service(service, source, parent_service)
+    if not resolved_service:
+        click.echo("❌ source-overrides list requires --service when multiple services exist")
+        return 1
+
+    try:
+        print_source_overrides(resolved_service)
+        return 0
+    except ValueError as exc:
+        click.echo(f"❌ {exc}")
+        return 1
 
 
 # ============================================================================
@@ -787,6 +1003,10 @@ manage_services_resources_cmd.add_command(
 manage_services_resources_cmd.add_command(
     manage_services_schema_transforms_cmd,
     name="transforms",
+)
+manage_services_resources_cmd.add_command(
+    manage_services_source_overrides_cmd,
+    name="source-overrides",
 )
 
 

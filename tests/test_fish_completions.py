@@ -83,6 +83,16 @@ def _get_manage_services_resources_inspect_command() -> click.Command:
     return resources_group.commands["inspect"]
 
 
+def _get_manage_services_resources_source_overrides_command() -> click.Command:
+    """Return the typed command for `manage-services resources source-overrides`."""
+    cmds = _get_typed_commands()
+    root_group = cmds["manage-services"]
+    assert isinstance(root_group, click.Group)
+    resources_group = root_group.commands["resources"]
+    assert isinstance(resources_group, click.Group)
+    return resources_group.commands["source-overrides"]
+
+
 def _get_manage_services_resources_command() -> click.Command:
     """Return the typed command group for `manage-services resources`."""
     cmds = _get_typed_commands()
@@ -177,7 +187,7 @@ class TestClickCommandRegistration:
         cli = _get_click_cli()
         registered = set(cli.commands.keys()) if hasattr(cli, "commands") else set()
 
-        for alias in ["ms", "msc", "msr", "msog", "msig", "mp", "mm"]:
+        for alias in ["ms", "msc", "msr", "mss", "msog", "msig", "mp", "mm"]:
             assert alias in registered, (
                 f"Management alias {alias!r} not registered"
             )
@@ -197,6 +207,7 @@ class TestClickCommandRegistration:
         # Direct subcommand aliases should be distinct command objects.
         assert commands["msc"] is not commands["manage-services"]
         assert commands["msr"] is not commands["manage-services"]
+        assert commands["mss"] is not commands["manage-services"]
 
 
 # ---------------------------------------------------------------------------
@@ -295,10 +306,23 @@ class TestManageServicesConfigOptions:
         )
         for opt in [
             "--source",
+            "--service",
             "--sink",
             "--track-table",
+            "--list-source-overrides",
+            "--set-source-override",
+            "--set-source-ovveride",
+            "--remove-source-override",
         ]:
             assert opt in opts, f"Missing option: {opt}"
+
+    def test_resources_source_overrides_subcommands_registered(self) -> None:
+        """source-overrides command must expose canonical set/remove/list actions."""
+        cmd = _get_manage_services_resources_source_overrides_command()
+        assert isinstance(cmd, click.Group)
+        assert "set" in cmd.commands
+        assert "remove" in cmd.commands
+        assert "list" in cmd.commands
 
 
 class TestManageSourceGroupsOptions:

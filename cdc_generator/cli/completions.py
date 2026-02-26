@@ -980,6 +980,187 @@ def complete_track_tables(
     return _filter(filtered, incomplete)
 
 
+def _get_resource_service(ctx: click.Context) -> str:
+    """Resolve service for manage-services resources actions."""
+    service = _get_param(ctx, "service")
+    if service:
+        return service
+
+    source = _get_param(ctx, "source")
+    if source:
+        return source
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        autodetect_single_service,
+    )
+
+    detected = _safe_call(autodetect_single_service)
+    return detected[0] if detected else ""
+
+
+def complete_set_source_override(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete ``schema.table.column:type`` for --set-source-override."""
+    service = _get_resource_service(ctx)
+    if not service:
+        return []
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        get_allowed_source_types,
+        list_overridden_column_refs,
+        list_source_column_refs,
+        normalize_source_column_ref,
+        validate_override_type_for_column,
+    )
+
+    source_refs = _safe_call(list_source_column_refs, service)
+    ref_display_by_normalized: dict[str, str] = {}
+    for source_ref in source_refs:
+        try:
+            normalized_source_ref = normalize_source_column_ref(source_ref)
+        except Exception:
+            continue
+        ref_display_by_normalized.setdefault(normalized_source_ref, source_ref)
+
+    if ":" not in incomplete:
+        overridden_refs = {
+            normalize_source_column_ref(ref)
+            for ref in _safe_call(list_overridden_column_refs, service)
+            if ref.strip()
+        }
+        candidates = [
+            ref_display
+            for normalized_ref, ref_display in ref_display_by_normalized.items()
+            if normalized_ref not in overridden_refs
+        ]
+        return _filter(candidates, incomplete)
+
+    ref_part, type_part = incomplete.rsplit(":", 1)
+    if not ref_part.strip():
+        return []
+
+    try:
+        normalized_ref = normalize_source_column_ref(ref_part)
+    except Exception:
+        return []
+
+    display_ref = ref_display_by_normalized.get(normalized_ref, ref_part.strip())
+
+    selected_types = {
+        value.rsplit(":", 1)[1].strip().casefold()
+        for value in _get_multi_param_values(ctx, "set_source_override")
+        if ":" in value and value != incomplete
+    }
+
+    candidates: list[str] = []
+    for type_name in _safe_call(get_allowed_source_types):
+        normalized_type = type_name.strip().casefold()
+        if not normalized_type or normalized_type in selected_types:
+            continue
+
+        if not normalized_type.startswith(type_part.casefold()):
+            continue
+
+        try:
+            validate_override_type_for_column(service, normalized_ref, normalized_type)
+        except Exception:
+            continue
+
+        candidates.append(f"{display_ref}:{normalized_type}")
+
+    return _filter(candidates, incomplete)
+
+
+def complete_remove_source_override(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete existing ``schema.table.column`` override refs."""
+    service = _get_resource_service(ctx)
+    if not service:
+        return []
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        list_overridden_column_refs,
+    )
+
+    return _filter(_safe_call(list_overridden_column_refs, service), incomplete)
+
+
+def complete_source_override_ref_for_set(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete source refs for canonical source-overrides set subcommand."""
+    service = _get_resource_service(ctx)
+    if not service:
+        return []
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        list_overridden_column_refs,
+        list_source_column_refs,
+    )
+
+    all_refs = _safe_call(list_source_column_refs, service)
+    overridden_refs = {
+        ref.casefold()
+        for ref in _safe_call(list_overridden_column_refs, service)
+        if ref.strip()
+    }
+    candidates = [
+        ref
+        for ref in all_refs
+        if ref.casefold() not in overridden_refs
+    ]
+    return _filter(candidates, incomplete)
+
+
+def complete_source_override_type_for_ref(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete type values for canonical source-overrides set subcommand."""
+    service = _get_resource_service(ctx)
+    source_ref = _get_param(ctx, "source_ref") or _get_param(ctx, "source_spec")
+    if not service or not source_ref:
+        return []
+
+    if ":" in source_ref:
+        source_ref = source_ref.split(":", 1)[0]
+
+    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
+        get_allowed_source_types,
+        normalize_source_column_ref,
+        validate_override_type_for_column,
+    )
+
+    try:
+        normalized_ref = normalize_source_column_ref(source_ref)
+    except Exception:
+        return []
+
+    candidates: list[str] = []
+    for type_name in _safe_call(get_allowed_source_types):
+        normalized_type = type_name.strip().casefold()
+        if not normalized_type:
+            continue
+        if not normalized_type.startswith(incomplete.casefold()):
+            continue
+        try:
+            validate_override_type_for_column(service, normalized_ref, normalized_type)
+        except Exception:
+            continue
+        candidates.append(normalized_type)
+
+    return _filter(candidates, incomplete)
+
+
 def complete_from_table(
     ctx: click.Context,
     _param: click.Parameter,
