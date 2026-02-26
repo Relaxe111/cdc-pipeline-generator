@@ -18,14 +18,14 @@
 | Tests passing | 1,365 / 1,366 ✅ |
 | Tests skipped | 1 (conditional: `test_cleanup_strategy.py`) |
 | Tests failing | 0 |
-| Command coverage | **7 / 11 commands (64%)** |
-| E2E command coverage | **5 / 11 commands (45%)** |
-| Test progress vs targets | **1,343 / 1,139 (100%+)** |
+| Command coverage | **8 / 11 commands (73%)** |
+| E2E command coverage | **6 / 11 commands (55%)** |
+| Test progress vs targets | **1,343 / 1,335 (100%+)** |
 | Dead / assert-nothing tests | **5** |
 | False-result tests | **2** |
 | Duplicate / overlapping tests | **6 pairs** |
 | Self-referential tests | **8** (test their own mock data, not production code) |
-| Untested commands | **4** (`generate-usage-stats`, `manage-pipelines-generate`, `manage-services-resources`, `manage-migrations-schema-docs`) |
+| Untested commands | **3** (`generate-usage-stats`, `manage-pipelines-generate`, `manage-migrations-schema-docs`) |
 
 ---
 
@@ -168,17 +168,16 @@ which maps every test to its corresponding `cdc` subcommand.
 | `cdc help` | 0 | 33 | 33 | — | ✅ |
 | `cdc manage-pipelines generate` | 0 | 0 | 0 | 70 | 0% ❌ |
 | `cdc manage-services config` | 59 | 451 | 510 | 613 | 83% ✅ |
-| `cdc manage-services resources` | 0 | 0 | 0 | 12 | 0% ❌ |
+| `cdc manage-services resources` | 24 | 181 | 205 | 208 | 99% ✅ |
 | `cdc manage-migrations schema-docs` | 0 | 0 | 0 | 7 | 0% ❌ |
 
-**Summary:** 7/11 commands covered (64%), 5/11 with E2E tests (45%).
+**Summary:** 8/11 commands covered (73%), 6/11 with E2E tests (55%).
 
 ### 7.2 Uncovered Commands
 
 | Command | Lines | Priority |
 |---------|------:|----------|
 | `manage-pipelines generate` | 978 | **P0** — core pipeline engine, most critical gap |
-| `manage-services resources` | ~500 | **P1** — inspect, custom-tables, column-templates, transforms |
 | `generate-usage-stats` | ~200 | P2 — reporting utility |
 | `manage-migrations schema-docs` | ~200 | P2 — documentation generation |
 
@@ -202,7 +201,7 @@ Beyond module-level gaps, these **functional areas** lack test coverage:
 Many source modules that lack *direct* unit tests are still exercised
 indirectly through CLI e2e and integration tests. The `cdc test-coverage`
 tool tracks coverage by **command surface** (how many `cdc` subcommands
-have tests), which gives 64% command coverage. Individual module-level
+have tests), which gives 73% command coverage. Individual module-level
 coverage would require `pytest --cov` instrumentation.
 
 ---

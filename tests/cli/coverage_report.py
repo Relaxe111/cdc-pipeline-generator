@@ -140,11 +140,11 @@ _CLI_FILE_OVERRIDES: dict[str, str] = {
     # Legacy singular file names
     "test_manage_service": "manage-services-config",
     "test_manage_service_remove": "manage-services-config",
-    "test_manage_service_schema": "manage-services-schema",
+    "test_manage_service_schema": "manage-services-resources",
     # Canonical pluralized file names
     "test_manage_services_config": "manage-services-config",
     "test_manage_services_remove": "manage-services-config",
-    "test_manage_services_schema": "manage-services-schema",
+    "test_manage_services_schema": "manage-services-resources",
 }
 
 # Unit-test mapping overrides for module names that don't naturally match
@@ -153,7 +153,7 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("setup_local", "setup-local"),
     ("server_group", "manage-source-groups"),
     ("sink_group", "manage-sink-groups"),
-    ("service_schema", "manage-services-schema"),
+    ("service_schema", "manage-services-resources"),
     ("source_handler", "manage-services-config"),
     ("sink_handler", "manage-services-config"),
     ("sink_from", "manage-services-config"),
@@ -167,8 +167,8 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("custom_table", "manage-services-config"),
     ("pg_schema", "manage-services-config"),
     ("dispatch", "manage-services-config"),
-    ("column_template", "manage-services-schema"),
-    ("transform_rule", "manage-services-schema"),
+    ("column_template", "manage-services-resources"),
+    ("transform_rule", "manage-services-resources"),
     ("structure_replicator", "manage-services-config"),
 ]
 
@@ -322,7 +322,7 @@ _COMMAND_SOURCE_MODULES: dict[str, list[str]] = {
         "cli/sink_group.py",
         "validators/sink_group_validator.py",
     ],
-    "manage-services-schema": [
+    "manage-services-resources": [
         "cli/service_schema.py",
         "cli/column_templates.py",
         "core/column_template_definitions.py",
