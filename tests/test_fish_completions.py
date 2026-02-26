@@ -499,22 +499,17 @@ class TestManagePipelinesOptions:
 class TestManageMigrationsOptions:
     """manage-migrations subcommands must expose expected options."""
 
-    def test_apply_replica_has_env_option(self) -> None:
+    def test_has_generate_subcommand(self) -> None:
         cmds = _get_typed_commands()
         group = cmds["manage-migrations"]
         assert isinstance(group, click.Group)
-        apply_cmd = group.commands["apply-replica"]
-        opts = _get_command_option_names(apply_cmd)
-        assert "--env" in opts
+        assert "generate" in group.commands
 
-    def test_clean_cdc_has_core_options(self) -> None:
+    def test_has_schema_docs_subcommand(self) -> None:
         cmds = _get_typed_commands()
         group = cmds["manage-migrations"]
         assert isinstance(group, click.Group)
-        clean_cmd = group.commands["clean-cdc"]
-        opts = _get_command_option_names(clean_cmd)
-        for opt in ["--env", "--table", "--all"]:
-            assert opt in opts, f"Missing option: {opt}"
+        assert "schema-docs" in group.commands
 
 
 class TestManageServicesOptions:

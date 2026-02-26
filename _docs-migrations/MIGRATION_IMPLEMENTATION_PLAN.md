@@ -15,8 +15,15 @@
 | 2026-02-26 | Output root: top-level `migrations/` (not `generated/pg-migrations/`) | Audit §3.3 |
 | 2026-02-26 | Sub-layout: subdirectories by category (`infrastructure/`, `schemas/`, `tables/`, `staging/`) | Audit §3.3 |
 | 2026-02-26 | `cdc_processing_log` → centralize in `cdc_management` schema (one table per database) | Audit §8 discussion |
-| 2026-02-26 | `generated/table-definitions/` stays under `generated/` as intermediate artifact | Audit §3.3 |
-
+| 2026-02-26 | `generated/table-definitions/` stays under `generated/` as intermediate artifact | Audit §3.3 || 2026-02-26 | Q1: Use Jinja2 templates for SQL generation (already a dependency) | Open Questions |
+| 2026-02-26 | Q2: `migrations/` committed to git (reviewable artifacts, `DO NOT EDIT` header) | Open Questions |
+| 2026-02-26 | Q3: `schema-docs` output stays in `generated/schemas/` (intermediate artifact) | Open Questions |
+| 2026-02-26 | Q4: Remove stale `generated/pg-migrations/` immediately (preprod policy) | Open Questions |
+| 2026-02-26 | Q5: Merge procedures always use batched processing | Open Questions |
+| 2026-02-26 | Q6: GRANT user configurable via env var `CDC_DB_USER`, default `postgres` | Open Questions |
+| 2026-02-26 | §11.5: No rollback/DOWN migrations — everything is new, no legacy to roll back | Recommendations |
+| 2026-02-26 | §11.1: Rely on directory structure for migration ordering | Recommendations |
+| 2026-02-26 | §11.2: Use `IF NOT EXISTS` everywhere; all table/column identifiers always double-quoted | Recommendations |
 ---
 
 ## Phase 0: CLI Cleanup
@@ -270,9 +277,9 @@ Phase 0 (CLI cleanup)
 
 | # | Question | Status | Answer |
 |---|----------|--------|--------|
-| Q1 | Should we use Jinja2 templates or Python string formatting for SQL generation? | ⬜ | |
-| Q2 | Should `migrations/` be gitignored (generated) or committed (reviewable)? | ⬜ | |
-| Q3 | Should `schema-docs` output move from `generated/schemas/` to `migrations/`? | ⬜ | |
-| Q4 | How to handle existing stale `generated/pg-migrations/`? Remove now or after Phase 1? | ⬜ | |
-| Q5 | Should merge procedures use batched processing or single-pass for small tables? | ⬜ | |
-| Q6 | GRANT statements: hardcode `postgres` user or make configurable? | ⬜ | |
+| Q1 | Should we use Jinja2 templates or Python string formatting for SQL generation? | ✅ | Jinja2 — already a dependency, supports conditionals for pattern branching |
+| Q2 | Should `migrations/` be gitignored (generated) or committed (reviewable)? | ✅ | Committed — reviewable deployment artifacts with `DO NOT EDIT` header |
+| Q3 | Should `schema-docs` output move from `generated/schemas/` to `migrations/`? | ✅ | No — stays in `generated/schemas/` as intermediate artifact |
+| Q4 | How to handle existing stale `generated/pg-migrations/`? Remove now or after Phase 1? | ✅ | Remove now (preprod policy) |
+| Q5 | Should merge procedures use batched processing or single-pass for small tables? | ✅ | Batched always — existing merge procedures already do this |
+| Q6 | GRANT statements: hardcode `postgres` user or make configurable? | ✅ | Configurable via `CDC_DB_USER` env var, default `postgres` |

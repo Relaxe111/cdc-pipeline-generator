@@ -14,6 +14,7 @@ from .templates import (
     get_cdc_cli_flow_doc_template,
     get_docker_compose_template,
     get_env_variables_doc_template,
+    get_migrations_architecture_doc_template,
     get_project_structure_doc_template,
     get_readme_template,
 )
@@ -376,6 +377,7 @@ def _ensure_scaffold_markdown_files(project_root: Path) -> None:
         ),
         "_docs/CDC_CLI.md": get_cdc_cli_doc_template(server_group_name),
         "_docs/CDC_CLI_FLOW.md": get_cdc_cli_flow_doc_template(server_group_name),
+        "_docs/architecture/MIGRATIONS.md": get_migrations_architecture_doc_template(),
     }
 
     for relative_path, content in markdown_files.items():

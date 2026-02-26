@@ -195,6 +195,48 @@ PIPELINE_COMMANDS: dict[str, dict[str, str]] = {
 
 # manage-migrations subcommands
 MIGRATION_COMMANDS: dict[str, dict[str, str]] = {
+    "generate": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_generate",
+        "script": "cli/migration_generate.py",
+        "description": "Generate PostgreSQL migration SQL files",
+        "usage": "cdc manage-migrations generate [--service <name>] [--table <name>] [--dry-run]",
+    },
+    "diff": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_diff",
+        "script": "cli/migration_diff.py",
+        "description": "Compare schema definitions against generated migrations",
+        "usage": "cdc manage-migrations diff [--service <name>] [--table <name>]",
+    },
+    "apply": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_apply",
+        "script": "cli/migration_apply.py",
+        "description": "Apply pending migrations to target PostgreSQL database",
+        "usage": "cdc manage-migrations apply --env <env> [--dry-run] [--sink <name>]",
+    },
+    "status": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_status",
+        "script": "cli/migration_status.py",
+        "description": "Show applied vs pending migration status",
+        "usage": "cdc manage-migrations status --env <env> [--offline] [--sink <name>]",
+    },
+    "enable-cdc": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_enable_cdc",
+        "script": "cli/migration_enable_cdc.py",
+        "description": "Enable CDC tracking on MSSQL source tables",
+        "usage": "cdc manage-migrations enable-cdc --env <env> [--table <name>] [--dry-run]",
+    },
+    "clean-cdc": {
+        "runner": "generator",
+        "module": "cdc_generator.cli.migration_clean_cdc",
+        "script": "cli/migration_clean_cdc.py",
+        "description": "Clean old CDC change tracking data from MSSQL",
+        "usage": "cdc manage-migrations clean-cdc --env <env> [--days <n>] [--dry-run]",
+    },
     "schema-docs": {
         "runner": "generator",
         "module": "cdc_generator.cli.schema_docs",

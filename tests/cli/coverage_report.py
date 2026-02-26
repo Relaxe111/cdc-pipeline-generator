@@ -189,6 +189,31 @@ _UNIT_COMMAND_OVERRIDES: list[tuple[str, str]] = [
     ("column_template", "manage-services-resources"),
     ("transform_rule", "manage-services-resources"),
     ("structure_replicator", "manage-services-config"),
+    # Migration module naming does not always mirror command verbs.
+    ("migration_generator", "manage-migrations-generate"),
+    ("migration_diff", "manage-migrations-diff"),
+    ("migration_apply", "manage-migrations-apply"),
+    ("migration_status", "manage-migrations-status"),
+    ("migration_schema_docs", "manage-migrations-schema-docs"),
+]
+
+# Some unit modules intentionally cover multiple subcommands.
+_UNIT_COMMAND_MULTI_OVERRIDES: list[tuple[str, list[str]]] = [
+    (
+        "migration_ops",
+        [
+            "manage-migrations-enable-cdc",
+            "manage-migrations-clean-cdc",
+        ],
+    ),
+    (
+        "migration_e2e",
+        [
+            "manage-migrations-generate",
+            "manage-migrations-diff",
+            "manage-migrations-status",
+        ],
+    ),
 ]
 
 
@@ -552,6 +577,18 @@ def _classify_unit_module(module_label: str) -> str | None:
     return None
 
 
+def _classify_unit_module_commands(module_label: str) -> list[str]:
+    """Map a unit-test module label to one or more cdc commands."""
+    leaf = module_label.rsplit("/", 1)[-1]
+
+    for pattern, commands in _UNIT_COMMAND_MULTI_OVERRIDES:
+        if pattern in leaf:
+            return commands
+
+    command = _classify_unit_module(module_label)
+    return [command] if command else []
+
+
 # ---------------------------------------------------------------------------
 # Report building
 # ---------------------------------------------------------------------------
@@ -704,12 +741,13 @@ class CoverageReport:
             self.unit_tests[module_label] = tests
 
             # Also map into command buckets for the per-command table
-            command = _classify_unit_module(module_label)
-            if command:
+            commands = _classify_unit_module_commands(module_label)
+            if commands:
                 for test in tests:
-                    self.unit_by_command.setdefault(command, []).append(
-                        f"{module_label}::{test}"
-                    )
+                    for command in commands:
+                        self.unit_by_command.setdefault(command, []).append(
+                            f"{module_label}::{test}"
+                        )
 
     # -----------------------------------------------------------------------
     # Output
@@ -996,7 +1034,8 @@ class CoverageReport:
         )
 
         for module, tests in sorted(self.unit_tests.items()):
-            cmd = _classify_unit_module(module) or "—"
+            mapped_commands = _classify_unit_module_commands(module)
+            cmd = ", ".join(mapped_commands) if mapped_commands else "—"
             cmd_display = f"{c.CYAN}{cmd}{c.RESET}" if cmd != "—" else f"{c.DIM}—{c.RESET}"
             print(f"  {module:<{module_col_width}} {len(tests):>6}  {cmd_display}")
             if verbose:
@@ -1137,6 +1176,7 @@ class CoverageReport:
                     mod: {
                         "count": len(tests),
                         "command": _classify_unit_module(mod),
+                        "commands": _classify_unit_module_commands(mod),
                         "tests": tests,
                     }
                     for mod, tests in self.unit_tests.items()

@@ -68,6 +68,10 @@ class PgConnection(Protocol):
         """Commit the current transaction."""
         ...
 
+    def rollback(self) -> None:
+        """Roll back the current transaction."""
+        ...
+
 
 class PgExtras(Protocol):
     """Type stub for psycopg2.extras module."""

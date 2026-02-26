@@ -1,5 +1,28 @@
 """Template generation functions for project scaffolding."""
 
+from pathlib import Path
+
+
+def get_migrations_architecture_doc_template() -> str:
+  """Return canonical migrations architecture docs content.
+
+  Source of truth lives in generator docs and is copied into
+  implementation scaffolds under ``_docs/architecture/MIGRATIONS.md``.
+  """
+  import cdc_generator
+
+  package_root = Path(cdc_generator.__file__).resolve().parent
+  repo_root = package_root.parent
+  doc_path = repo_root / "_docs" / "architecture" / "MIGRATIONS.md"
+  if doc_path.exists():
+    return doc_path.read_text(encoding="utf-8")
+
+  return (
+    "# CDC Migration System\n\n"
+    "Canonical migration architecture documentation is available in the "
+    "generator repository at _docs/architecture/MIGRATIONS.md.\n"
+  )
+
 
 def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
     """Generate docker-compose.yml template with server_group naming.

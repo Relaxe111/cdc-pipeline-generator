@@ -14,6 +14,7 @@ from .templates import (
     get_env_example_template,
     get_env_variables_doc_template,
     get_gitignore_template,
+    get_migrations_architecture_doc_template,
     get_project_structure_doc_template,
     get_readme_template,
     get_sink_pipeline_template,
@@ -264,6 +265,7 @@ def scaffold_project_structure(
         ),
         "_docs/CDC_CLI.md": get_cdc_cli_doc_template(server_group_name),
         "_docs/CDC_CLI_FLOW.md": get_cdc_cli_flow_doc_template(server_group_name),
+        "_docs/architecture/MIGRATIONS.md": get_migrations_architecture_doc_template(),
     }
 
     # docker-compose.yml should always be created/overwritten with full CDC infrastructure
@@ -285,6 +287,7 @@ def scaffold_project_structure(
     # Create documentation files under _docs (skip if they exist)
     for filename, content in docs_to_create.items():
         file_path = project_root / filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         if not file_path.exists():
             file_path.write_text(content)
             print(f"✓ Created file: {filename}")

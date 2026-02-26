@@ -1346,61 +1346,28 @@ def manage_migrations_cmd(ctx: click.Context) -> int:
     """Manage-migrations command group."""
     if ctx.invoked_subcommand is None:
         click.echo("❌ Missing subcommand for manage-migrations")
-        click.echo("   Try: cdc manage-migrations apply-replica CUSTOMER --env nonprod")
+        click.echo("   Try: cdc manage-migrations generate [--service adopus] [--table Actor]")
         return 1
     return 0
 
 
 @manage_migrations_cmd.command(
-    name="enable-cdc",
-    help="Enable CDC on MSSQL tables",
+    name="generate",
+    help="Generate PostgreSQL migration SQL files",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
+@click.option("--service", default="adopus", help="Service name")
+@click.option("--table", default=None, help="Filter by table name")
+@click.option("--dry-run", is_flag=True, help="Preview without writing")
 @click.pass_context
-def manage_migrations_enable_cdc_cmd(
+def manage_migrations_generate_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
-    """manage-migrations enable-cdc passthrough."""
+    """manage-migrations generate passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_grouped_command("manage-migrations", "enable-cdc", sys.argv[3:])
-
-
-@manage_migrations_cmd.command(
-    name="apply-replica",
-    help="Apply PostgreSQL migrations to replica databases",
-    context_settings=_PASSTHROUGH_CTX,
-    add_help_option=False,
-)
-@click.option("--env", help="Environment")
-@click.pass_context
-def manage_migrations_apply_replica_cmd(
-    _ctx: click.Context, **_kwargs: object,
-) -> int:
-    """manage-migrations apply-replica passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "apply-replica", sys.argv[3:])
-
-
-@manage_migrations_cmd.command(
-    name="clean-cdc",
-    help="Clean CDC change tracking tables",
-    context_settings=_PASSTHROUGH_CTX,
-    add_help_option=False,
-)
-@click.option("--env", help="Environment")
-@click.option("--table", help="Table name")
-@click.option("--all", "all_flag", is_flag=True, help="Process all tables")
-@click.pass_context
-def manage_migrations_clean_cdc_cmd(
-    _ctx: click.Context, **_kwargs: object,
-) -> int:
-    """manage-migrations clean-cdc passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "clean-cdc", sys.argv[3:])
+    return execute_grouped_command("manage-migrations", "generate", sys.argv[3:])
 
 
 @manage_migrations_cmd.command(
@@ -1418,6 +1385,101 @@ def manage_migrations_schema_docs_cmd(
     from cdc_generator.cli.commands import execute_grouped_command
 
     return execute_grouped_command("manage-migrations", "schema-docs", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="diff",
+    help="Compare schema definitions against generated migrations",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--service", default="adopus", help="Service name")
+@click.option("--table", default=None, help="Filter by table name")
+@click.pass_context
+def manage_migrations_diff_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations diff passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "diff", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="apply",
+    help="Apply pending migrations to target PostgreSQL database",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", required=True, help="Target environment")
+@click.option("--dry-run", is_flag=True, help="Preview without applying")
+@click.option("--sink", default=None, help="Filter by sink name")
+@click.pass_context
+def manage_migrations_apply_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations apply passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "apply", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="status",
+    help="Show applied vs pending migration status",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", default=None, help="Target environment")
+@click.option("--offline", is_flag=True, help="Offline mode (no DB)")
+@click.option("--sink", default=None, help="Filter by sink name")
+@click.pass_context
+def manage_migrations_status_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations status passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "status", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="enable-cdc",
+    help="Enable CDC tracking on MSSQL source tables",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", default="nonprod", help="MSSQL environment")
+@click.option("--table", default=None, help="Filter by table name")
+@click.option("--dry-run", is_flag=True, help="Preview without enabling")
+@click.pass_context
+def manage_migrations_enable_cdc_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations enable-cdc passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "enable-cdc", sys.argv[3:])
+
+
+@manage_migrations_cmd.command(
+    name="clean-cdc",
+    help="Clean old CDC change tracking data from MSSQL",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--env", default="nonprod", help="MSSQL environment")
+@click.option("--days", type=int, default=30, help="Clean entries older than N days")
+@click.option("--table", default=None, help="Filter by table name")
+@click.option("--dry-run", is_flag=True, help="Preview without cleaning")
+@click.pass_context
+def manage_migrations_clean_cdc_cmd(
+    _ctx: click.Context, **_kwargs: object,
+) -> int:
+    """manage-migrations clean-cdc passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-migrations", "clean-cdc", sys.argv[3:])
 
 
 # ============================================================================

@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from cdc_generator.validators.manage_server_group.scaffolding import create, update
+from cdc_generator.validators.manage_server_group.scaffolding.templates import (
+    get_migrations_architecture_doc_template,
+)
 
 
 def _set_fake_generator_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
@@ -158,3 +161,23 @@ class TestScaffoldTemplatePathResolution:
             / "examples"
             / "json_extractor.blobl"
         ).exists()
+
+    def test_get_migrations_architecture_doc_template_reads_generator_doc(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Scaffold migrations doc content is sourced from generator _docs."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        migrations_doc = (
+            generator_root.parent
+            / "_docs"
+            / "architecture"
+            / "MIGRATIONS.md"
+        )
+        migrations_doc.parent.mkdir(parents=True, exist_ok=True)
+        migrations_doc.write_text("# Canonical MIGRATIONS\n", encoding="utf-8")
+
+        content = get_migrations_architecture_doc_template()
+
+        assert "# Canonical MIGRATIONS" in content
