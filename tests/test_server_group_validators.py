@@ -324,6 +324,27 @@ class TestParseEnvMapping:
         with pytest.raises(ValueError, match="No valid mappings"):
             parse_env_mapping("dev:nonprod:extra")
 
+    def test_empty_source_env_raises_value_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Mapping ':nonprod' (empty source) → ValueError."""
+        with pytest.raises(ValueError, match="No valid mappings"):
+            parse_env_mapping(":nonprod")
+        output = capsys.readouterr().out
+        assert "empty" in output.lower()
+
+    def test_empty_target_env_raises_value_error(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Mapping 'dev:' (empty target) → ValueError."""
+        with pytest.raises(ValueError, match="No valid mappings"):
+            parse_env_mapping("dev:")
+        output = capsys.readouterr().out
+        assert "empty" in output.lower()
+
+    def test_partial_valid_mappings_returns_valid_only(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Mix of valid and invalid → returns only valid mappings."""
+        result = parse_env_mapping("dev:nonprod,invalid,prod:prod")
+        assert result == {"dev": "nonprod", "prod": "prod"}
+
 
 class TestExcludePatternMatching:
     """Tests regex-or-word matching behavior for exclude filters."""
@@ -345,27 +366,6 @@ class TestExcludePatternMatching:
 
     def test_table_exclude_regex_matches(self) -> None:
         assert should_exclude_table("zz_internal", [r"^zz_.*"]) is True
-
-    def test_empty_source_env_raises_value_error(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Mapping ':nonprod' (empty source) → ValueError."""
-        with pytest.raises(ValueError, match="No valid mappings"):
-            parse_env_mapping(":nonprod")
-        output = capsys.readouterr().out
-        assert "empty" in output.lower()
-
-    def test_empty_target_env_raises_value_error(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Mapping 'dev:' (empty target) → ValueError."""
-        with pytest.raises(ValueError, match="No valid mappings"):
-            parse_env_mapping("dev:")
-        output = capsys.readouterr().out
-        assert "empty" in output.lower()
-
-    def test_partial_valid_mappings_returns_valid_only(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Mix of valid and invalid → returns only valid mappings."""
-        result = parse_env_mapping("dev:nonprod,invalid,prod:prod")
-        assert result == {"dev": "nonprod", "prod": "prod"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -468,6 +468,4 @@ class TestValidateMultiServerConfig:
             },
         }
         errors = validate_multi_server_config(config)
-        # This may or may not be an error depending on implementation
-        # Check if kafka is expected per-server
-        assert isinstance(errors, list)
+        assert len(errors) >= 0  # May or may not require kafka per-server

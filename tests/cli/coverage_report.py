@@ -27,6 +27,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
+import click as _click
+
+from cdc_generator.cli.click_commands import CLICK_COMMANDS
 from cdc_generator.cli.commands import (
     GENERATOR_COMMANDS,
     MIGRATION_COMMANDS,
@@ -48,41 +51,57 @@ _SPECIAL_LIBRARY_COMMANDS: dict[str, str] = {
 }
 
 
-def _discover_commands() -> list[tuple[str, str, bool]]:
-    """Build the known-commands list from authoritative sources.
+def _list_click_subcommands(group_name: str) -> list[tuple[str, str]]:
+    """Introspect a Click group to discover registered subcommands.
 
-    Returns a list of ``(command, description, is_library)`` tuples,
-    sourced from ``GENERATOR_COMMANDS`` and the
-    small ``_SPECIAL_LIBRARY_COMMANDS`` set.
+    Returns sorted list of ``(name, description)`` pairs.
+    Only direct children are listed — nested groups are treated as leaves.
+    """
+    if group_name not in CLICK_COMMANDS:
+        return []
+    cmd_obj = CLICK_COMMANDS[group_name]
+    if not isinstance(cmd_obj, _click.Group):
+        return []
+    ctx = _click.Context(cmd_obj)
+    result: list[tuple[str, str]] = []
+    for sub_name in cmd_obj.list_commands(ctx):
+        sub_cmd = cmd_obj.get_command(ctx, sub_name)
+        if sub_cmd is not None:
+            desc = sub_cmd.help or sub_cmd.short_help or ""
+            result.append((sub_name, desc))
+    return sorted(result)
+
+
+def _discover_commands() -> list[tuple[str, str, bool]]:
+    """Build the known-commands list by introspecting Click registrations.
+
+    Returns a list of ``(command, description, is_library)`` tuples.
+    Grouped subcommands are auto-discovered from Click group objects
+    so adding a subcommand to a Click group automatically registers it.
     """
     commands: list[tuple[str, str, bool]] = []
+    seen: set[str] = set()
 
-    # Library commands from GENERATOR_COMMANDS
+    # Top-level commands from GENERATOR_COMMANDS (have module metadata)
     for cmd, info in GENERATOR_COMMANDS.items():
+        seen.add(cmd)
         commands.append((cmd, info["description"], True))
 
     # Special library commands not in GENERATOR_COMMANDS
     for cmd, desc in _SPECIAL_LIBRARY_COMMANDS.items():
-        if cmd not in GENERATOR_COMMANDS:
+        if cmd not in seen:
+            seen.add(cmd)
             commands.append((cmd, desc, True))
 
-    # Grouped pipeline subcommands
-    for subcmd, info in PIPELINE_COMMANDS.items():
-        composite = f"manage-pipelines-{subcmd}"
-        is_library = info.get("runner") == "generator"
-        commands.append((composite, info["description"], is_library))
-
-    # Grouped service subcommands
-    for subcmd, info in SERVICE_COMMANDS.items():
-        composite = f"manage-services-{subcmd}"
-        is_library = info.get("runner") == "generator"
-        commands.append((composite, info["description"], is_library))
-
-    # Grouped migration subcommands
-    for subcmd, info in MIGRATION_COMMANDS.items():
-        composite = f"manage-migrations-{subcmd}"
-        is_library = info.get("runner") == "generator"
-        commands.append((composite, info["description"], is_library))
+    # Auto-discover grouped subcommands from Click groups
+    for group_name, cmd_obj in CLICK_COMMANDS.items():
+        if not isinstance(cmd_obj, _click.Group):
+            continue
+        for sub_name, desc in _list_click_subcommands(group_name):
+            composite = f"{group_name}-{sub_name}"
+            if composite not in seen:
+                seen.add(composite)
+                commands.append((composite, desc, True))
 
     return commands
 
@@ -552,6 +571,90 @@ class _ReportStats:
     e2e_pct: int = 0
 
 
+@dataclass
+class _TreeNode:
+    """A node in the hierarchical command tree."""
+
+    display_name: str
+    command_key: str | None  # composite key for stats lookup (None = parent)
+    children: list[_TreeNode] = field(default_factory=list)
+
+
+class _TreeRow(NamedTuple):
+    """Flattened row for tree rendering."""
+
+    prefix: str  # tree connector chars (e.g. "├── ", "│   └── ")
+    name: str  # display name
+    command_key: str | None  # for verbose test listing
+    e2e: int
+    unit: int
+    target: int
+    is_leaf: bool
+
+
+def _build_command_tree() -> list[_TreeNode]:
+    """Auto-discover hierarchical command tree from Click registrations.
+
+    Introspects ``CLICK_COMMANDS`` to find Click groups and their
+    subcommands dynamically.  Adding or removing a subcommand from
+    a Click group automatically updates the tree — no manual list
+    maintenance needed.
+    """
+    groups: list[_TreeNode] = []
+    manage_leaves: list[_TreeNode] = []
+    other_leaves: list[_TreeNode] = []
+    specials: list[_TreeNode] = []
+    seen: set[str] = set()
+
+    # 1. Process CLICK_COMMANDS (primary source of truth)
+    for cmd_name, cmd_obj in CLICK_COMMANDS.items():
+        seen.add(cmd_name)
+        if isinstance(cmd_obj, _click.Group):
+            children = [
+                _TreeNode(
+                    display_name=sub, command_key=f"{cmd_name}-{sub}",
+                )
+                for sub, _ in _list_click_subcommands(cmd_name)
+            ]
+            groups.append(_TreeNode(
+                display_name=cmd_name, command_key=None, children=children,
+            ))
+        elif cmd_name in _SPECIAL_LIBRARY_COMMANDS:
+            specials.append(
+                _TreeNode(display_name=cmd_name, command_key=cmd_name),
+            )
+        elif cmd_name.startswith("manage-"):
+            manage_leaves.append(
+                _TreeNode(display_name=cmd_name, command_key=cmd_name),
+            )
+        else:
+            other_leaves.append(
+                _TreeNode(display_name=cmd_name, command_key=cmd_name),
+            )
+
+    # 2. Add GENERATOR_COMMANDS not already in CLICK_COMMANDS
+    for cmd in GENERATOR_COMMANDS:
+        if cmd not in seen:
+            seen.add(cmd)
+            if cmd.startswith("manage-"):
+                manage_leaves.append(
+                    _TreeNode(display_name=cmd, command_key=cmd),
+                )
+            else:
+                other_leaves.append(
+                    _TreeNode(display_name=cmd, command_key=cmd),
+                )
+
+    # 3. Add special commands not in CLICK_COMMANDS
+    for cmd in _SPECIAL_LIBRARY_COMMANDS:
+        if cmd not in seen:
+            specials.append(
+                _TreeNode(display_name=cmd, command_key=cmd),
+            )
+
+    return groups + manage_leaves + other_leaves + specials
+
+
 class CoverageReport:
     """Build and format the coverage report."""
 
@@ -683,68 +786,161 @@ class CoverageReport:
         print()
 
     def _print_cli_section(self, verbose: bool) -> None:
-        """Print tests grouped by library command."""
-        c = Colors
-        lib_cmds = [cmd for cmd, _, is_lib in KNOWN_COMMANDS if is_lib]
-        command_col_width = max(
-            len("Command"),
-            *(len(f"cdc {cmd}") for cmd in lib_cmds),
-        )
+        """Print hierarchical command tree with test counts.
 
+        The tree is auto-discovered from command registries.
+        Parent nodes (manage-services, manage-pipelines, …) aggregate
+        stats from children; standalone commands appear as root leaves.
+        """
+        c = Colors
+        nodes = _build_command_tree()
+
+        # Filter: hide special/meta commands with no tests or target.
+        # All non-special commands are always shown (even with 0 tests)
+        # to make coverage gaps visible.
+        def _is_visible(node: _TreeNode) -> bool:
+            if node.children:
+                return any(_is_visible(ch) for ch in node.children)
+            key = node.command_key or ""
+            # Non-special commands are always visible
+            if key not in _SPECIAL_LIBRARY_COMMANDS:
+                return True
+            # Special commands only when they have tests or a target
+            e2e = len(self.cli_tests.get(key, []))
+            unit = len(self.unit_by_command.get(key, []))
+            target = self.command_targets.get(key, (0, 0, 0))[2]
+            return (e2e + unit) > 0 or target > 0
+
+        visible = [n for n in nodes if _is_visible(n)]
+        for node in visible:
+            if node.children:
+                node.children = [ch for ch in node.children if _is_visible(ch)]
+
+        # Flatten tree → rows with correct connectors ------------------
+        rows: list[_TreeRow] = []
+        for i, node in enumerate(visible):
+            is_last = i == len(visible) - 1
+            connector = "└── " if is_last else "├── "
+
+            if node.children:
+                # Parent: aggregate children stats
+                e2e = sum(
+                    len(self.cli_tests.get(ch.command_key or "", []))
+                    for ch in node.children
+                )
+                unit = sum(
+                    len(self.unit_by_command.get(ch.command_key or "", []))
+                    for ch in node.children
+                )
+                target = sum(
+                    self.command_targets.get(
+                        ch.command_key or "", (0, 0, 0),
+                    )[2]
+                    for ch in node.children
+                )
+                rows.append(_TreeRow(
+                    prefix=connector, name=node.display_name,
+                    command_key=None, e2e=e2e, unit=unit,
+                    target=target, is_leaf=False,
+                ))
+
+                continuation = "    " if is_last else "│   "
+                for j, child in enumerate(node.children):
+                    child_last = j == len(node.children) - 1
+                    child_conn = "└── " if child_last else "├── "
+                    prefix = continuation + child_conn
+                    ce = len(
+                        self.cli_tests.get(child.command_key or "", []),
+                    )
+                    cu = len(
+                        self.unit_by_command.get(
+                            child.command_key or "", [],
+                        ),
+                    )
+                    ct = self.command_targets.get(
+                        child.command_key or "", (0, 0, 0),
+                    )[2]
+                    rows.append(_TreeRow(
+                        prefix=prefix, name=child.display_name,
+                        command_key=child.command_key, e2e=ce,
+                        unit=cu, target=ct, is_leaf=True,
+                    ))
+            else:
+                e2e = len(
+                    self.cli_tests.get(node.command_key or "", []),
+                )
+                unit = len(
+                    self.unit_by_command.get(
+                        node.command_key or "", [],
+                    ),
+                )
+                target = self.command_targets.get(
+                    node.command_key or "", (0, 0, 0),
+                )[2]
+                rows.append(_TreeRow(
+                    prefix=connector, name=node.display_name,
+                    command_key=node.command_key, e2e=e2e,
+                    unit=unit, target=target, is_leaf=True,
+                ))
+
+        # Column width from max visible tree+name width ----------------
+        name_widths = [len(r.prefix) + len(r.name) for r in rows]
+        name_col = max(3, *name_widths) if name_widths else 30
+
+        # Section header -----------------------------------------------
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(f"  {c.BOLD}🔧 TESTS BY CDC COMMAND{c.RESET}")
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(
-            f"     {c.DIM}{'Command':<{command_col_width}} {'E2E':>5} {'Unit':>6}"
-            f" {'Total':>6} {'Target':>7} {'Progress':>9}{c.RESET}"
+            f"     {c.BOLD}{'cdc':<{name_col}}{c.RESET}"
+            f"  {c.DIM}{'E2E':>5} {'Unit':>6}"
+            f" {'Total':>6} {'Target':>7}  {'Progress':<9}{c.RESET}"
         )
         print(
-            f"     {c.DIM}{'─' * command_col_width} {'─' * 5} {'─' * 6}"
-            f" {'─' * 6} {'─' * 7} {'─' * 9}{c.RESET}"
+            f"     {c.DIM}{'─' * name_col}"
+            f"  {'─' * 5} {'─' * 6}"
+            f" {'─' * 6} {'─' * 7}  {'─' * 9}{c.RESET}"
         )
 
-        for cmd, _, is_lib in KNOWN_COMMANDS:
-            if not is_lib:
-                continue
-            e2e = self.cli_tests.get(cmd, [])
-            unit = self.unit_by_command.get(cmd, [])
-            total = len(e2e) + len(unit)
-            _fns, _br, target = self.command_targets.get(
-                cmd, (0, 0, 0),
-            )
+        # Command rows -------------------------------------------------
+        for row in rows:
+            total = row.e2e + row.unit
+            padded = f"{row.prefix}{row.name}"
+            padded = f"{padded:<{name_col}}"
+            target_str = str(row.target) if row.target > 0 else "—"
+            total_clr = c.GREEN if total > 0 else c.DIM
 
-            # Hide meta-commands with no target and no tests
-            if target == 0 and total == 0:
-                continue
-
-            pct = 0
-            if target > 0:
-                pct = min(round(total / target * 100), 100)
-                pct_color = c.GREEN if pct >= 80 else c.YELLOW if pct >= 50 else c.RED
-                progress = f"{pct_color}{pct}%{c.RESET}"
-                # Pad manually since ANSI codes break alignment
-                progress = f"{' ' * (9 - len(f'{pct}%'))}{progress}"
-                row_icon = "✅" if pct >= 80 else "🔶" if pct >= 50 else "❌"
+            if row.target > 0:
+                pct = min(round(total / row.target * 100), 100)
+                pct_clr = (
+                    c.GREEN if pct >= 80
+                    else c.YELLOW if pct >= 50
+                    else c.RED
+                )
+                icon = "✅" if pct >= 80 else "🔶" if pct >= 50 else "❌"
+                pct_text = f"{pct}%"
+                pad = 5 - len(pct_text)
+                progress = (
+                    f"{' ' * pad}{pct_clr}{pct_text}{c.RESET} {icon}"
+                )
             elif total > 0:
-                progress = f"       {c.GREEN}✅{c.RESET}"
-                row_icon = "✅"
+                progress = f"    {c.GREEN}✅{c.RESET}"
             else:
-                progress = f"       {c.DIM}—{c.RESET}"
-                row_icon = "⬜"
+                progress = f"    {c.DIM}—{c.RESET}"
 
-            total_color = c.GREEN if total > 0 else c.DIM
-            target_str = str(target) if target > 0 else "—"
-            cmd_color = c.GREEN if total > 0 else c.RED
             print(
-                f"  {row_icon} {cmd_color}{('cdc ' + cmd):<{command_col_width}}{c.RESET}"
-                f" {len(e2e):>5}"
-                f" {len(unit):>6} {total_color}{total:>6}{c.RESET}"
-                f" {target_str:>7} {progress}"
+                f"     {padded}"
+                f"  {row.e2e:>5}"
+                f" {row.unit:>6}"
+                f" {total_clr}{total:>6}{c.RESET}"
+                f" {target_str:>7}"
+                f"  {progress}"
             )
 
-            if verbose and e2e:
-                for test in e2e:
-                    print(f"      {c.DIM}• {test}{c.RESET}")
+            if verbose and row.command_key:
+                tests = self.cli_tests.get(row.command_key, [])
+                for test in tests:
+                    print(f"       {c.DIM}• {test}{c.RESET}")
 
     def _print_local_section(self, verbose: bool) -> None:
         """Print local/script command coverage (if any exist)."""

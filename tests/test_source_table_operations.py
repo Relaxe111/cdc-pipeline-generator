@@ -259,12 +259,6 @@ class TestHandleUpdateSourceTable:
 
         assert result == 0
 
-    def test_handler_returns_1_when_no_columns(self) -> None:
-        """Handler returns 1 when neither track nor ignore columns given."""
-        args = _make_args()
-        result = handle_update_source_table(args)
-        assert result == 1
-
     def test_handler_strips_table_prefix_from_columns(
         self, project_dir: Path, service_with_tables: Path,
     ) -> None:

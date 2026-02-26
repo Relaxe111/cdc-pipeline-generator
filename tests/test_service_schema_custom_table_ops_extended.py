@@ -39,17 +39,29 @@ def test_parse_column_spec_not_null_nullable_conflict_returns_none() -> None:
 
 
 @patch("cdc_generator.validators.manage_service_schema.type_definitions.get_all_type_names")
-def test_try_type_definitions_check_with_no_types_warns(mock_get_types: Mock) -> None:
+def test_try_type_definitions_check_with_no_types_warns(
+    mock_get_types: Mock, capsys: pytest.CaptureFixture[str],
+) -> None:
     mock_get_types.return_value = []
 
     ops._try_type_definitions_check("mystery_type")
 
+    output = capsys.readouterr().out
+    assert "mystery_type" in output
+    assert "not in built-in list" in output or "type definitions" in output.lower()
+
 
 @patch("cdc_generator.validators.manage_service_schema.type_definitions.get_all_type_names")
-def test_try_type_definitions_check_with_missing_type_warns(mock_get_types: Mock) -> None:
+def test_try_type_definitions_check_with_missing_type_warns(
+    mock_get_types: Mock, capsys: pytest.CaptureFixture[str],
+) -> None:
     mock_get_types.return_value = ["uuid", "text"]
 
     ops._try_type_definitions_check("mystery_type")
+
+    output = capsys.readouterr().out
+    assert "mystery_type" in output
+    assert "unknown" in output.lower() or "not in" in output.lower()
 
 
 @patch("cdc_generator.validators.manage_service_schema.custom_table_ops.yaml", None)

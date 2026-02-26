@@ -19,6 +19,7 @@ from cdc_generator.cli.service import (
     _dispatch_source,
     _dispatch_validation,
 )
+from tests._namespace_defaults import make_namespace
 
 # project_dir fixture is provided by tests/conftest.py
 
@@ -41,73 +42,8 @@ def service_yaml(project_dir: Path) -> Path:
 
 
 def _full_ns(**kwargs: object) -> argparse.Namespace:
-    """Build a complete argparse.Namespace with all dispatch-relevant attrs."""
-    defaults: dict[str, object] = {
-        # Core
-        "service": "proxy",
-        "create_service": None,
-        "server": None,
-        # Source
-        "add_source_table": None,
-        "add_source_tables": None,
-        "remove_table": None,
-        "source_table": None,
-        "list_source_tables": False,
-        "primary_key": None,
-        "schema": None,
-        "ignore_columns": None,
-        "track_columns": None,
-        # Inspect
-        "inspect": False,
-        "inspect_sink": None,
-        "all": False,
-        "env": "nonprod",
-        "save": False,
-        # Validation
-        "validate_config": False,
-        "validate_hierarchy": False,
-        "validate_bloblang": False,
-        "generate_validation": False,
-        # Sink
-        "sink": None,
-        "add_sink": None,
-        "remove_sink": None,
-        "add_sink_table": None,
-        "remove_sink_table": None,
-        "update_schema": None,
-        "sink_table": None,
-        "from_table": None,
-        "replicate_structure": False,
-        "sink_schema": None,
-        "target_exists": None,
-        "target": None,
-        "target_schema": None,
-        "map_column": None,
-        "include_sink_columns": None,
-        "list_sinks": False,
-        "validate_sinks": False,
-        "add_custom_sink_table": None,
-        "column": None,
-        "modify_custom_table": None,
-        "add_column": None,
-        "remove_column": None,
-        # Templates
-        "add_column_template": None,
-        "remove_column_template": None,
-        "list_column_templates": False,
-        "column_name": None,
-        "add_transform": None,
-        "remove_transform": None,
-        "list_transforms": False,
-        "list_template_keys": False,
-        "list_transform_rule_keys": False,
-        "skip_validation": False,
-        # Legacy
-        "source": None,
-        "source_schema": None,
-    }
-    defaults.update(kwargs)
-    return argparse.Namespace(**defaults)
+    """Build a complete argparse.Namespace for dispatch (skip_validation=False)."""
+    return make_namespace(skip_validation=False, **kwargs)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
