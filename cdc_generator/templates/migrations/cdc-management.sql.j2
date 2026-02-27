@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."cdc_processing_log" (
     "id"                 BIGSERIAL    PRIMARY KEY,
     "schema_name"        TEXT         NOT NULL,
     "table_name"         TEXT         NOT NULL,
+    "customer_id"        TEXT,
+    "kafka_topic"        TEXT,
     "min_source_ts_ms"   BIGINT,
     "max_source_ts_ms"   BIGINT,
     "min_kafka_offset"   BIGINT,
@@ -155,14 +157,26 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."cdc_processing_log" (
     "processed_at"       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE "cdc_management"."cdc_processing_log"
+    ADD COLUMN IF NOT EXISTS "customer_id" TEXT;
+
+ALTER TABLE "cdc_management"."cdc_processing_log"
+    ADD COLUMN IF NOT EXISTS "kafka_topic" TEXT;
+
 CREATE INDEX IF NOT EXISTS "idx_cdc_log_gap"
-    ON "cdc_management"."cdc_processing_log" ("table_name", "kafka_partition", "min_kafka_offset");
+    ON "cdc_management"."cdc_processing_log" ("table_name", "customer_id", "kafka_partition", "min_kafka_offset");
 
 CREATE INDEX IF NOT EXISTS "idx_cdc_log_recent"
     ON "cdc_management"."cdc_processing_log" ("processed_at" DESC);
 
 CREATE INDEX IF NOT EXISTS "idx_cdc_log_time_range"
     ON "cdc_management"."cdc_processing_log" ("table_name", "min_source_ts_ms", "max_source_ts_ms");
+
+CREATE INDEX IF NOT EXISTS "idx_cdc_log_customer"
+    ON "cdc_management"."cdc_processing_log" ("customer_id", "table_name", "processed_at" DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_cdc_log_topic"
+    ON "cdc_management"."cdc_processing_log" ("kafka_topic", "processed_at" DESC);
 
 -- ============================================================================
 -- 5. MIGRATION HISTORY (track which migrations have been applied)
@@ -181,6 +195,11 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."migration_history" (
 -- ============================================================================
 -- 6. MONITORING VIEWS
 -- ============================================================================
+
+DROP VIEW IF EXISTS "cdc_management"."v_customer_gap_alerts";
+DROP VIEW IF EXISTS "cdc_management"."v_customer_sync_health";
+DROP VIEW IF EXISTS "cdc_management"."v_cdc_replication_lag";
+DROP VIEW IF EXISTS "cdc_management"."v_cdc_processing_gaps";
 
 CREATE OR REPLACE VIEW "cdc_management"."v_merge_status" AS
 SELECT
@@ -211,14 +230,16 @@ LIMIT 100;
 CREATE OR REPLACE VIEW "cdc_management"."v_cdc_processing_gaps" AS
 SELECT
     "table_name",
+    "customer_id",
+    "kafka_topic",
     "kafka_partition",
     "max_kafka_offset"                                                AS "batch_end_offset",
     LEAD("min_kafka_offset") OVER (
-        PARTITION BY "table_name", "kafka_partition"
+        PARTITION BY "table_name", "customer_id", "kafka_partition"
         ORDER BY "min_kafka_offset"
     )                                                                 AS "next_batch_start",
     LEAD("min_kafka_offset") OVER (
-        PARTITION BY "table_name", "kafka_partition"
+        PARTITION BY "table_name", "customer_id", "kafka_partition"
         ORDER BY "min_kafka_offset"
     ) - "max_kafka_offset" - 1                                        AS "gap_size",
     "processed_at"
@@ -228,6 +249,8 @@ WHERE "kafka_partition" IS NOT NULL;
 CREATE OR REPLACE VIEW "cdc_management"."v_cdc_replication_lag" AS
 SELECT
     "table_name",
+    "customer_id",
+    "kafka_topic",
     "kafka_partition",
     "max_source_ts_ms",
     EXTRACT(EPOCH FROM NOW()) * 1000 - "max_source_ts_ms"             AS "lag_ms",
@@ -236,6 +259,38 @@ SELECT
 FROM "cdc_management"."cdc_processing_log"
 WHERE "max_source_ts_ms" IS NOT NULL
 ORDER BY "processed_at" DESC;
+
+-- Per-customer sync health: latest processing per customer per table.
+-- Use to detect stale/silent tenants in db-per-tenant pattern.
+CREATE OR REPLACE VIEW "cdc_management"."v_customer_sync_health" AS
+SELECT
+    "customer_id",
+    "table_name",
+    "kafka_topic",
+    MAX("max_source_ts_ms")                                           AS "last_source_ts_ms",
+    MAX("processed_at")                                               AS "last_processed_at",
+    EXTRACT(EPOCH FROM NOW()) * 1000 - MAX("max_source_ts_ms")        AS "lag_ms",
+    NOW() - MAX("processed_at")                                       AS "silence_duration",
+    SUM("records_processed")                                          AS "total_records"
+FROM "cdc_management"."cdc_processing_log"
+WHERE "customer_id" IS NOT NULL
+GROUP BY "customer_id", "table_name", "kafka_topic"
+ORDER BY "lag_ms" DESC NULLS LAST;
+
+-- Alert view: customers with gaps or excessive lag.
+-- Query this to find tenants that need replay.
+CREATE OR REPLACE VIEW "cdc_management"."v_customer_gap_alerts" AS
+SELECT
+    g."customer_id",
+    g."table_name",
+    g."kafka_topic",
+    g."kafka_partition",
+    g."batch_end_offset",
+    g."next_batch_start",
+    g."gap_size",
+    g."processed_at"
+FROM "cdc_management"."v_cdc_processing_gaps" g
+WHERE g."gap_size" > 0;
 
 -- ============================================================================
 -- 7. UTILITY: manual_merge()

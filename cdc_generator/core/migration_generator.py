@@ -581,7 +581,11 @@ def _build_pk_names_sql(primary_keys: list[str]) -> str:
 
 
 def _compute_checksum(content: str) -> str:
-    """Compute SHA256 checksum of SQL content.
+    """Compute SHA256 checksum of SQL content, excluding the header block.
+
+    Strips the auto-generated header (everything up to and including the
+    closing ``-- ====...`` separator) so that timestamp-only changes do
+    not alter the checksum.
 
     Args:
         content: SQL file content.
@@ -589,14 +593,28 @@ def _compute_checksum(content: str) -> str:
     Returns:
         Hex digest string.
     """
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    header_end = "-- " + "=" * 76
+    first_sep = content.find(header_end)
+    if first_sep != -1:
+        second_sep = content.find(header_end, first_sep + len(header_end))
+        if second_sep != -1:
+            # Strip everything up to (and including) the closing separator line
+            line_end = content.index("\n", second_sep)
+            body = content[line_end + 1:]
+        else:
+            line_end = content.index("\n", first_sep)
+            body = content[line_end + 1:]
+    else:
+        body = content
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def _inject_checksum(content: str) -> str:
     """Inject a SHA256 checksum comment after the header block.
 
-    The checksum is computed from the content *without* the checksum line,
-    making it possible to verify whether the file was manually edited.
+    The checksum is computed from the content *without* the checksum line
+    and *without* the header block (timestamps), making it possible to
+    verify whether the SQL body was manually edited.
 
     Args:
         content: SQL file content.
@@ -1230,6 +1248,7 @@ def _generate_infrastructure(
         "generated_at": ctx.generated_at,
         "db_user": ctx.db_user,
         "sink_target": ctx.sink_target,
+        "pattern": pattern,
     })
     _write_migration_file(infra_dir / "02-cdc-management.sql", mgmt_sql, result)
 

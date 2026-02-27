@@ -246,7 +246,7 @@ def extract_checksum(content: str) -> str | None:
 
 
 def compute_content_checksum(content: str) -> str:
-    """Compute SHA256 of content excluding the checksum line.
+    """Compute SHA256 of SQL body excluding checksum and header block.
 
     Args:
         content: SQL file content (may include checksum line).
@@ -259,7 +259,20 @@ def compute_content_checksum(content: str) -> str:
         line for line in lines
         if not line.startswith("-- Checksum: sha256:")
     ]
-    return hashlib.sha256("".join(filtered).encode("utf-8")).hexdigest()
+
+    # Ignore auto-generated header (includes volatile Generated timestamp)
+    # so only SQL body changes trigger migration updates.
+    normalized = "".join(filtered)
+    header_end = "-- " + "=" * 76
+    first_sep = normalized.find(header_end)
+    if first_sep != -1:
+        second_sep = normalized.find(header_end, first_sep + len(header_end))
+        if second_sep != -1:
+            line_end = normalized.find("\n", second_sep)
+            if line_end != -1:
+                normalized = normalized[line_end + 1:]
+
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
