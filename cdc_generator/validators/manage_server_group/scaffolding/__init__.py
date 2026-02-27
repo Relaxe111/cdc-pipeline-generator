@@ -26,6 +26,7 @@ from .create import scaffold_project_structure
 from .templates import (
     get_cdc_cli_doc_template,
     get_cdc_cli_flow_doc_template,
+    get_destructive_changes_doc_template,
     get_docker_compose_template,
     get_env_example_template,
     get_env_variables_doc_template,
@@ -55,29 +56,30 @@ from .vscode_settings import (
 )
 
 __all__ = [
-    # Main public API
-    "scaffold_project_structure",
-    "update_scaffold",
-    # Template functions
-    "get_docker_compose_template",
-    "get_env_example_template",
-    "get_readme_template",
-    "get_gitignore_template",
-    "get_project_structure_doc_template",
-    "get_env_variables_doc_template",
-    "get_cdc_cli_doc_template",
-    "get_cdc_cli_flow_doc_template",
-    "get_source_pipeline_template",
-    "get_sink_pipeline_template",
-    # Settings functions
-    "create_vscode_settings",
-    "get_gitignore_patterns",
-    "get_scaffold_directories",
-    "get_generated_subdirs",
+    "DirectoryList",
     # Type definitions
     "FilePatterns",
     "FilesAssociations",
-    "VSCodeSettings",
-    "DirectoryList",
     "PatternList",
+    "VSCodeSettings",
+    # Settings functions
+    "create_vscode_settings",
+    "get_cdc_cli_doc_template",
+    "get_cdc_cli_flow_doc_template",
+    "get_destructive_changes_doc_template",
+    # Template functions
+    "get_docker_compose_template",
+    "get_env_example_template",
+    "get_env_variables_doc_template",
+    "get_generated_subdirs",
+    "get_gitignore_patterns",
+    "get_gitignore_template",
+    "get_project_structure_doc_template",
+    "get_readme_template",
+    "get_scaffold_directories",
+    "get_sink_pipeline_template",
+    "get_source_pipeline_template",
+    # Main public API
+    "scaffold_project_structure",
+    "update_scaffold",
 ]

@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Service Config",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/servicePayload"
+    },
+    {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/definitions/servicePayload"
+      }
+    }
+  ],
+  "definitions": {
+    "columnTemplateRef": {
+      "oneOf": [
+        {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "source_table",
+                "source_schema",
+                "kafka_topic",
+                "kafka_offset",
+                "kafka_partition",
+                "sync_timestamp",
+                "sync_id",
+                "cdc_operation",
+                "cdc_lsn",
+                "environment",
+                "tenant_id",
+                "row_hash",
+                "ingestion_id"
+              ]
+            },
+            { "type": "string" }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "template": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "source_table",
+                    "source_schema",
+                    "kafka_topic",
+                    "kafka_offset",
+                    "kafka_partition",
+                    "sync_timestamp",
+                    "sync_id",
+                    "cdc_operation",
+                    "cdc_lsn",
+                    "environment",
+                    "tenant_id",
+                    "row_hash",
+                    "ingestion_id"
+                  ]
+                },
+                { "type": "string" }
+              ]
+            },
+            "name": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "required": ["template"]
+        }
+      ]
+    },
+    "transformRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bloblang_ref": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "file://services/_bloblang/examples/priority_label.blobl",
+                "file://services/_bloblang/examples/user_class_splitter.blobl",
+                "file://services/_bloblang/examples/active_users_only.blobl",
+                "file://services/_bloblang/examples/valid_status_filter.blobl"
+              ]
+            },
+            { "type": "string" }
+          ]
+        },
+        "expected_output_column": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["priority_label", "user_class"]
+            },
+            { "type": "string" }
+          ]
+        }
+      },
+      "required": ["bloblang_ref"]
+    },
+    "manualMigrationHints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "renames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "string" },
+              "to": { "type": "string" }
+            },
+            "required": ["from", "to"]
+          }
+        },
+        "type_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "column": { "type": "string" },
+              "using": { "type": "string" }
+            },
+            "required": ["column", "using"]
+          }
+        },
+        "set_not_null": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "column": { "type": "string" },
+              "pre_sql": { "type": "string" }
+            },
+            "required": ["column"]
+          }
+        }
+      }
+    },
+    "sinkTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "string" },
+        "target_exists": { "type": "boolean" },
+        "replicate_structure": { "type": "boolean" },
+        "columns": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "column_templates": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/columnTemplateRef" }
+        },
+        "transforms": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/transformRef" }
+        },
+        "manual_migration_hints": { "$ref": "#/definitions/manualMigrationHints" }
+      },
+      "required": ["from"]
+    },
+    "sourceTable": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ignore_columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "include_columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "servicePayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "service": { "type": "string" },
+        "server_group": { "type": "string" },
+        "reference": { "type": "string" },
+        "source": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "validation_database": { "type": "string" },
+            "validation_env": { "type": "string" },
+            "tables": {
+              "type": "object",
+              "patternProperties": {
+                "^[^.]+\\.[^.]+$": { "$ref": "#/definitions/sourceTable" }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "sinks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "tables": {
+                "type": "object",
+                "patternProperties": {
+                  "^[^.]+\\.[^.]+$": { "$ref": "#/definitions/sinkTable" }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["tables"]
+          }
+        }
+      },
+      "required": ["source", "sinks"]
+    }
+  }
+}

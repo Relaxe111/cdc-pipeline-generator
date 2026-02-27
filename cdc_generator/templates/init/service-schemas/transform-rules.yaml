@@ -33,7 +33,7 @@ rules:
     type: conditional_column
     description: Map numeric priority to human-readable label
     bloblang_ref: file://services/_bloblang/examples/priority_label.blobl
-    expected_output_column: _priority_label
+    expected_output_column: priority_label
     behavior: first_match_then_default
     notes:
       - Uses match-like threshold logic for this.priority.
@@ -43,7 +43,7 @@ rules:
     type: row_multiplier
     description: Split row by role flags into one row per user class
     bloblang_ref: file://services/_bloblang/examples/user_class_splitter.blobl
-    expected_output_column: _user_class
+    expected_output_column: user_class
     behavior: one_to_many_rows
     notes:
       - Appends one output row for each true flag.

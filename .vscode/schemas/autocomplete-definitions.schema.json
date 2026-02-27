@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Autocomplete Definitions",
+  "description": "Schema for services/_schemas/_definitions/*-autocompletes.yaml",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "type": "array",
+    "items": { "type": "string" }
+  }
+}

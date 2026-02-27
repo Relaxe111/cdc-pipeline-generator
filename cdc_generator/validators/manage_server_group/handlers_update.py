@@ -31,7 +31,7 @@ from .db_inspector import (
 from .handlers_group import ensure_project_structure
 from .handlers_validation_env import update_envs_list
 from .types import DatabaseInfo, ServerConfig, ServerGroupConfig
-from .utils import regenerate_all_validation_schemas, update_completions, update_vscode_schema
+from .utils import update_completions
 from .yaml_io import write_server_group_yaml
 from .yaml_writer import update_server_group_yaml
 
@@ -286,9 +286,6 @@ def _apply_updates(
     except Exception as e:
         print_warning(f"Could not update envs list: {e}")
 
-    # Update VS Code schema
-    update_vscode_schema(all_databases)
-
     # Generate fast table autocomplete cache per service
     generate_service_autocomplete_definitions(
         server_group,
@@ -300,9 +297,6 @@ def _apply_updates(
 
     # Update Fish completions
     update_completions()
-
-    # Regenerate validation schemas
-    regenerate_all_validation_schemas([sg_name])  # type: ignore[list-item]
 
     return True
 

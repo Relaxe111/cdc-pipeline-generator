@@ -8,6 +8,7 @@ import pytest
 
 from cdc_generator.validators.manage_server_group.scaffolding import create, update
 from cdc_generator.validators.manage_server_group.scaffolding.templates import (
+    get_destructive_changes_doc_template,
     get_migrations_architecture_doc_template,
 )
 
@@ -48,6 +49,15 @@ def _write_bloblang_templates(base: Path) -> None:
     examples_dir.mkdir(parents=True, exist_ok=True)
     (base / "_bloblang" / "README.md").write_text("# Bloblang examples\n")
     (examples_dir / "json_extractor.blobl").write_text("this.value = this\n")
+
+
+def _write_vscode_schema_files(repo_root: Path) -> None:
+    """Write sample static VS Code schema files under .vscode/schemas/."""
+    schemas_dir = repo_root / ".vscode" / "schemas"
+    schemas_dir.mkdir(parents=True, exist_ok=True)
+    (schemas_dir / "source-groups.schema.json").write_text('{"type": "object"}\n')
+    (schemas_dir / "service.schema.json").write_text('{"type": "object"}\n')
+    (schemas_dir / "README.md").write_text("not copied\n")
 
 
 class TestScaffoldTemplatePathResolution:
@@ -181,3 +191,58 @@ class TestScaffoldTemplatePathResolution:
         content = get_migrations_architecture_doc_template()
 
         assert "# Canonical MIGRATIONS" in content
+
+    def test_get_destructive_changes_doc_template_reads_generator_doc(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """Scaffold destructive guide content is sourced from generator _docs."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        destructive_doc = (
+            generator_root.parent
+            / "_docs"
+            / "architecture"
+            / "DESTRUCTIVE_CHANGES.md"
+        )
+        destructive_doc.parent.mkdir(parents=True, exist_ok=True)
+        destructive_doc.write_text("# Canonical DESTRUCTIVE CHANGES\n", encoding="utf-8")
+
+        content = get_destructive_changes_doc_template()
+
+        assert "# Canonical DESTRUCTIVE CHANGES" in content
+
+    def test_create_copies_static_vscode_schema_json_files(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """create path copies only JSON schema files into implementation .vscode/schemas."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        _write_vscode_schema_files(generator_root.parent)
+
+        project_root = _prepare_project_root(tmp_path)
+        create._copy_vscode_schema_files(project_root)
+
+        assert (project_root / ".vscode" / "schemas" / "source-groups.schema.json").exists()
+        assert (project_root / ".vscode" / "schemas" / "service.schema.json").exists()
+        assert not (project_root / ".vscode" / "schemas" / "README.md").exists()
+
+    def test_update_keeps_existing_vscode_schema_json_files(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        """update path does not overwrite existing JSON schema files in implementation."""
+        generator_root = _set_fake_generator_root(monkeypatch, tmp_path)
+        _write_vscode_schema_files(generator_root.parent)
+
+        project_root = _prepare_project_root(tmp_path)
+        target_schema = project_root / ".vscode" / "schemas" / "service.schema.json"
+        target_schema.parent.mkdir(parents=True, exist_ok=True)
+        target_schema.write_text('{"type": "existing"}\n')
+
+        update._copy_vscode_schema_files(project_root)
+
+        assert (project_root / ".vscode" / "schemas" / "source-groups.schema.json").exists()
+        assert target_schema.read_text() == '{"type": "existing"}\n'

@@ -10,6 +10,7 @@ import yaml
 from .templates import (
     get_cdc_cli_doc_template,
     get_cdc_cli_flow_doc_template,
+    get_destructive_changes_doc_template,
     get_docker_compose_template,
     get_env_example_template,
     get_env_variables_doc_template,
@@ -39,6 +40,30 @@ def _resolve_template_file(generator_root: Path, relative_path: Path) -> Path | 
         if candidate.exists():
             return candidate
     return None
+
+
+def _copy_vscode_schema_files(project_root: Path) -> None:
+    """Copy static YAML validation schemas into implementation .vscode/schemas/."""
+    import cdc_generator
+
+    package_root = Path(cdc_generator.__file__).resolve().parent
+    repo_root = package_root.parent
+    source_dir = repo_root / ".vscode" / "schemas"
+    target_dir = project_root / ".vscode" / "schemas"
+
+    if not source_dir.exists() or not source_dir.is_dir():
+        print("⚠ Warning: .vscode/schemas not found in generator")
+        return
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    for schema_file in sorted(source_dir.glob("*.json")):
+        target_file = target_dir / schema_file.name
+        if target_file.exists():
+            print(f"⊘ Skipped (exists): .vscode/schemas/{schema_file.name}")
+            continue
+        shutil.copy2(schema_file, target_file)
+        print(f"✓ Copied VS Code schema: .vscode/schemas/{schema_file.name}")
 
 
 def _resolve_source_group_name(project_root: Path) -> str:
@@ -266,6 +291,7 @@ def scaffold_project_structure(
         "_docs/CDC_CLI.md": get_cdc_cli_doc_template(server_group_name),
         "_docs/CDC_CLI_FLOW.md": get_cdc_cli_flow_doc_template(server_group_name),
         "_docs/architecture/MIGRATIONS.md": get_migrations_architecture_doc_template(),
+        "_docs/architecture/DESTRUCTIVE_CHANGES.md": get_destructive_changes_doc_template(),
     }
 
     # docker-compose.yml should always be created/overwritten with full CDC infrastructure
@@ -296,6 +322,9 @@ def scaffold_project_structure(
 
     # Create .vscode/settings.json
     _create_vscode_settings_file(project_root)
+
+    # Copy static .vscode/schemas/*.json validation files
+    _copy_vscode_schema_files(project_root)
 
     # Create pipeline templates with real, tested templates
     _create_pipeline_templates(project_root)

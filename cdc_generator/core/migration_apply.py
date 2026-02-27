@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -283,11 +284,12 @@ def compute_content_checksum(content: str) -> str:
 def get_ordered_files(sink_dir: Path) -> list[Path]:
     """Get migration files in execution order.
 
-    Order:
-        1. 00-infrastructure/01-create-schemas.sql
-        2. 00-infrastructure/02-cdc-management.sql
-        3. 01-tables/{Table}.sql (DDL first)
-        4. 01-tables/{Table}-staging.sql (staging after DDL)
+    Preferred order source is ``manifest.yaml`` (explicit ordered file list).
+    If manifest is missing or invalid, falls back to deterministic directory
+    sorting:
+        1. 00-infrastructure/*.sql (sorted)
+        2. 01-tables/{Table}.sql (DDL first)
+        3. 01-tables/{Table}-staging.sql (staging after DDL)
 
     Args:
         sink_dir: Sink-specific migration directory.
@@ -295,6 +297,27 @@ def get_ordered_files(sink_dir: Path) -> list[Path]:
     Returns:
         Ordered list of SQL file paths.
     """
+    manifest_path = sink_dir / "manifest.yaml"
+    if manifest_path.exists():
+        raw_manifest = cast(dict[str, Any], load_yaml_file(manifest_path))
+
+        infra_entries = raw_manifest.get("infrastructure", [])
+        table_entries = raw_manifest.get("tables", [])
+
+        ordered_paths: list[Path] = []
+        seen: set[Path] = set()
+
+        for rel in list(cast(list[Any], infra_entries)) + list(cast(list[Any], table_entries)):
+            if not isinstance(rel, str):
+                continue
+            p = sink_dir / rel
+            if p.exists() and p.suffix == ".sql" and p not in seen:
+                ordered_paths.append(p)
+                seen.add(p)
+
+        if ordered_paths:
+            return ordered_paths
+
     files: list[Path] = []
 
     # Infrastructure files (sorted by filename)
@@ -333,6 +356,137 @@ def _categorize_file(file_path: Path) -> str:
     if file_path.stem.endswith("-staging"):
         return "staging"
     return "table"
+
+
+def _normalize_expected_type(type_name: str) -> str:
+    """Normalize SQL type text for robust comparison against pg_catalog output."""
+    normalized = " ".join(type_name.casefold().split())
+    if normalized.startswith("varchar"):
+        normalized = normalized.replace("varchar", "character varying", 1)
+    if normalized == "timestamp":
+        normalized = "timestamp without time zone"
+    if normalized == "timestamptz":
+        normalized = "timestamp with time zone"
+    return normalized
+
+
+def _extract_table_expectations(content: str) -> tuple[str, str, dict[str, tuple[str, bool]]] | None:
+    """Extract expected table schema from additive ALTER COLUMN statements.
+
+    Returns:
+        Tuple (schema, table, expectations) where expectations maps column name
+        to (normalized_type, nullable). Returns None if no generated table
+        evolution statements are found.
+    """
+    pattern = re.compile(
+        r'^ALTER TABLE\s+"(?P<schema>[^"]+)"\."(?P<table>[^"]+)"\s+'
+        + r'ADD COLUMN IF NOT EXISTS\s+"(?P<column>[^"]+)"\s+(?P<definition>.+);$',
+    )
+
+    target_schema = ""
+    target_table = ""
+    expectations: dict[str, tuple[str, bool]] = {}
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("ALTER TABLE") or "ADD COLUMN IF NOT EXISTS" not in line:
+            continue
+
+        match = pattern.match(line)
+        if match is None:
+            continue
+
+        line_schema = match.group("schema")
+        line_table = match.group("table")
+        if not target_schema:
+            target_schema = line_schema
+            target_table = line_table
+        elif line_schema != target_schema or line_table != target_table:
+            continue
+
+        column_name = match.group("column")
+        definition = " ".join(match.group("definition").split())
+
+        nullable = True
+        if " NOT NULL" in definition:
+            nullable = False
+            definition = definition.replace(" NOT NULL", "", 1).strip()
+
+        if " DEFAULT " in definition:
+            definition = definition.split(" DEFAULT ", 1)[0].strip()
+
+        expectations[column_name] = (_normalize_expected_type(definition), nullable)
+
+    if not target_schema or not target_table or not expectations:
+        return None
+
+    return target_schema, target_table, expectations
+
+
+def _validate_table_drift_before_apply(
+    conn: PgConnection,
+    rel_name: str,
+    content: str,
+) -> None:
+    """Fail fast when existing columns drift from expected type/nullability."""
+    extracted = _extract_table_expectations(content)
+    if extracted is None:
+        return
+
+    target_schema, target_table, expectations = extracted
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT
+                a.attname,
+                lower(pg_catalog.format_type(a.atttypid, a.atttypmod)) AS existing_type,
+                NOT a.attnotnull AS existing_nullable
+            FROM pg_catalog.pg_attribute a
+            JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = %s
+              AND c.relname = %s
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+            """,
+            (target_schema, target_table),
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+
+    existing_map: dict[str, tuple[str, bool]] = {}
+    for row in rows:
+        if not isinstance(row, tuple) or len(row) < 3:
+            continue
+        column_name = str(row[0])
+        existing_type = " ".join(str(row[1]).casefold().split())
+        existing_nullable = bool(row[2])
+        existing_map[column_name] = (existing_type, existing_nullable)
+
+    for column_name, (expected_type, expected_nullable) in expectations.items():
+        if column_name not in existing_map:
+            continue
+
+        existing_type, existing_nullable = existing_map[column_name]
+        if existing_type != expected_type:
+            msg = (
+                f"Schema evolution conflict in {rel_name}: "
+                + f"{target_schema}.{target_table}.{column_name} type mismatch "
+                + f"(existing={existing_type}, expected={expected_type}). "
+                + "Manual migration is required before apply."
+            )
+            raise ValueError(msg)
+
+        if existing_nullable != expected_nullable:
+            msg = (
+                f"Schema evolution conflict in {rel_name}: "
+                + f"{target_schema}.{target_table}.{column_name} nullability mismatch "
+                + f"(existing={existing_nullable}, expected={expected_nullable}). "
+                + "Manual migration is required before apply."
+            )
+            raise ValueError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +610,9 @@ def _apply_sink(
             if status == "skip":
                 result.skipped_count += 1
                 continue
+
+            if category == "table":
+                _validate_table_drift_before_apply(conn, rel_name, content)
 
             try:
                 cursor = conn.cursor()

@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Migration Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": { "type": "string" },
+    "table_count": { "type": "integer", "minimum": 0 },
+    "schema_count": { "type": "integer", "minimum": 0 },
+    "sink_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "sink_group": { "type": "string" },
+        "service": { "type": "string" },
+        "databases": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["name", "sink_group", "service", "databases"]
+    },
+    "infrastructure": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tables": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "schemas": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": [
+    "generated_at",
+    "table_count",
+    "schema_count",
+    "sink_target",
+    "infrastructure",
+    "tables",
+    "schemas"
+  ]
+}

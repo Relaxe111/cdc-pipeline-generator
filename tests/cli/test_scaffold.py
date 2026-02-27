@@ -106,6 +106,7 @@ EXPECTED_FILES = [
     "_docs/CDC_CLI.md",
     "_docs/CDC_CLI_FLOW.md",
     "_docs/architecture/MIGRATIONS.md",
+    "_docs/architecture/DESTRUCTIVE_CHANGES.md",
     ".gitignore",
     ".vscode/settings.json",
     "services/_schemas/column-templates.yaml",
@@ -523,6 +524,7 @@ class TestScaffoldGeneratedFileContent:
         assert "_docs/ENV_VARIABLES.md" in content
         assert "_docs/CDC_CLI.md" in content
         assert "_docs/CDC_CLI_FLOW.md" in content
+        assert "_docs/architecture/DESTRUCTIVE_CHANGES.md" in content
 
     def test_cdc_scaffold_gitignore_contains_expected_patterns(
         self,
@@ -879,6 +881,27 @@ class TestScaffoldUpdate:
         result = run_cdc("scaffold", "--update")
         assert result.returncode == 0
         assert docs_file.is_file(), "Missing migrations architecture doc should be recreated by --update"
+
+    def test_cdc_scaffold_update_recreates_missing_destructive_changes_doc(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--update recreates _docs/architecture/DESTRUCTIVE_CHANGES.md when missing."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "upddestructivedocs")
+
+        docs_file = (
+            isolated_project
+            / "_docs"
+            / "architecture"
+            / "DESTRUCTIVE_CHANGES.md"
+        )
+        docs_file.unlink(missing_ok=True)
+        assert not docs_file.exists()
+
+        result = run_cdc("scaffold", "--update")
+        assert result.returncode == 0
+        assert docs_file.is_file(), "Missing destructive changes doc should be recreated by --update"
 
     def test_cdc_scaffold_update_recreates_missing_docker_compose(
         self,

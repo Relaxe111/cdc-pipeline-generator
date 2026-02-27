@@ -34,7 +34,9 @@ htmlcov/
 !.test-workspace/README.md
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/schemas/
+!.vscode/schemas/**
 .idea/
 *.swp
 *.swo

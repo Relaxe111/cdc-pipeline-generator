@@ -39,7 +39,15 @@ def create_vscode_settings() -> dict[str, object]:
             "docker-compose*.yml": "dockercompose"
         },
         "yaml.schemas": {
-            ".vscode/service-schema.json": "services/*.yaml"
+            ".vscode/schemas/source-groups.schema.json": "source-groups.yaml",
+            ".vscode/schemas/sink-groups.schema.json": "sink-groups.yaml",
+            ".vscode/schemas/service.schema.json": "services/*.yaml",
+            ".vscode/schemas/migration-manifest.schema.json": "migrations/*/manifest.yaml",
+            ".vscode/schemas/autocomplete-definitions.schema.json": "services/_schemas/_definitions/*-autocompletes.yaml",
+            ".vscode/schemas/map-types.schema.json": "services/_schemas/_definitions/map-*.yaml",
+            ".vscode/schemas/source-type-overrides.schema.json": "services/_schemas/_definitions/source-*-type-overrides.yaml",
+            ".vscode/schemas/column-templates.schema.json": "services/_schemas/column-templates.yaml",
+            ".vscode/schemas/transform-rules.schema.json": "services/_schemas/transform-rules.yaml"
         },
         "files.exclude": {
             "**/__pycache__": True,

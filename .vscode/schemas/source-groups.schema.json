@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Source Groups",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "$ref": "#/definitions/sourceGroup"
+  },
+  "definitions": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": ["string", "integer"] },
+        "user": { "type": "string" },
+        "password": { "type": "string" },
+        "kafka_bootstrap_servers": { "type": "string" },
+        "extraction_patterns": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/extractionPattern" }
+        }
+      },
+      "required": ["host", "port", "user", "password"]
+    },
+    "extractionPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pattern": { "type": "string" },
+        "env": { "type": "string" },
+        "strip_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "env_mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "description": { "type": "string" }
+      },
+      "required": ["pattern"]
+    },
+    "sourceCustomKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exec_type": {
+          "type": "string",
+          "enum": ["sql", "bloblang", "literal"]
+        },
+        "value": { "type": "string" }
+      },
+      "required": ["exec_type", "value"]
+    },
+    "sourceEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server": { "type": "string" },
+        "database": { "type": "string" },
+        "table_count": { "type": "integer", "minimum": 0 },
+        "customer_id": { "type": ["string", "null"] }
+      },
+      "required": ["server", "database"]
+    },
+    "sourceEntry": {
+      "type": "object",
+      "properties": {
+        "schemas": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "patternProperties": {
+        "^(?!schemas$).+": { "$ref": "#/definitions/sourceEnv" }
+      },
+      "required": ["schemas"],
+      "additionalProperties": false
+    },
+    "sourceGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "enum": ["db-per-tenant", "db-shared"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["mssql", "postgres"]
+        },
+        "description": { "type": "string" },
+        "kafka_topology": {
+          "type": "string",
+          "enum": ["shared", "per-server"]
+        },
+        "environment_aware": { "type": "boolean" },
+        "validation_env": { "type": "string" },
+        "extraction_pattern": { "type": "string" },
+        "database_ref": { "type": "string" },
+        "include_pattern": { "type": "string" },
+        "database_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "schema_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "table_include_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "table_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "envs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "servers": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/server" }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/sourceEntry" }
+        },
+        "source_custom_keys": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/sourceCustomKey" }
+        }
+      },
+      "required": ["pattern", "type", "servers", "sources"]
+    }
+  }
+}

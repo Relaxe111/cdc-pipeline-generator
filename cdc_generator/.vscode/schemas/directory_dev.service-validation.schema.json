@@ -1,0 +1,497 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Directory Service Validation Schema",
+  "description": "Comprehensive validation schema for directory service: structure + table content validation (from service-schemas/directory)",
+  "type": "object",
+  "required": [],
+  "definitions": {},
+  "properties": {
+    "service": {
+      "$ref": "keys/service.schema.json",
+      "description": "\u26a0\ufe0f DEPRECATED: Service name is now the root key in YAML (e.g., adopus:, directory:). This field is kept for backward compatibility."
+    },
+    "server_group": {
+      "$ref": "keys/server_group.schema.json"
+    },
+    "reference": {
+      "type": "string",
+      "description": "Reference customer/database for schema validation (db-per-tenant only)"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "db-per-tenant",
+        "shared-db"
+      ],
+      "description": "\u26a0\ufe0f LEGACY: Service mode - use server_group instead. db-per-tenant (database per customer) or shared-db (customer_id column)"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "mssql",
+            "postgres"
+          ],
+          "description": "\u26a0\ufe0f LEGACY: Source database type (auto-detected from server_group)"
+        },
+        "validation_database": {
+          "$ref": "keys/database_name/.schema.json",
+          "description": "Database name for schema validation (from server_group: )"
+        },
+        "validation_env": {
+          "type": "string",
+          "enum": [
+            "local",
+            "nonprod",
+            "prod",
+            "prod-fretex"
+          ],
+          "description": "Environment for schema validation"
+        }
+      }
+    },
+    "source_tables": {
+      "type": "array",
+      "description": "Source table definitions grouped by schema",
+      "items": {
+        "type": "object",
+        "required": [
+          "schema",
+          "tables"
+        ],
+        "properties": {
+          "schema": {
+            "$ref": "keys/schema_name/directory_dev.schema.json",
+            "description": "Database schema name (from validation_database: directory_dev)"
+          },
+          "tables": {
+            "type": "array",
+            "description": "List of tables in this schema",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "Table name (simplified format when no additional properties needed)",
+                  "enum": []
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "description": "Environment-specific configurations with hierarchical inheritance. Properties at root level serve as defaults.",
+      "properties": {
+        "sink_tasks": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Default sink tasks (inherited by all environments unless overridden)"
+        },
+        "existing_mssql": {
+          "type": "boolean",
+          "description": "Default existing_mssql flag (inherited unless overridden)"
+        },
+        "mssql": {
+          "type": "object",
+          "description": "Default MSSQL connection (inherited unless overridden)"
+        },
+        "postgres": {
+          "type": "object",
+          "description": "Default PostgreSQL connection (inherited unless overridden)"
+        },
+        "kafka": {
+          "type": "object",
+          "description": "Default Kafka connection (inherited unless overridden)"
+        }
+      },
+      "patternProperties": {
+        "^(local|nonprod|prod|prod-.+)$": {
+          "type": "object",
+          "description": "Environment-specific overrides (inherits from root level)",
+          "properties": {
+            "sink_tasks": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Override sink tasks for this environment"
+            },
+            "existing_mssql": {
+              "type": "boolean",
+              "description": "Override existing_mssql for this environment"
+            },
+            "mssql": {
+              "type": "object",
+              "description": "Override MSSQL connection for this environment"
+            },
+            "postgres": {
+              "type": "object",
+              "description": "Override PostgreSQL connection for this environment"
+            },
+            "kafka": {
+              "type": "object",
+              "description": "Override Kafka connection for this environment"
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Single environment configuration (shared-db)",
+      "properties": {
+        "database_name": {
+          "type": "string",
+          "enum": [
+            "directory_dev",
+            "directory_stage",
+            "directory_test",
+            "adopus_db_directory_dev",
+            "adopus_db_directory_stage",
+            "adopus_db_directory_test",
+            "adpraksis_db_dev",
+            "adpraksis_db_stage",
+            "adpraksis_db_test",
+            "activities_db_dev",
+            "activities_db_stage",
+            "adopus_wrapper_db_dev",
+            "adopus_wrapper_db_stage",
+            "wrapper_db_dev_adcuris",
+            "wrapper_db_stage_adcuris",
+            "wrapper_db_test_adcuris",
+            "auth_dev",
+            "auth_stage",
+            "auth_test",
+            "calendar_dev",
+            "calendar_stage",
+            "calendar_test",
+            "chat_dev",
+            "chat_stage",
+            "chat_test",
+            "datalog_db_dev",
+            "datalog_db_stage",
+            "datalog_db_test",
+            "notification_db_dev",
+            "notification_db_stage",
+            "notification_db_test",
+            "proxy_dev",
+            "proxy_stage",
+            "proxy_test",
+            "tracing_dev",
+            "tracing_stage",
+            "tracing_test",
+            "exper_video_module_dev",
+            "exper_video_module_stage",
+            "exper_video_module_test",
+            "postgres",
+            "ddn_test_db"
+          ],
+          "description": "Database name from available nonprod PostgreSQL databases"
+        },
+        "sink_tasks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "existing_mssql": {
+          "type": "boolean"
+        },
+        "mssql": {
+          "type": "object"
+        },
+        "postgres": {
+          "type": "object"
+        }
+      }
+    },
+    "customers": {
+      "type": "array",
+      "description": "Customer-specific configurations (db-per-tenant only). Inherits from environments root and specific environments.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "customer_id",
+          "schema"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "integer"
+          },
+          "schema": {
+            "type": "string"
+          },
+          "environments": {
+            "type": "object",
+            "description": "Customer-specific environment overrides (inherits from global environments)",
+            "additionalProperties": false,
+            "properties": {
+              "local": {
+                "type": "object",
+                "description": "Customer+environment-specific overrides",
+                "properties": {
+                  "database": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Database name"
+                      }
+                    }
+                  },
+                  "database_name": {
+                    "type": "string",
+                    "description": "Database name (deprecated, use database.name instead)"
+                  },
+                  "sink_tasks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Override sink tasks for this customer+environment"
+                  },
+                  "existing_mssql": {
+                    "type": "boolean",
+                    "description": "Override existing_mssql for this customer+environment"
+                  },
+                  "mssql": {
+                    "type": "object",
+                    "description": "Override MSSQL connection for this customer+environment"
+                  },
+                  "postgres": {
+                    "type": "object",
+                    "description": "Override PostgreSQL connection for this customer+environment"
+                  },
+                  "kafka": {
+                    "type": "object",
+                    "description": "Override Kafka connection for this customer+environment"
+                  },
+                  "topic_prefix": {
+                    "type": "string",
+                    "description": "Override Kafka topic prefix for this customer+environment"
+                  }
+                }
+              },
+              "nonprod": {
+                "type": "object",
+                "description": "Customer+environment-specific overrides",
+                "properties": {
+                  "database": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Database name"
+                      }
+                    }
+                  },
+                  "database_name": {
+                    "type": "string",
+                    "description": "Database name (deprecated, use database.name instead)"
+                  },
+                  "sink_tasks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Override sink tasks for this customer+environment"
+                  },
+                  "existing_mssql": {
+                    "type": "boolean",
+                    "description": "Override existing_mssql for this customer+environment"
+                  },
+                  "mssql": {
+                    "type": "object",
+                    "description": "Override MSSQL connection for this customer+environment"
+                  },
+                  "postgres": {
+                    "type": "object",
+                    "description": "Override PostgreSQL connection for this customer+environment"
+                  },
+                  "kafka": {
+                    "type": "object",
+                    "description": "Override Kafka connection for this customer+environment"
+                  },
+                  "topic_prefix": {
+                    "type": "string",
+                    "description": "Override Kafka topic prefix for this customer+environment"
+                  }
+                }
+              },
+              "prod": {
+                "type": "object",
+                "description": "Customer+environment-specific overrides",
+                "properties": {
+                  "database": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Database name"
+                      }
+                    }
+                  },
+                  "database_name": {
+                    "type": "string",
+                    "description": "Database name (deprecated, use database.name instead)"
+                  },
+                  "sink_tasks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Override sink tasks for this customer+environment"
+                  },
+                  "existing_mssql": {
+                    "type": "boolean",
+                    "description": "Override existing_mssql for this customer+environment"
+                  },
+                  "mssql": {
+                    "type": "object",
+                    "description": "Override MSSQL connection for this customer+environment"
+                  },
+                  "postgres": {
+                    "type": "object",
+                    "description": "Override PostgreSQL connection for this customer+environment"
+                  },
+                  "kafka": {
+                    "type": "object",
+                    "description": "Override Kafka connection for this customer+environment"
+                  },
+                  "topic_prefix": {
+                    "type": "string",
+                    "description": "Override Kafka topic prefix for this customer+environment"
+                  }
+                }
+              },
+              "prod-fretex": {
+                "type": "object",
+                "description": "Customer+environment-specific overrides",
+                "properties": {
+                  "database": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Database name"
+                      }
+                    }
+                  },
+                  "database_name": {
+                    "type": "string",
+                    "description": "Database name (deprecated, use database.name instead)"
+                  },
+                  "sink_tasks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Override sink tasks for this customer+environment"
+                  },
+                  "existing_mssql": {
+                    "type": "boolean",
+                    "description": "Override existing_mssql for this customer+environment"
+                  },
+                  "mssql": {
+                    "type": "object",
+                    "description": "Override MSSQL connection for this customer+environment"
+                  },
+                  "postgres": {
+                    "type": "object",
+                    "description": "Override PostgreSQL connection for this customer+environment"
+                  },
+                  "kafka": {
+                    "type": "object",
+                    "description": "Override Kafka connection for this customer+environment"
+                  },
+                  "topic_prefix": {
+                    "type": "string",
+                    "description": "Override Kafka topic prefix for this customer+environment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "mode": {
+                "const": "db-per-tenant"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          {
+            "properties": {
+              "server_group": {
+                "const": "adopus"
+              }
+            },
+            "required": [
+              "server_group"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "environments",
+          "customers",
+          "source",
+          "reference"
+        ]
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "mode": {
+                "const": "shared-db"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          {
+            "properties": {
+              "server_group": {
+                "const": "asma"
+              }
+            },
+            "required": [
+              "server_group"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "environments",
+          "source"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "customers"
+              ]
+            },
+            {
+              "required": [
+                "reference"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

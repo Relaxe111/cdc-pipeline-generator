@@ -24,6 +24,28 @@ def get_migrations_architecture_doc_template() -> str:
   )
 
 
+def get_destructive_changes_doc_template() -> str:
+  """Return canonical manual/destructive migration guide content.
+
+  Source of truth lives in generator docs and is copied into
+  implementation scaffolds under
+  ``_docs/architecture/DESTRUCTIVE_CHANGES.md``.
+  """
+  import cdc_generator
+
+  package_root = Path(cdc_generator.__file__).resolve().parent
+  repo_root = package_root.parent
+  doc_path = repo_root / "_docs" / "architecture" / "DESTRUCTIVE_CHANGES.md"
+  if doc_path.exists():
+    return doc_path.read_text(encoding="utf-8")
+
+  return (
+    "# Manual and Destructive Migration Changes\n\n"
+    "Canonical guidance is available in the generator repository at "
+    "_docs/architecture/DESTRUCTIVE_CHANGES.md.\n"
+  )
+
+
 def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
     """Generate docker-compose.yml template with server_group naming.
 
@@ -481,6 +503,7 @@ Detailed implementation documentation is generated under `_docs/`:
 - `_docs/ENV_VARIABLES.md` — Required/optional environment variables and local runtime defaults.
 - `_docs/CDC_CLI.md` — Command reference for the `cdc` workflow used by this implementation.
 - `_docs/CDC_CLI_FLOW.md` — Practical end-to-end command flow from setup to generation.
+- `_docs/architecture/DESTRUCTIVE_CHANGES.md` — Required manual workflow for destructive schema changes.
 
 Use these docs as the canonical implementation reference; keep root-level docs minimal.
 """

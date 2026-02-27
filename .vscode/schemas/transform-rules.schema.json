@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Transform Rules",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "rules": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["conditional_column", "row_multiplier", "filter"]
+          },
+          "description": { "type": "string" },
+          "bloblang_ref": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "file://services/_bloblang/examples/priority_label.blobl",
+                  "file://services/_bloblang/examples/user_class_splitter.blobl",
+                  "file://services/_bloblang/examples/active_users_only.blobl",
+                  "file://services/_bloblang/examples/valid_status_filter.blobl"
+                ]
+              },
+              { "type": "string" }
+            ]
+          },
+          "expected_output_column": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": ["priority_label", "user_class"]
+              },
+              { "type": "string" }
+            ]
+          },
+          "behavior": {
+            "type": "string",
+            "enum": ["first_match_then_default", "one_to_many_rows", "keep_or_drop"]
+          },
+          "notes": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["type", "bloblang_ref"]
+      }
+    }
+  },
+  "required": ["rules"]
+}

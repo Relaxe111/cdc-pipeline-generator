@@ -836,3 +836,210 @@ class TestGenerateMigrations:
 
         actor_sql = (output / "sink_test.db" / "01-tables" / "Actor.sql").read_text()
         assert "-- Checksum: sha256:" in actor_sql
+
+    @patch("cdc_generator.core.migration_generator.get_project_root")
+    @patch("cdc_generator.core.migration_generator.load_service_config")
+    @patch("cdc_generator.core.migration_generator.get_service_schema_read_dirs")
+    def test_creates_manual_required_file_for_destructive_type_change(
+        self,
+        mock_schema_dirs: MagicMock,
+        mock_load_config: MagicMock,
+        mock_root: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Second generation emits table-scoped manual file when type changes."""
+        self._setup_project(tmp_path)
+        mock_root.return_value = tmp_path
+        mock_load_config.return_value = {
+            "service": "test_svc",
+            "source": {"tables": {"dbo.Actor": {"primary_key": "actno"}}},
+            "sinks": {
+                "sink_test.db": {
+                    "tables": {"myschema.Actor": {"from": "dbo.Actor"}},
+                },
+            },
+        }
+        mock_schema_dirs.return_value = [
+            tmp_path / "services" / "_schemas" / "test_svc",
+        ]
+
+        from cdc_generator.core.migration_generator import generate_migrations
+
+        output = tmp_path / "migrations"
+        first = generate_migrations("test_svc", output_dir=output)
+        assert first.errors == []
+
+        actor_yaml = tmp_path / "services" / "_schemas" / "test_svc" / "dbo" / "Actor.yaml"
+        actor_yaml.write_text(
+            "table: Actor\n"
+            "columns:\n"
+            "  - name: actno\n"
+            "    type: int\n"
+            "    nullable: false\n"
+            "    primary_key: true\n"
+            "  - name: name\n"
+            "    type: int\n"
+            "    nullable: true\n",
+        )
+
+        second = generate_migrations("test_svc", output_dir=output)
+        assert second.errors == []
+
+        manual_file = output / "sink_test.db" / "02-manual" / "Actor" / "MANUAL_REQUIRED.sql"
+        assert manual_file.exists()
+        manual_content = manual_file.read_text(encoding="utf-8")
+        assert "COLUMN_TYPE_CHANGED" in manual_content
+        assert "name" in manual_content
+
+    @patch("cdc_generator.core.migration_generator.get_project_root")
+    @patch("cdc_generator.core.migration_generator.load_service_config")
+    @patch("cdc_generator.core.migration_generator.get_service_schema_read_dirs")
+    def test_creates_manual_required_file_for_removed_table(
+        self,
+        mock_schema_dirs: MagicMock,
+        mock_load_config: MagicMock,
+        mock_root: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Generation emits manual file when a previously generated table is removed."""
+        self._setup_project(tmp_path)
+        mock_root.return_value = tmp_path
+        mock_schema_dirs.return_value = [
+            tmp_path / "services" / "_schemas" / "test_svc",
+        ]
+
+        from cdc_generator.core.migration_generator import generate_migrations
+
+        initial_config = {
+            "service": "test_svc",
+            "source": {"tables": {"dbo.Actor": {"primary_key": "actno"}}},
+            "sinks": {
+                "sink_test.db": {
+                    "tables": {"myschema.Actor": {"from": "dbo.Actor"}},
+                },
+            },
+        }
+        mock_load_config.return_value = initial_config
+
+        output = tmp_path / "migrations"
+        first = generate_migrations("test_svc", output_dir=output)
+        assert first.errors == []
+
+        other_yaml = tmp_path / "services" / "_schemas" / "test_svc" / "dbo" / "Other.yaml"
+        other_yaml.write_text(
+            "table: Other\n"
+            "columns:\n"
+            "  - name: id\n"
+            "    type: int\n"
+            "    nullable: false\n"
+            "    primary_key: true\n",
+            encoding="utf-8",
+        )
+
+        removed_config = {
+            "service": "test_svc",
+            "source": {
+                "tables": {
+                    "dbo.Other": {"primary_key": "id"},
+                },
+            },
+            "sinks": {
+                "sink_test.db": {
+                    "tables": {
+                        "myschema.Other": {"from": "dbo.Other"},
+                    },
+                },
+            },
+        }
+        mock_load_config.return_value = removed_config
+
+        second = generate_migrations("test_svc", output_dir=output)
+        assert second.errors == []
+
+        manual_file = output / "sink_test.db" / "02-manual" / "Actor" / "MANUAL_REQUIRED.sql"
+        assert manual_file.exists()
+        manual_content = manual_file.read_text(encoding="utf-8")
+        assert "TABLE_REMOVED" in manual_content
+        assert "Actor" in manual_content
+
+    @patch("cdc_generator.core.migration_generator.get_project_root")
+    @patch("cdc_generator.core.migration_generator.load_service_config")
+    @patch("cdc_generator.core.migration_generator.get_service_schema_read_dirs")
+    def test_manual_migration_hints_are_included_in_manual_required_sql(
+        self,
+        mock_schema_dirs: MagicMock,
+        mock_load_config: MagicMock,
+        mock_root: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Hint block from services yaml is included before fallback suggestions."""
+        self._setup_project(tmp_path)
+        mock_root.return_value = tmp_path
+        mock_schema_dirs.return_value = [
+            tmp_path / "services" / "_schemas" / "test_svc",
+        ]
+
+        from cdc_generator.core.migration_generator import generate_migrations
+
+        base_config = {
+            "service": "test_svc",
+            "source": {"tables": {"dbo.Actor": {"primary_key": "actno"}}},
+            "sinks": {
+                "sink_test.db": {
+                    "tables": {
+                        "myschema.Actor": {"from": "dbo.Actor"},
+                    },
+                },
+            },
+        }
+        mock_load_config.return_value = base_config
+
+        output = tmp_path / "migrations"
+        first = generate_migrations("test_svc", output_dir=output)
+        assert first.errors == []
+
+        actor_yaml = tmp_path / "services" / "_schemas" / "test_svc" / "dbo" / "Actor.yaml"
+        actor_yaml.write_text(
+            "table: Actor\n"
+            "columns:\n"
+            "  - name: actno\n"
+            "    type: int\n"
+            "    nullable: false\n"
+            "    primary_key: true\n"
+            "  - name: score\n"
+            "    type: int\n"
+            "    nullable: true\n",
+            encoding="utf-8",
+        )
+
+        hinted_config = {
+            "service": "test_svc",
+            "source": {"tables": {"dbo.Actor": {"primary_key": "actno"}}},
+            "sinks": {
+                "sink_test.db": {
+                    "tables": {
+                        "myschema.Actor": {
+                            "from": "dbo.Actor",
+                            "manual_migration_hints": {
+                                "type_changes": [
+                                    {
+                                        "column": "score",
+                                        "using": "NULLIF(trim(\"score\"), '')::integer",
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        }
+        mock_load_config.return_value = hinted_config
+
+        second = generate_migrations("test_svc", output_dir=output)
+        assert second.errors == []
+
+        manual_file = output / "sink_test.db" / "02-manual" / "Actor" / "MANUAL_REQUIRED.sql"
+        assert manual_file.exists()
+        manual_content = manual_file.read_text(encoding="utf-8")
+        assert "Hint-based SQL from services/<service>.yaml manual_migration_hints" in manual_content
+        assert "USING NULLIF(trim(\"score\"), '')::integer" in manual_content

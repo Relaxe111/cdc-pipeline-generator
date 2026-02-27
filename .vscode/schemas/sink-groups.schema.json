@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sink Groups",
+  "type": "object",
+  "minProperties": 1,
+  "additionalProperties": {
+    "$ref": "#/definitions/sinkGroup"
+  },
+  "definitions": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": ["string", "integer"] },
+        "user": { "type": "string" },
+        "password": { "type": "string" },
+        "kafka_bootstrap_servers": { "type": "string" },
+        "extraction_patterns": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/extractionPattern" }
+        }
+      },
+      "required": ["host", "port", "user", "password"]
+    },
+    "extractionPattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pattern": { "type": "string" },
+        "env": { "type": "string" },
+        "strip_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "env_mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "description": { "type": "string" }
+      },
+      "required": ["pattern"]
+    },
+    "sourceEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server": { "type": "string" },
+        "database": { "type": "string" },
+        "table_count": { "type": "integer", "minimum": 0 },
+        "customer_id": { "type": ["string", "null"] }
+      },
+      "required": ["server", "database"]
+    },
+    "sourceEntry": {
+      "type": "object",
+      "properties": {
+        "schemas": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "patternProperties": {
+        "^(?!schemas$).+": { "$ref": "#/definitions/sourceEnv" }
+      },
+      "required": ["schemas"],
+      "additionalProperties": false
+    },
+    "sinkGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_group": { "type": "string" },
+        "pattern": {
+          "type": "string",
+          "enum": ["db-per-tenant", "db-shared"]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["mssql", "postgres"]
+        },
+        "environment_aware": { "type": "boolean" },
+        "description": { "type": "string" },
+        "servers": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/server" }
+        },
+        "sources": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/sourceEntry" }
+        }
+      },
+      "required": ["pattern", "type", "servers", "sources"]
+    }
+  }
+}

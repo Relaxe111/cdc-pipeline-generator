@@ -206,6 +206,8 @@ cdc manage-migrations diff [--service <name>] [--table Actor]
 
 **Exit codes:** 0 = no changes, 1 = changes detected, 2 = error.
 
+For destructive/manual changes (drop, rename, incompatible type/nullability changes), follow [_docs/architecture/DESTRUCTIVE_CHANGES.md](_docs/architecture/DESTRUCTIVE_CHANGES.md).
+
 ---
 
 ## Infrastructure: Merge Control & Monitoring
