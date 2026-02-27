@@ -234,7 +234,7 @@ def validate_column_type(col_type: str) -> str | None:
 
 def add_template_definition(  # noqa: PLR0913
     key: str,
-    name: str,
+    name: str | None,
     col_type: str,
     value: str,
     description: str = "",
@@ -247,7 +247,7 @@ def add_template_definition(  # noqa: PLR0913
 
     Args:
         key: Template identifier (e.g., 'tenant_id').
-        name: Default column name (e.g., '_tenant_id').
+        name: Default column name (defaults to key when omitted).
         col_type: PostgreSQL column type (e.g., 'text').
         value: Bloblang expression or env var reference.
         description: Human-readable description.
@@ -292,11 +292,14 @@ def add_template_definition(  # noqa: PLR0913
         print_info("Use --edit to modify an existing template")
         return False
 
+    resolved_name = name if name is not None else key
+
     # Build YAML entry
     entry: dict[str, Any] = {
-        "name": name,
         "type": col_type,
     }
+    if resolved_name != key:
+        entry["name"] = resolved_name
     if not_null:
         entry["not_null"] = True
     if description:
@@ -321,7 +324,9 @@ def add_template_definition(  # noqa: PLR0913
     templates_dict[key] = entry
     _save_raw_yaml(raw)
 
-    print_success(f"Added template '{key}' (column: {name}, type: {col_type})")
+    print_success(
+        f"Added template '{key}' (column: {resolved_name}, type: {col_type})",
+    )
     return True
 
 
@@ -444,7 +449,10 @@ def edit_template_definition(  # noqa: PLR0913
     # Update provided fields
     changes: list[str] = []
     if name is not None:
-        entry_dict["name"] = name
+        if name == key:
+            entry_dict.pop("name", None)
+        else:
+            entry_dict["name"] = name
         changes.append(f"name → {name}")
     if col_type is not None:
         entry_dict["type"] = col_type

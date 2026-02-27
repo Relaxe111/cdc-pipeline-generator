@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from cdc_generator.helpers.helpers_sink_groups import load_sink_groups
 from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_header,
@@ -132,15 +133,87 @@ def get_pg_connection(
         )
         raise ValueError(msg)
 
-    # Get credentials from env vars
-    env_upper = env.upper()
-    host = os.getenv(f"PG_{env_upper}_HOST", os.getenv("PG_HOST", "localhost"))
-    port = int(os.getenv(f"PG_{env_upper}_PORT", os.getenv("PG_PORT", "5432")))
-    user = os.getenv(f"PG_{env_upper}_USER", os.getenv("PG_USER", "postgres"))
-    password = os.getenv(
-        f"PG_{env_upper}_PASSWORD",
-        os.getenv("PG_PASSWORD", ""),
-    )
+    # Prefer sink-group server credentials from sink-groups.yaml
+    host: str | None = None
+    port: int | None = None
+    user: str | None = None
+    password: str | None = None
+
+    sink_target = cast(dict[str, Any], manifest).get("sink_target", {}) if manifest_path.exists() else {}
+    sink_group_name = ""
+    service_name = ""
+    if isinstance(sink_target, dict):
+        sink_group_name = str(cast(dict[str, Any], sink_target).get("sink_group", ""))
+        service_name = str(cast(dict[str, Any], sink_target).get("service", ""))
+
+    if sink_group_name and service_name:
+        project_root = get_project_root()
+        sink_groups_path = project_root / "sink-groups.yaml"
+        if sink_groups_path.exists():
+            sink_groups = load_sink_groups(sink_groups_path)
+            sink_group = sink_groups.get(sink_group_name)
+            if isinstance(sink_group, dict):
+                sources = sink_group.get("sources", {})
+                source_cfg = (
+                    cast(dict[str, Any], sources).get(service_name, {})
+                    if isinstance(sources, dict)
+                    else {}
+                )
+                env_cfg = (
+                    cast(dict[str, Any], source_cfg).get(env, {})
+                    if isinstance(source_cfg, dict)
+                    else {}
+                )
+                server_name = str(cast(dict[str, Any], env_cfg).get("server", ""))
+                servers = sink_group.get("servers", {})
+                server_cfg = (
+                    cast(dict[str, Any], servers).get(server_name, {})
+                    if isinstance(servers, dict)
+                    else {}
+                )
+
+                if isinstance(server_cfg, dict) and server_cfg:
+                    missing_env_vars: list[str] = []
+
+                    def _resolve_value(raw: object) -> str:
+                        value = str(raw or "").strip()
+                        if value.startswith("${") and value.endswith("}"):
+                            env_var = value[2:-1]
+                            resolved = os.getenv(env_var, "").strip()
+                            if not resolved:
+                                missing_env_vars.append(env_var)
+                            return resolved
+                        return value
+
+                    resolved_host = _resolve_value(server_cfg.get("host"))
+                    resolved_port = _resolve_value(server_cfg.get("port"))
+                    resolved_user = _resolve_value(server_cfg.get("user"))
+                    resolved_password = _resolve_value(server_cfg.get("password"))
+
+                    if missing_env_vars:
+                        missing_joined = ", ".join(sorted(set(missing_env_vars)))
+                        raise ValueError(
+                            "Missing sink-group credential environment variables: "
+                            + missing_joined,
+                        )
+
+                    if resolved_host and resolved_port and resolved_user:
+                        host = resolved_host
+                        port = int(resolved_port)
+                        user = resolved_user
+                        password = resolved_password
+
+    # Fallback to generic PG_* credentials when sink-group credentials
+    # are unavailable in current workspace configuration.
+    if host is None or port is None or user is None or password is None:
+        env_upper = env.upper()
+        host = os.getenv(f"PG_{env_upper}_HOST", os.getenv("PG_HOST", "localhost"))
+        port = int(os.getenv(f"PG_{env_upper}_PORT", os.getenv("PG_PORT", "5432")))
+        user = os.getenv(f"PG_{env_upper}_USER", os.getenv("PG_USER", "postgres"))
+        password = os.getenv(
+            f"PG_{env_upper}_PASSWORD",
+            os.getenv("PG_PASSWORD", ""),
+        )
 
     return create_postgres_connection(
         host=host,

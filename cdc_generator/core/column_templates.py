@@ -118,7 +118,7 @@ def clear_cache() -> None:
 # Parsing & validation
 # ---------------------------------------------------------------------------
 
-_REQUIRED_FIELDS = ("name", "type", "value")
+_REQUIRED_FIELDS = ("type", "value")
 
 _VALUE_SOURCE_ALIASES: dict[str, Literal["bloblang", "source_ref", "sql", "env"]] = {
     "bloblang": "bloblang",
@@ -219,7 +219,7 @@ def _parse_single_template(
             print_warning(f"Column template '{key}': missing required field '{field}'")
             return None
 
-    name = data.get("name")
+    name = data.get("name", key)
     col_type = data.get("type")
     value = data.get("value")
 

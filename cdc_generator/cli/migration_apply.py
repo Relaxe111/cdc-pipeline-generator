@@ -12,6 +12,10 @@ from __future__ import annotations
 import argparse
 import sys
 
+from cdc_generator.cli.migration_cli_validation import (
+    resolve_sink_filter,
+    validate_env_for_sink,
+)
 from cdc_generator.core.migration_apply import apply_migrations
 from cdc_generator.helpers.helpers_logging import print_error
 
@@ -57,12 +61,30 @@ def main() -> int:
 
     migrations_dir = Path(args.migrations_dir) if args.migrations_dir else None
 
+    if migrations_dir is None:
+        from cdc_generator.helpers.service_config import get_project_root
+
+        migrations_dir = get_project_root() / "migrations"
+
+    try:
+        resolved_sink = resolve_sink_filter(
+            migrations_dir=migrations_dir,
+            sink_filter=args.sink,
+        )
+        validate_env_for_sink(
+            migrations_dir=migrations_dir,
+            sink_name=resolved_sink,
+            env=args.env,
+        )
+    except ValueError as e:
+        parser.error(str(e))
+
     result = apply_migrations(
         service_name=args.service,
         env=args.env,
         dry_run=args.dry_run,
         migrations_dir=migrations_dir,
-        sink_filter=args.sink,
+        sink_filter=resolved_sink,
     )
 
     if result.errors:

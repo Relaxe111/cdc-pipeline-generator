@@ -188,6 +188,37 @@ class TestBuildColumnsFromTableDef:
         assert pks == ["a", "b"]
         assert len(cols) == 3
 
+    def test_primary_keys_are_deduplicated_case_insensitive(self) -> None:
+        """Duplicate PK entries differing by case are deduplicated."""
+        table_def: dict[str, Any] = {
+            "table": "DupPk",
+            "columns": [
+                {"name": "Id", "type": "int", "primary_key": True},
+                {"name": "id", "type": "int", "primary_key": True},
+                {"name": "value", "type": "nvarchar"},
+            ],
+        }
+
+        _cols, pks = build_columns_from_table_def(table_def)
+
+        assert pks == ["Id"]
+
+    def test_duplicate_columns_are_deduplicated_case_insensitive(self) -> None:
+        """Duplicate source columns are deduplicated to prevent duplicate DDL lines."""
+        table_def: dict[str, Any] = {
+            "table": "DupCol",
+            "columns": [
+                {"name": "Id", "type": "int", "primary_key": True},
+                {"name": "id", "type": "int", "primary_key": True},
+                {"name": "Name", "type": "nvarchar"},
+            ],
+        }
+
+        cols, pks = build_columns_from_table_def(table_def)
+
+        assert [c.name for c in cols] == ["Id", "Name"]
+        assert pks == ["Id"]
+
 
 # ---------------------------------------------------------------------------
 # _add_cdc_metadata_columns
@@ -490,6 +521,23 @@ class TestSqlRendering:
         )
         assert "PRIMARY KEY" not in sql
 
+    def test_create_table_deduplicates_primary_keys(self) -> None:
+        cols = [
+            MigrationColumn(name="Id", type="INTEGER", nullable=False, primary_key=True),
+            MigrationColumn(name="name", type="TEXT"),
+        ]
+        sql = _build_create_table_sql(
+            target_schema="myschema",
+            table_name="MyTable",
+            columns=cols,
+            primary_keys=["Id", "id"],
+            source_schema="dbo",
+            generated_at="2025-01-01 00:00:00 UTC",
+        )
+
+        assert 'PRIMARY KEY ("Id")' in sql
+        assert 'PRIMARY KEY ("Id", "id")' not in sql
+
 
 # ---------------------------------------------------------------------------
 # build_full_column_list
@@ -543,6 +591,79 @@ class TestBuildFullColumnList:
         names = [c.name for c in cols]
         assert "secret" not in names
         assert "id" in names
+
+    @patch("cdc_generator.core.migration_generator.resolve_column_templates")
+    def test_preserves_exact_column_template_name(
+        self,
+        mock_resolve_templates: MagicMock,
+    ) -> None:
+        """Template column names are preserved exactly as configured."""
+        table_def: dict[str, Any] = {
+            "table": "T",
+            "columns": [{"name": "Id", "type": "int", "primary_key": True}],
+        }
+        service_config: dict[str, object] = {"source": {"tables": {"dbo.T": {}}}}
+        sink_cfg: dict[str, object] = {
+            "column_templates": [{"template": "customer_id", "name": "_CustomerExact"}],
+        }
+
+        template = MagicMock()
+        template.column_type = "uuid"
+        template.not_null = True
+        template.default = None
+        resolved = MagicMock()
+        resolved.name = "_CustomerExact"
+        resolved.template = template
+        mock_resolve_templates.return_value = [resolved]
+
+        cols, _ = build_full_column_list(table_def, sink_cfg, service_config, "dbo.T")
+        names = [c.name for c in cols]
+        assert "_CustomerExact" in names
+
+    @patch("cdc_generator.core.migration_generator.resolve_transforms")
+    def test_preserves_exact_transform_output_names(
+        self,
+        mock_resolve_transforms: MagicMock,
+    ) -> None:
+        """Transform-produced output column names keep exact casing/underscore."""
+        table_def: dict[str, Any] = {
+            "table": "T",
+            "columns": [{"name": "Id", "type": "int", "primary_key": True}],
+        }
+        service_config: dict[str, object] = {"source": {"tables": {"dbo.T": {}}}}
+        sink_cfg: dict[str, object] = {
+            "transforms": [{"bloblang_ref": "services/_bloblang/x.blobl"}],
+        }
+
+        resolved_transform = MagicMock()
+        resolved_transform.bloblang = "root._customer = this.Id\nroot.CustomerStatus = \"ok\""
+        mock_resolve_transforms.return_value = [resolved_transform]
+
+        cols, _ = build_full_column_list(table_def, sink_cfg, service_config, "dbo.T")
+        names = [c.name for c in cols]
+        assert "_customer" in names
+        assert "CustomerStatus" in names
+
+    @patch("cdc_generator.core.migration_generator.resolve_transforms")
+    def test_preserves_expected_output_column_name(
+        self,
+        mock_resolve_transforms: MagicMock,
+    ) -> None:
+        """Transform expected_output_column is included without renaming."""
+        table_def: dict[str, Any] = {
+            "table": "T",
+            "columns": [{"name": "Id", "type": "int", "primary_key": True}],
+        }
+        service_config: dict[str, object] = {"source": {"tables": {"dbo.T": {}}}}
+        sink_cfg: dict[str, object] = {
+            "transforms": [{"expected_output_column": "_CustomerFromTransform"}],
+        }
+
+        mock_resolve_transforms.return_value = []
+
+        cols, _ = build_full_column_list(table_def, sink_cfg, service_config, "dbo.T")
+        names = [c.name for c in cols]
+        assert "_CustomerFromTransform" in names
 
 
 # ---------------------------------------------------------------------------

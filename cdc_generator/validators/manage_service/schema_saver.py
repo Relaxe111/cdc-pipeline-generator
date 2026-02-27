@@ -206,7 +206,7 @@ def save_detailed_schema_mssql(
         print(f"  [{i}/{len(tables)}] {table_schema}.{table_name}")
 
         # Get detailed column info
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT
                 c.COLUMN_NAME,
                 c.DATA_TYPE,
@@ -216,23 +216,31 @@ def save_detailed_schema_mssql(
                 CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS IS_PRIMARY_KEY
             FROM INFORMATION_SCHEMA.COLUMNS c
             LEFT JOIN (
-                SELECT ku.COLUMN_NAME
+                SELECT DISTINCT ku.COLUMN_NAME
                 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
                 JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku
                     ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
+                    AND tc.TABLE_SCHEMA = ku.TABLE_SCHEMA
+                    AND tc.TABLE_NAME = ku.TABLE_NAME
                 WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-                    AND tc.TABLE_SCHEMA = '{table_schema}'
-                    AND tc.TABLE_NAME = '{table_name}'
+                    AND tc.TABLE_SCHEMA = %s
+                    AND tc.TABLE_NAME = %s
             ) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
-            WHERE c.TABLE_SCHEMA = '{table_schema}'
-                AND c.TABLE_NAME = '{table_name}'
+            WHERE c.TABLE_SCHEMA = %s
+                AND c.TABLE_NAME = %s
             ORDER BY c.ORDINAL_POSITION
-        """)
+        """, (table_schema, table_name, table_schema, table_name))
 
         columns: list[dict[str, Any]] = []
         primary_keys: list[str] = []
+        seen_columns: set[str] = set()
         for row in cursor.fetchall():
             col_name, data_type, _max_len, is_nullable, default_value, is_pk = row
+            column_key = str(col_name).casefold()
+            if column_key in seen_columns:
+                continue
+            seen_columns.add(column_key)
+
             columns.append({
                 'name': col_name,
                 'type': data_type,
@@ -240,7 +248,7 @@ def save_detailed_schema_mssql(
                 'default_value': default_value,
                 'primary_key': bool(is_pk),
             })
-            if is_pk:
+            if is_pk and col_name not in primary_keys:
                 primary_keys.append(col_name)
 
         tables_data[table_name] = {

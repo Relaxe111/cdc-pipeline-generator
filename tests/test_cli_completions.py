@@ -13,6 +13,7 @@ from cdc_generator.cli.completions import (
     complete_available_sink_keys,
     complete_accept_column,
     complete_column_templates,
+    complete_migration_envs,
     complete_map_column,
     complete_target_schema,
 )
@@ -213,6 +214,34 @@ def test_click_cli_registers_manage_services_command() -> None:
 
     assert "manage-services" in _click_cli.commands
     assert "manage-service" not in _click_cli.commands
+
+
+@patch("cdc_generator.helpers.service_config.get_project_root")
+def test_complete_migration_envs_reads_manifest_databases(
+    mock_project_root: Mock,
+    tmp_path: Path,
+) -> None:
+    """Migration env completion should come from manifest sink_target.databases."""
+    sink_dir = tmp_path / "migrations" / "sink_asma.directory"
+    sink_dir.mkdir(parents=True)
+    (sink_dir / "manifest.yaml").write_text(
+        "sink_target:\n"
+        "  databases:\n"
+        "    dev: directory_dev\n"
+        "    prod: directory\n"
+        "    stage: directory_stage\n",
+        encoding="utf-8",
+    )
+    mock_project_root.return_value = tmp_path
+
+    ctx = cast(click.Context, SimpleNamespace(params={"sink": "sink_asma.directory"}, args=[]))
+    items = complete_migration_envs(
+        ctx,
+        cast(click.Parameter, None),
+        "",
+    )
+
+    assert _values(items) == ["dev", "prod", "stage"]
 
 
 @patch(

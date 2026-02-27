@@ -98,6 +98,41 @@ def test_save_detailed_schema_mssql_includes_default_value() -> None:
     assert actor["columns"][1]["default_value"] is None
 
 
+@patch("cdc_generator.validators.manage_service.schema_saver.has_pymssql", True)
+def test_save_detailed_schema_mssql_deduplicates_duplicate_rows() -> None:
+    """MSSQL schema save should deduplicate repeated column rows from inspector query."""
+    mock_cursor = MagicMock()
+    mock_cursor.fetchall.return_value = [
+        ("Id", "int", None, "NO", None, 1),
+        ("Id", "int", None, "NO", None, 1),
+        ("Name", "nvarchar", 255, "YES", None, 0),
+    ]
+
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+
+    with patch(
+        "cdc_generator.validators.manage_service.schema_saver.create_mssql_connection",
+        return_value=mock_conn,
+    ):
+        result = save_detailed_schema_mssql(
+            service="directory",
+            schema="dbo",
+            tables=[{"TABLE_SCHEMA": "dbo", "TABLE_NAME": "Actor"}],
+            conn_params={
+                "host": "localhost",
+                "port": 1433,
+                "database": "directory_dev",
+                "user": "sa",
+                "password": "secret",
+            },
+        )
+
+    actor = result["Actor"]
+    assert [col["name"] for col in actor["columns"]] == ["Id", "Name"]
+    assert actor["primary_key"] == "Id"
+
+
 # ---------------------------------------------------------------------------
 # Output path tests (merged from test_schema_saver_paths.py)
 # ---------------------------------------------------------------------------

@@ -101,6 +101,14 @@ def _get_manage_services_resources_command() -> click.Command:
     return root_group.commands["resources"]
 
 
+def _get_manage_migrations_group() -> click.Group:
+    """Return the typed command group for `manage-migrations`."""
+    cmds = _get_typed_commands()
+    group = cmds["manage-migrations"]
+    assert isinstance(group, click.Group)
+    return group
+
+
 # ---------------------------------------------------------------------------
 # Tests: cdc.fish bootstrap file
 # ---------------------------------------------------------------------------
@@ -593,6 +601,15 @@ class TestShellCompleteCallbacksWired:
                 )
         return False
 
+    def _is_required_option(
+        self, cmd: click.Command, option_name: str,
+    ) -> bool:
+        """Check whether an option is marked as required."""
+        for param in cmd.params:
+            if isinstance(param, click.Option) and option_name in param.opts:
+                return bool(param.required)
+        return False
+
     def test_manage_service_dynamic_options(self) -> None:
         """manage-services config dynamic options must have shell_complete."""
         cmd = _get_manage_services_config_command()
@@ -649,6 +666,31 @@ class TestShellCompleteCallbacksWired:
             assert self._has_shell_complete(cmd, opt), (
                 "manage-services resources column-templates "
                 + f"{opt} missing shell_complete callback"
+            )
+
+    def test_manage_migrations_env_options_have_shell_complete(self) -> None:
+        """manage-migrations env options must provide environment completions."""
+        group = _get_manage_migrations_group()
+        for subcommand in [
+            "schema-docs",
+            "apply",
+            "status",
+            "enable-cdc",
+            "clean-cdc",
+        ]:
+            cmd = group.commands[subcommand]
+            assert self._has_shell_complete(cmd, "--env"), (
+                f"manage-migrations {subcommand} --env missing shell_complete callback"
+            )
+
+    def test_manage_migrations_env_required_on_env_specific_actions(self) -> None:
+        """Environment-specific migration actions must require --env."""
+        group = _get_manage_migrations_group()
+        required_env_subcommands = ["apply", "enable-cdc", "clean-cdc"]
+        for subcommand in required_env_subcommands:
+            cmd = group.commands[subcommand]
+            assert self._is_required_option(cmd, "--env"), (
+                f"manage-migrations {subcommand} should require --env"
             )
 
 

@@ -33,7 +33,10 @@ from typing import Any, cast
 
 from jinja2 import Environment, FileSystemLoader
 
-from cdc_generator.core.column_template_operations import resolve_column_templates
+from cdc_generator.core.column_template_operations import (
+    resolve_column_templates,
+    resolve_transforms,
+)
 from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_header,
@@ -317,6 +320,7 @@ def build_columns_from_table_def(
 
     columns: list[MigrationColumn] = []
     primary_keys: list[str] = []
+    seen_column_names: set[str] = set()
 
     for field_entry in cast(list[object], columns_raw):
         if not isinstance(field_entry, dict):
@@ -329,6 +333,10 @@ def build_columns_from_table_def(
             continue
         if pg_name.casefold() in ignore_set:
             continue
+        column_key = pg_name.casefold()
+        if column_key in seen_column_names:
+            continue
+        seen_column_names.add(column_key)
 
         # Type: _schemas has MSSQL types that need mapping, table-defs have PG types
         raw_type = str(f.get("type", "TEXT"))
@@ -348,7 +356,7 @@ def build_columns_from_table_def(
         if col.primary_key:
             primary_keys.append(pg_name)
 
-    return columns, primary_keys
+    return columns, _dedupe_names_case_insensitive(primary_keys)
 
 
 def _add_column_template_columns(
@@ -377,6 +385,48 @@ def _add_column_template_columns(
             default=r.template.default,
         )
         columns.append(col)
+
+    return columns
+
+
+def _add_transform_output_columns(
+    columns: list[MigrationColumn],
+    table_cfg: dict[str, object],
+) -> list[MigrationColumn]:
+    """Add columns produced by transforms without altering configured names.
+
+    For migration DDL, transform outputs are represented as nullable TEXT
+    columns unless already present from source/table templates.
+
+    Args:
+        columns: Existing column list.
+        table_cfg: Sink table config with transforms.
+
+    Returns:
+        Extended column list with transform output columns appended.
+    """
+    from cdc_generator.validators.bloblang_parser import extract_root_assignments
+
+    existing_names = {c.name for c in columns}
+
+    transforms_raw = table_cfg.get("transforms")
+    if isinstance(transforms_raw, list):
+        for item in cast(list[object], transforms_raw):
+            if not isinstance(item, dict):
+                continue
+            entry = cast(dict[str, object], item)
+            expected_output = entry.get("expected_output_column")
+            if isinstance(expected_output, str) and expected_output and expected_output not in existing_names:
+                columns.append(MigrationColumn(name=expected_output, type="TEXT"))
+                existing_names.add(expected_output)
+
+    for transform in resolve_transforms(table_cfg):
+        output_columns = sorted(extract_root_assignments(transform.bloblang))
+        for output_name in output_columns:
+            if output_name in existing_names:
+                continue
+            columns.append(MigrationColumn(name=output_name, type="TEXT"))
+            existing_names.add(output_name)
 
     return columns
 
@@ -447,6 +497,9 @@ def build_full_column_list(
     # Add column template columns (e.g., _customer_id for db-per-tenant)
     columns = _add_column_template_columns(columns, sink_cfg)
 
+    # Add transform output columns using exact configured/assigned names
+    columns = _add_transform_output_columns(columns, sink_cfg)
+
     # Add CDC metadata columns (__sync_timestamp, __source, etc.)
     columns = _add_cdc_metadata_columns(columns)
 
@@ -489,6 +542,26 @@ def _build_column_names_sql(columns: list[MigrationColumn]) -> str:
     return ", ".join(f'"{c.name}"' for c in columns)
 
 
+def _dedupe_names_case_insensitive(names: list[str]) -> list[str]:
+    """Return unique names preserving order with case-insensitive matching.
+
+    Args:
+        names: Input names.
+
+    Returns:
+        Deduplicated names preserving first occurrence.
+    """
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in names:
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(name)
+    return deduped
+
+
 def _build_pk_names_sql(primary_keys: list[str]) -> str:
     """Build a comma-separated quoted PK column name list.
 
@@ -498,7 +571,8 @@ def _build_pk_names_sql(primary_keys: list[str]) -> str:
     Returns:
         SQL fragment like '"pk1", "pk2"'.
     """
-    return ", ".join(f'"{pk}"' for pk in primary_keys)
+    unique_primary_keys = _dedupe_names_case_insensitive(primary_keys)
+    return ", ".join(f'"{pk}"' for pk in unique_primary_keys)
 
 
 # ---------------------------------------------------------------------------
@@ -1202,8 +1276,9 @@ def _build_create_table_sql(
         Complete CREATE TABLE SQL string.
     """
     col_lines = _build_column_defs_sql(columns)
-    if primary_keys:
-        pk_expr = ", ".join(f'"{pk}"' for pk in primary_keys)
+    unique_primary_keys = _dedupe_names_case_insensitive(primary_keys)
+    if unique_primary_keys:
+        pk_expr = ", ".join(f'"{pk}"' for pk in unique_primary_keys)
         col_lines.append(f"    PRIMARY KEY ({pk_expr})")
 
     columns_sql = ",\n".join(col_lines)
@@ -1261,10 +1336,11 @@ def _generate_table_files(
 
     # 2. Staging + merge (only if table has primary keys)
     if migration.primary_keys:
-        pk_set = set(migration.primary_keys)
-        non_pk_cols = [c for c in migration.columns if c.name not in pk_set]
+        unique_primary_keys = _dedupe_names_case_insensitive(migration.primary_keys)
+        pk_set = {pk.casefold() for pk in unique_primary_keys}
+        non_pk_cols = [c for c in migration.columns if c.name.casefold() not in pk_set]
         all_column_names = _build_column_names_sql(migration.columns)
-        pk_column_names = _build_pk_names_sql(migration.primary_keys)
+        pk_column_names = _build_pk_names_sql(unique_primary_keys)
 
         # Build the UPDATE SET clause with proper formatting
         update_lines: list[str] = []

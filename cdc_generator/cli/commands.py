@@ -221,7 +221,7 @@ MIGRATION_COMMANDS: dict[str, dict[str, str]] = {
         "module": "cdc_generator.cli.migration_status",
         "script": "cli/migration_status.py",
         "description": "Show applied vs pending migration status",
-        "usage": "cdc manage-migrations status --env <env> [--offline] [--sink <name>]",
+        "usage": "cdc manage-migrations status (--env <env> | --offline) [--sink <name>]",
     },
     "enable-cdc": {
         "runner": "generator",

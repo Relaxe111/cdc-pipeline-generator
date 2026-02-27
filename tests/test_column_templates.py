@@ -102,6 +102,16 @@ class TestParseSingleTemplate:
         result = _parse_single_template("bad", raw)
         assert result is None
 
+    def test_name_defaults_to_key_when_missing(self) -> None:
+        """When name is omitted, template key is used as column name."""
+        raw = {
+            "type": "text",
+            "value": "meta(\"table\")",
+        }
+        result = _parse_single_template("customer_id", raw)
+        assert result is not None
+        assert result.name == "customer_id"
+
     def test_not_a_dict(self) -> None:
         """Return None for non-dict input."""
         result = _parse_single_template("bad", "string")

@@ -43,6 +43,7 @@ from cdc_generator.cli.completions import (
     complete_from_table,
     complete_include_sink_columns,
     complete_map_column,
+    complete_migration_envs,
     complete_non_inherited_sink_group_names,
     complete_pg_types,
     complete_remove_sink_table,
@@ -1376,7 +1377,7 @@ def manage_migrations_generate_cmd(
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--env", help="Environment")
+@click.option("--env", shell_complete=complete_available_envs, help="Environment")
 @click.pass_context
 def manage_migrations_schema_docs_cmd(
     _ctx: click.Context, **_kwargs: object,
@@ -1411,7 +1412,12 @@ def manage_migrations_diff_cmd(
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--env", required=True, help="Target environment")
+@click.option(
+    "--env",
+    required=True,
+    shell_complete=complete_migration_envs,
+    help="Target environment",
+)
 @click.option("--dry-run", is_flag=True, help="Preview without applying")
 @click.option("--sink", default=None, help="Filter by sink name")
 @click.pass_context
@@ -1430,7 +1436,12 @@ def manage_migrations_apply_cmd(
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--env", default=None, help="Target environment")
+@click.option(
+    "--env",
+    required=False,
+    shell_complete=complete_migration_envs,
+    help="Target environment (required unless --offline)",
+)
 @click.option("--offline", is_flag=True, help="Offline mode (no DB)")
 @click.option("--sink", default=None, help="Filter by sink name")
 @click.pass_context
@@ -1449,7 +1460,12 @@ def manage_migrations_status_cmd(
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--env", default="nonprod", help="MSSQL environment")
+@click.option(
+    "--env",
+    required=True,
+    shell_complete=complete_available_envs,
+    help="MSSQL environment",
+)
 @click.option("--table", default=None, help="Filter by table name")
 @click.option("--dry-run", is_flag=True, help="Preview without enabling")
 @click.pass_context
@@ -1468,7 +1484,12 @@ def manage_migrations_enable_cdc_cmd(
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
-@click.option("--env", default="nonprod", help="MSSQL environment")
+@click.option(
+    "--env",
+    required=True,
+    shell_complete=complete_available_envs,
+    help="MSSQL environment",
+)
 @click.option("--days", type=int, default=30, help="Clean entries older than N days")
 @click.option("--table", default=None, help="Filter by table name")
 @click.option("--dry-run", is_flag=True, help="Preview without cleaning")

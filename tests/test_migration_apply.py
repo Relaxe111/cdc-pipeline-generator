@@ -14,6 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from cdc_generator.core.migration_apply import (
     ApplyResult,
     _categorize_file,
@@ -21,6 +23,7 @@ from cdc_generator.core.migration_apply import (
     compute_content_checksum,
     extract_checksum,
     get_ordered_files,
+    get_pg_connection,
 )
 
 # ---------------------------------------------------------------------------
@@ -185,6 +188,115 @@ class TestCategorizeFile:
     def test_table(self) -> None:
         p = Path("migrations/sink/01-tables/Actor.sql")
         assert _categorize_file(p) == "table"
+
+
+# ---------------------------------------------------------------------------
+# get_pg_connection
+# ---------------------------------------------------------------------------
+
+
+class TestGetPgConnection:
+    """Test DB connection parameter resolution for migrations."""
+
+    @patch("cdc_generator.helpers.psycopg2_loader.create_postgres_connection")
+    @patch("cdc_generator.core.migration_apply.get_project_root")
+    @patch.dict(
+        "os.environ",
+        {
+            "POSTGRES_SINK_HOST_ASMA_NONPROD": "asma-nonprod-pgsql-1.cloud.avans.no",
+            "POSTGRES_SINK_PORT_ASMA_NONPROD": "5432",
+            "POSTGRES_SINK_USER_ASMA_NONPROD": "postgres",
+            "POSTGRES_SINK_PASSWORD_ASMA_NONPROD": "secret",
+        },
+        clear=True,
+    )
+    def test_prefers_sink_group_server_credentials(
+        self,
+        mock_root: MagicMock,
+        mock_connect: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Uses sink-group server placeholders instead of PG_* defaults."""
+        mock_root.return_value = tmp_path
+
+        sink_dir = tmp_path / "migrations" / "sink_asma.directory"
+        sink_dir.mkdir(parents=True)
+        (sink_dir / "manifest.yaml").write_text(
+            "sink_target:\n"
+            "  sink_group: sink_asma\n"
+            "  service: directory\n"
+            "  databases:\n"
+            "    prod: directory\n",
+            encoding="utf-8",
+        )
+
+        (tmp_path / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  servers:\n"
+            "    nonprod:\n"
+            "      host: ${POSTGRES_SINK_HOST_ASMA_NONPROD}\n"
+            "      port: ${POSTGRES_SINK_PORT_ASMA_NONPROD}\n"
+            "      user: ${POSTGRES_SINK_USER_ASMA_NONPROD}\n"
+            "      password: ${POSTGRES_SINK_PASSWORD_ASMA_NONPROD}\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      prod:\n"
+            "        server: nonprod\n",
+            encoding="utf-8",
+        )
+
+        get_pg_connection("prod", "sink_asma.directory", tmp_path / "migrations")
+
+        mock_connect.assert_called_once_with(
+            host="asma-nonprod-pgsql-1.cloud.avans.no",
+            port=5432,
+            dbname="directory",
+            user="postgres",
+            password="secret",
+            connect_timeout=10,
+        )
+
+    @patch("cdc_generator.core.migration_apply.get_project_root")
+    @patch.dict("os.environ", {}, clear=True)
+    def test_missing_sink_group_placeholder_env_raises(
+        self,
+        mock_root: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Missing ${VAR} values in sink-group credentials should fail fast."""
+        mock_root.return_value = tmp_path
+
+        sink_dir = tmp_path / "migrations" / "sink_asma.directory"
+        sink_dir.mkdir(parents=True)
+        (sink_dir / "manifest.yaml").write_text(
+            "sink_target:\n"
+            "  sink_group: sink_asma\n"
+            "  service: directory\n"
+            "  databases:\n"
+            "    dev: directory_dev\n",
+            encoding="utf-8",
+        )
+
+        (tmp_path / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  servers:\n"
+            "    nonprod:\n"
+            "      host: ${POSTGRES_SINK_HOST_ASMA_NONPROD}\n"
+            "      port: ${POSTGRES_SINK_PORT_ASMA_NONPROD}\n"
+            "      user: ${POSTGRES_SINK_USER_ASMA_NONPROD}\n"
+            "      password: ${POSTGRES_SINK_PASSWORD_ASMA_NONPROD}\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      dev:\n"
+            "        server: nonprod\n",
+            encoding="utf-8",
+        )
+
+        with patch("cdc_generator.helpers.psycopg2_loader.create_postgres_connection"), pytest.raises(
+            ValueError,
+            match="Missing sink-group credential",
+        ):
+            get_pg_connection("dev", "sink_asma.directory", tmp_path / "migrations")
 
 
 # ---------------------------------------------------------------------------

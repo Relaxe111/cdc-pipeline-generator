@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest  # type: ignore[import-not-found]
+import yaml
 
 from cdc_generator.core.column_template_definitions import (
     add_template_definition,
@@ -194,6 +195,19 @@ class TestAddTemplateDefinition:
         clear_cache()
         keys = list_template_keys()
         assert "zzz_last" in keys
+
+    def test_add_omits_redundant_name_when_equal_to_key(self, templates_file: Path) -> None:
+        result = add_template_definition(
+            key="customer_id",
+            name="customer_id",
+            col_type="text",
+            value='meta("table")',
+        )
+        assert result is True
+
+        content = yaml.safe_load(templates_file.read_text())
+        entry = content["templates"]["customer_id"]
+        assert "name" not in entry
 
 
 # ---------------------------------------------------------------------------

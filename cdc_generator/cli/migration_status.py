@@ -12,6 +12,10 @@ from __future__ import annotations
 import argparse
 import sys
 
+from cdc_generator.cli.migration_cli_validation import (
+    resolve_sink_filter,
+    validate_env_for_sink,
+)
 from cdc_generator.helpers.helpers_logging import print_error
 
 
@@ -33,7 +37,7 @@ def main() -> int:
     parser.add_argument(
         "--env",
         default=None,
-        help="Target environment (dev, stage, prod). Omit for offline mode.",
+        help="Target environment (dev, stage, prod). Required unless --offline is set.",
     )
     parser.add_argument(
         "--offline",
@@ -55,8 +59,12 @@ def main() -> int:
     from pathlib import Path
 
     migrations_dir = Path(args.migrations_dir) if args.migrations_dir else None
+    if migrations_dir is None:
+        from cdc_generator.helpers.service_config import get_project_root
 
-    if args.offline or not args.env:
+        migrations_dir = get_project_root() / "migrations"
+
+    if args.offline:
         from cdc_generator.core.migration_status import check_migration_status_offline
 
         result = check_migration_status_offline(
@@ -75,13 +83,29 @@ def main() -> int:
         print_info(f"\n  {len(result.files)} file(s) — connect with --env to check status")
         return 0
 
+    if not args.env:
+        parser.error("--env is required unless --offline is set")
+
+    try:
+        resolved_sink = resolve_sink_filter(
+            migrations_dir=migrations_dir,
+            sink_filter=args.sink,
+        )
+        validate_env_for_sink(
+            migrations_dir=migrations_dir,
+            sink_name=resolved_sink,
+            env=args.env,
+        )
+    except ValueError as e:
+        parser.error(str(e))
+
     from cdc_generator.core.migration_status import check_migration_status
 
     result = check_migration_status(
         service_name=args.service,
         env=args.env,
         migrations_dir=migrations_dir,
-        sink_filter=args.sink,
+        sink_filter=resolved_sink,
     )
 
     if result.errors:

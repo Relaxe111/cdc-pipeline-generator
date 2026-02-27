@@ -33,8 +33,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--env",
-        default="nonprod",
-        help="MSSQL environment (local, nonprod, prod) (default: nonprod)",
+        required=True,
+        help="MSSQL environment (local, nonprod, prod)",
     )
     parser.add_argument(
         "--table",

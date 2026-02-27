@@ -375,4 +375,4 @@ Jinja2 templates in `cdc_generator/templates/migrations/` render the SQL DDL. Co
 This architecture document intentionally stays implementation-agnostic.
 
 - Keep service-specific migration stats (file counts, schema names, sink names, test counts) in each implementation repository.
-- For AdOpus, maintain these metrics in the implementation docs under `docs-adopus-specific/`.
+- For AdOpus, maintain these metrics in the implementation docs under `_docs/adopus-specific/`.

@@ -68,8 +68,8 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "--value-source bloblang",
     ),
     "--name": (
-        "Column name (defaults to _<key>)",
-        "--name _tenant_id",
+        "Column name (defaults to <key>)",
+        "--name tenant_id",
     ),
 }
 
@@ -174,7 +174,7 @@ def _build_parser() -> TemplateArgumentParser:
     parser.add_argument(
         "--name",
         metavar="NAME",
-        help="Column name (default: _<key> for --add)",
+        help="Column name (default: <key> for --add)",
     )
     parser.add_argument(
         "--type",
@@ -316,8 +316,8 @@ def _handle_add(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # Default column name: _{key}
-    name = args.name if args.name is not None else f"_{key}"
+    # Default column name: key
+    name = args.name if args.name is not None else key
     not_null = bool(args.not_null) if args.not_null is not None else False
     description = args.description or ""
 

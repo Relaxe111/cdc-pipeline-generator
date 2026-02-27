@@ -603,6 +603,33 @@ def complete_available_envs(
     return _filter(_safe_call(_list_envs), incomplete)
 
 
+def complete_migration_envs(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete env names from migration manifest databases.
+
+    Uses selected ``--sink`` when present; otherwise uses the single sink's
+    manifest when only one exists, or the union across sinks.
+    """
+    from cdc_generator.cli.migration_cli_validation import list_manifest_envs
+    from cdc_generator.helpers.service_config import get_project_root
+
+    sink_filter = _get_param(ctx, "sink") or None
+    migrations_dir = get_project_root() / "migrations"
+
+    try:
+        envs = list_manifest_envs(
+            migrations_dir=migrations_dir,
+            sink_filter=sink_filter,
+        )
+    except Exception:
+        return []
+
+    return _filter(envs, incomplete)
+
+
 def complete_server_group_names(
     _ctx: click.Context,
     _param: click.Parameter,
