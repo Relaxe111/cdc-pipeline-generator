@@ -1,11 +1,11 @@
-"""Pipeline templates for Redpanda Connect source and sink pipelines."""
+"""Pipeline templates for Bento source and sink pipelines."""
 
 
 def get_source_pipeline_template() -> str:
     """Generate source-pipeline.yaml template.
 
     Returns:
-        Complete source pipeline template as string for MSSQL CDC to Redpanda.
+        Complete source pipeline template as string for MSSQL CDC to Bento.
         Uses placeholders for customer-specific values:
         - {{CUSTOMER}}: Customer identifier
         - {{ENV}}: Environment (nonprod, prod)
@@ -15,7 +15,7 @@ def get_source_pipeline_template() -> str:
         - {{TABLE_ROUTING}}: Table-specific routing configuration
     """
     return """# =============================================================================
-# Redpanda Connect Source Pipeline - MSSQL CDC to Redpanda
+  # Bento Source Pipeline - MSSQL CDC to Bento
 # =============================================================================
 # Customer: {{CUSTOMER}}
 # Environment: {{ENV}}
@@ -70,7 +70,7 @@ pipeline:
           "after": if $op_code != 1 { $payload_data } else { null },
           "source": {
             "version": "1.0.0",
-            "connector": "redpanda-connect-mssql",
+            "connector": "bento-mssql",
             "name": "{{TOPIC_PREFIX}}",
             "ts_ms": now().ts_unix_milli(),
             "db": "{{DATABASE_NAME}}",
@@ -143,7 +143,7 @@ def get_sink_pipeline_template() -> str:
         - {{TABLE_CASES}}: Switch cases for table routing
     """
     return """# =============================================================================
-# Redpanda Connect Sink Pipeline - Consolidated Multi-Schema
+  # Bento Sink Pipeline - Consolidated Multi-Schema
 # =============================================================================
 # This pipeline consumes CDC events from Kafka and routes to multiple
 # PostgreSQL schemas in a single pipeline instance.
@@ -234,7 +234,7 @@ logger:
   format: json
   add_timestamp: true
   static_fields:
-    "@service": redpanda-connect-sink
+    "@service": bento-sink
     environment: "{{ENV}}"
 
 http:
@@ -247,5 +247,5 @@ metrics:
   prometheus:
     push_url: ""
     push_interval: 30s
-    push_job_name: redpanda-connect-sink-{{ENV}}
+    push_job_name: bento-sink-{{ENV}}
 """

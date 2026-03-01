@@ -225,7 +225,7 @@ def scaffold_project_structure(
     """Create complete directory structure and template files for new implementation.
 
     Creates:
-    - Directory structure (services, generated, pipeline-templates, etc.)
+    - Directory structure (services, pipelines, templates, generated outputs, etc.)
     - docker-compose.yml with full CDC infrastructure
     - .env.example with environment variable templates
     - README.md with quick start guide
@@ -249,8 +249,11 @@ def scaffold_project_structure(
         "services/_schemas/adapters",
         "services/_bloblang",
         "services/_bloblang/examples",
-        "pipeline-templates",
-        "generated/pipelines",
+        "pipelines",
+        "pipelines/templates",
+        "pipelines/generated",
+        "pipelines/generated/sources",
+        "pipelines/generated/sinks",
         "generated/schemas",
         "generated/pg-migrations",
         "_docs",
@@ -263,9 +266,14 @@ def scaffold_project_structure(
         print(f"✓ Created directory: {directory}")
 
     # Create .gitkeep files in generated directories
-    for gen_dir in ["pipelines", "schemas", "pg-migrations"]:
-        gitkeep = project_root / "generated" / gen_dir / ".gitkeep"
-        gitkeep.touch()
+    for generated_path in [
+        project_root / "pipelines" / "generated",
+        project_root / "pipelines" / "generated" / "sources",
+        project_root / "pipelines" / "generated" / "sinks",
+        project_root / "generated" / "schemas",
+        project_root / "generated" / "pg-migrations",
+    ]:
+        (generated_path / ".gitkeep").touch()
 
     # Copy template library files from generator to implementation
     _copy_template_library_files(project_root, server_group_name)
@@ -370,15 +378,15 @@ def _create_pipeline_templates(project_root: Path) -> None:
     Args:
         project_root: Root directory of the implementation
     """
-    source_template = project_root / "pipeline-templates" / "source-pipeline.yaml"
+    source_template = project_root / "pipelines" / "templates" / "source-pipeline.yaml"
     if not source_template.exists():
         source_template.write_text(get_source_pipeline_template())
-        print("✓ Created file: pipeline-templates/source-pipeline.yaml")
+        print("✓ Created file: pipelines/templates/source-pipeline.yaml")
 
-    sink_template = project_root / "pipeline-templates" / "sink-pipeline.yaml"
+    sink_template = project_root / "pipelines" / "templates" / "sink-pipeline.yaml"
     if not sink_template.exists():
         sink_template.write_text(get_sink_pipeline_template())
-        print("✓ Created file: pipeline-templates/sink-pipeline.yaml")
+        print("✓ Created file: pipelines/templates/sink-pipeline.yaml")
 
 
 def _print_next_steps(server_group_name: str) -> None:

@@ -1,10 +1,10 @@
-# Redpanda Connect Pipelines
+# Bento Pipelines
 
-This directory contains Redpanda Connect (formerly Benthos) pipeline configurations for the CDC pipeline.
+This directory contains Bento pipeline configurations for the CDC pipeline.
 
 ## Overview
 
-**Redpanda Connect** replaces the previous Kafka Connect + Debezium setup with a simpler, unified streaming solution:
+**Bento** replaces the previous Kafka Connect + Debezium setup with a simpler, unified streaming solution:
 
 - **Source Pipeline**: Captures CDC events from MSSQL and publishes to Redpanda
 - **Sink Pipeline**: Consumes events from Redpanda and writes to PostgreSQL
@@ -74,7 +74,7 @@ That's it! The scripts handle everything else automatically.
        │ SQL CDC polling
        ▼
 ┌─────────────────────┐
-│ Redpanda Connect    │
+│ Bento               │
 │  (Source Pipeline)  │
 └──────┬──────────────┘
        │
@@ -88,7 +88,7 @@ That's it! The scripts handle everything else automatically.
        │ Consume topics
        ▼
 ┌─────────────────────┐
-│ Redpanda Connect    │
+│ Bento               │
 │  (Sink Pipeline)    │
 └──────┬──────────────┘
        │
@@ -167,7 +167,7 @@ If you need to change transformations or add tables:
 
 1. Edit `templates/source-pipeline.yaml` or `templates/sink-pipeline.yaml`
 2. Regenerate all pipelines: `python3 ../scripts/5-generate-pipelines.py`
-3. Restart Redpanda Connect services
+3. Restart Bento services
 
 ### Migration from JSON to YAML
 
@@ -183,7 +183,7 @@ This will:
 - Preserve all configuration data
 
 ```
-redpanda-connect/
+pipelines/
 ├── templates/
 │   ├── source-pipeline.yaml       # Source pipeline template
 │   └── sink-pipeline.yaml         # Sink pipeline template
@@ -311,8 +311,8 @@ Both pipelines expose HTTP endpoints for monitoring:
 
 4. **View logs:**
    ```bash
-   docker logs cdc-redpanda-connect-source -f
-   docker logs cdc-redpanda-connect-sink -f
+   docker logs cdc-bento-source -f
+   docker logs cdc-bento-sink -f
    ```
 
 ## Configuration Variables
@@ -354,7 +354,7 @@ To add support for new tables:
 
 4. **Restart services:**
    ```bash
-   docker compose restart redpanda-connect-source redpanda-connect-sink
+   docker compose restart bento-source bento-sink
    ```
 
 ## Advantages over Kafka Connect
@@ -373,8 +373,8 @@ To add support for new tables:
 
 Check logs:
 ```bash
-docker logs cdc-redpanda-connect-source
-docker logs cdc-redpanda-connect-sink
+docker logs cdc-bento-source
+docker logs cdc-bento-sink
 ```
 
 Common issues:
@@ -406,12 +406,12 @@ Common issues:
 
 ### Data in wrong format
 
-Check the Bloblang transformations in the pipeline YAML files. Use the Redpanda Connect online Bloblang playground to test transformations:
+Check the Bloblang transformations in the pipeline YAML files. Use the Bloblang playground to test transformations:
 https://www.benthos.dev/docs/guides/bloblang/about
 
 ## Resources
 
-- [Redpanda Connect Documentation](https://docs.redpanda.com/redpanda-connect/)
+- [Bento Documentation](https://warpstreamlabs.github.io/bento/)
 - [Bloblang Language Guide](https://www.benthos.dev/docs/guides/bloblang/about)
-- [SQL Input Documentation](https://docs.redpanda.com/redpanda-connect/components/inputs/sql_raw/)
-- [Kafka Output Documentation](https://docs.redpanda.com/redpanda-connect/components/outputs/kafka/)
+- [SQL Input Documentation](https://warpstreamlabs.github.io/bento/docs/components/inputs/sql_raw/)
+- [Kafka Output Documentation](https://warpstreamlabs.github.io/bento/docs/components/outputs/kafka/)

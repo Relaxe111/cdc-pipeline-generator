@@ -1,6 +1,6 @@
 # Decision Plan — Migration from Redpanda Connect to Bento
 
-> **Status:** Proposed
+> **Status:** Implemented (preprod)
 > **Scope:** Generator-driven source/sink pipeline migration
 > **Last updated:** February 2026
 

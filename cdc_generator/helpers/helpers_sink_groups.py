@@ -126,7 +126,7 @@ def deduce_kafka_topology(
         Kafka topology if deducible, None otherwise
 
     Mapping:
-        db-per-tenant → multi-tenant
+        db-per-tenant → shared
         db-shared → per-server
     """
     if not source_group_name or source_group_name not in source_groups:
@@ -136,7 +136,7 @@ def deduce_kafka_topology(
     pattern = source_group.get("pattern")
 
     if pattern == "db-per-tenant":
-        return "multi-tenant"
+        return "shared"
     if pattern == "db-shared":
         return "per-server"
 

@@ -87,7 +87,7 @@ cdc enable-cdc avansas --env nonprod --migrations-only
 
 ### Runtime (Automatic)
 ```
-1. Redpanda Connect → INSERT to avansas.stg_Fraver
+1. Bento → INSERT to avansas.stg_Fraver
 2. Trigger fires → mark_table_for_merge()
 3. Control table updated:
    - has_changes = true

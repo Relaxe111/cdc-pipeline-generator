@@ -74,10 +74,14 @@ def _normalize_loaded_service_config(config: dict[str, object]) -> dict[str, obj
     For db-per-tenant services, customers are derived from source-groups sources
     and no longer depend on service-level ``customers`` YAML blocks.
     """
-    server_group_name_raw = config.get('server_group')
+    _normalize_legacy_source_tables(config)
+
+    server_group_name_raw = config.get('server_group') or config.get('service')
     server_group_name = str(server_group_name_raw).strip()
     if not server_group_name:
         return config
+
+    config['server_group'] = server_group_name
 
     source_groups = _load_source_groups_file()
     source_groups_dict = cast(dict[str, Any], source_groups)
@@ -93,6 +97,68 @@ def _normalize_loaded_service_config(config: dict[str, object]) -> dict[str, obj
     derived_customers = _derive_customers_from_source_group(server_group)
     config['customers'] = derived_customers
     return config
+
+
+def _normalize_legacy_source_tables(config: dict[str, object]) -> None:
+    """Normalize ``source.tables`` mapping into ``shared.source_tables`` list.
+
+    Input shape supported:
+      source:
+        tables:
+          dbo.Actor: {primary_key: actno, ignore_columns: [...]}
+          dbo.Address: {}
+    """
+    shared_raw = config.get('shared')
+    if isinstance(shared_raw, dict) and shared_raw.get('source_tables'):
+        return
+
+    source_raw = config.get('source')
+    if not isinstance(source_raw, dict):
+        return
+
+    source_dict = cast(dict[str, Any], source_raw)
+    tables_raw = source_dict.get('tables')
+    if not isinstance(tables_raw, dict):
+        return
+
+    grouped: dict[str, list[dict[str, object]]] = {}
+    tables = cast(dict[str, Any], tables_raw)
+    for table_ref_raw, table_cfg_raw in tables.items():
+        table_ref = str(table_ref_raw).strip()
+        if not table_ref:
+            continue
+
+        if '.' in table_ref:
+            schema_name, table_name = table_ref.split('.', 1)
+        else:
+            schema_name, table_name = 'dbo', table_ref
+
+        table_cfg = cast(dict[str, Any], table_cfg_raw) if isinstance(table_cfg_raw, dict) else {}
+        normalized_table: dict[str, object] = {'name': table_name}
+
+        primary_key = table_cfg.get('primary_key')
+        if primary_key is not None:
+            normalized_table['primary_key'] = primary_key
+
+        ignore_columns = table_cfg.get('ignore_columns')
+        if ignore_columns is not None:
+            normalized_table['ignore_columns'] = ignore_columns
+
+        include_columns = table_cfg.get('include_columns')
+        if include_columns is not None:
+            normalized_table['include_columns'] = include_columns
+
+        grouped.setdefault(schema_name, []).append(normalized_table)
+
+    source_tables = [
+        {'schema': schema_name, 'tables': tables_for_schema}
+        for schema_name, tables_for_schema in grouped.items()
+    ]
+
+    config['shared'] = {
+        'source_tables': source_tables,
+        'ignore_tables': [],
+    }
 
 
 def _load_source_groups_file() -> dict[str, object]:

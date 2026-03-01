@@ -58,9 +58,11 @@ def create_vscode_settings() -> dict[str, object]:
         "files.readonlyInclude": {
             "source-groups.yaml": True,
             "services/**/*.yaml": True,
+            "pipelines/generated/**/*.yaml": True,
             "generated/**/*.yaml": True
         },
         "search.exclude": {
+            "**/pipelines/generated": True,
             "**/generated": True,
             "**/.venv": True
         }
@@ -80,9 +82,9 @@ def get_gitignore_patterns() -> list[str]:
         "*.pyc",
         ".pytest_cache/",
         ".lsn_cache/",
-        "generated/pipelines/*",
+        "pipelines/generated/*",
+        "!pipelines/generated/**/.gitkeep",
         "generated/schemas/*",
-        "generated/table-definitions/*",
         "!generated/**/.gitkeep",
         ".DS_Store",
         "*.swp",
@@ -104,11 +106,13 @@ def get_scaffold_directories() -> list[str]:
         "services/_schemas/adapters",
         "services/_bloblang",
         "services/_bloblang/examples",
-        "pipeline-templates",
-        "generated/pipelines",
+        "pipelines",
+        "pipelines/templates",
+        "pipelines/generated",
+        "pipelines/generated/sources",
+        "pipelines/generated/sinks",
         "generated/schemas",
         "generated/pg-migrations",
-        "generated/table-definitions",
         "_docs",
         ".vscode",
     ]
@@ -121,8 +125,6 @@ def get_generated_subdirs() -> list[str]:
         List of subdirectory names under generated/
     """
     return [
-        "pipelines",
         "schemas",
         "pg-migrations",
-        "table-definitions",
     ]

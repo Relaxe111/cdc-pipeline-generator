@@ -88,8 +88,11 @@ EXPECTED_DIRECTORIES = [
     "services/_schemas/adapters",
     "services/_bloblang",
     "services/_bloblang/examples",
-    "pipeline-templates",
-    "generated/pipelines",
+    "pipelines",
+    "pipelines/templates",
+    "pipelines/generated",
+    "pipelines/generated/sources",
+    "pipelines/generated/sinks",
     "generated/schemas",
     "generated/pg-migrations",
     "_docs",
@@ -112,8 +115,8 @@ EXPECTED_FILES = [
     "services/_schemas/column-templates.yaml",
     "services/_schemas/transform-rules.yaml",
     "services/_schemas/_definitions/map-mssql-pgsql.yaml",
-    "pipeline-templates/source-pipeline.yaml",
-    "pipeline-templates/sink-pipeline.yaml",
+    "pipelines/templates/source-pipeline.yaml",
+    "pipelines/templates/sink-pipeline.yaml",
 ]
 
 
@@ -537,7 +540,7 @@ class TestScaffoldGeneratedFileContent:
         assert ".env" in content
         assert "__pycache__/" in content
         assert ".lsn_cache/" in content
-        assert "generated/pipelines/*" in content
+        assert "pipelines/generated/*" in content
 
     def test_cdc_scaffold_vscode_settings_contains_yaml_association(
         self,
@@ -600,9 +603,9 @@ class TestScaffoldTemplates:
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """pipeline-templates/source-pipeline.yaml is created with content."""
+        """pipelines/templates/source-pipeline.yaml is created with content."""
         _scaffold_db_per_tenant_mssql(run_cdc, "tpltest")
-        template = isolated_project / "pipeline-templates" / "source-pipeline.yaml"
+        template = isolated_project / "pipelines" / "templates" / "source-pipeline.yaml"
         assert template.is_file()
         content = template.read_text(encoding="utf-8")
         assert len(content) > 0
@@ -612,9 +615,9 @@ class TestScaffoldTemplates:
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """pipeline-templates/sink-pipeline.yaml is created with content."""
+        """pipelines/templates/sink-pipeline.yaml is created with content."""
         _scaffold_db_shared_postgres(run_cdc, "tpltest2")
-        template = isolated_project / "pipeline-templates" / "sink-pipeline.yaml"
+        template = isolated_project / "pipelines" / "templates" / "sink-pipeline.yaml"
         assert template.is_file()
         content = template.read_text(encoding="utf-8")
         assert len(content) > 0
@@ -626,8 +629,8 @@ class TestScaffoldTemplates:
     ) -> None:
         """Both source and sink pipeline templates are created."""
         _scaffold_db_per_tenant_mssql(run_cdc, "bothpl")
-        source = isolated_project / "pipeline-templates" / "source-pipeline.yaml"
-        sink = isolated_project / "pipeline-templates" / "sink-pipeline.yaml"
+        source = isolated_project / "pipelines" / "templates" / "source-pipeline.yaml"
+        sink = isolated_project / "pipelines" / "templates" / "sink-pipeline.yaml"
         assert source.is_file(), "source-pipeline.yaml missing"
         assert sink.is_file(), "sink-pipeline.yaml missing"
 
@@ -985,7 +988,7 @@ class TestScaffoldFileHandling:
         isolated_project: Path,
     ) -> None:
         """Existing pipeline templates are NOT overwritten."""
-        tpl_dir = isolated_project / "pipeline-templates"
+        tpl_dir = isolated_project / "pipelines" / "templates"
         tpl_dir.mkdir(parents=True, exist_ok=True)
         source_tpl = tpl_dir / "source-pipeline.yaml"
         source_tpl.write_text("# My custom source template\n", encoding="utf-8")

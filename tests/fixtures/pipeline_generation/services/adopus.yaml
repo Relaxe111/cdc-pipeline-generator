@@ -1,0 +1,5 @@
+adopus:
+  source:
+    tables:
+      dbo.Actor:
+        primary_key: actno

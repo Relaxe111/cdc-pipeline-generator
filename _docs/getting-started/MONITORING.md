@@ -132,8 +132,8 @@ Should show:
 - ✅ `cdc-postgres` - PostgreSQL target
 - ✅ `cdc-mssql` - SQL Server source
 - ✅ `cdc-redpanda` - Message broker
-- ✅ `cdc-redpanda-connect-source` - CDC source pipeline
-- ✅ `cdc-redpanda-connect-sink` - CDC sink pipeline
+- ✅ `cdc-bento-source` - CDC source pipeline
+- ✅ `cdc-bento-sink` - CDC sink pipeline
 - ✅ `cdc-redpanda-console` - Monitoring UI
 - ✅ `cdc-adminer` - Database UI
 
@@ -143,8 +143,8 @@ Should show:
 docker compose logs -f
 
 # Specific service
-docker logs cdc-redpanda-connect-source -f
-docker logs cdc-redpanda-connect-sink -f
+docker logs cdc-bento-source -f
+docker logs cdc-bento-sink -f
 docker logs cdc-redpanda -f
 docker logs cdc-postgres -f
 docker logs cdc-mssql -f
@@ -162,7 +162,7 @@ docker compose up -d
 docker compose down
 
 # Restart pipelines after config change
-docker compose restart redpanda-connect-source redpanda-connect-sink
+docker compose restart bento-source bento-sink
 
 # Generate pipelines
 cd pipelines
@@ -187,7 +187,7 @@ docker compose down -v
 | Adminer login fails | Check credentials in `.env` file |
 | No topics in Redpanda Console | `cd pipelines && python3 generate_pipelines.py` |
 | Pipeline not running | `curl http://localhost:4195/ping` |
-| No data flowing | Check `docker logs cdc-redpanda-connect-source` |
+| No data flowing | Check `docker logs cdc-bento-source` |
 
 ---
 

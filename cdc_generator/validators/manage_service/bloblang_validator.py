@@ -301,7 +301,7 @@ def validate_service_bloblang(service: str) -> bool:
         bool: True if all validations passed
     """
     if not check_rpk_available():
-        print_error("rpk CLI not found. Please install Redpanda Connect CLI:")
+        print_error("rpk CLI not found. Please install rpk:")
         print_error("  https://docs.redpanda.com/current/get-started/rpk-install/")
         return False
 

@@ -79,19 +79,19 @@ cdc reload-cdc-autocompletions
 **Always read before coding:**
 - **[Coding Guidelines](.github/copilot-instructions-coding-guidelines.md)** - Code organization, style, naming conventions, function/file size limits, type hints
 
-**For Redpanda Connect / Bloblang transformations:**
-- **[Redpanda Connect Docs](_docs/redpanda-connect/README.md)** - Complete Bloblang reference and pipeline patterns
+**For Bento / Bloblang transformations:**
+- **[Bloblang Runtime Docs](_docs/bento-bloblang/README.md)** - Complete Bloblang reference and pipeline patterns
 
 | Document | Use Case |
 |----------|----------|
-| [Bloblang Fundamentals](_docs/redpanda-connect/01-BLOBLANG-FUNDAMENTALS.md) | Core syntax: assignment, variables, conditionals, maps |
-| [Bloblang Methods](_docs/redpanda-connect/02-BLOBLANG-METHODS.md) | String, number, timestamp, array, object, JWT methods |
-| [Bloblang Functions](_docs/redpanda-connect/03-BLOBLANG-FUNCTIONS.md) | Built-in functions: uuid, now, env, content, metadata |
-| [HTTP Inputs](_docs/redpanda-connect/04-HTTP-INPUTS.md) | Webhook receivers, JWT/signature validation, API polling |
-| [SQL Patterns](_docs/redpanda-connect/05-SQL-PATTERNS.md) | PostgreSQL integration, UPSERT, batching, connection pools |
-| [Error Handling](_docs/redpanda-connect/06-ERROR-HANDLING.md) | try/catch, DLQ, fallback outputs, error routing |
-| [Pipeline Patterns](_docs/redpanda-connect/07-PIPELINE-PATTERNS.md) | Complete CDC pipeline examples, multi-input/output |
-| [**Pipeline Templating**](_docs/redpanda-connect/08-PIPELINE-TEMPLATING.md) | **Template structure, .blobl files, generation flow** |
+| [Bloblang Fundamentals](_docs/bento-bloblang/01-BLOBLANG-FUNDAMENTALS.md) | Core syntax: assignment, variables, conditionals, maps |
+| [Bloblang Methods](_docs/bento-bloblang/02-BLOBLANG-METHODS.md) | String, number, timestamp, array, object, JWT methods |
+| [Bloblang Functions](_docs/bento-bloblang/03-BLOBLANG-FUNCTIONS.md) | Built-in functions: uuid, now, env, content, metadata |
+| [HTTP Inputs](_docs/bento-bloblang/04-HTTP-INPUTS.md) | Webhook receivers, JWT/signature validation, API polling |
+| [SQL Patterns](_docs/bento-bloblang/05-SQL-PATTERNS.md) | PostgreSQL integration, UPSERT, batching, connection pools |
+| [Error Handling](_docs/bento-bloblang/06-ERROR-HANDLING.md) | try/catch, DLQ, fallback outputs, error routing |
+| [Pipeline Patterns](_docs/bento-bloblang/07-PIPELINE-PATTERNS.md) | Complete CDC pipeline examples, multi-input/output |
+| [**Pipeline Templating**](_docs/bento-bloblang/08-PIPELINE-TEMPLATING.md) | **Template structure, .blobl files, generation flow** |
 
 ---
 

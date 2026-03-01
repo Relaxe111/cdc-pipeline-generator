@@ -1,0 +1,10 @@
+service: adopus
+schema: dbo
+table: Actor
+columns:
+- name: actno
+  type: int
+  primary_key: true
+- name: name
+  type: varchar
+  primary_key: false

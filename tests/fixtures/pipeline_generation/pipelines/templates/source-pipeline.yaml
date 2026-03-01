@@ -1,0 +1,14 @@
+input:
+  label: "{{CUSTOMER}}"
+  brokers: "{{KAFKA_BOOTSTRAP_SERVERS}}"
+  include: "{{TABLE_INCLUDE_LIST}}"
+  source_inputs: |
+{{SOURCE_TABLE_INPUTS}}
+  table_routing: |
+{{TABLE_ROUTING}}
+output:
+  topic_prefix: "{{TOPIC_PREFIX}}"
+  postgres_url: "{{POSTGRES_URL}}"
+  database: "{{DATABASE_NAME}}"
+  schema: "{{SCHEMA}}"
+  sink_topics: "{{SINK_TOPICS}}"

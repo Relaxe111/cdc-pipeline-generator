@@ -494,14 +494,43 @@ class TestManagePipelinesOptions:
         for opt in ["--all", "--force"]:
             assert opt in opts, f"Missing option: {opt}"
 
-    def test_verify_sync_has_filter_options(self) -> None:
+    def test_verify_has_mode_options(self) -> None:
         cmds = _get_typed_commands()
         group = cmds["manage-pipelines"]
         assert isinstance(group, click.Group)
-        verify_sync_cmd = group.commands["verify-sync"]
-        opts = _get_command_option_names(verify_sync_cmd)
-        for opt in ["--customer", "--service", "--table", "--all"]:
+        verify_cmd = group.commands["verify"]
+        opts = _get_command_option_names(verify_cmd)
+        for opt in ["--full", "--sink", "--service"]:
             assert opt in opts, f"Missing option: {opt}"
+
+    def test_has_list_subcommand(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        assert "list" in group.commands
+
+    def test_list_has_status_option(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        list_opts = _get_command_option_names(group.commands["list"])
+        assert "--status" in list_opts
+
+    def test_has_diff_health_prune_subcommands(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        for subcommand in ["diff", "health", "prune"]:
+            assert subcommand in group.commands
+
+    def test_health_and_prune_options(self) -> None:
+        cmds = _get_typed_commands()
+        group = cmds["manage-pipelines"]
+        assert isinstance(group, click.Group)
+        health_opts = _get_command_option_names(group.commands["health"])
+        prune_opts = _get_command_option_names(group.commands["prune"])
+        assert "--url" in health_opts
+        assert "--confirm" in prune_opts
 
 
 class TestManageMigrationsOptions:

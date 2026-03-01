@@ -67,8 +67,8 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 # - Dev Container (Python development environment with Fish shell)
 # - PostgreSQL (target database for CDC)
 # - Redpanda (Kafka-compatible streaming platform)
-# - Redpanda Connect Source (Source DB CDC → Redpanda)
-# - Redpanda Connect Sink (Redpanda → PostgreSQL)
+# - Bento Source (Source DB CDC → Redpanda)
+# - Bento Sink (Redpanda → PostgreSQL)
 # - Redpanda Console (Web UI for monitoring)
 # - Adminer (Database management UI)
 #
@@ -217,15 +217,15 @@ services:
     # Adminer starts by default for database management
 
   # ===========================================================================
-  # Redpanda Connect Source (Source DB → Redpanda)
+  # Bento Source (Source DB → Redpanda)
   # ===========================================================================
   # Uncomment and configure when ready to set up CDC source pipelines
-  # redpanda-connect-source:
-  #   image: docker.redpanda.com/redpandadata/connect:latest
+  # bento-source:
+  #   image: jeffail/bento:latest
   #   hostname: {container_prefix}-source
   #   container_name: {container_prefix}-source
   #   volumes:
-  #     - ./generated/pipelines:/pipelines:ro
+  #     - ./pipelines/generated:/pipelines:ro
   #   command: run /pipelines/source-pipeline.yaml
   #   networks:
   #     - cdc-network
@@ -233,15 +233,15 @@ services:
   #     - redpanda
 
   # ===========================================================================
-  # Redpanda Connect Sink (Redpanda → PostgreSQL)
+  # Bento Sink (Redpanda → PostgreSQL)
   # ===========================================================================
   # Uncomment and configure when ready to set up CDC sink pipelines
-  # redpanda-connect-sink:
-  #   image: docker.redpanda.com/redpandadata/connect:latest
+  # bento-sink:
+  #   image: jeffail/bento:latest
   #   hostname: {container_prefix}-sink
   #   container_name: {container_prefix}-sink
   #   volumes:
-  #     - ./generated/pipelines:/pipelines:ro
+  #     - ./pipelines/generated:/pipelines:ro
   #   command: run /pipelines/sink-pipeline.yaml
   #   networks:
   #     - cdc-network
@@ -429,7 +429,7 @@ def get_readme_template(server_group_name: str, pattern: str) -> str:
 
     return f"""# {server_group_name.title()} CDC Pipeline
 
-CDC (Change Data Capture) pipeline for {server_group_name} using Redpanda Connect.
+CDC (Change Data Capture) pipeline for {server_group_name} using Bento.
 
 ## Pattern
 
@@ -482,12 +482,15 @@ docker compose exec dev fish
 
 ```
 .
-├── services/             # Service YAML configurations
-├── pipeline-templates/   # Redpanda Connect pipeline templates
-├── generated/           # Auto-generated files
-│   ├── pipelines/      # Redpanda Connect pipelines
-│   ├── schemas/        # Database schemas
-│   └── pg-migrations/  # PostgreSQL migrations
+├── services/              # Service YAML configurations
+├── pipelines/             # Pipeline templates + generated artifacts
+│   ├── templates/         # Source and sink template files
+│   └── generated/         # Generated source/sink pipeline YAMLs
+│       ├── sources/
+│       └── sinks/
+├── generated/             # Generated non-pipeline artifacts
+│   ├── schemas/           # Database schemas
+│   └── pg-migrations/     # PostgreSQL migrations
 ├── source-groups.yaml   # Server group configuration
 ├── docker-compose.yml  # Infrastructure services
 └── .env               # Environment variables (not in git)
@@ -529,8 +532,10 @@ def get_project_structure_doc_template(server_group_name: str, pattern: str) -> 
 ```
 .
 ├── services/               # Service-level YAML configs
-├── pipeline-templates/     # Source/sink template YAML files
-├── generated/              # Generated artifacts (do not edit manually)
+├── pipelines/              # Pipeline templates + generated outputs
+│   ├── templates/          # Source/sink template YAML files
+│   └── generated/          # Generated source/sink pipeline files
+├── generated/              # Generated schemas/migrations (do not edit manually)
 ├── _docs/                  # Implementation documentation
 ├── source-groups.yaml      # Server group definition
 ├── docker-compose.yml      # Local runtime infrastructure
@@ -543,8 +548,9 @@ def get_project_structure_doc_template(server_group_name: str, pattern: str) -> 
 - Edit manually:
   - `source-groups.yaml`
   - `services/*.yaml`
-  - `pipeline-templates/*.yaml`
+  - `pipelines/templates/*.yaml`
 - Generated/managed:
+  - `pipelines/generated/**`
   - `generated/**`
 
 ## Notes
@@ -768,7 +774,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .lsn_cache/
-generated/pipelines/*
+pipelines/generated/*
+!pipelines/generated/**/.gitkeep
 generated/schemas/*
 !generated/**/.gitkeep
 .DS_Store

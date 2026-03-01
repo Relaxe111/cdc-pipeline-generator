@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This document outlines critical production safeguards for the Redpanda Connect CDC pipeline. The current implementation works well for development but requires specific configurations to prevent data consistency issues and performance problems in production.
+This document outlines critical production safeguards for the Bento CDC pipeline. The current implementation works well for development but requires specific configurations to prevent data consistency issues and performance problems in production.
 
 **Risk Level**:
 - ✅ **Development**: LOW - Current setup is adequate
@@ -165,11 +165,11 @@ spec:
 **Step 2**: Mount in Source Pipeline Deployment
 
 ```yaml
-# kubernetes/overlays/prod/redpanda-connect-source-deployment.yaml
+# kubernetes/overlays/prod/bento-source-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: redpanda-connect-source
+  name: bento-source
 spec:
   template:
     spec:
@@ -178,7 +178,7 @@ spec:
           persistentVolumeClaim:
             claimName: lsn-cache-pvc
       containers:
-        - name: redpanda-connect
+        - name: bento
           volumeMounts:
             - name: lsn-cache
               mountPath: /data/lsn_cache
@@ -188,7 +188,7 @@ spec:
 
 ```bash
 # Test: Delete pod and verify cache survives
-kubectl delete pod -l app=redpanda-connect-source
+kubectl delete pod -l app=bento-source
 kubectl exec -it <new-pod> -- ls -la /data/lsn_cache/
 # Should show existing LSN files
 ```
@@ -199,7 +199,7 @@ kubectl exec -it <new-pod> -- ls -la /data/lsn_cache/
 # Automated backup script (run daily via CronJob)
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-kubectl cp cdc-pipeline/redpanda-connect-source-xxx:/data/lsn_cache \
+kubectl cp cdc-pipeline/bento-source-xxx:/data/lsn_cache \
   ./backups/lsn_cache_${DATE}.tar.gz
 
 # Retention: Keep last 30 days

@@ -33,12 +33,12 @@ def ensure_project_structure(server_group_name: str, server_group_config: Server
 
     Example:
         >>> ensure_project_structure('mygroup', {'pattern': 'db-shared', 'type': 'postgres'})
-        # Creates: services/, pipeline-templates/, generated/pipelines/, etc.
+        # Creates: services/, pipelines/templates/, pipelines/generated/, etc.
     """
     critical_dirs = [
         "services",
-        "pipeline-templates",
-        "generated/pipelines",
+        "pipelines/templates",
+        "pipelines/generated",
         "generated/schemas",
         ".vscode",
     ]

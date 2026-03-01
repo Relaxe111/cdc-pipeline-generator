@@ -68,10 +68,8 @@ service-schemas/
 # Added by cdc scaffold --update
 *.pyc
 .lsn_cache/
-generated/pipelines/*
-generated/schemas/*
-generated/table-definitions/*
-!generated/**/.gitkeep
+pipelines/generated/
+generated/schemas/
 
 # Temporary investigation workspace (remove after final summary is moved to _docs)
 _docs-temporary-audit-refactor/

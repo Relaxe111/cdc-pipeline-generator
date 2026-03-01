@@ -6,7 +6,7 @@
 
 ## 🎯 Project Purpose
 
-**Abstract, reusable library** for generating Redpanda Connect CDC pipelines.
+**Abstract, reusable library** for generating Bento CDC pipelines.
 
 **CRITICAL:** All scripts and logic live here. Implementations (adopus/asma) contain ONLY YAML files and generated artifacts.
 
@@ -43,8 +43,8 @@
 | [Type Safety Rules](.github/copilot-instructions-type-safety.md) | Fixing type errors, adding type hints |
 | [Architecture](.github/copilot-instructions-architecture.md) | Understanding patterns, service structure |
 | [Development Workflow](.github/copilot-instructions-dev-workflow.md) | Dev container, testing, common tasks |
-| [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (Redpanda Connect → Bento), decision gates, phased rollout |
-| [Redpanda Connect](_docs/redpanda-connect/README.md) | Pipeline templates, Bloblang syntax |
+| [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (legacy runtime → Bento), decision gates, phased rollout |
+| [Bloblang Runtime Docs](_docs/bento-bloblang/README.md) | Pipeline templates, Bloblang syntax |
 | [Decision Navigation (ADR)](.github/decisions/README.md) | Entry point for past architectural decisions; load targeted ADRs only |
 
 ---
@@ -83,15 +83,15 @@ When any ADR becomes obsolete, keep only a minimal tombstone entry (status + sup
 | Task | Files to Load |
 |------|--------------|
 | Service YAML changes | `services/*.yaml` + `source-groups.yaml` + `validators/manage_service/` |
-| Pipeline generation | `pipeline-templates/*.yaml` + `cdc_generator/core/pipeline_generator.py` |
+| Pipeline generation | `pipelines/templates/*.yaml` + `cdc_generator/core/pipeline_generator.py` |
 | Server group changes | `source-groups.yaml` + `validators/manage_server_group/` |
 | CLI command work | `cdc_generator/cli/commands.py` + `cdc_generator/cli/*.py` |
 | Type/lint fixes | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/copilot-instructions-type-safety.md) |
 | Adding helpers | `cdc_generator/helpers/*.py` (check existing before creating new) |
 | Schema validation | `cdc_generator/validators/manage_service/schema_generator/` |
 | DB inspection | `cdc_generator/helpers/helpers_mssql.py` + `cdc_generator/validators/*/db_inspector.py` |
-| Bloblang/templates | `pipeline-templates/*.yaml` + [Redpanda docs](_docs/redpanda-connect/README.md) |
-| Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `cdc_generator/core/pipeline_generator.py` + `pipeline-templates/*.yaml` |
+| Bloblang/templates | `pipelines/templates/*.yaml` + [Bloblang docs](_docs/bento-bloblang/README.md) |
+| Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `cdc_generator/core/pipeline_generator.py` + `pipelines/templates/*.yaml` |
 | Architecture decisions / ADR rationale | `.github/decisions/README.md` + relevant `000X-*.md` + [architecture](.github/copilot-instructions-architecture.md) |
 
 ---

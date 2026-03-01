@@ -11,12 +11,12 @@ When you create a new server group with `--create`, the generator automatically 
 ```
 .
 ├── services/              # Service YAML configurations
-├── pipeline-templates/    # Redpanda Connect pipeline templates
+├── pipeline-templates/    # Bento pipeline templates
 ├── scripts/                 # Helper scripts
 │   ├── postgres-init/      # PostgreSQL initialization scripts
 │   └── mssql-init/         # MSSQL initialization scripts (if using MSSQL)
 ├── generated/              # Auto-generated files
-│   ├── pipelines/          # Redpanda Connect pipelines
+│   ├── pipelines/          # Bento pipelines
 │   ├── schemas/            # Database schemas
 │   ├── table-definitions/  # Table definitions
 │   └── pg-migrations/      # PostgreSQL migrations

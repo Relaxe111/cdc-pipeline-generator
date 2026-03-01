@@ -1,6 +1,6 @@
 # CDC Pipeline Generator - Documentation
 
-This documentation covers the **CDC Pipeline Generator library** - a reusable tool for creating Redpanda Connect CDC pipelines.
+This documentation covers the **CDC Pipeline Generator library** - a reusable tool for creating Bento CDC pipelines.
 
 ## 📁 Documentation Structure
 
@@ -19,7 +19,7 @@ Core CDC concepts and system design:
 - **[EVENT_DRIVEN_MERGE_SYSTEM.md](./architecture/EVENT_DRIVEN_MERGE_SYSTEM.md)** - Merge/upsert strategy
 - **[CDC_PRODUCTION_SAFEGUARDS.md](./architecture/CDC_PRODUCTION_SAFEGUARDS.md)** - Production deployment checklist
 - **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bento, Bytewax, Materialize, and Vector comparison
-- **[BENTO_MIGRATION_DECISION_PLAN.md](./architecture/BENTO_MIGRATION_DECISION_PLAN.md)** - Decision gates and phased plan for Redpanda Connect → Bento migration in generator-driven source/sink pipelines
+- **[BENTO_MIGRATION_DECISION_PLAN.md](./architecture/BENTO_MIGRATION_DECISION_PLAN.md)** - Decision gates and phased plan for legacy runtime → Bento migration in generator-driven source/sink pipelines
 - **[CDC_EVENT_TRACING.md](./architecture/CDC_EVENT_TRACING.md)** - End-to-end event latency tracing with embedded timestamps, sampling strategies (≤5% permanent + 100% debug mode), bottleneck detection queries, and performance mitigations
 
 ### [Development](./development/)

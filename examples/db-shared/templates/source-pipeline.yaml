@@ -1,5 +1,5 @@
 # =============================================================================
-# Redpanda Connect Source Pipeline - MSSQL CDC to Redpanda
+# Bento Source Pipeline - MSSQL CDC to Bento
 # =============================================================================
 # Customer: {{CUSTOMER}}
 # Environment: {{ENV}}
@@ -54,7 +54,7 @@ pipeline:
           "after": if $op_code != 1 { $payload_data } else { null },
           "source": {
             "version": "1.0.0",
-            "connector": "redpanda-connect-mssql",
+            "connector": "bento-mssql",
             "name": "{{TOPIC_PREFIX}}",
             "ts_ms": now().ts_unix_milli(),
             "db": "{{DATABASE_NAME}}",

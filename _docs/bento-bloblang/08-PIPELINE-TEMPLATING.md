@@ -16,9 +16,9 @@ The pipeline generation system uses a **two-phase approach**:
 │                        BUILD TIME (Python Generator)                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  pipeline-templates/                    generated/                          │
-│  ├── sink-pipeline.yaml    ──────────▶  ├── pipelines/                      │
-│  ├── source-pipeline.yaml               │   ├── service-Table1-sink.yaml   │
+│  pipelines/templates/                   pipelines/generated/                │
+│  ├── sink-pipeline.yaml    ──────────▶  ├── sinks/                          │
+│  ├── source-pipeline.yaml               │   ├── env/sink-pipeline.yaml      │
 │  └── bloblang/                          │   ├── service-Table1-source.yaml │
 │      ├── common.blobl      ──(copy)──▶  │   └── ...                        │
 │      ├── validation.blobl               └── bloblang/                       │
@@ -30,7 +30,7 @@ The pipeline generation system uses a **two-phase approach**:
 │                        RUNTIME (Redpanda Connect)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Redpanda loads: generated/pipelines/service-Table1-sink.yaml              │
+│  Redpanda loads: pipelines/generated/sinks/env/sink-pipeline.yaml          │
 │       └── import "./bloblang/common.blobl"  ← Resolved at runtime          │
 │       └── Executes pipeline with concrete values                            │
 │                                                                             │
@@ -44,7 +44,7 @@ The pipeline generation system uses a **two-phase approach**:
 ### Template Directory (Source)
 
 ```
-pipeline-templates/
+pipelines/templates/
 ├── sink-pipeline.yaml          # Sink template with {{PLACEHOLDERS}}
 ├── source-pipeline.yaml        # Source template with {{PLACEHOLDERS}}
 └── bloblang/                   # Static Bloblang logic (no placeholders)
@@ -58,11 +58,12 @@ pipeline-templates/
 ### Generated Directory (Output)
 
 ```
-generated/
-├── pipelines/                  # Generated YAML pipelines (per table/service)
-│   ├── adopus-Actor-sink.yaml
-│   ├── adopus-Actor-source.yaml
-│   ├── adopus-Customer-sink.yaml
+pipelines/generated/
+├── sources/                    # Generated source pipelines (per env/customer)
+│   ├── local/customer-a/source-pipeline.yaml
+│   └── ...
+├── sinks/                      # Generated sink pipelines (per environment)
+│   ├── local/sink-pipeline.yaml
 │   └── ...
 └── bloblang/                   # Copied from templates (static, unchanged)
     ├── common.blobl
@@ -81,7 +82,7 @@ generated/
 YAML templates contain `{{PLACEHOLDERS}}` that are replaced at build time:
 
 ```yaml
-# pipeline-templates/sink-pipeline.yaml
+# pipelines/templates/sink-pipeline.yaml
 input:
   kafka:
     addresses: ["{{KAFKA_BROKERS}}"]
@@ -121,7 +122,7 @@ output:
 `.blobl` files contain reusable logic with **no placeholders**:
 
 ```blobl
-# pipeline-templates/bloblang/common.blobl
+# pipelines/templates/bloblang/common.blobl
 
 # Add processing metadata to every message
 map add_metadata {
@@ -149,7 +150,7 @@ map enrich_error {
 ```
 
 ```blobl
-# pipeline-templates/bloblang/validation.blobl
+# pipelines/templates/bloblang/validation.blobl
 
 # Validate required fields exist
 map validate_required {
@@ -173,7 +174,7 @@ map validate_types {
 ```
 
 ```blobl
-# pipeline-templates/bloblang/cdc_operations.blobl
+# pipelines/templates/bloblang/cdc_operations.blobl
 
 # Parse Debezium/CDC envelope format
 map parse_cdc_envelope {
@@ -199,7 +200,7 @@ map route_by_operation {
 ```
 
 ```blobl
-# pipeline-templates/bloblang/transforms.blobl
+# pipelines/templates/bloblang/transforms.blobl
 
 # Common type conversions
 map convert_timestamps {
@@ -266,13 +267,13 @@ def generate_pipelines(service: Service) -> None:
     
     # 1. Copy static .blobl files (unchanged)
     copy_bloblang_files(
-        source="pipeline-templates/bloblang/",
-        dest="generated/bloblang/"
+        source="pipelines/templates/bloblang/",
+        dest="pipelines/generated/bloblang/"
     )
     
     # 2. Load YAML templates
-    sink_template = load_template("pipeline-templates/sink-pipeline.yaml")
-    source_template = load_template("pipeline-templates/source-pipeline.yaml")
+    sink_template = load_template("pipelines/templates/sink-pipeline.yaml")
+    source_template = load_template("pipelines/templates/source-pipeline.yaml")
     
     # 3. Generate per-table pipelines
     for table in service.cdc_tables:
@@ -283,8 +284,8 @@ def generate_pipelines(service: Service) -> None:
         source_yaml = replace_placeholders(source_template, context)
         
         # Write generated files
-        write_file(f"generated/pipelines/{service.name}-{table.name}-sink.yaml", sink_yaml)
-        write_file(f"generated/pipelines/{service.name}-{table.name}-source.yaml", source_yaml)
+        write_file(f"pipelines/generated/sinks/{service.name}-{table.name}-sink.yaml", sink_yaml)
+        write_file(f"pipelines/generated/sources/{service.name}-{table.name}-source.yaml", source_yaml)
 ```
 
 ### Template Context
@@ -352,7 +353,7 @@ For best developer experience:
 ## Example: Complete Sink Template
 
 ```yaml
-# pipeline-templates/sink-pipeline.yaml
+# pipelines/templates/sink-pipeline.yaml
 input:
   kafka:
     addresses: ["{{KAFKA_BROKERS}}"]

@@ -141,11 +141,11 @@ docker compose restart adminer
 ### Pipeline stats return error
 ```bash
 # Check if pipelines are running
-docker ps | grep redpanda-connect
+docker ps | grep bento
 
 # Check pipeline logs
-docker logs cdc-redpanda-connect-source --tail 20
-docker logs cdc-redpanda-connect-sink --tail 20
+docker logs cdc-bento-source --tail 20
+docker logs cdc-bento-sink --tail 20
 
 # Restart pipelines
 cdc reload-pipelines

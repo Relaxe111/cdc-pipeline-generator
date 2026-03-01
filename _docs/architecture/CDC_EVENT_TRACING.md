@@ -89,7 +89,7 @@ At the end of the pipeline, a sampled subset of trace records are written to a `
 | 5 | Inserted into staging table | `staging_inserted_at` | Staging write latency |
 | 6 | Merged into target table | `target_merged_at` | MERGE/upsert execution time |
 
-> **Note:** In Redpanda Connect's architecture, there is no separate buffering layer between the Kafka consumer and the first pipeline processor. The `kafka_consumed_at` timestamp effectively marks both "consumed from Kafka" and "sink processing started". If a future architecture introduces a routing/dispatch layer between Kafka and the sink (e.g., Bytewax), a separate `sink_received_at` timestamp could be added at that point.
+> **Note:** In Bento's architecture, there is no separate buffering layer between the Kafka consumer and the first pipeline processor. The `kafka_consumed_at` timestamp effectively marks both "consumed from Kafka" and "sink processing started". If a future architecture introduces a routing/dispatch layer between Kafka and the sink (e.g., Bytewax), a separate `sink_received_at` timestamp could be added at that point.
 
 ---
 
@@ -540,6 +540,6 @@ VACUUM cdc_trace_log;
 
 - [PostgreSQL GENERATED ALWAYS AS](https://www.postgresql.org/docs/current/ddl-generated-columns.html)
 - [PostgreSQL UNLOGGED Tables](https://www.postgresql.org/docs/current/sql-createtable.html#SQL-CREATETABLE-UNLOGGED)
-- [Redpanda Connect Bloblang Functions](https://docs.redpanda.com/redpanda-connect/guides/bloblang/functions/)
+- [Bento Bloblang Functions](https://warpstreamlabs.github.io/bento/docs/guides/bloblang/functions/)
 - [Kafka Consumer Lag Monitoring](https://docs.redpanda.com/current/manage/monitoring/)
 - [pg_cron — Job Scheduler](https://github.com/citusdata/pg_cron)

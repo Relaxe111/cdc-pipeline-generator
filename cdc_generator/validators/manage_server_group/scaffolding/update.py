@@ -318,6 +318,17 @@ def update_scaffold(project_root: Path) -> bool:
             gitkeep.touch()
             print_success(f"✓ Created: generated/{gen_dir}/.gitkeep")
 
+    for pipeline_dir in [
+        project_root / "pipelines" / "generated",
+        project_root / "pipelines" / "generated" / "sources",
+        project_root / "pipelines" / "generated" / "sinks",
+    ]:
+        gitkeep = pipeline_dir / ".gitkeep"
+        if not gitkeep.exists():
+            gitkeep.touch()
+            relative_path = gitkeep.relative_to(project_root)
+            print_success(f"✓ Created: {relative_path}")
+
     # 3. Merge .vscode/settings.json (add new keys, preserve existing)
     _update_vscode_settings(project_root)
 

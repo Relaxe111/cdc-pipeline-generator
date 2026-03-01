@@ -147,8 +147,8 @@ cdc-generator generate --service adopus --customer brukerforum
 ### 4. Deploy Pipelines
 
 ```bash
-# Apply generated pipelines to Redpanda Connect
-kubectl apply -f generated/pipelines/adopus/nonprod/
+# Apply generated pipelines to Bento runtime
+kubectl apply -f pipelines/generated/sources/nonprod/
 ```
 
 ## Key Features

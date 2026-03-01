@@ -1,7 +1,7 @@
 """
 CDC Pipeline Generator
 
-A library for generating Redpanda Connect pipeline configurations
+A library for generating Bento pipeline configurations
 for Change Data Capture (CDC) workflows.
 """
 

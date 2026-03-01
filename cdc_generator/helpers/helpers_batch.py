@@ -1,7 +1,7 @@
 """
 Helper functions for SQL generation - optimized using sql_insert and sql_raw.
 
-This module provides functions to generate Redpanda Connect output configurations
+This module provides functions to generate Bento output configurations
 that efficiently handle CDC operations (INSERT, UPDATE, DELETE) using:
 - sql_raw for DELETE operations
 - sql_insert with ON CONFLICT for INSERT/UPDATE operations

@@ -543,7 +543,7 @@ docker exec cdc-redpanda rpk redpanda admin brokers list
 docker exec cdc-redpanda rpk cluster partitions
 ```
 
-#### Redpanda Connection Issues
+#### Broker Connection Issues
 
 ```bash
 # Verify Redpanda is listening

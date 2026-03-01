@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate Redpanda Connect pipeline configurations from templates and customer configs.
+Generate Bento pipeline configurations from templates and customer configs.
 
 Usage:
     python generate_pipelines.py                    # Generate all customers, all environments
@@ -9,6 +9,7 @@ Usage:
     python generate_pipelines.py --list             # List all customers
 """
 
+import argparse
 import json
 import re
 import sys
@@ -19,6 +20,7 @@ from typing import Any, cast
 from cdc_generator.helpers.helpers_batch import build_staging_case
 from cdc_generator.helpers.service_config import (
     get_all_customers,
+    get_project_root,
     load_customer_config,
     load_service_config,
 )
@@ -34,7 +36,7 @@ def get_services_for_customers(customers: list[str]) -> set[str]:
     Returns set of service names that need to be validated.
     """
     services: set[str] = set()
-    services_dir = Path(__file__).parent.parent / "services"
+    services_dir = get_project_root() / "services"
 
     if not services_dir.exists():
         return services
@@ -87,7 +89,7 @@ def should_write_file(file_path: Path, new_content: str) -> bool:
 
 
 def preserve_env_vars(value: object) -> str:
-    """Preserve environment variable placeholders for runtime resolution by Redpanda Connect.
+    """Preserve environment variable placeholders for runtime resolution by Bento.
 
     Also provides backward compatibility by converting old ${env:VAR} format to ${VAR}.
     """
@@ -96,15 +98,13 @@ def preserve_env_vars(value: object) -> str:
         return re.sub(r'\$\{env:([A-Z_][A-Z0-9_]*)\}', r'${\1}', value)
     return str(value) if value is not None else ""
 
-SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-TEMPLATES_DIR = PROJECT_ROOT / "pipeline-templates"
+PROJECT_ROOT = get_project_root()
+TEMPLATES_DIR = PROJECT_ROOT / "pipelines" / "templates"
 SERVICES_DIR = PROJECT_ROOT / "services"
-CUSTOMERS_DIR = PROJECT_ROOT / "2-customers"  # Legacy support during migration
 
-# Generated files go to root-level generated/ folder
-GENERATED_ROOT = PROJECT_ROOT / "generated"
-GENERATED_DIR = GENERATED_ROOT / "pipelines" / "multi-tenant"
+PIPELINES_GENERATED_DIR = PROJECT_ROOT / "pipelines" / "generated"
+GENERATED_SOURCES_DIR = PIPELINES_GENERATED_DIR / "sources"
+GENERATED_SINKS_DIR = PIPELINES_GENERATED_DIR / "sinks"
 
 
 def load_template(template_name: str) -> str:
@@ -116,20 +116,55 @@ def load_template(template_name: str) -> str:
 
 
 def load_generated_table_definitions() -> dict[str, Any]:
-    """Load generated table definitions from generated/table-definitions/"""
-    generated_dir = GENERATED_ROOT / 'table-definitions'
+    """Load table definitions from canonical services/_schemas/ tree.
+
+    Returns a table-name keyed dict with normalized ``fields`` entries:
+        {
+            "Actor": {
+                "fields": [{"mssql": "[actno]", "postgres": "actno"}, ...]
+            }
+        }
+    """
+    generated_dir = SERVICES_DIR / '_schemas'
 
     if not generated_dir.exists():
         return {}
 
     tables_by_name: dict[str, Any] = {}
-    for yaml_file in sorted(generated_dir.glob('*.yaml')):
+    for yaml_file in sorted(generated_dir.rglob('*.yaml')):
+        path_parts = set(yaml_file.parts)
+        if '_definitions' in path_parts or '_bloblang' in path_parts or 'adapters' in path_parts:
+            continue
+
         table_def = load_yaml_file(yaml_file)
         if table_def and table_def:
             table_def_dict = cast(dict[str, object], table_def)
-            table_name = table_def_dict.get('name')
-            if isinstance(table_name, str):
-                tables_by_name[table_name] = table_def
+            table_name = table_def_dict.get('table')
+            columns = table_def_dict.get('columns')
+            if not isinstance(table_name, str) or not isinstance(columns, list):
+                continue
+
+            fields: list[dict[str, str]] = []
+            for col_raw in columns:
+                if not isinstance(col_raw, dict):
+                    continue
+                col = cast(dict[str, Any], col_raw)
+                col_name_raw = col.get('name')
+                if not isinstance(col_name_raw, str) or not col_name_raw:
+                    continue
+                postgres_name = normalize_table_name(col_name_raw)
+                fields.append(
+                    {
+                        'mssql': f'[{col_name_raw}]',
+                        'postgres': postgres_name,
+                    },
+                )
+
+            if fields:
+                tables_by_name[table_name] = {
+                    'name': table_name,
+                    'fields': fields,
+                }
 
     return tables_by_name
 
@@ -210,7 +245,7 @@ def generate_customer_pipelines(
     customer: str,
     environments: list[str] | None = None,
 ) -> None:
-    """Generate Redpanda Connect SOURCE pipeline config for a customer.
+    """Generate Bento SOURCE pipeline config for a customer.
 
     Note: Sink pipelines are generated separately as consolidated per-environment files.
     """
@@ -307,7 +342,7 @@ def generate_customer_pipelines(
         source_pipeline = substitute_variables(source_template, variables)
 
         # Create output directory for customer source
-        output_dir = GENERATED_DIR / env_name / customer_name
+        output_dir = GENERATED_SOURCES_DIR / env_name / customer_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Write source pipeline file with DO NOT EDIT warning
@@ -319,8 +354,8 @@ def generate_customer_pipelines(
 # This file is automatically generated from templates and customer configs
 #
 # To make changes:
-#   1. Edit source files: 2-customers/{customer}.yaml or pipeline-templates/
-#   2. Run: python3 scripts/3-generate-pipelines.py
+#   1. Edit source files: services/<service>.yaml and pipelines/templates/
+#   2. Run: cdc manage-pipelines generate --all
 #
 # Customer: {customer}
 # Environment: {env}
@@ -337,9 +372,9 @@ def generate_customer_pipelines(
         # Only write files if content has actually changed (ignoring timestamp)
         if should_write_file(source_path, source_content):
             source_path.write_text(source_content)
-            print(f"      ✓ Generated: {source_path.relative_to(SCRIPT_DIR.parent)}")
+            print(f"      ✓ Generated: {source_path.relative_to(PROJECT_ROOT)}")
         else:
-            print(f"      ⊘ Unchanged: {source_path.relative_to(SCRIPT_DIR.parent)}")
+            print(f"      ⊘ Unchanged: {source_path.relative_to(PROJECT_ROOT)}")
 
 
 def generate_consolidated_sink(
@@ -449,7 +484,7 @@ def generate_consolidated_sink(
     sink_pipeline = substitute_variables(sink_template, variables)
 
     # Create output directory for consolidated sink
-    output_dir = GENERATED_DIR / env_name
+    output_dir = GENERATED_SINKS_DIR / env_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     sink_path = output_dir / "sink-pipeline.yaml"
@@ -460,9 +495,9 @@ def generate_consolidated_sink(
 # CONSOLIDATED SINK - Handles ALL customers for this environment
 #
 # To make changes:
-#   1. Edit customer files in 2-customers/*.yaml
-#   2. Edit template: pipeline-templates/sink-pipeline.yaml
-#   3. Run: python3 scripts/3-generate-pipelines.py
+#   1. Edit source files: services/<service>.yaml
+#   2. Edit template: pipelines/templates/sink-pipeline.yaml
+#   3. Run: cdc manage-pipelines generate --all
 #
 # Environment: {env}
 # Customers: {customers}
@@ -484,10 +519,10 @@ def generate_consolidated_sink(
 
     if should_write_file(sink_path, sink_content):
         sink_path.write_text(sink_content)
-        print(f"   ✓ Generated: {sink_path.relative_to(SCRIPT_DIR.parent)}")
+        print(f"   ✓ Generated: {sink_path.relative_to(PROJECT_ROOT)}")
         print(f"   📋 Topics: {len(all_topics)}, Table Routes: {len(all_table_cases)}")
     else:
-        print(f"   ⊘ Unchanged: {sink_path.relative_to(SCRIPT_DIR.parent)}")
+        print(f"   ⊘ Unchanged: {sink_path.relative_to(PROJECT_ROOT)}")
 
 
 def build_table_include_list(config: dict[str, Any]) -> str:
@@ -858,55 +893,40 @@ def normalize_table_name(name: str) -> str:
 
 
 def main() -> None:
-    args = sys.argv[1:]
+    parser = argparse.ArgumentParser(
+        prog="cdc manage-pipelines generate",
+        description="Generate source and sink pipelines from templates",
+    )
+    parser.add_argument("customer", nargs="?", help="Generate for a specific customer")
+    parser.add_argument("environment", nargs="?", help="Generate for a specific environment")
+    parser.add_argument("--list", action="store_true", help="List all available customers")
+    parser.add_argument("--all", dest="all_customers", action="store_true", help="Generate for all customers")
+    parser.add_argument("--force", action="store_true", help="Reserved for compatibility (currently no-op)")
+    args = parser.parse_args()
 
-    # Handle --help or -h flag
-    if "--help" in args or "-h" in args:
-        print("""
-Usage:
-    python 3-generate-pipelines.py                    # Generate all customers, all environments
-    python 3-generate-pipelines.py avansas            # Generate all environments for avansas
-    python 3-generate-pipelines.py avansas local      # Generate only local for avansas
-    python 3-generate-pipelines.py --list             # List all customers
-
-Options:
-    --list      List all available customers
-    --help, -h  Show this help message
-
-Output Structure:
-    generated/pipelines/{env}/{customer}/source-pipeline.yaml  # Per customer source
-    generated/pipelines/{env}/sink-pipeline.yaml               # Consolidated sink per env
-""")
-        return
-
-    # Handle --list flag
-    if "--list" in args:
+    if args.list:
         customers = get_all_customers()
         print("Available customers:")
-        for c in sorted(customers):
-            print(f"  - {c}")
+        for customer in sorted(customers):
+            print(f"  - {customer}")
         return
 
-    # Determine customers and environments to generate
-    if len(args) == 0:
-        # Generate all
+    if args.all_customers or args.customer is None:
         customers = get_all_customers()
-        environments = None
-    elif len(args) == 1:
-        # Generate all environments for specific customer
-        customers = [args[0]]
-        environments = None
+        environments = [args.environment] if args.environment else None
+    elif args.customer and args.environment:
+        customers = [args.customer]
+        environments = [args.environment]
     else:
-        # Generate specific environment for specific customer
-        customers = [args[0]]
-        environments = [args[1]]
+        customers = [args.customer]
+        environments = None
 
     if not customers:
-        print("No customers found. Create customer configs in 2-customers/<customer>.yaml")
+        print("No customers found. Create customer configs in services/<service>.yaml")
         return
 
     print("=" * 60)
-    print("🚀 Redpanda Connect Pipeline Generator")
+    print("🚀 Bento Pipeline Generator")
     print("=" * 60)
 
     # Validate service configurations for customers being generated

@@ -1197,7 +1197,7 @@ def manage_pipelines_cmd(ctx: click.Context) -> int:
 
 @manage_pipelines_cmd.command(
     name="generate",
-    help="Generate Redpanda Connect pipelines",
+    help="Generate Bento pipelines",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
@@ -1213,31 +1213,84 @@ def manage_pipelines_generate_cmd(_ctx: click.Context, **_kwargs: object) -> int
 
 
 @manage_pipelines_cmd.command(
-    name="reload",
-    help="Regenerate and reload Redpanda Connect pipelines",
+    name="list",
+    help="List available customers and generated pipeline summary",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
+@click.option("--status", "status_flag", is_flag=True,
+              help="Show readiness/freshness status summary")
 @click.pass_context
-def manage_pipelines_reload_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """manage-pipelines reload passthrough."""
+def manage_pipelines_list_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines list passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
 
-    return execute_grouped_command("manage-pipelines", "reload", sys.argv[3:])
+    return execute_grouped_command("manage-pipelines", "list", sys.argv[3:])
 
 
 @manage_pipelines_cmd.command(
     name="verify",
-    help="Verify pipeline connections",
+    help="Verify pipeline templates/configuration",
     context_settings=_PASSTHROUGH_CTX,
     add_help_option=False,
 )
+@click.option("--full", "full_mode", is_flag=True,
+              help="Run full verification (generate + validate outputs)")
+@click.option("--sink", "sink_mode", is_flag=True,
+              help="Verify sink PostgreSQL connectivity")
+@click.option("--service", help="Optional service name filter for --sink")
 @click.pass_context
 def manage_pipelines_verify_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines verify passthrough."""
     from cdc_generator.cli.commands import execute_grouped_command
 
     return execute_grouped_command("manage-pipelines", "verify", sys.argv[3:])
+
+
+@manage_pipelines_cmd.command(
+    name="diff",
+    help="Detect drift in generated pipeline files",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.pass_context
+def manage_pipelines_diff_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines diff passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-pipelines", "diff", sys.argv[3:])
+
+
+@manage_pipelines_cmd.command(
+    name="health",
+    help="Check Bento/runtime readiness",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--url", "health_urls", multiple=True,
+              help="Optional endpoint URL to probe")
+@click.pass_context
+def manage_pipelines_health_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines health passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-pipelines", "health", sys.argv[3:])
+
+
+@manage_pipelines_cmd.command(
+    name="prune",
+    help="Detect/remove orphaned generated pipeline files",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@click.option("--confirm", is_flag=True,
+              help="Delete orphaned files (default is dry-run)")
+@click.pass_context
+def manage_pipelines_prune_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """manage-pipelines prune passthrough."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command("manage-pipelines", "prune", sys.argv[3:])
 
 
 # ============================================================================
@@ -1283,52 +1336,6 @@ def test_coverage_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     from cdc_generator.cli.commands import execute_command
 
     return execute_command("test-coverage", sys.argv[2:])
-
-
-# ============================================================================
-# manage-pipelines verify-sync
-# ============================================================================
-
-@manage_pipelines_cmd.command(
-    name="verify-sync",
-    help="Verify CDC synchronization and detect gaps",
-    context_settings=_PASSTHROUGH_CTX,
-    add_help_option=False,
-)
-@click.option("--customer", help="Specify customer")
-@click.option("--service", help="Specify service")
-@click.option("--table", help="Specify table")
-@click.option("--all", "all_flag", is_flag=True, help="Check all tables")
-@click.pass_context
-def manage_pipelines_verify_sync_cmd(_ctx: click.Context, **_kwargs: object) -> int:
-    """manage-pipelines verify-sync passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "verify-sync", sys.argv[3:])
-
-
-# ============================================================================
-# manage-pipelines stress-test
-# ============================================================================
-
-@manage_pipelines_cmd.command(
-    name="stress-test",
-    help="CDC stress test with real-time monitoring",
-    context_settings=_PASSTHROUGH_CTX,
-    add_help_option=False,
-)
-@click.option("--customer", help="Specify customer")
-@click.option("--service", help="Specify service")
-@click.option("--duration", help="Test duration in seconds")
-@click.option("--interval", help="Monitoring interval in seconds")
-@click.pass_context
-def manage_pipelines_stress_test_cmd(
-    _ctx: click.Context, **_kwargs: object,
-) -> int:
-    """manage-pipelines stress-test passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "stress-test", sys.argv[3:])
 
 
 # ============================================================================

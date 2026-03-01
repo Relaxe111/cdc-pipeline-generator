@@ -1,0 +1,8 @@
+input:
+  env: "{{ENV}}"
+  topics:
+{{SINK_TOPICS}}
+pipeline:
+  processors:
+    - mapping: |
+{{TABLE_CASES}}

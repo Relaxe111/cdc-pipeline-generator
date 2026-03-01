@@ -392,7 +392,7 @@ cd pipelines
 python3 generate_pipelines.py avansas local
 
 # 4. Restart pipelines
-docker compose restart cdc-redpanda-connect-source
+docker compose restart cdc-bento-source
 
 # 5. Verify
 python3 scripts/verify-pipeline.py
@@ -422,7 +422,7 @@ done
 cd ..
 
 # 4. Restart pipelines
-docker compose restart cdc-redpanda-connect-source cdc-redpanda-connect-sink
+docker compose restart cdc-bento-source cdc-bento-sink
 
 # 5. Verify
 python3 scripts/verify-pipeline.py

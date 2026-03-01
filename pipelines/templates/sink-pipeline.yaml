@@ -1,5 +1,5 @@
 # =============================================================================
-# Redpanda Connect Sink Pipeline - Consolidated Multi-Schema
+# Bento Sink Pipeline - Consolidated Multi-Schema
 # =============================================================================
 # This pipeline consumes CDC events from Kafka and routes to multiple 
 # PostgreSQL schemas in a single pipeline instance.
@@ -90,7 +90,7 @@ logger:
   format: json
   add_timestamp: true
   static_fields:
-    "@service": redpanda-connect-sink
+    "@service": bento-sink
     environment: "{{ENV}}"
 
 http:
@@ -103,4 +103,4 @@ metrics:
   prometheus:
     push_url: ""
     push_interval: 30s
-    push_job_name: redpanda-connect-sink-{{ENV}}
+    push_job_name: bento-sink-{{ENV}}
