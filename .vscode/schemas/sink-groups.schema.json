@@ -81,6 +81,26 @@
         },
         "environment_aware": { "type": "boolean" },
         "description": { "type": "string" },
+        "database_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "schema_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "table_include_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "table_exclude_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "envs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "servers": {
           "type": "object",
           "minProperties": 1,

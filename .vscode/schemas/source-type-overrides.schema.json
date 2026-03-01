@@ -20,7 +20,50 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "type": { "type": "string" },
+              "type": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "bigint",
+                      "int",
+                      "smallint",
+                      "tinyint",
+                      "bit",
+                      "decimal",
+                      "numeric",
+                      "money",
+                      "smallmoney",
+                      "float",
+                      "real",
+                      "date",
+                      "datetime",
+                      "datetime2",
+                      "smalldatetime",
+                      "datetimeoffset",
+                      "time",
+                      "char",
+                      "nchar",
+                      "varchar",
+                      "nvarchar",
+                      "text",
+                      "ntext",
+                      "binary",
+                      "varbinary",
+                      "image",
+                      "rowversion",
+                      "timestamp",
+                      "uniqueidentifier",
+                      "xml",
+                      "json",
+                      "sql_variant",
+                      "geography",
+                      "geometry"
+                    ]
+                  },
+                  { "type": "string" }
+                ]
+              },
               "reason": { "type": "string" }
             },
             "required": ["type"]

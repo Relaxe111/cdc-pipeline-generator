@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../.vscode/schemas/transform-rules.schema.json
 # ============================================================================
 # Transform Rules Examples (Bloblang-first)
 # ============================================================================

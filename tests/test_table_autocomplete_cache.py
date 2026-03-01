@@ -95,6 +95,12 @@ def test_generate_service_autocomplete_definitions_replaces_regenerated_schemas(
         result = generate_service_autocomplete_definitions(server_group, scanned_databases)
 
     assert result is True
+    raw_text = target.read_text(encoding="utf-8")
+    assert raw_text.startswith(
+        "# yaml-language-server: "
+        + "$schema=../../../.vscode/schemas/autocomplete-definitions.schema.json"
+    )
+    assert "AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY" in raw_text
     saved = load_yaml_file(target)
     assert saved == {
         "dbo": ["new_table"],

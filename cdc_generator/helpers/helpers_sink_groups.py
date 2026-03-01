@@ -219,6 +219,7 @@ def save_sink_groups(
 def _build_sink_file_header_comments() -> list[str]:
     """Build the standard header comments for sink-groups.yaml."""
     return [
+        "# yaml-language-server: $schema=.vscode/schemas/sink-groups.schema.json",
         "# ============================================================================",
         "# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY",
         "# Use 'cdc manage-sink-groups' commands to modify this file",

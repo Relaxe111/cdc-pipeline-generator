@@ -91,15 +91,7 @@
             { "type": "string" }
           ]
         },
-        "expected_output_column": {
-          "oneOf": [
-            {
-              "type": "string",
-              "enum": ["priority_label", "user_class"]
-            },
-            { "type": "string" }
-          ]
-        }
+        "expected_output_column": { "type": "string" } 
       },
       "required": ["bloblang_ref"]
     },

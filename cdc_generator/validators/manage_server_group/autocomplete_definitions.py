@@ -27,6 +27,20 @@ def _definitions_dir() -> Path:
     return get_project_root() / "services" / "_schemas" / "_definitions"
 
 
+AUTOCOMPLETE_SCHEMA_HEADER = (
+    "# yaml-language-server: "
+    + "$schema=../../../.vscode/schemas/autocomplete-definitions.schema.json\n"
+    + "# ============================================================================\n"
+    + "# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY\n"
+    + "# Generated table autocomplete definitions per service/schema.\n"
+    + "#\n"
+    + "# Regenerate with:\n"
+    + "#   - cdc manage-source-groups --update\n"
+    + "#   - cdc manage-sink-groups --update\n"
+    + "# ============================================================================\n\n"
+)
+
+
 def _load_existing_autocomplete_file(path: Path) -> dict[str, set[str]]:
     if not path.is_file():
         return {}
@@ -240,7 +254,8 @@ def generate_service_autocomplete_definitions(
             if table_names
         }
 
-        with target_file.open("w") as f:
+        with target_file.open("w", encoding="utf-8") as f:
+            f.write(AUTOCOMPLETE_SCHEMA_HEADER)
             yaml.dump(payload, f)
 
         print_info(
