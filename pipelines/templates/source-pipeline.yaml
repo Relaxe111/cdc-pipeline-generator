@@ -19,8 +19,8 @@ input:
 
     # Poll all tables continuously
     batching:
-      count: 100
-      period: 1s
+      count: ${SOURCE_BATCH_COUNT:-100}
+      period: ${SOURCE_BATCH_PERIOD:-1s}
 
 pipeline:
   processors:
@@ -98,8 +98,8 @@ output:
     max_in_flight: 64
     compression: snappy
     batching:
-      count: 100
-      period: 1s
+      count: ${SOURCE_BATCH_COUNT:-100}
+      period: ${SOURCE_BATCH_PERIOD:-1s}
 
 logger:
   level: INFO

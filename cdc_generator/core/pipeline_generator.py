@@ -10,9 +10,9 @@ Usage:
 """
 
 import argparse
-import json
 import re
 import sys
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -50,13 +50,15 @@ def get_services_for_customers(customers: list[str]) -> set[str]:
             service_customers = service_config.get('customers', [])
             if not isinstance(service_customers, list):
                 continue
+            service_customers_list = cast(list[ConfigValue], service_customers)
 
             customer_names: set[str] = set()
-            c: ConfigValue
-            for c in service_customers:
-                if not isinstance(c, dict):
+            customer_value: ConfigValue
+            for customer_value in service_customers_list:
+                if not isinstance(customer_value, dict):
                     continue
-                name = c.get('name')
+                customer_dict = cast(dict[str, ConfigValue], customer_value)
+                name = customer_dict.get('name')
                 if isinstance(name, str):
                     customer_names.add(name.casefold())
 
@@ -105,6 +107,7 @@ SERVICES_DIR = PROJECT_ROOT / "services"
 PIPELINES_GENERATED_DIR = PROJECT_ROOT / "pipelines" / "generated"
 GENERATED_SOURCES_DIR = PIPELINES_GENERATED_DIR / "sources"
 GENERATED_SINKS_DIR = PIPELINES_GENERATED_DIR / "sinks"
+SINK_REF_PARTS_COUNT = 2
 
 
 def load_template(template_name: str) -> str:
@@ -143,9 +146,11 @@ def load_generated_table_definitions() -> dict[str, Any]:
             columns = table_def_dict.get('columns')
             if not isinstance(table_name, str) or not isinstance(columns, list):
                 continue
+            columns_list = cast(list[object], columns)
 
             fields: list[dict[str, str]] = []
-            for col_raw in columns:
+            col_raw: object
+            for col_raw in columns_list:
                 if not isinstance(col_raw, dict):
                     continue
                 col = cast(dict[str, Any], col_raw)
@@ -170,66 +175,62 @@ def load_generated_table_definitions() -> dict[str, Any]:
 
 
 def get_primary_key_from_schema(
-    _service_name: str,
+    service_name: str,
     schema_name: str,
     table_name: str,
 ) -> tuple[str | list[str] | None, str | None]:
-    """Read primary_key from generated validation schema.
+    """Read primary_key from canonical service schema table definition.
 
     Returns:
-        tuple: (primary_key, source) where source is 'schema', 'fallback', or None
+        tuple: (primary_key, source) where source is 'schema' or None
     """
-    # Find validation schema file
-    schemas_dir = PROJECT_ROOT / '.vscode' / 'schemas'
+    table_schema_path = SERVICES_DIR / '_schemas' / service_name / schema_name / f'{table_name}.yaml'
 
-    if not schemas_dir.exists():
-        return None, None
+    if not table_schema_path.exists():
+        raise ValueError(
+            "Missing table schema definition for primary key resolution: "
+            + f"{table_schema_path}. "
+            + "Generation requires services/_schemas/{service}/{schema}/{Table}.yaml "
+            + "with a valid primary_key."
+        )
 
-    # Find schema file matching service (might have different database name)
-    schema_files = list(schemas_dir.glob('*.service-validation.schema.json'))
+    table_def_dict = cast(dict[str, Any], load_yaml_file(table_schema_path))
 
-    for schema_file in schema_files:
-        try:
-            with schema_file.open() as f:
-                validation_schema = json.load(f)
+    # 1) Prefer explicit top-level primary_key
+    top_level_pk = table_def_dict.get('primary_key')
+    if isinstance(top_level_pk, str) and top_level_pk:
+        return top_level_pk, 'schema'
+    if isinstance(top_level_pk, list):
+        top_level_pk_list = cast(list[object], top_level_pk)
+        pk_list = [str(pk) for pk in top_level_pk_list if str(pk)]
+        if pk_list:
+            return pk_list, 'schema'
 
-            # Navigate to table definitions in shared.source_tables
-            shared = validation_schema.get('properties', {}).get('shared', {})
-            source_tables = shared.get('properties', {}).get('source_tables', {})
-            items = source_tables.get('items', {})
+    # 2) Fallback to columns[].primary_key flags in schema file
+    columns = table_def_dict.get('columns', [])
+    pk_columns: list[str] = []
+    if isinstance(columns, list):
+        columns_list = cast(list[object], columns)
+        col: object
+        for col in columns_list:
+            if not isinstance(col, dict):
+                continue
+            col_dict = cast(dict[str, Any], col)
+            if col_dict.get('primary_key') is True:
+                col_name = col_dict.get('name')
+                if isinstance(col_name, str) and col_name:
+                    pk_columns.append(col_name)
 
-            # Look for schema group
-            if 'anyOf' in items:
-                for schema_group in items['anyOf']:
-                    schema_def = schema_group.get('properties', {}).get('schema', {})
-                    if schema_def.get('const') == schema_name:
-                        # Found matching schema, now find table
-                        tables = schema_group.get('properties', {}).get('tables', {})
-                        table_items = tables.get('items', {})
+    if pk_columns:
+        if len(pk_columns) == 1:
+            return pk_columns[0], 'schema'
+        return pk_columns, 'schema'
 
-                        if 'anyOf' in table_items:
-                            for table_def in table_items['anyOf']:
-                                table_name_def = table_def.get('properties', {}).get('name', {})
-                                if table_name_def.get('const') == table_name:
-                                    # Found the table, extract primary_key
-                                    pk_def = table_def.get('properties', {}).get('primary_key', {})
-                                    pk_desc = pk_def.get('description', '')
-
-                                    # Parse primary key from description
-                                    # Format: "Primary key: 'column_name'" or
-                                    # "Primary key: ['col1', 'col2']"
-                                    if 'Primary key:' in pk_desc:
-                                        pk_str = pk_desc.split('Primary key:')[1].strip()
-                                        try:
-                                            import ast
-                                            pk_value = ast.literal_eval(pk_str)
-                                            return pk_value, 'schema'
-                                        except Exception:
-                                            pass
-        except Exception:
-            continue
-
-    return None, None
+    raise ValueError(
+        "Missing primary key metadata in schema definition: "
+        + f"{table_schema_path}. "
+        + "Add top-level primary_key or mark columns with primary_key: true."
+    )
 
 
 def substitute_variables(template: str, variables: dict[str, Any]) -> str:
@@ -239,6 +240,125 @@ def substitute_variables(template: str, variables: dict[str, Any]) -> str:
         placeholder = f"{{{{{key}}}}}"
         result = result.replace(placeholder, str(value))
     return result
+
+
+def _resolve_sink_env_key(source_cfg: dict[str, Any], env_name: str) -> str:
+    """Resolve sink-groups source environment key from generator env name."""
+    if env_name in source_cfg:
+        return env_name
+
+    env_aliases: dict[str, list[str]] = {
+        'default': ['dev', 'nonprod', 'stage', 'test'],
+        'nonprod': ['dev', 'stage', 'test'],
+        'local': ['dev', 'test'],
+        'prod': ['prod', 'prod-adcuris'],
+    }
+
+    for candidate in env_aliases.get(env_name, []):
+        if candidate in source_cfg:
+            return candidate
+
+    raise ValueError(
+        f"No sink-groups source environment mapping for env '{env_name}'. "
+        + f"Available: {[key for key in source_cfg if key != 'schemas']}"
+    )
+
+
+def resolve_postgres_url_from_sink_groups(service_name: str, env_name: str) -> str:
+    """Build consolidated sink PostgreSQL URL from sink-groups.yaml.
+
+    Uses service sinks reference like ``sink_asma.directory`` and resolves
+    server credentials + environment database from sink-groups.
+    """
+    service_cfg = load_service_config(service_name)
+    sinks_raw = service_cfg.get('sinks', {})
+    if not isinstance(sinks_raw, dict) or not sinks_raw:
+        raise ValueError(
+            f"Service '{service_name}' has no sinks configuration; cannot resolve sink DSN"
+        )
+    sinks = cast(dict[str, Any], sinks_raw)
+
+    sink_ref = str(next(iter(sinks)))
+    sink_ref_parts = sink_ref.split('.', 1)
+    if len(sink_ref_parts) != SINK_REF_PARTS_COUNT:
+        raise ValueError(
+            f"Invalid sink reference '{sink_ref}' in service '{service_name}'. "
+            + "Expected format '<sink_group>.<source>'"
+        )
+
+    sink_group_name, sink_source_name = sink_ref_parts
+
+    sink_groups_path = PROJECT_ROOT / 'sink-groups.yaml'
+    if not sink_groups_path.exists():
+        raise ValueError(f"Missing sink-groups.yaml at {sink_groups_path}")
+
+    sink_groups_data = cast(dict[str, Any], load_yaml_file(sink_groups_path))
+    sink_group_raw = sink_groups_data.get(sink_group_name)
+    if not isinstance(sink_group_raw, dict):
+        raise ValueError(
+            f"Sink group '{sink_group_name}' not found in sink-groups.yaml"
+        )
+
+    sink_group = cast(dict[str, Any], sink_group_raw)
+    sources_raw = sink_group.get('sources', {})
+    if not isinstance(sources_raw, dict):
+        raise ValueError(
+            f"Sink group '{sink_group_name}' has invalid 'sources' section"
+        )
+
+    sources = cast(dict[str, Any], sources_raw)
+    source_raw = sources.get(sink_source_name)
+    if not isinstance(source_raw, dict):
+        raise ValueError(
+            f"Sink source '{sink_source_name}' not found in sink group '{sink_group_name}'"
+        )
+
+    source_cfg = cast(dict[str, Any], source_raw)
+    source_env_key = _resolve_sink_env_key(source_cfg, env_name)
+    source_env_raw = source_cfg.get(source_env_key)
+    if not isinstance(source_env_raw, dict):
+        raise ValueError(
+            f"Invalid sink source env config for '{sink_group_name}.{sink_source_name}.{source_env_key}'"
+        )
+
+    source_env_cfg = cast(dict[str, Any], source_env_raw)
+    server_name = source_env_cfg.get('server')
+    database_name = source_env_cfg.get('database')
+    if not isinstance(server_name, str) or not isinstance(database_name, str):
+        raise ValueError(
+            f"Missing server/database for sink source '{sink_group_name}.{sink_source_name}.{source_env_key}'"
+        )
+
+    servers_raw = sink_group.get('servers', {})
+    if not isinstance(servers_raw, dict):
+        raise ValueError(f"Sink group '{sink_group_name}' has invalid 'servers' section")
+    servers = cast(dict[str, Any], servers_raw)
+    server_cfg_raw = servers.get(server_name)
+    if not isinstance(server_cfg_raw, dict):
+        raise ValueError(
+            f"Server '{server_name}' not found in sink group '{sink_group_name}'"
+        )
+
+    server_cfg = cast(dict[str, Any], server_cfg_raw)
+
+    host_raw = server_cfg.get('host')
+    port_raw = server_cfg.get('port')
+    user_raw = server_cfg.get('user')
+    password_raw = server_cfg.get('password')
+
+    if host_raw in (None, '') or port_raw in (None, '') or user_raw in (None, '') or password_raw in (None, ''):
+        raise ValueError(
+            f"Missing sink server credentials for '{sink_group_name}.{server_name}'. "
+            + "Required: host, port, user, password"
+        )
+
+    host = preserve_env_vars(host_raw)
+    port = preserve_env_vars(port_raw)
+    user = preserve_env_vars(user_raw)
+    password = preserve_env_vars(password_raw)
+    database = preserve_env_vars(database_name)
+
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode=disable"
 
 
 def generate_customer_pipelines(
@@ -400,7 +520,7 @@ def generate_consolidated_sink(
     # Aggregate all topics and table cases across customers
     all_topics: list[str] = []
     all_table_cases: list[str] = []
-    postgres_url = None  # Will be set from first customer's config
+    postgres_url = None  # Resolved from sink-groups (preferred) or customer config fallback
 
     for customer in customers:
         try:
@@ -409,6 +529,7 @@ def generate_consolidated_sink(
             continue
 
         schema = config.get("schema", customer)
+        service_name = str(config.get('service', ''))
         env_config = config.get("environments", {}).get(env_name)
 
         if not env_config:
@@ -418,18 +539,11 @@ def generate_consolidated_sink(
         # Strip customer-specific URL parameters like search_path or currentSchema
         # since we use schema-qualified table names instead
         if postgres_url is None:
-            raw_url = preserve_env_vars(
-                env_config.get("postgres", {}).get("url",
-                    "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+            postgres_url = _resolve_consolidated_postgres_url(
+                service_name=service_name,
+                customer=customer,
+                env_name=env_name,
             )
-            # Remove customer-specific parameters (search_path, currentSchema, options)
-            # Keep only the base URL with sslmode
-            if '&options=' in raw_url:
-                postgres_url = raw_url.split('&options=')[0]
-            elif '?currentSchema=' in raw_url:
-                postgres_url = raw_url.split('?currentSchema=')[0]
-            else:
-                postgres_url = raw_url
 
         # Build topics for this customer
         topic_prefix = preserve_env_vars(env_config.get("topic_prefix", f"{env_name}.{customer}"))
@@ -655,7 +769,7 @@ def build_source_table_inputs(
         driver: mssql
         dsn: "{dsn}"
         query: |
-          SELECT TOP 100000 {select_columns}
+          SELECT TOP ${{MSSQL_CDC_SELECT_TOP:-100000}} {select_columns}
           FROM cdc.{schema}_{table_name}_CT
           WHERE [__$start_lsn] > CONVERT(VARBINARY(10), $1, 1)
           ORDER BY [__$start_lsn], [__$seqval]
@@ -742,13 +856,12 @@ def build_table_routing_map(
         else:
             # Try to get primary key from multiple sources (priority order):
             # 1. User-specified in YAML
-            # 2. Validation schema (auto-detected from database)
-            # 3. Fallback to 'id'
+            # 2. Canonical table schema file in services/_schemas
             primary_key: str | list[str] | None = table_def.get('primary_key')
             pk_source = 'yaml' if primary_key else None
 
             if not primary_key:
-                # Try to read from validation schema
+                # Try to read from canonical service schema file
                 schema_pk, _source = get_primary_key_from_schema(
                     service_name, schema, table_name
                 )
@@ -761,12 +874,13 @@ def build_table_routing_map(
                     )
 
             if not primary_key:
-                # Final fallback
-                primary_key = 'id'
-                pk_source = 'fallback'
-                print(f"  ⚠️  {schema}.{table_name}: No primary_key found, using fallback 'id'")
+                raise ValueError(
+                    f"{schema}.{table_name}: No primary_key found. "
+                    + "Generation requires schema metadata under "
+                    + f"services/_schemas/{service_name}/{schema}/{table_name}.yaml"
+                )
 
-            # Validate if user specified primary_key matches schema
+            # Validate if user specified primary_key matches canonical schema
             if pk_source == 'yaml':
                 schema_pk, _ = get_primary_key_from_schema(service_name, schema, table_name)
                 if schema_pk and schema_pk != primary_key:
@@ -892,6 +1006,115 @@ def normalize_table_name(name: str) -> str:
     return result
 
 
+def _parse_generation_scope(
+    args: argparse.Namespace,
+) -> tuple[list[str], list[str] | None]:
+    """Resolve customers and environments from CLI args."""
+    if args.all_customers or args.customer is None:
+        customers = get_all_customers()
+        environments = [args.environment] if args.environment else None
+    elif args.customer and args.environment:
+        customers = [args.customer]
+        environments = [args.environment]
+    else:
+        customers = [args.customer]
+        environments = None
+
+    return customers, environments
+
+
+def _validate_services_for_customers(customers: list[str]) -> None:
+    """Validate service configurations required by selected customers."""
+    services_to_validate = get_services_for_customers(customers)
+    if not services_to_validate:
+        return
+
+    print(
+        f"\n📋 Validating {len(services_to_validate)} service(s): "
+        + f"{', '.join(sorted(services_to_validate))}"
+    )
+    validation_failed = False
+
+    for service_name in sorted(services_to_validate):
+        print(f"\n  → Validating {service_name}...")
+        if not validate_service_config(service_name):
+            validation_failed = True
+            print(f"    ✗ Validation failed for {service_name}")
+
+    if validation_failed:
+        print(
+            "\n❌ Service validation failed. "
+            + "Fix errors before generating pipelines."
+        )
+        print("   Run: cdc manage-services config --service <name> --validate-config")
+        sys.exit(1)
+
+    print("\n  ✅ All service configurations validated successfully\n")
+
+
+def _generate_sources(customers: list[str], environments: list[str] | None) -> bool:
+    """Generate per-customer source pipelines and return failure flag."""
+    generation_failed = False
+    for customer in customers:
+        try:
+            generate_customer_pipelines(customer, environments)
+        except Exception as error:
+            generation_failed = True
+            print(f"\n   ✗ Error generating {customer}: {error}")
+            traceback.print_exc()
+    return generation_failed
+
+
+def _collect_target_environments(customers: list[str], environments: list[str] | None) -> set[str]:
+    """Collect environments to generate consolidated sinks for."""
+    env_set: set[str] = set()
+    for customer in customers:
+        try:
+            config = load_customer_config(customer)
+            customer_envs = list(config.get("environments", {}).keys())
+            if environments:
+                customer_envs = [env for env in customer_envs if env in environments]
+            env_set.update(customer_envs)
+        except FileNotFoundError:
+            continue
+    return env_set
+
+
+def _generate_sinks(env_set: set[str]) -> bool:
+    """Generate consolidated sink pipelines and return failure flag."""
+    generation_failed = False
+    all_customers = get_all_customers()
+    for env_name in sorted(env_set):
+        try:
+            generate_consolidated_sink(env_name, all_customers)
+        except Exception as error:
+            generation_failed = True
+            print(f"\n   ✗ Error generating consolidated sink for {env_name}: {error}")
+            traceback.print_exc()
+    return generation_failed
+
+
+def _resolve_consolidated_postgres_url(
+    service_name: str,
+    customer: str,
+    env_name: str,
+) -> str:
+    """Resolve Postgres URL for consolidated sink generation."""
+    resolved_service_name = service_name
+    if not resolved_service_name:
+        matched_services = sorted(get_services_for_customers([customer]))
+        if len(matched_services) == 1:
+            resolved_service_name = matched_services[0]
+
+    if not resolved_service_name:
+        raise ValueError(
+            f"Unable to resolve service for customer '{customer}'. "
+            + "Consolidated sink DSN must be resolved from sink-groups.yaml (no localhost fallback)."
+        )
+
+    return resolve_postgres_url_from_sink_groups(resolved_service_name, env_name)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="cdc manage-pipelines generate",
@@ -911,15 +1134,7 @@ def main() -> None:
             print(f"  - {customer}")
         return
 
-    if args.all_customers or args.customer is None:
-        customers = get_all_customers()
-        environments = [args.environment] if args.environment else None
-    elif args.customer and args.environment:
-        customers = [args.customer]
-        environments = [args.environment]
-    else:
-        customers = [args.customer]
-        environments = None
+    customers, environments = _parse_generation_scope(args)
 
     if not customers:
         print("No customers found. Create customer configs in services/<service>.yaml")
@@ -929,65 +1144,18 @@ def main() -> None:
     print("🚀 Bento Pipeline Generator")
     print("=" * 60)
 
-    # Validate service configurations for customers being generated
-    services_to_validate = get_services_for_customers(customers)
+    _validate_services_for_customers(customers)
+    source_failed = _generate_sources(customers, environments)
+    env_set = _collect_target_environments(customers, environments)
+    sink_failed = _generate_sinks(env_set)
+    generation_failed = source_failed or sink_failed
 
-    if services_to_validate:
-        print(
-            f"\n📋 Validating {len(services_to_validate)} service(s): "
-            + f"{', '.join(sorted(services_to_validate))}"
-        )
-        validation_failed = False
-
-        for service_name in sorted(services_to_validate):
-            print(f"\n  → Validating {service_name}...")
-            if not validate_service_config(service_name):
-                validation_failed = True
-                print(f"    ✗ Validation failed for {service_name}")
-
-        if validation_failed:
-            print(
-                "\n❌ Service validation failed. "
-                + "Fix errors before generating pipelines."
-            )
-            print("   Run: cdc manage-services config --service <name> --validate-config")
-            sys.exit(1)
-
-        print("\n  ✅ All service configurations validated successfully\n")
-
-    # Generate source pipelines per customer
-    for customer in customers:
-        try:
-            generate_customer_pipelines(customer, environments)
-        except Exception as e:
-            print(f"\n   ✗ Error generating {customer}: {e}")
-            import traceback
-            traceback.print_exc()
-
-    # Generate consolidated sinks per environment
-    # Collect all unique environments from the customers being processed
-    env_set: set[str] = set()
-    for customer in customers:
-        try:
-            config = load_customer_config(customer)
-            customer_envs = list(config.get("environments", {}).keys())
-            if environments:
-                # Only include environments that were requested
-                customer_envs = [e for e in customer_envs if e in environments]
-            env_set.update(customer_envs)
-        except FileNotFoundError:
-            continue
-
-    for env_name in sorted(env_set):
-        try:
-            # For consolidated sink, use ALL customers (not just the ones being regenerated)
-            # This ensures the sink always has complete topic/routing coverage
-            all_customers = get_all_customers()
-            generate_consolidated_sink(env_name, all_customers)
-        except Exception as e:
-            print(f"\n   ✗ Error generating consolidated sink for {env_name}: {e}")
-            import traceback
-            traceback.print_exc()
+    if generation_failed:
+        print("\n" + "=" * 60)
+        print("❌ Pipeline generation failed")
+        print("   Fix schema/primary key errors and retry generation.")
+        print("=" * 60)
+        sys.exit(1)
 
     print("\n" + "=" * 60)
     print("✅ Pipeline generation complete!")

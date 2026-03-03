@@ -328,6 +328,6 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
       args_mapping: |
         root = [ {args_yaml} ]
       batching:
-        count: 100
-        period: 5s
+                count: ${{SINK_BATCH_COUNT:-100}}
+                period: ${{SINK_BATCH_PERIOD:-5s}}
 """
