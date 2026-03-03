@@ -1,4 +1,4 @@
-# Redpanda Connect Pipeline Patterns
+# Bento Pipeline Patterns
 
 Complete pipeline examples and architectural patterns for CDC implementations.
 

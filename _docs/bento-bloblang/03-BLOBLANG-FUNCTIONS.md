@@ -1,6 +1,6 @@
 # Bloblang Functions Reference
 
-Built-in functions for Redpanda Connect Bloblang mappings.
+Built-in functions for Bento Bloblang mappings.
 
 ---
 

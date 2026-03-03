@@ -11,7 +11,7 @@ When you create a new server group with `--create`, the generator automatically 
 ```
 .
 ├── services/              # Service YAML configurations
-├── pipeline-templates/    # Bento pipeline templates
+├── pipelines/templates/    # Bento pipeline templates
 ├── scripts/                 # Helper scripts
 │   ├── postgres-init/      # PostgreSQL initialization scripts
 │   └── mssql-init/         # MSSQL initialization scripts (if using MSSQL)

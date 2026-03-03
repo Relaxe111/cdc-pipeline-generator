@@ -432,7 +432,7 @@ groups:
 
 Instead of always starting from `0x00000000000000000000`, add logic to start from current LSN if cache is missing.
 
-**Template Modification** (`pipeline-templates/source-pipeline.yaml`):
+**Template Modification** (`pipelines/templates/source-pipeline.yaml`):
 
 ```yaml
 processors:

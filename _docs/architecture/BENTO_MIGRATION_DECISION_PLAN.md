@@ -1,4 +1,4 @@
-# Decision Plan — Migration from Redpanda Connect to Bento
+# Decision Plan — Migration from Bento to Bento
 
 > **Status:** Implemented (preprod)
 > **Scope:** Generator-driven source/sink pipeline migration
@@ -8,7 +8,7 @@
 
 ## Goal and Scope
 
-Migrate source and sink pipeline runtimes from Redpanda Connect to Bento with minimal behavior changes, while keeping generation fully file-driven through the generator.
+Migrate source and sink pipeline runtimes from Bento to Bento with minimal behavior changes, while keeping generation fully file-driven through the generator.
 
 **In scope:**
 - Source pipeline generation (MSSQL/PG CDC)
@@ -35,7 +35,7 @@ Proceed to production migration only if all gates pass:
 | **Operational parity** | Equivalent observability, alerting, restart/recovery behavior validated |
 | **Performance guardrail** | Throughput/latency is at least baseline ± agreed tolerance |
 
-If any gate fails, keep Redpanda Connect as default runtime and continue with targeted fixes before re-evaluating.
+If any gate fails, keep Bento as default runtime and continue with targeted fixes before re-evaluating.
 
 ---
 
@@ -64,7 +64,7 @@ Generate Bento versions of source pipelines first:
 
 Validation:
 - Run `bento lint` and `bento test` on generated source configs
-- Compare emitted topic payload shape and key fields with current Redpanda Connect baseline
+- Compare emitted topic payload shape and key fields with current Bento baseline
 
 ### Phase C — Sink Pipeline Parity
 
@@ -77,7 +77,7 @@ Validation:
 
 ### Phase D — Dual-Run Canary
 
-Run Bento in parallel for selected services while Redpanda Connect remains authoritative:
+Run Bento in parallel for selected services while Bento remains authoritative:
 - Mirror traffic to Bento-generated pipelines
 - Compare outputs by deterministic checks (message counts, key-level checksums, sampled row diffs)
 - Promote service-by-service once parity threshold is met
@@ -110,4 +110,4 @@ Migration is complete when:
 - CI enforces Bento lint/test on generated artifacts
 - Production parity metrics are stable across agreed observation window
 - Runbooks and on-call docs reference Bento commands (`bento lint`, `bento test`, runtime debug flow)
-- Redpanda Connect remains optional fallback, not primary runtime
+- Bento remains optional fallback, not primary runtime

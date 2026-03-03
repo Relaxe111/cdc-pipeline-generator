@@ -1,6 +1,6 @@
 # Bloblang Methods Reference
 
-Complete reference for Bloblang methods used in Redpanda Connect transformations.
+Complete reference for Bloblang methods used in Bento transformations.
 
 ---
 

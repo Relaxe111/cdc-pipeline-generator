@@ -97,7 +97,7 @@ Pipeline templates (simpler than db-per-tenant):
 Single set of pipelines for all customers:
 
 ```
-generated/pipelines/directory/
+pipelines/generated/directory/
 ├── nonprod/
 │   ├── source-directory.yaml     # Reads all customers
 │   └── sink-directory.yaml       # Writes to shared schema
@@ -133,7 +133,7 @@ cdc-generator generate --service directory --environment nonprod
 
 ```bash
 # Apply generated pipelines
-kubectl apply -f generated/pipelines/directory/nonprod/
+kubectl apply -f pipelines/generated/directory/nonprod/
 ```
 
 ## Multi-Tenancy Strategies
@@ -212,7 +212,7 @@ One source + one sink pipeline handles all customers:
 
 ```bash
 # Generates only 2 files (vs 52 in db-per-tenant with 26 customers)
-generated/pipelines/directory/nonprod/
+pipelines/generated/directory/nonprod/
 ├── source-directory.yaml
 └── sink-directory.yaml
 ```

@@ -66,15 +66,15 @@
 
 ```
 Source DB (MSSQL/PG)
-  → CDC capture (Redpanda Connect source pipeline)
+  → CDC capture (Bento source pipeline)
     → Kafka/Redpanda topics
-      → Redpanda Connect sink pipeline
+      → Bento sink pipeline
         → staging table (INSERT)
           → MERGE into target table (SQL)
             → PostgreSQL target
 ```
 
-Redpanda Connect handles **both** the source capture and sink delivery today. It works well for straightforward CDC replication, but has limitations when requirements grow beyond simple row-level replication.
+Bento handles **both** the source capture and sink delivery today. It works well for straightforward CDC replication, but has limitations when requirements grow beyond simple row-level replication.
 
 ---
 
@@ -82,7 +82,7 @@ Redpanda Connect handles **both** the source capture and sink delivery today. It
 
 ### What Is Bento
 
-[Bento](https://warpstreamlabs.github.io/bento/) is the community-maintained open-source continuation of Benthos, and is the closest drop-in runtime alternative to Redpanda Connect for YAML/Bloblang pipelines.
+[Bento](https://warpstreamlabs.github.io/bento/) is the community-maintained open-source continuation of Benthos, and is the closest drop-in runtime alternative to Bento for YAML/Bloblang pipelines.
 
 In our context, Bento is relevant because it can keep the same connector-driven architecture and provides built-in source inputs for both CDC and HTTP ingestion patterns.
 
@@ -99,7 +99,7 @@ These are available as first-class input components in Bento and can be used imm
 
 ### What Bento Replaces
 
-- **Redpanda Connect runtime** for source/sink execution in most YAML + Bloblang pipeline use cases
+- **Bento runtime** for source/sink execution in most YAML + Bloblang pipeline use cases
 - **License-sensitive deployments** where a fully open-source runtime is preferred
 
 ### What Bento Does NOT Replace
@@ -115,7 +115,7 @@ These are available as first-class input components in Bento and can be used imm
 | Trigger | Signal |
 |---------|--------|
 | **Open-source runtime requirement** | Need to avoid BSL constraints while keeping Benthos-style pipelines |
-| **Minimal migration effort** | Existing Redpanda Connect YAML/Bloblang configs should run with minimal changes |
+| **Minimal migration effort** | Existing Bento YAML/Bloblang configs should run with minimal changes |
 | **Source capture parity needed** | Need ready-to-use `mssql_cdc` and `postgres_cdc` connectors |
 | **HTTP ingestion at edge** | Need built-in `http_client` and `http_server` sources in the same runtime |
 
@@ -123,7 +123,7 @@ These are available as first-class input components in Bento and can be used imm
 - A full architecture change to stream processing or analytics (Bytewax/Materialize solve different problems)
 - Replacing Kafka/Redpanda broker responsibilities
 
-**Estimated effort to prototype:** 1-3 days for one existing source pipeline migrated from Redpanda Connect to Bento.
+**Estimated effort to prototype:** 1-3 days for one existing source pipeline migrated from Bento to Bento.
 
 ---
 
@@ -156,14 +156,14 @@ These are available as first-class input components in Bento and can be used imm
 
 #### 1. High-Performance Sink Layer (Primary Use Case)
 
-Replace Redpanda Connect sink pipelines with a Bytewax dataflow that:
+Replace Bento sink pipelines with a Bytewax dataflow that:
 
 - Reads CDC events from Kafka topics
 - Transforms/maps columns using Python (instead of Bloblang)
 - Batches rows and writes via PostgreSQL **binary COPY protocol**
 - Handles merge/upsert logic in Python with conflict resolution
 
-**Why:** The binary COPY protocol can deliver **10-50× throughput** compared to row-level INSERTs through Redpanda Connect. For large initial loads or high-volume CDC streams, this is a significant advantage.
+**Why:** The binary COPY protocol can deliver **10-50× throughput** compared to row-level INSERTs through Bento. For large initial loads or high-volume CDC streams, this is a significant advantage.
 
 ```
 Kafka topic
@@ -181,7 +181,7 @@ A Bytewax dataflow can sit alongside the sink pipeline and:
 - Dispatch cache invalidation events (Redis PUBLISH, HTTP webhook)
 - Trigger downstream workflows based on data changes
 
-**Why:** Redpanda Connect cannot easily fan-out CDC events to multiple destinations with conditional logic. Bytewax's Python filter/map makes this trivial.
+**Why:** Bento cannot easily fan-out CDC events to multiple destinations with conditional logic. Bytewax's Python filter/map makes this trivial.
 
 #### 3. Complex Transformations
 
@@ -193,13 +193,13 @@ For tables that need transformations beyond what Bloblang can express:
 
 ### What Bytewax Replaces
 
-- **Redpanda Connect sink pipelines** — Bytewax can fully replace the sink side
+- **Bento sink pipelines** — Bytewax can fully replace the sink side
 - **Bloblang transformations** — replaced by Python functions
 - **Staging → merge SQL** — can be handled in the Bytewax sink logic
 
 ### What Bytewax Does NOT Replace
 
-- **CDC source capture** — Bytewax does not have built-in CDC connectors for MSSQL or PostgreSQL logical replication. Redpanda Connect (or Debezium) still handles source capture.
+- **CDC source capture** — Bytewax does not have built-in CDC connectors for MSSQL or PostgreSQL logical replication. Bento (or Debezium) still handles source capture.
 - **Kafka/Redpanda** — Bytewax reads FROM Kafka; it does not replace the message broker.
 - **Pipeline YAML generation** — our generator library still produces configuration; Bytewax would be an alternative sink runtime.
 
@@ -216,11 +216,11 @@ For tables that need transformations beyond what Bloblang can express:
 | **Multi-destination fanout** | Same CDC event must go to DB + cache + webhook + analytics |
 
 **Do NOT introduce for:**
-- Simple 1:1 table replication (Redpanda Connect handles this fine)
+- Simple 1:1 table replication (Bento handles this fine)
 - Small volume CDC streams (overhead not justified)
 - Source-side capture (Bytewax has no CDC source connectors)
 
-**Estimated effort to prototype:** 1-2 weeks for a single-table Bytewax sink replacing one Redpanda Connect sink pipeline.
+**Estimated effort to prototype:** 1-2 weeks for a single-table Bytewax sink replacing one Bento sink pipeline.
 
 ---
 
@@ -308,7 +308,7 @@ Issues appear in real time as bad data flows through.
 ### What Materialize Does NOT Replace
 
 - **Operational database** — Materialize is not a transactional OLTP database; it doesn't support UPDATE/DELETE/INSERT from applications
-- **CDC source capture** — still need Redpanda Connect or Debezium to capture changes and publish to Kafka
+- **CDC source capture** — still need Bento or Debezium to capture changes and publish to Kafka
 - **Sink replication** — if the goal is a writable replica of the source database, Materialize is not the right tool (it's read-only views)
 - **Kafka/Redpanda** — Materialize reads from Kafka; it does not replace the broker
 
@@ -366,7 +366,7 @@ In our context, Vector is not a replacement for CDC itself; it is a strong candi
   - Route same data to PostgreSQL + object storage (cold retention) + alerting sink.
 
 2. **Unified operational telemetry**
-  - Centralize Redpanda Connect logs, health metrics, and pipeline events.
+  - Centralize Bento logs, health metrics, and pipeline events.
   - Build one ingestion path for dashboards and alerts.
 
 3. **Cost control for observability**
@@ -380,7 +380,7 @@ In our context, Vector is not a replacement for CDC itself; it is a strong candi
 
 ### What Vector Does NOT Replace
 
-- **CDC source capture** from MSSQL/PG (keep Redpanda Connect/Debezium)
+- **CDC source capture** from MSSQL/PG (keep Bento/Debezium)
 - **Business sink replication** into target DB (Vector is not a CDC merge engine)
 - **Streaming SQL analytics layer** (Materialize still fills that role)
 
@@ -406,7 +406,7 @@ In our context, Vector is not a replacement for CDC itself; it is a strong candi
 
 ## Comparison Matrix
 
-| Dimension | Redpanda Connect (current) | Bento | Bytewax | Materialize | Vector |
+| Dimension | Bento (current) | Bento | Bytewax | Materialize | Vector |
 |-----------|---------------------------|-------|---------|-------------|--------|
 | **Primary role** | CDC source + sink connector | Open-source connector runtime (Benthos fork) | Stream processor (sink-side) | Streaming SQL query engine | Telemetry/log routing pipeline |
 | **Language** | YAML + Bloblang | YAML + Bloblang | Python | SQL | TOML + VRL |
@@ -428,7 +428,7 @@ In our context, Vector is not a replacement for CDC itself; it is a strong candi
 ### Phase 0 — Current State (Now)
 
 ```
-MSSQL/PG → Redpanda Connect Source → Kafka → Redpanda Connect Sink → PostgreSQL
+MSSQL/PG → Bento Source → Kafka → Bento Sink → PostgreSQL
 ```
 
 **Focus:** Stabilize current CDC pipelines, complete db-shared pattern, improve CLI tooling.
@@ -436,7 +436,7 @@ MSSQL/PG → Redpanda Connect Source → Kafka → Redpanda Connect Sink → Pos
 ### Phase 1 — Hook Dispatcher (When cache invalidation is needed)
 
 ```
-Kafka → Redpanda Connect Sink → PostgreSQL
+Kafka → Bento Sink → PostgreSQL
                                     ↓
                             Hook Dispatcher (Python)
                                     ↓
@@ -454,12 +454,12 @@ Kafka → Bytewax Dataflow → PG binary COPY → PostgreSQL
                          → Hook dispatch → Redis / Webhooks
 ```
 
-**Replace Redpanda Connect sink pipelines** with Bytewax for tables that need:
+**Replace Bento sink pipelines** with Bytewax for tables that need:
 - Higher throughput (binary COPY)
 - Complex transformations
 - Multi-destination fanout
 
-Keep Redpanda Connect sink for simple tables where it works fine.
+Keep Bento sink for simple tables where it works fine.
 
 **Trigger:** Sink throughput bottleneck OR complex transformation requirement.
 
@@ -504,7 +504,7 @@ Before introducing either technology, evaluate against these criteria:
 
 ### Must-Have Before Adopting
 
-- [ ] Current Redpanda Connect pipeline is stable and in production
+- [ ] Current Bento pipeline is stable and in production
 - [ ] Clear use case that current stack cannot handle
 - [ ] Team capacity for learning and maintaining additional technology
 - [ ] Monitoring and alerting infrastructure in place
@@ -512,7 +512,7 @@ Before introducing either technology, evaluate against these criteria:
 ### Bento Adoption Checklist
 
 - [ ] Confirm required source inputs are supported (`mssql_cdc`, `postgres_cdc`, `http_client`, `http_server`)
-- [ ] Run one existing Redpanda Connect pipeline unchanged against Bento
+- [ ] Run one existing Bento pipeline unchanged against Bento
 - [ ] Validate metadata parity and delivery semantics in target topics
 - [ ] Validate production auth/TLS settings in Bento runtime
 - [ ] Document any config deltas in generator templates (if needed)
@@ -523,7 +523,7 @@ Before introducing either technology, evaluate against these criteria:
 - [ ] Measured current INSERT throughput vs required throughput
 - [ ] Prototype binary COPY sink for one table
 - [ ] Recovery/replay mechanism tested (Kafka offset snapshots)
-- [ ] Deployment pipeline supports Python process alongside Redpanda Connect
+- [ ] Deployment pipeline supports Python process alongside Bento
 
 ### Materialize Adoption Checklist
 
@@ -554,4 +554,4 @@ Before introducing either technology, evaluate against these criteria:
 - [Vector Documentation](https://vector.dev/docs/)
 - [Vector GitHub](https://github.com/vectordotdev/vector)
 - [PostgreSQL Binary COPY Protocol](https://www.postgresql.org/docs/current/sql-copy.html)
-- [Redpanda Connect Documentation](https://docs.redpanda.com/redpanda-connect/)
+- [Bento Documentation](https://docs.redpanda.com/bento/)

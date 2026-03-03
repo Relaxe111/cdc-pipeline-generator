@@ -1,12 +1,12 @@
 # Error Handling Patterns
 
-Comprehensive error handling strategies for Redpanda Connect pipelines.
+Comprehensive error handling strategies for Bento pipelines.
 
 ---
 
 ## Error Flag System
 
-When a processor fails, Redpanda Connect:
+When a processor fails, Bento:
 1. Sets an error flag on the message
 2. Stores the error message (accessible via `error()`)
 3. Continues processing (message is not dropped)

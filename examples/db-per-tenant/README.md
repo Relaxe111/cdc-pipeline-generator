@@ -97,7 +97,7 @@ Pipeline templates with placeholders:
 For each customer database, the generator creates:
 
 ```
-generated/pipelines/adopus/
+pipelines/generated/adopus/
 ├── nonprod/
 │   ├── brukerforum/
 │   │   ├── source-brukerforum.yaml       # Reads AdOpusBrukerforum

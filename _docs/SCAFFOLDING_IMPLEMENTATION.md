@@ -40,10 +40,10 @@ Added automatic project scaffolding to the CDC Pipeline Generator to create comp
 Creates all necessary directories:
 ```
 services/
-pipeline-templates/
+pipelines/templates/
 scripts/postgres-init/
 scripts/mssql-init/
-generated/pipelines/
+pipelines/generated/
 generated/schemas/
 generated/table-definitions/
 generated/pg-migrations/

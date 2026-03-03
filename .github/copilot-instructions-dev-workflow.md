@@ -22,7 +22,7 @@ docker compose exec dev fish
 ### Edit and test workflow:
 1. Edit generator code: `/workspace/cdc_generator/...`
 2. Test against adopus: `cd /implementations/adopus && cdc generate`
-3. Verify output in `generated/pipelines/`
+3. Verify output in `pipelines/generated/`
 
 ---
 
@@ -34,8 +34,8 @@ docker compose exec dev fish
 |------|---------|-------|
 | `source-groups.yaml` | Server group definitions | ⚠️ USE CLI |
 | `services/{service}.yaml` | Service config | ⚠️ USE CLI |
-| `pipeline-templates/*.yaml` | Templates with `{{VARS}}` | ✅ EDIT |
-| `generated/pipelines/` | Auto-generated | ❌ READ-ONLY |
+| `pipelines/templates/*.yaml` | Templates with `{{VARS}}` | ✅ EDIT |
+| `pipelines/generated/` | Auto-generated | ❌ READ-ONLY |
 
 ---
 

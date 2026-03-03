@@ -9,7 +9,7 @@ This document describes the CDC pipeline templating architecture, including the 
 The pipeline generation system uses a **two-phase approach**:
 
 1. **Build Time** (Python Generator): Templates with `{{PLACEHOLDERS}}` are processed to generate concrete pipeline configurations
-2. **Runtime** (Redpanda Connect): Generated pipelines load static `.blobl` files via `import`
+2. **Runtime** (Bento): Generated pipelines load static `.blobl` files via `import`
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -27,7 +27,7 @@ The pipeline generation system uses a **two-phase approach**:
 │                                             └── transforms.blobl            │
 │                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                        RUNTIME (Redpanda Connect)                            │
+│                        RUNTIME (Bento)                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  Redpanda loads: pipelines/generated/sinks/env/sink-pipeline.yaml          │

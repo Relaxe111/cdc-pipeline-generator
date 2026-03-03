@@ -136,7 +136,7 @@ migrations/                        ← manage-migrations output root
 
 **Rationale:**
 - Each `manage-*` CLI group owns a clear top-level folder in implementations
-- `manage-services` → `services/`, `manage-pipelines` → `generated/pipelines/`, `manage-migrations` → `migrations/`
+- `manage-services` → `services/`, `manage-pipelines` → `pipelines/generated/`, `manage-migrations` → `migrations/`
 - Subdirectories by category scale better than flat numbered prefixes (39+ tables)
 - `generated/table-definitions/` stays under `generated/` as intermediate build artifact used by both pipelines and migrations
 
@@ -262,7 +262,7 @@ The existing staging SQL (`4-*-staging.sql`) is well-designed:
 
 ### 6.2 Pipeline vs Migration Gap
 
-`helpers_batch.py::build_staging_case()` generates Redpanda Connect YAML that writes to staging tables like `{schema}."stg_Actor"` — but it assumes the table exists. If migration generation is broken for 36/39 tables, those pipeline inserts will fail at runtime.
+`helpers_batch.py::build_staging_case()` generates Bento YAML that writes to staging tables like `{schema}."stg_Actor"` — but it assumes the table exists. If migration generation is broken for 36/39 tables, those pipeline inserts will fail at runtime.
 
 ---
 

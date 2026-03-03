@@ -1,6 +1,6 @@
 # Bloblang Fundamentals
 
-Bloblang is the native mapping language for Redpanda Connect pipelines. This document covers core concepts essential for building CDC transformations.
+Bloblang is the native mapping language for Bento pipelines. This document covers core concepts essential for building CDC transformations.
 
 ## Quick Reference
 

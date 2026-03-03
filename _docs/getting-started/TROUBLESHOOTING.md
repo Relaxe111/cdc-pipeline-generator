@@ -503,7 +503,7 @@ kubectl exec -it deployment/kafka-connect -n cdc-pipeline -- bash
 # Test database connectivity
 /opt/mssql-tools/bin/sqlcmd -S mssql-server -U sa -P password -Q "SELECT @@VERSION"
 
-# Test Redpanda connectivity (Kafka API compatible)
+# Test broker connectivity (Kafka API compatible)
 docker exec cdc-redpanda rpk topic list
 
 # Check Java process

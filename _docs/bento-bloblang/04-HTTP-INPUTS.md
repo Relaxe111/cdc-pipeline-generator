@@ -1,6 +1,6 @@
 # HTTP Inputs for Webhooks
 
-Redpanda Connect provides robust HTTP input capabilities for receiving webhooks and polling APIs.
+Bento provides robust HTTP input capabilities for receiving webhooks and polling APIs.
 
 ---
 

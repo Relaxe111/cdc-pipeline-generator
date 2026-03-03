@@ -1,6 +1,6 @@
 # SQL and PostgreSQL Patterns
 
-Patterns for SQL database integration in Redpanda Connect pipelines.
+Patterns for SQL database integration in Bento pipelines.
 
 ---
 

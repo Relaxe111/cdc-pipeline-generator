@@ -1,6 +1,6 @@
-# Redpanda Connect Documentation
+# Bento Documentation
 
-Comprehensive reference documentation for Redpanda Connect (formerly Benthos) used in CDC pipeline implementations.
+Comprehensive reference documentation for Bento (formerly Benthos) used in CDC pipeline implementations.
 
 ## Quick Navigation
 
@@ -61,7 +61,7 @@ This documentation supports future pipeline template implementations:
 
 ## Official Documentation
 
-- [Redpanda Connect Home](https://docs.redpanda.com/redpanda-connect/home/)
-- [Bloblang Guide](https://docs.redpanda.com/redpanda-connect/guides/bloblang/about/)
-- [Components Catalog](https://docs.redpanda.com/redpanda-connect/components/about/)
-- [Error Handling](https://docs.redpanda.com/redpanda-connect/configuration/error_handling/)
+- [Bento Home](https://docs.redpanda.com/bento/home/)
+- [Bloblang Guide](https://docs.redpanda.com/bento/guides/bloblang/about/)
+- [Components Catalog](https://docs.redpanda.com/bento/components/about/)
+- [Error Handling](https://docs.redpanda.com/bento/configuration/error_handling/)
