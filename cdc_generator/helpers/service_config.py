@@ -36,7 +36,7 @@ def get_project_root() -> Path:
     return current
 
 
-def load_service_config(service_name: str = "adopus") -> dict[str, object]:
+def load_service_config(service_name: str) -> dict[str, object]:
     """Load service configuration from services/, preserving comments.
 
     Supports both formats:
@@ -65,7 +65,7 @@ def load_service_config(service_name: str = "adopus") -> dict[str, object]:
     # Legacy format: already has 'service' field
     if isinstance(raw_config, dict):
         return _normalize_loaded_service_config(cast(dict[str, object], dict(cast(dict[str, Any], raw_config))))
-    return raw_config  # type: ignore[return-value]
+    raise ValueError(f"Invalid service config format in {service_path}: expected mapping")
 
 
 def _normalize_loaded_service_config(config: dict[str, object]) -> dict[str, object]:
@@ -261,57 +261,12 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
     # New format: [{schema: "dbo", tables: [{name: "Actor", primary_key: "actno"}]}]
     # Or simplified: [{schema: "dbo", tables: ["Actor", "Fraver"]}]  (when no extra properties)
     # Old format: [{schema: "dbo", table: "Actor", primary_key: "actno"}]
-    source_tables_hierarchical = normalized_service_config.get('shared', {}).get('source_tables', [])  # type: ignore[attr-defined]
-    ignore_tables = normalized_service_config.get('shared', {}).get('ignore_tables', [])  # type: ignore[attr-defined]
-
-    source_tables_flat = []
-    for schema_group in source_tables_hierarchical:  # type: ignore[attr-defined]
-        schema_name = schema_group.get('schema')  # type: ignore[attr-defined]
-        for table in schema_group.get('tables', []):  # type: ignore[attr-defined]
-            # Handle both string format ("Actor") and object format ({name: "Actor", ...})
-            if isinstance(table, str):
-                table_name = table
-                table_dict = {'name': table}
-            else:
-                table_name = table.get('name')  # type: ignore[attr-defined]
-                table_dict = table  # type: ignore[assignment]
-
-            # Check if table should be ignored (ignore_tables has priority)
-            should_ignore = False
-            for ignore_entry in ignore_tables:  # type: ignore[attr-defined]
-                if isinstance(ignore_entry, str):
-                    # Simple format: just table name (assumes dbo schema)
-                    if table_name == ignore_entry and schema_name == 'dbo':
-                        should_ignore = True
-                        break
-                elif (
-                    isinstance(ignore_entry, dict)
-                    and cast(dict[str, Any], ignore_entry).get('table') == table_name
-                    and cast(dict[str, Any], ignore_entry).get('schema', 'dbo') == schema_name
-                ):
-                    should_ignore = True
-                    break
-
-            if not should_ignore:
-                table_config = {  # type: ignore[var-annotated]
-                    'schema': schema_name,
-                    'table': table_name,
-                    'primary_key': table_dict.get('primary_key')  # type: ignore[attr-defined]
-                }
-
-                # Handle column filtering (ignore_columns has priority over include_columns)
-                ignore_cols = table_dict.get('ignore_columns')  # type: ignore[attr-defined]
-                include_cols = table_dict.get('include_columns')  # type: ignore[attr-defined]
-
-                if ignore_cols:
-                    table_config['ignore_columns'] = ignore_cols  # type: ignore[index]
-                elif include_cols:
-                    table_config['include_columns'] = include_cols  # type: ignore[index]
-
-                source_tables_flat.append(table_config)  # type: ignore[arg-type]
+    shared_raw = normalized_service_config.get('shared')
+    shared_cfg = cast(dict[str, Any], shared_raw) if isinstance(shared_raw, dict) else {}
+    source_tables_flat = _flatten_shared_source_tables(shared_cfg)
 
     # Start with backward-compatible structure
-    merged = {  # type: ignore[var-annotated]
+    merged: dict[str, object] = {
         'customer': customer_name,
         'schema': customer_data.get('schema', normalized_customer_name),
         'customer_id': customer_data.get('customer_id'),
@@ -327,7 +282,107 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
     )
     merged['environments'] = derived_environments
 
-    return merged  # type: ignore[return-value]
+    return merged
+
+
+def _flatten_shared_source_tables(shared_cfg: dict[str, Any]) -> list[dict[str, object]]:
+    """Flatten shared source tables into legacy cdc_tables format."""
+    source_tables_hierarchical_raw = shared_cfg.get('source_tables', [])
+    ignore_tables_raw = shared_cfg.get('ignore_tables', [])
+    source_tables_hierarchical = (
+        cast(list[object], source_tables_hierarchical_raw)
+        if isinstance(source_tables_hierarchical_raw, list)
+        else []
+    )
+    ignore_tables = (
+        cast(list[object], ignore_tables_raw)
+        if isinstance(ignore_tables_raw, list)
+        else []
+    )
+
+    source_tables_flat: list[dict[str, object]] = []
+    for schema_group_raw in source_tables_hierarchical:
+        if not isinstance(schema_group_raw, dict):
+            continue
+        schema_group = cast(dict[str, Any], schema_group_raw)
+        schema_name_raw = schema_group.get('schema')
+        schema_name = str(schema_name_raw).strip() if schema_name_raw is not None else ''
+        if not schema_name:
+            continue
+
+        tables_raw = schema_group.get('tables', [])
+        if not isinstance(tables_raw, list):
+            continue
+
+        for table in cast(list[object], tables_raw):
+            if isinstance(table, str):
+                table_name = table
+                table_dict: dict[str, Any] = {'name': table}
+            elif isinstance(table, dict):
+                table_dict = cast(dict[str, Any], table)
+                table_name_raw = table_dict.get('name')
+                table_name = str(table_name_raw).strip() if table_name_raw is not None else ''
+            else:
+                continue
+
+            if not table_name or _should_ignore_table(ignore_tables, schema_name, table_name):
+                continue
+
+            table_config: dict[str, object] = {
+                'schema': schema_name,
+                'table': table_name,
+                'primary_key': table_dict.get('primary_key'),
+            }
+
+            ignore_cols = table_dict.get('ignore_columns')
+            include_cols = table_dict.get('include_columns')
+
+            if ignore_cols:
+                table_config['ignore_columns'] = ignore_cols
+            elif include_cols:
+                table_config['include_columns'] = include_cols
+
+            source_tables_flat.append(table_config)
+
+    return source_tables_flat
+
+
+def _should_ignore_table(ignore_tables: list[object], schema_name: str, table_name: str) -> bool:
+    """Return whether a table should be ignored based on ignore_tables rules."""
+    for ignore_entry in ignore_tables:
+        if isinstance(ignore_entry, str):
+            if table_name == ignore_entry and schema_name == 'dbo':
+                return True
+            continue
+
+        if not isinstance(ignore_entry, dict):
+            continue
+
+        ignore_dict = cast(dict[str, Any], ignore_entry)
+        if (
+            ignore_dict.get('table') == table_name
+            and ignore_dict.get('schema', 'dbo') == schema_name
+        ):
+            return True
+
+    return False
+
+
+def _resolve_default_service_name() -> str | None:
+    """Resolve default service name from services directory.
+
+    Returns the only available service file stem, or the first sorted stem when
+    multiple service files exist.
+    """
+    services_dir = get_project_root() / "services"
+    if not services_dir.is_dir():
+        return None
+
+    service_files = sorted(services_dir.glob("*.yaml"))
+    if not service_files:
+        return None
+
+    return service_files[0].stem
 
 
 def _derive_customer_environments_from_source_groups(
@@ -433,38 +488,51 @@ def _find_source_entry_for_customer(
     return None
 
 
-def load_customer_config(customer: str) -> dict[str, Any]:
+def load_customer_config(customer: str, service_name: str | None = None) -> dict[str, Any]:
     """Load customer configuration - supports both new and legacy format.
 
     Priority:
-    1. Try new service-based format (services/adopus.yaml)
+    1. Try new service-based format (services/{service}.yaml)
     2. Fall back to legacy format (2-customers/{customer}.yaml)
     """
+    resolved_service = service_name or _resolve_default_service_name()
+
     # Try new service-based format first
-    try:
-        service_config = load_service_config("adopus")
-        return merge_customer_config(service_config, customer)
-    except (FileNotFoundError, ValueError) as exc:
-        # Fall back to old format (individual customer files)
-        customers_dir = get_project_root() / "2-customers"
-        config_path = customers_dir / f"{customer}.yaml"
-        if not config_path.exists():
-            raise FileNotFoundError(
-                f"Customer config not found in service or legacy format: {customer}"
-            ) from exc
-        with config_path.open() as f:
-            return yaml.safe_load(f)  # type: ignore[return-value,attr-defined]
+    fallback_exc: Exception | None = None
+    if resolved_service:
+        try:
+            service_config = load_service_config(resolved_service)
+            return merge_customer_config(service_config, customer)
+        except (FileNotFoundError, ValueError) as exc:
+            fallback_exc = exc
+
+    customers_dir = get_project_root() / "2-customers"
+    config_path = customers_dir / f"{customer}.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Customer config not found in service or legacy format: {customer}"
+        ) from fallback_exc
+
+    with config_path.open() as f:
+        loaded = yaml.load(f)
+    if isinstance(loaded, dict):
+        return cast(dict[str, Any], dict(loaded))
+    raise ValueError(f"Invalid customer config format in {config_path}: expected mapping")
 
 
-def get_all_customers() -> list[str]:
+def get_all_customers(service_name: str | None = None) -> list[str]:
     """Get list of all customers.
 
     Priority:
-    1. Read from service config (services/adopus.yaml)
+    1. Read from service config (services/{service}.yaml)
     2. Fall back to directory listing (2-customers/)
     """
+    resolved_service = service_name or _resolve_default_service_name()
+
     try:
-        service_config = load_service_config("adopus")
+        if not resolved_service:
+            raise FileNotFoundError("No service config discovered")
+        service_config = load_service_config(resolved_service)
         customers = service_config.get('customers', [])
         if not isinstance(customers, list):
             return []
