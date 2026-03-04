@@ -7,10 +7,8 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Any
 
 from .data_structures import GenerationResult, SinkTarget
-from .helpers import DO_NOT_EDIT_HEADER
 
 
 def _compute_checksum(content: str) -> str:
@@ -133,6 +131,16 @@ def write_migration_file(
 ) -> None:
     """Public wrapper around migration SQL file writing."""
     _write_migration_file(output_path, content, result)
+
+
+def compute_checksum(content: str) -> str:
+    """Public wrapper around checksum computation."""
+    return _compute_checksum(content)
+
+
+def inject_checksum(content: str) -> str:
+    """Public wrapper around checksum injection."""
+    return _inject_checksum(content)
 
 
 def _write_manifest(

@@ -23,14 +23,32 @@ This plan supersedes ad-hoc execution and is intended to be followed end-to-end 
 
 Primary agreed issue: oversized/high-churn modules that violate size/responsibility standards and slow safe iteration.
 
-Current hotspots (from latest size scan):
+Current hotspots (from latest size scan, files > 600 lines in `cdc_generator/`):
 
-- `cdc_generator/cli/sink_group.py` (2598)
-- `cdc_generator/cli/completions.py` (1907)
-- `cdc_generator/validators/manage_service/sink_operations.py` (1740)
-- `cdc_generator/cli/click_commands.py` (1527)
-- `cdc_generator/core/migration_generator/__init__.py` (1498)
-- `cdc_generator/cli/service_handlers_sink_custom.py` (1029)
+- `cdc_generator/cli/sink_group.py` (2599)
+- `cdc_generator/cli/completions.py` (1908)
+- `cdc_generator/cli/click_commands.py` (1528)
+- `cdc_generator/cli/service_handlers_sink_custom.py` (1030)
+- `cdc_generator/helpers/helpers_sink_groups.py` (998)
+- `cdc_generator/cli/service.py` (958)
+- `cdc_generator/validators/manage_service_schema/source_type_overrides.py` (918)
+- `cdc_generator/validators/manage_service/db_inspector_common.py` (864)
+- `cdc_generator/validators/manage_server_group/scaffolding/templates.py` (807)
+- `cdc_generator/helpers/autocompletions/sinks.py` (797)
+- `cdc_generator/validators/template_validator.py` (776)
+- `cdc_generator/cli/service_handlers_sink.py` (766)
+- `cdc_generator/validators/manage_server_group/db_inspector.py` (735)
+- `cdc_generator/core/migration_apply.py` (731)
+- `cdc_generator/cli/source_group.py` (725)
+- `cdc_generator/cli/commands.py` (619)
+
+Current method/compliance audit snapshot:
+
+- Function-size violations (`>100` lines): `45` functions in `cdc_generator/`.
+  - largest: `cli/source_group.py::main` (428), `cli/sink_group.py::main` (427), `cli/service.py::_build_parser` (282), `validators/manage_server_group/scaffolding/templates.py::get_docker_compose_template` (243).
+- `type: ignore` occurrences in `cdc_generator/`: `49` total.
+  - top offenders: `validators/manage_server_group/config.py` (15), `cli/smart_command.py` (4), `cli/sink_group.py` (4), `validators/manage_server_group/yaml_writer.py` (4).
+- `Any` token occurrences in `cdc_generator/`: `773` total (broad typing-hardening backlog).
 
 Secondary agreed issue: touched-path type/structure hardening and removal of avoidable compatibility debt in preprod scope.
 
@@ -41,6 +59,7 @@ Secondary agreed issue: touched-path type/structure hardening and removal of avo
 - Keep behavior stable unless a phase explicitly deprecates legacy behavior.
 - Preserve CLI entrypoints and command UX contracts during extraction.
 - Prefer facade + extracted modules per responsibility.
+- `__init__.py` policy: import/export-only modules; no function definitions in `__init__.py`.
 - No broad suppression (`type: ignore`, broad `noqa`) in newly touched code.
 - Do not refactor unrelated modules in the same slice.
 - Run targeted tests after every cohesive slice.
@@ -70,7 +89,7 @@ Do not pause for confirmation between slices unless blocked by policy in Section
 
 ## 5) Phase Backlog and Order
 
-## Phase A — Complete `sink_operations` decomposition (in progress)
+## Phase 1 — Complete `sink_operations` decomposition (completed)
 
 Target file: `cdc_generator/validators/manage_service/sink_operations.py`
 
@@ -90,25 +109,25 @@ Exit target:
 
 ---
 
-## Phase B — Decompose `core/migration_generator/__init__.py`
+## Phase 2 — Convert `core/migration_generator/__init__.py` to import/export-only (completed)
 
 Target file: `cdc_generator/core/migration_generator/__init__.py`
 
 Sub-phases:
 
-1. Split orchestration vs render/write logic.
-2. Split diff/manual-migration glue if still mixed.
-3. Ensure package exports remain stable.
+1. Move orchestration and wrappers out of `__init__.py` into dedicated modules.
+2. Keep compatibility at package surface via re-export imports only.
+3. Ensure no function bodies remain in `__init__.py`.
 
 Exit target:
 
-- `__init__.py` facade <= 400-600 lines,
+- `__init__.py` contains imports/exports only (no functions),
 - package API stable,
 - migration E2E and related tests green.
 
 ---
 
-## Phase C — Decompose CLI mega-modules
+## Phase 3 — Decompose CLI mega-modules (in progress)
 
 Targets:
 
@@ -124,15 +143,26 @@ Sub-phases (per file):
 3. Extract command handlers by domain into submodules.
 4. Preserve command registration surface in facade file.
 
+Method hotspots (first split wave, >100 lines):
+
+- `cli/source_group.py::main` (428)
+- `cli/sink_group.py::main` (427)
+- `cli/service.py::_build_parser` (282)
+- `cli/click_commands.py::manage_services_resources_cmd` (110)
+- `cli/completions.py::complete_map_column` (103)
+
 Exit target:
 
 - each facade <= 600 lines,
+- largest per-file methods reduced to <= 100 lines in touched files,
 - command UX unchanged,
 - fish completion tests + CLI tests green.
 
 ---
 
-## Phase D — Final hardening and cleanup
+## Phase 4 — Final hardening and cleanup
+
+Sub-phases:
 
 1. Remove temporary wrappers introduced only for transitional moves.
 2. Normalize imports and docstrings in new modules.
@@ -144,6 +174,29 @@ Exit target:
 - no new lint/type debt,
 - tests green,
 - docs reflect final structure.
+
+---
+
+## Phase 5 — Type-safety debt reduction (`type: ignore` + high-`Any` paths)
+
+Targets:
+
+- `cdc_generator/validators/manage_server_group/config.py`
+- `cdc_generator/cli/smart_command.py`
+- `cdc_generator/validators/manage_server_group/yaml_writer.py`
+- `cdc_generator/helpers/helpers_completions.py`
+
+Sub-phases:
+
+1. Replace non-import `type: ignore` usages with explicit casts/runtime guards.
+2. Migrate YAML reads to typed wrappers where possible.
+3. Reduce `Any`-heavy signatures to TypedDict/dataclass contracts in touched modules.
+
+Exit target:
+
+- non-import `type: ignore` occurrences reduced substantially in targeted modules,
+- touched paths lint/type clean,
+- behavior unchanged.
 
 ---
 
@@ -217,24 +270,25 @@ This plan is complete when all are true:
 2. No regression in impacted CLI/generation behavior,
 3. Touched paths are lint-clean and type-safe without suppression debt,
 4. Iterative changelog exists for each phase,
-5. Final test matrix for impacted suites passes.
+5. Final test matrix for impacted suites passes,
+6. All touched `__init__.py` modules follow import/export-only rule.
 
 ---
 
 ## 11) Immediate Next Action
 
-Continue with **Phase A**, next seam:
+Continue with **Phase 3**, next seam:
 
-- Extract `sink_operations` mapping validation/context sub-pipeline into dedicated helper module,
-- Keep facade calls unchanged,
-- Run `ruff` + `tests/cli/test_manage_services_config.py` + adjacent impacted suites,
-- Publish short slice changelog and continue automatically.
+- Start with `cdc_generator/cli/service_handlers_sink_custom.py` (smallest-risk CLI hotspot),
+- extract parser/normalization helpers first,
+- run `ruff` + CLI/completion impacted tests,
+- publish short slice changelog and continue automatically.
 
 ---
 
 ## 12) Execution Log
 
-### 2026-03-04 — Iteration A1 (Phase A ongoing)
+### 2026-03-04 — Iteration 1.1 (Phase 1 ongoing)
 
 Changed:
 
@@ -262,9 +316,9 @@ Delta:
 
 Next:
 
-- Continue Phase A by extracting add/update schema compatibility + table mutation helpers from `sink_operations.py` into dedicated modules, preserving facade API.
+- Continue Phase 1 by extracting add/update schema compatibility + table mutation helpers from `sink_operations.py` into dedicated modules, preserving facade API.
 
-### 2026-03-04 — Iteration A2 (Phase A ongoing)
+### 2026-03-04 — Iteration 1.2 (Phase 1 ongoing)
 
 Changed:
 
@@ -286,9 +340,9 @@ Delta:
 
 Next:
 
-- Continue Phase A by extracting table mutation/file-write helpers (`_validate_table_add`, `_save_custom_table_structure`, `_remove_custom_table_file`, schema-update validators) into a dedicated mutation module.
+- Continue Phase 1 by extracting table mutation/file-write helpers (`_validate_table_add`, `_save_custom_table_structure`, `_remove_custom_table_file`, schema-update validators) into a dedicated mutation module.
 
-### 2026-03-04 — Iteration A3 (Phase A ongoing)
+### 2026-03-04 — Iteration 1.3 (Phase 1 ongoing)
 
 Changed:
 
@@ -316,9 +370,9 @@ Delta:
 
 Next:
 
-- Continue Phase A with a final seam: extract `add_sink_table` orchestration into a dedicated helper/orchestrator module to bring facade below `<= 600` while preserving public API and tests.
+- Continue Phase 1 with a final seam: extract `add_sink_table` orchestration into a dedicated helper/orchestrator module to bring facade below `<= 600` while preserving public API and tests.
 
-### 2026-03-04 — Iteration A4 (Phase A checkpoint)
+### 2026-03-04 — Iteration 1.4 (Phase 1 checkpoint)
 
 Changed:
 
@@ -341,8 +395,63 @@ Delta:
 
 - `cdc_generator/validators/manage_service/sink_operations.py`
   - `615 -> 573` lines in this iteration.
-  - Phase A line-size exit target (`<= 600`) met.
+  - Phase 1 line-size exit target (`<= 600`) met.
 
 Next:
 
-- Continue with next agreed hotspot from backlog (Phase B or Phase C), starting with smallest-risk seam extraction and same lint+targeted-test loop.
+- Continue with next agreed hotspot from backlog (Phase 2 or Phase 3), starting with smallest-risk seam extraction and same lint+targeted-test loop.
+
+### 2026-03-04 — Iteration 2.1 (Phase 2 intermediate)
+
+Changed:
+
+- Replaced the monolithic `core/migration_generator/__init__.py` implementation with a thin facade that delegates to extracted modules (`columns`, `service_parsing`, `table_processing`, `rendering`, `manual_migrations`, `file_writers`).
+- Preserved package-level compatibility exports and compatibility patch-points used by existing tests:
+  - `build_columns_from_table_def`, `build_full_column_list`, `load_table_definitions` wrappers,
+  - module-level symbols `resolve_column_templates`, `resolve_transforms`, `get_service_schema_read_dirs` remain patchable from the facade namespace.
+- Kept public orchestration flow (`generate_migrations`, per-sink generation) behaviorally stable while removing duplicated local helper implementations.
+
+Validated:
+
+- `ruff check cdc_generator/core/migration_generator/__init__.py`: pass.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_migration_generator.py -q`: `53 passed`.
+
+Delta:
+
+- `cdc_generator/core/migration_generator/__init__.py`
+  - `1498 -> 415` lines in this iteration.
+  - Line-size target was met, but this checkpoint is now superseded by the stricter import/export-only `__init__.py` policy.
+
+Next:
+
+- Continue Phase 2 until `core/migration_generator/__init__.py` has no function definitions and keeps stable exports.
+
+### 2026-03-04 — Iteration 2.2 (Phase 2 checkpoint)
+
+Changed:
+
+- Moved all executable logic out of `core/migration_generator/__init__.py` into:
+  - `cdc_generator/core/migration_generator/runtime.py`
+- Converted `core/migration_generator/__init__.py` to import/export-only policy:
+  - no function definitions,
+  - stable re-exports for public API,
+  - kept package-level monkeypatch targets (`resolve_column_templates`, `resolve_transforms`, `get_project_root`, `load_service_config`, `get_service_schema_read_dirs`, `load_yaml_file`) available.
+- Preserved compatibility behavior by resolving patchable symbols through package namespace inside runtime entrypoints.
+
+Validated:
+
+- `ruff check cdc_generator/core/migration_generator/__init__.py cdc_generator/core/migration_generator/runtime.py`: pass.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_migration_generator.py -q`: `53 passed`.
+- `grep '^def\\s' cdc_generator/core/migration_generator/__init__.py`: no matches.
+
+Delta:
+
+- `cdc_generator/core/migration_generator/__init__.py`
+  - `415 -> 81` lines in this iteration.
+- `cdc_generator/core/migration_generator/runtime.py`
+  - new runtime implementation module (`379` lines).
+- Phase 2 exit target met under strict policy (`__init__.py` import/export-only, no functions).
+
+Next:
+
+- Proceed to Phase 3 hotspot decomposition (`cli/*` mega-modules), starting with smallest-risk seam extraction.

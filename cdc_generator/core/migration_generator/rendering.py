@@ -217,3 +217,27 @@ def generate_table_files(
         result.warnings.append(
             f"Table {migration.table_name}: no primary key, staging/merge skipped",
         )
+
+
+def build_column_defs_sql(columns: list[MigrationColumn]) -> list[str]:
+    """Public wrapper around CREATE TABLE column definition generation."""
+    return _build_column_defs_sql(columns)
+
+
+def build_create_table_sql(
+    target_schema: str,
+    table_name: str,
+    columns: list[MigrationColumn],
+    primary_keys: list[str],
+    source_schema: str,
+    generated_at: str,
+) -> str:
+    """Public wrapper around CREATE TABLE SQL generation."""
+    return _build_create_table_sql(
+        target_schema,
+        table_name,
+        columns,
+        primary_keys,
+        source_schema,
+        generated_at,
+    )
