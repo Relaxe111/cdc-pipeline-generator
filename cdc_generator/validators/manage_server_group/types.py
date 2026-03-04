@@ -176,6 +176,7 @@ class DatabaseEntry(TypedDict, total=False):
     """
     server: str         # References servers.{name} (default: "default")
     database: str       # Database name
+    target_sink_env: str  # Optional sink environment routing hint
     table_count: int    # Number of tables discovered
 
 

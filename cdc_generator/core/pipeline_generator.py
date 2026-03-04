@@ -13,11 +13,20 @@ import argparse
 import re
 import sys
 import traceback
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from cdc_generator.core.column_template_operations import (
+    ResolvedTransform,
+    resolve_column_templates,
+    resolve_transforms,
+)
+from cdc_generator.core.sink_env_routing import resolve_sink_env_key
+from cdc_generator.core.source_ref_resolver import parse_source_ref, resolve_source_ref
 from cdc_generator.helpers.helpers_batch import build_staging_case
+from cdc_generator.helpers.helpers_logging import print_error
 from cdc_generator.helpers.service_config import (
     get_all_customers,
     get_project_root,
@@ -25,6 +34,7 @@ from cdc_generator.helpers.service_config import (
     load_service_config,
 )
 from cdc_generator.helpers.yaml_loader import ConfigValue, load_yaml_file
+from cdc_generator.validators.bloblang_parser import extract_root_assignments
 
 # Import validation functions
 from cdc_generator.validators.manage_service.validation import validate_service_config
@@ -242,29 +252,11 @@ def substitute_variables(template: str, variables: dict[str, Any]) -> str:
     return result
 
 
-def _resolve_sink_env_key(source_cfg: dict[str, Any], env_name: str) -> str:
-    """Resolve sink-groups source environment key from generator env name."""
-    if env_name in source_cfg:
-        return env_name
-
-    env_aliases: dict[str, list[str]] = {
-        'default': ['dev', 'nonprod', 'stage', 'test'],
-        'nonprod': ['dev', 'stage', 'test'],
-        'local': ['dev', 'test'],
-        'prod': ['prod', 'prod-adcuris'],
-    }
-
-    for candidate in env_aliases.get(env_name, []):
-        if candidate in source_cfg:
-            return candidate
-
-    raise ValueError(
-        f"No sink-groups source environment mapping for env '{env_name}'. "
-        + f"Available: {[key for key in source_cfg if key != 'schemas']}"
-    )
-
-
-def resolve_postgres_url_from_sink_groups(service_name: str, env_name: str) -> str:
+def resolve_postgres_url_from_sink_groups(
+    service_name: str,
+    env_name: str,
+    target_sink_env: str | None = None,
+) -> str:
     """Build consolidated sink PostgreSQL URL from sink-groups.yaml.
 
     Uses service sinks reference like ``sink_asma.directory`` and resolves
@@ -314,7 +306,11 @@ def resolve_postgres_url_from_sink_groups(service_name: str, env_name: str) -> s
         )
 
     source_cfg = cast(dict[str, Any], source_raw)
-    source_env_key = _resolve_sink_env_key(source_cfg, env_name)
+    source_env_key = resolve_sink_env_key(
+        source_cfg,
+        env_name,
+        target_sink_env=target_sink_env,
+    )
     source_env_raw = source_cfg.get(source_env_key)
     if not isinstance(source_env_raw, dict):
         raise ValueError(
@@ -361,6 +357,270 @@ def resolve_postgres_url_from_sink_groups(service_name: str, env_name: str) -> s
     return f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode=disable"
 
 
+def _load_source_groups_config() -> dict[str, Any]:
+    source_groups_path = PROJECT_ROOT / 'source-groups.yaml'
+    if not source_groups_path.exists():
+        return {}
+    return cast(dict[str, Any], load_yaml_file(source_groups_path))
+
+
+def _find_source_name_case_insensitive(group_name: str, customer_name: str) -> str | None:
+    source_groups = _load_source_groups_config()
+    group_raw = source_groups.get(group_name)
+    if not isinstance(group_raw, dict):
+        return None
+
+    group_cfg = cast(dict[str, Any], group_raw)
+    sources_raw = group_cfg.get('sources', {})
+    if not isinstance(sources_raw, dict):
+        return None
+
+    sources = cast(dict[str, Any], sources_raw)
+    target = customer_name.casefold()
+    for source_name in sources:
+        if str(source_name).casefold() == target:
+            return str(source_name)
+    return None
+
+
+def _escape_bloblang_string(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def _resolve_template_expr(
+    template_value: str,
+    value_source: str,
+    customer_name: str,
+    env_name: str,
+    server_group_name: str,
+) -> str:
+    if value_source == 'source_ref':
+        parsed_ref = parse_source_ref(template_value)
+        if parsed_ref is None:
+            raise ValueError(f"Invalid source reference in column template: {template_value}")
+
+        source_name = _find_source_name_case_insensitive(server_group_name, customer_name)
+        if not source_name:
+            raise ValueError(
+                f"Could not resolve source name for customer '{customer_name}' in group '{server_group_name}'"
+            )
+
+        resolved = resolve_source_ref(
+            parsed_ref,
+            source_name=source_name,
+            env=env_name,
+            config=_load_source_groups_config(),
+        )
+        resolved_text = str(resolved).strip()
+        if resolved_text.casefold() in {'none', 'null', ''}:
+            raise ValueError(
+                "Source reference resolved to null/empty value: "
+                + f"{template_value} for customer '{customer_name}' env '{env_name}'. "
+                + "Populate source-groups.yaml with concrete per-source value before generation."
+            )
+        return f'"{_escape_bloblang_string(resolved_text)}"'
+
+    if value_source == 'env':
+        env_match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", template_value.strip())
+        if env_match:
+            return f'env("{env_match.group(1)}")'
+        return f'"{_escape_bloblang_string(template_value)}"'
+
+    if value_source == 'sql':
+        lowered = template_value.strip().casefold()
+        if lowered == 'now()':
+            return 'now()'
+        if lowered == 'gen_random_uuid()':
+            return 'uuid_v4()'
+        return f'"{_escape_bloblang_string(template_value)}"'
+
+    return template_value
+
+
+def _build_sink_table_enrichment(
+    table_cfg: dict[str, Any],
+    customer_name: str,
+    env_name: str,
+    server_group_name: str,
+) -> tuple[list[str], list[str], list[str]]:
+    extra_columns: list[str] = []
+    extra_args: list[str] = []
+    processor_steps: list[str] = []
+
+    for resolved_template in resolve_column_templates(cast(dict[str, object], table_cfg)):
+        extra_columns.append(resolved_template.name)
+        extra_args.append(f'this.{resolved_template.name}')
+        expr = _resolve_template_expr(
+            template_value=resolved_template.value,
+            value_source=resolved_template.template.value_source,
+            customer_name=customer_name,
+            env_name=env_name,
+            server_group_name=server_group_name,
+        )
+        processor_steps.append(f'root.{resolved_template.name} = {expr}')
+
+    for resolved_transform in resolve_transforms(cast(dict[str, object], table_cfg)):
+        for output_name in sorted(extract_root_assignments(resolved_transform.bloblang)):
+            if output_name not in extra_columns:
+                extra_columns.append(output_name)
+                extra_args.append(f'this.{output_name}')
+        if resolved_transform.execution_stage == 'sink':
+            processor_steps.append(resolved_transform.bloblang)
+
+    return extra_columns, extra_args, processor_steps
+
+
+def _select_sink_table_cfg_for_source(
+    service_cfg: dict[str, Any],
+    source_table: str,
+) -> dict[str, Any] | None:
+    sinks_raw = service_cfg.get('sinks', {})
+    if not isinstance(sinks_raw, dict):
+        return None
+
+    sinks = cast(dict[str, Any], sinks_raw)
+    if not sinks:
+        return None
+
+    sink_root_raw = sinks.get(next(iter(sinks)))
+    if not isinstance(sink_root_raw, dict):
+        return None
+
+    sink_root = cast(dict[str, Any], sink_root_raw)
+    tables_raw = sink_root.get('tables', {})
+    if not isinstance(tables_raw, dict):
+        return None
+
+    tables = cast(dict[str, Any], tables_raw)
+    exact_match: dict[str, Any] | None = None
+    fallback: dict[str, Any] | None = None
+
+    for sink_table_key, sink_table_cfg_raw in tables.items():
+        if not isinstance(sink_table_cfg_raw, dict):
+            continue
+        sink_table_cfg = cast(dict[str, Any], sink_table_cfg_raw)
+        from_ref = str(sink_table_cfg.get('from', '')).strip()
+        if not from_ref:
+            continue
+
+        source_ref_table = from_ref.split('.', 1)[1] if '.' in from_ref else from_ref
+        if source_ref_table.casefold() != source_table.casefold():
+            continue
+
+        fallback = sink_table_cfg
+        target_table = str(sink_table_key).split('.', 1)[1] if '.' in str(sink_table_key) else str(sink_table_key)
+        if target_table.casefold() == source_table.casefold():
+            exact_match = sink_table_cfg
+            break
+
+    return exact_match if exact_match is not None else fallback
+
+
+def _collect_sink_table_cfgs_for_source(
+    service_cfg: dict[str, Any],
+    source_table: str,
+) -> list[dict[str, Any]]:
+    sinks_raw = service_cfg.get('sinks', {})
+    if not isinstance(sinks_raw, dict):
+        return []
+
+    sinks = cast(dict[str, Any], sinks_raw)
+    if not sinks:
+        return []
+
+    sink_root_raw = sinks.get(next(iter(sinks)))
+    if not isinstance(sink_root_raw, dict):
+        return []
+
+    sink_root = cast(dict[str, Any], sink_root_raw)
+    tables_raw = sink_root.get('tables', {})
+    if not isinstance(tables_raw, dict):
+        return []
+
+    tables = cast(dict[str, Any], tables_raw)
+    matching: list[dict[str, Any]] = []
+    for sink_table_cfg_raw in tables.values():
+        if not isinstance(sink_table_cfg_raw, dict):
+            continue
+        sink_table_cfg = cast(dict[str, Any], sink_table_cfg_raw)
+        from_ref = str(sink_table_cfg.get('from', '')).strip()
+        if not from_ref:
+            continue
+        source_ref_table = from_ref.split('.', 1)[1] if '.' in from_ref else from_ref
+        if source_ref_table.casefold() == source_table.casefold():
+            matching.append(sink_table_cfg)
+
+    return matching
+
+
+def _build_runtime_processor_case(
+    schema_name: str,
+    table_name: str,
+    processor_steps: Iterable[str],
+) -> str:
+    steps = list(processor_steps)
+    if not steps:
+        return ""
+
+    bloblang_parts = "\n".join(f"        {step}" for step in steps)
+    return (
+        f'- check: \'this.__routing_schema == "{schema_name}" && '
+        + f'this.__routing_table == "{table_name}"\'\n'
+        + '  processors:\n'
+        + '    - bloblang: |\n'
+        + bloblang_parts
+    )
+
+
+def _build_runtime_processors_block(processor_cases: list[str]) -> str:
+    if not processor_cases:
+        return ""
+
+    indented_cases = "\n".join(
+        "          " + processor_case.replace("\n", "\n          ")
+        for processor_case in processor_cases
+    )
+    return "- switch:\n        cases:\n" + indented_cases
+
+
+def _build_source_transform_processors(
+    table_cfgs: list[dict[str, Any]],
+) -> str:
+    if not table_cfgs:
+        return ""
+
+    source_stage: list[ResolvedTransform] = []
+    seen_refs: set[str] = set()
+    for table_cfg in table_cfgs:
+        for transform in resolve_transforms(cast(dict[str, object], table_cfg)):
+            if transform.execution_stage != 'source':
+                continue
+            if transform.bloblang_ref in seen_refs:
+                continue
+            seen_refs.add(transform.bloblang_ref)
+            source_stage.append(transform)
+
+    if not source_stage:
+        return ""
+
+    blocks: list[str] = [
+        "    # Apply source-stage transforms configured for this table",
+    ]
+
+    for transform in source_stage:
+        bloblang = transform.bloblang.replace("\n", "\n        ")
+        blocks.append("    - bloblang: |\n        " + bloblang)
+
+    blocks.extend([
+        "    # Normalize transformed output to an array and split into messages",
+        "    - bloblang: 'root = if this.type() == \"array\" { this } else { [ this ] }'",
+        "    - unarchive:",
+        "        format: json_array",
+    ])
+
+    return "\n" + "\n".join(blocks)
+
+
 def generate_customer_pipelines(
     customer: str,
     environments: list[str] | None = None,
@@ -381,6 +641,8 @@ def generate_customer_pipelines(
 
     customer_name = config.get("customer", customer)
     schema = config.get("schema", customer)
+    service_name = str(config.get('service', '')).strip()
+    service_cfg = load_service_config(service_name) if service_name else {}
 
     # Load generated table definitions
     generated_tables = load_generated_table_definitions()
@@ -450,7 +712,7 @@ def generate_customer_pipelines(
         }
 
         # Build source table inputs for multi-table CDC polling
-        source_inputs = build_source_table_inputs(config, variables, generated_tables)
+        source_inputs = build_source_table_inputs(config, variables, generated_tables, service_cfg)
         variables["SOURCE_TABLE_INPUTS"] = source_inputs
 
         # Build table routing map for main pipeline (pass service name for schema lookup)
@@ -497,6 +759,191 @@ def generate_customer_pipelines(
             print(f"      ⊘ Unchanged: {source_path.relative_to(PROJECT_ROOT)}")
 
 
+def _load_customer_env_config(
+    customer: str,
+    env_name: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Load customer config and selected environment config."""
+    try:
+        config = load_customer_config(customer)
+    except FileNotFoundError:
+        return None, None
+
+    envs_raw = config.get("environments", {})
+    envs = cast(dict[str, Any], envs_raw) if isinstance(envs_raw, dict) else {}
+    env_config_raw = envs.get(env_name)
+    if not isinstance(env_config_raw, dict):
+        return config, None
+
+    return config, cast(dict[str, Any], env_config_raw)
+
+
+def _build_customer_consolidated_routes(
+    customer: str,
+    env_name: str,
+    schema_name: str,
+    config: dict[str, Any],
+    env_config: dict[str, Any],
+    postgres_url: str,
+    generated_tables: dict[str, Any],
+) -> tuple[list[str], list[str], list[str], int, list[tuple[str, str]], int]:
+    """Build sink topics, table cases and runtime processors for one customer."""
+    topics: list[str] = []
+    table_cases: list[str] = []
+    runtime_cases: list[str] = []
+    customer_generated_routes = 0
+    skipped_routes = 0
+    skipped_entries: list[tuple[str, str]] = []
+
+    topic_prefix = preserve_env_vars(env_config.get("topic_prefix", f"{env_name}.{customer}"))
+    source_tables_raw = config.get("cdc_tables", [])
+    source_tables = cast(list[dict[str, Any]], source_tables_raw) if isinstance(source_tables_raw, list) else []
+    service_name = str(config.get("service", ""))
+    service_cfg = load_service_config(service_name) if service_name else {}
+    server_group_name = str(config.get("server_group", service_name))
+
+    for table_config in source_tables:
+        table_name = str(table_config.get("table", "")).strip()
+        if not table_name:
+            continue
+        table_schema = str(table_config.get("schema", "dbo"))
+
+        table_def = generated_tables.get(table_name)
+        if not table_def or "fields" not in table_def:
+            print(f"   [WARNING] No generated field metadata for {table_name} - skipping")
+            continue
+
+        fields = table_def["fields"]
+        mssql_fields = [field["mssql"] for field in fields]
+        postgres_fields = [field["postgres"] for field in fields]
+
+        sink_table_cfg = _select_sink_table_cfg_for_source(service_cfg, table_name)
+        extra_columns: list[str] = []
+        extra_args: list[str] = []
+        processor_steps: list[str] = []
+        if sink_table_cfg is not None:
+            try:
+                extra_columns, extra_args, processor_steps = _build_sink_table_enrichment(
+                    sink_table_cfg,
+                    customer_name=customer,
+                    env_name=env_name,
+                    server_group_name=server_group_name,
+                )
+            except ValueError as enrichment_error:
+                skipped_routes += 1
+                skipped_entries.append((f"{table_schema}.{table_name}", str(enrichment_error)))
+                continue
+
+        runtime_case = _build_runtime_processor_case(
+            schema_name=schema_name,
+            table_name=table_name,
+            processor_steps=processor_steps,
+        )
+        if runtime_case:
+            runtime_cases.append(runtime_case)
+
+        table_cases.append(
+            build_staging_case(
+                table_name=table_name,
+                schema=schema_name,
+                postgres_url=postgres_url,
+                postgres_fields=postgres_fields,
+                mssql_fields=mssql_fields,
+                extra_columns=extra_columns,
+                extra_args=extra_args,
+            )
+        )
+        customer_generated_routes += 1
+        topics.append(f'"{topic_prefix}.{table_schema}.{table_name}"')
+
+    return topics, table_cases, runtime_cases, customer_generated_routes, skipped_entries, skipped_routes
+
+
+def _print_customer_skip_summary(
+    customer: str,
+    env_name: str,
+    customer_generated_routes: int,
+    skipped_entries: list[tuple[str, str]],
+) -> None:
+    """Print consolidated summary for skipped customer routes."""
+    if not skipped_entries:
+        return
+
+    first_table, first_reason = skipped_entries[0]
+    if customer_generated_routes == 0:
+        print_error(
+            f"Skipping customer '{customer}' for env '{env_name}' due to unresolved source refs "
+            + f"({len(skipped_entries)} table routes skipped). "
+            + f"First issue [{first_table}]: {first_reason}"
+        )
+        return
+
+    print_error(
+        f"Customer '{customer}' in env '{env_name}': skipped {len(skipped_entries)} table routes "
+        + f"due to unresolved source refs. First issue [{first_table}]: {first_reason}"
+    )
+
+
+def _render_consolidated_sink_content(
+    env_name: str,
+    customers: list[str],
+    all_topics: list[str],
+    all_table_cases: list[str],
+    runtime_processor_cases: list[str],
+    sink_template: str,
+) -> str:
+    """Render consolidated sink content with generated header and substitutions."""
+    topics_yaml = "\n".join([f"      - {topic}" for topic in all_topics])
+    table_cases_yaml = "\n".join(all_table_cases).replace("\n", "\n      ")
+
+    variables = {
+        "ENV": env_name,
+        "SINK_TOPICS": "\n" + topics_yaml,
+        "TABLE_CASES": table_cases_yaml,
+        "SINK_RUNTIME_PROCESSORS": _build_runtime_processors_block(runtime_processor_cases),
+    }
+    sink_pipeline = substitute_variables(sink_template, variables)
+
+    header = """# ============================================================================
+# DO NOT EDIT THIS FILE - IT IS AUTO-GENERATED
+# ============================================================================
+# CONSOLIDATED SINK - Handles ALL customers for this environment
+#
+# To make changes:
+#   1. Edit source files: services/<service>.yaml
+#   2. Edit template: pipelines/templates/sink-pipeline.yaml
+#   3. Run: cdc manage-pipelines generate --all
+#
+# Environment: {env}
+# Customers: {customers}
+# Generated: {timestamp}
+# ============================================================================
+
+"""
+
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    customer_list = ", ".join(
+        sorted([
+            customer
+            for customer in customers
+            if load_customer_config(customer).get("environments", {}).get(env_name)
+        ])
+    )
+    header_formatted = header.format(env=env_name, customers=customer_list, timestamp=timestamp)
+    return header_formatted + sink_pipeline
+
+
+def _print_consolidated_sink_skip_summary(
+    skipped_routes: int,
+    skipped_customers: int,
+) -> None:
+    """Print post-generation skip summary for consolidated sink."""
+    if skipped_routes:
+        print_error(f"   ⚠ Skipped routes due to unresolved source refs: {skipped_routes}")
+    if skipped_customers:
+        print_error(f"   ⚠ Skipped customers due to invalid sink routing: {skipped_customers}")
+
+
 def generate_consolidated_sink(
     env_name: str,
     customers: list[str] | None = None,
@@ -520,123 +967,94 @@ def generate_consolidated_sink(
     # Aggregate all topics and table cases across customers
     all_topics: list[str] = []
     all_table_cases: list[str] = []
+    runtime_processor_cases: list[str] = []
     postgres_url = None  # Resolved from sink-groups (preferred) or customer config fallback
+    skipped_routes = 0
+    skipped_customers = 0
 
     for customer in customers:
-        try:
-            config = load_customer_config(customer)
-        except FileNotFoundError:
+        config, env_config = _load_customer_env_config(customer, env_name)
+        if config is None or env_config is None:
             continue
 
-        schema = config.get("schema", customer)
-        service_name = str(config.get('service', ''))
-        env_config = config.get("environments", {}).get(env_name)
+        schema = str(config.get("schema", customer))
+        service_name = str(config.get("service", ""))
 
-        if not env_config:
-            continue  # Customer doesn't have this environment
-
-        # Get PostgreSQL URL (same for all customers in consolidated setup)
-        # Strip customer-specific URL parameters like search_path or currentSchema
-        # since we use schema-qualified table names instead
-        if postgres_url is None:
-            postgres_url = _resolve_consolidated_postgres_url(
+        try:
+            customer_postgres_url = _resolve_consolidated_postgres_url(
                 service_name=service_name,
                 customer=customer,
                 env_name=env_name,
+                env_config=env_config,
             )
-
-        # Build topics for this customer
-        topic_prefix = preserve_env_vars(env_config.get("topic_prefix", f"{env_name}.{customer}"))
-        source_tables = config.get('cdc_tables', [])
-
-        for t in source_tables:
-            table_name = t['table']
-            table_schema = t.get('schema', 'dbo')
-            # topic_prefix already includes database name, just add schema.table
-            topic = f'"{topic_prefix}.{table_schema}.{table_name}"'
-            all_topics.append(topic)
-
-        # Build table cases for this customer
-        for table_config in source_tables:
-            table_name = table_config['table']
-
-            table_def = generated_tables.get(table_name)
-            if not table_def or 'fields' not in table_def:
-                print(f"   [WARNING] No generated field metadata for {table_name} - skipping")
-                continue
-
-            fields = table_def['fields']
-            mssql_fields = [f['mssql'] for f in fields]
-            postgres_fields = [f['postgres'] for f in fields]
-
-            staging_case = build_staging_case(
-                table_name=table_name,
-                schema=schema,
-                postgres_url=postgres_url,
-                postgres_fields=postgres_fields,
-                mssql_fields=mssql_fields
+        except ValueError as sink_route_error:
+            skipped_customers += 1
+            cdc_tables = cast(list[dict[str, Any]], config.get("cdc_tables", []))
+            skipped_routes += len(cdc_tables)
+            print_error(
+                f"Skipping customer '{customer}' for env '{env_name}' due to sink routing error: "
+                + str(sink_route_error)
             )
-            all_table_cases.append(staging_case)
+            continue
+
+        if postgres_url is None:
+            postgres_url = customer_postgres_url
+        elif postgres_url != customer_postgres_url:
+            skipped_customers += 1
+            cdc_tables = cast(list[dict[str, Any]], config.get("cdc_tables", []))
+            skipped_routes += len(cdc_tables)
+            print_error(
+                f"Skipping customer '{customer}' for env '{env_name}' due to mismatched sink route target. "
+                + "Consolidated sink requires one resolved sink target per environment."
+            )
+            continue
+
+        (
+            customer_topics,
+            customer_table_cases,
+            customer_runtime_cases,
+            customer_generated_routes,
+            customer_skipped,
+            customer_skipped_routes,
+        ) = _build_customer_consolidated_routes(
+            customer=customer,
+            env_name=env_name,
+            schema_name=schema,
+            config=config,
+            env_config=env_config,
+            postgres_url=postgres_url,
+            generated_tables=generated_tables,
+        )
+        all_topics.extend(customer_topics)
+        all_table_cases.extend(customer_table_cases)
+        runtime_processor_cases.extend(customer_runtime_cases)
+        skipped_routes += customer_skipped_routes
+        _print_customer_skip_summary(customer, env_name, customer_generated_routes, customer_skipped)
 
     if not all_topics:
         print(f"   ⚠️  No customers configured for environment {env_name}")
         return
 
-    # Build consolidated variables
-    topics_yaml = "\n".join([f"      - {t}" for t in all_topics])
-    table_cases_yaml = "\n".join(all_table_cases)
-    # Indent table cases to match template
-    table_cases_yaml = table_cases_yaml.replace("\n", "\n      ")
-
-    variables = {
-        "ENV": env_name,
-        "SINK_TOPICS": "\n" + topics_yaml,
-        "TABLE_CASES": table_cases_yaml,
-    }
-
-    # Substitute variables in sink template
-    sink_pipeline = substitute_variables(sink_template, variables)
-
-    # Create output directory for consolidated sink
     output_dir = GENERATED_SINKS_DIR / env_name
     output_dir.mkdir(parents=True, exist_ok=True)
-
     sink_path = output_dir / "sink-pipeline.yaml"
-
-    header = """# ============================================================================
-# DO NOT EDIT THIS FILE - IT IS AUTO-GENERATED
-# ============================================================================
-# CONSOLIDATED SINK - Handles ALL customers for this environment
-#
-# To make changes:
-#   1. Edit source files: services/<service>.yaml
-#   2. Edit template: pipelines/templates/sink-pipeline.yaml
-#   3. Run: cdc manage-pipelines generate --all
-#
-# Environment: {env}
-# Customers: {customers}
-# Generated: {timestamp}
-# ============================================================================
-
-"""
-
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    customer_list = ", ".join(
-        sorted([
-            c for c in customers
-            if load_customer_config(c).get("environments", {}).get(env_name)
-        ])
+    sink_content = _render_consolidated_sink_content(
+        env_name=env_name,
+        customers=customers,
+        all_topics=all_topics,
+        all_table_cases=all_table_cases,
+        runtime_processor_cases=runtime_processor_cases,
+        sink_template=sink_template,
     )
-    header_formatted = header.format(env=env_name, customers=customer_list, timestamp=timestamp)
-
-    sink_content = header_formatted + sink_pipeline
 
     if should_write_file(sink_path, sink_content):
         sink_path.write_text(sink_content)
         print(f"   ✓ Generated: {sink_path.relative_to(PROJECT_ROOT)}")
         print(f"   📋 Topics: {len(all_topics)}, Table Routes: {len(all_table_cases)}")
+        _print_consolidated_sink_skip_summary(skipped_routes, skipped_customers)
     else:
         print(f"   ⊘ Unchanged: {sink_path.relative_to(PROJECT_ROOT)}")
+        _print_consolidated_sink_skip_summary(skipped_routes, skipped_customers)
 
 
 def build_table_include_list(config: dict[str, Any]) -> str:
@@ -690,6 +1108,7 @@ def build_source_table_inputs(
     config: dict[str, Any],
     variables: dict[str, Any],
     generated_tables: dict[str, Any],
+    service_cfg: dict[str, Any] | None = None,
 ) -> str:
     """Build generate + sql_raw inputs for continuous CDC polling with LSN tracking."""
     source_tables = config.get('cdc_tables', [])
@@ -708,6 +1127,9 @@ def build_source_table_inputs(
     for table_config in source_tables:
         table_name = table_config['table']
         schema = table_config.get('schema', 'dbo')
+
+        sink_table_cfgs = _collect_sink_table_cfgs_for_source(service_cfg or {}, table_name)
+        source_transform_processors = _build_source_transform_processors(sink_table_cfgs)
 
         # Get field definitions from generated table metadata
         table_def = generated_tables.get(table_name)
@@ -780,6 +1202,7 @@ def build_source_table_inputs(
     # Split the array result into individual messages (one per CDC row)
     - unarchive:
         format: json_array
+{source_transform_processors}
     # Set table metadata and capture the LSN for cache update (already hex string from SQL)
     - bloblang: |
         meta source_table = "{table_name}"
@@ -1098,6 +1521,7 @@ def _resolve_consolidated_postgres_url(
     service_name: str,
     customer: str,
     env_name: str,
+    env_config: dict[str, Any],
 ) -> str:
     """Resolve Postgres URL for consolidated sink generation."""
     resolved_service_name = service_name
@@ -1106,13 +1530,42 @@ def _resolve_consolidated_postgres_url(
         if len(matched_services) == 1:
             resolved_service_name = matched_services[0]
 
-    if not resolved_service_name:
-        raise ValueError(
-            f"Unable to resolve service for customer '{customer}'. "
-            + "Consolidated sink DSN must be resolved from sink-groups.yaml (no localhost fallback)."
-        )
+    if resolved_service_name:
+        try:
+            target_sink_env_raw = env_config.get("target_sink_env")
+            target_sink_env = (
+                str(target_sink_env_raw).strip()
+                if isinstance(target_sink_env_raw, str) and target_sink_env_raw.strip()
+                else None
+            )
+            return resolve_postgres_url_from_sink_groups(
+                resolved_service_name,
+                env_name,
+                target_sink_env=target_sink_env,
+            )
+        except ValueError as error:
+            if "has no sinks configuration" not in str(error):
+                raise
 
-    return resolve_postgres_url_from_sink_groups(resolved_service_name, env_name)
+    raw_url = preserve_env_vars(
+        env_config.get(
+            "postgres",
+            {},
+        ).get(
+            "url",
+            (
+                "postgresql://${POSTGRES_SINK_USER:-postgres}:${POSTGRES_SINK_PASSWORD:-postgres}"
+                + "@${POSTGRES_SINK_HOST:-postgres}:${POSTGRES_SINK_PORT:-5432}"
+                + "/${POSTGRES_SINK_DB:-postgres}?sslmode=disable"
+            ),
+        )
+    )
+
+    if '&options=' in raw_url:
+        return raw_url.split('&options=')[0]
+    if '?currentSchema=' in raw_url:
+        return raw_url.split('?currentSchema=')[0]
+    return raw_url
 
 
 def main() -> None:

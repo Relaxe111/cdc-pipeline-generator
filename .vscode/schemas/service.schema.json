@@ -91,7 +91,11 @@
             { "type": "string" }
           ]
         },
-        "expected_output_column": { "type": "string" } 
+        "expected_output_column": { "type": "string" },
+        "execution_stage": {
+          "type": "string",
+          "enum": ["source", "sink"]
+        }
       },
       "required": ["bloblang_ref"]
     },

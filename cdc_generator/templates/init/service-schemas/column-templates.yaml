@@ -21,6 +21,9 @@
 #                - Bloblang expressions: root().source_table, this.field, meta("key")
 #                - Environment variables: ${VARIABLE_NAME}
 #   default:     SQL default for DDL (e.g., now(), gen_random_uuid())
+#   unique:      Optional boolean. When true, resolved values must be unique:
+#                - per sink env if sink group is environment-aware
+#                - per source-group if sink group is not environment-aware
 #
 # Value overrides:
 #   In service YAML, use 'value' to override the template default.
@@ -120,6 +123,7 @@ templates:
     not_null: true
     description: Tenant identifier for multi-tenant deployments
     value: "{asma.sources.*.customer_id}"
+    unique: true
 
   # ---------------------------------------------------------------------------
   # Row identity columns

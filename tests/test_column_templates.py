@@ -96,6 +96,17 @@ class TestParseSingleTemplate:
         assert result is not None
         assert result.default == "now()"
 
+    def test_parses_unique_flag(self) -> None:
+        """Unique flag is parsed and defaults to False when omitted."""
+        raw = {
+            "type": "text",
+            "value": "meta(\"table\")",
+            "unique": True,
+        }
+        result = _parse_single_template("tenant_key", raw)
+        assert result is not None
+        assert result.unique is True
+
     def test_missing_required_field(self) -> None:
         """Return None for template missing required field."""
         raw = {"name": "_col", "type": "text"}  # missing 'value'

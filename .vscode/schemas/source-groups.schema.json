@@ -59,6 +59,7 @@
       "properties": {
         "server": { "type": "string" },
         "database": { "type": "string" },
+        "target_sink_env": { "type": "string" },
         "table_count": { "type": "integer", "minimum": 0 },
         "customer_id": { "type": ["string", "null"] }
       },

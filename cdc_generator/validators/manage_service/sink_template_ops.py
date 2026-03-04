@@ -27,6 +27,7 @@ from cdc_generator.helpers.helpers_logging import (
 from cdc_generator.helpers.service_config import load_service_config
 
 from .config import save_service_config
+from .validation import validate_service_sink_preflight
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -332,6 +333,15 @@ def add_column_template_to_table(
         value_override=value_override, table_key=table_key,
     ):
         return False
+
+    preflight_errors, preflight_warnings = validate_service_sink_preflight(service, config)
+    if preflight_errors:
+        for error in preflight_errors:
+            print_error(f"  ✗ {error}")
+        remove_column_template(table_cfg, template_key)
+        return False
+    for warning in preflight_warnings:
+        print_info(f"  ⚠ {warning}")
 
     if not save_service_config(service, config):
         return False

@@ -11,6 +11,9 @@ import argparse
 import hashlib
 import subprocess
 import sys
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 from cdc_generator.helpers.service_config import get_project_root
@@ -50,13 +53,49 @@ def _run_generation(project_root: Path) -> tuple[int, str, str]:
     return result.returncode, result.stdout, result.stderr
 
 
+def _run_with_loading(
+    message: str,
+    operation: Callable[[], tuple[int, str, str]],
+) -> tuple[int, str, str]:
+    """Run operation with interactive loading indicator when attached to a TTY."""
+    if not sys.stdout.isatty():
+        print(f"⏳ {message}...")
+        return operation()
+
+    frames = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+    stop_event = threading.Event()
+
+    def _spinner() -> None:
+        index = 0
+        while not stop_event.is_set():
+            frame = frames[index % len(frames)]
+            print(f"\r{frame} {message}...", end="", flush=True)
+            index += 1
+            time.sleep(0.1)
+
+    thread = threading.Thread(target=_spinner, daemon=True)
+    thread.start()
+
+    try:
+        return operation()
+    finally:
+        stop_event.set()
+        thread.join(timeout=0.3)
+        print(f"\r✅ {message}...done")
+
+
 def main() -> int:
     _parse_args()
     project_root = get_project_root()
     generated_root = project_root / "pipelines" / "generated"
 
+    print("🔍 Running pipeline drift check")
+
     before = _snapshot_yaml(generated_root)
-    code, stdout, stderr = _run_generation(project_root)
+    code, stdout, stderr = _run_with_loading(
+        "Generating pipelines for comparison",
+        lambda: _run_generation(project_root),
+    )
 
     if code != 0:
         print("❌ Failed to generate pipelines while calculating diff")

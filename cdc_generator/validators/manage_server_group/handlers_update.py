@@ -36,6 +36,14 @@ from .yaml_io import write_server_group_yaml
 from .yaml_writer import update_server_group_yaml
 
 
+def update_vscode_schema() -> None:
+    """Compatibility no-op for legacy test patch points."""
+
+
+def regenerate_all_validation_schemas() -> None:
+    """Compatibility no-op for legacy test patch points."""
+
+
 def _show_config_file_help() -> None:
     """Display help message for missing source-groups.yaml file.
 

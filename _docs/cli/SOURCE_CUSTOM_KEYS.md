@@ -66,7 +66,22 @@ sources:
       database: directory_db
       table_count: 42
       customer_id: cust-001
+      target_sink_env: dev
 ```
+
+`target_sink_env` is optional and used when the source group is not environment-aware
+but the target sink group is environment-aware. It selects the sink env route
+explicitly (for example `dev`, `stage`, `prod`).
+
+## `manage-services config` preflight behavior
+
+- Fast-fail: if sink topology exists and `target_sink_env` is missing/invalid for env-aware sink routing.
+- Warning-only: if sink topology is not initialized yet (for example missing `sink-groups.yaml`).
+- `column_templates` with `unique: true` are validated against resolved values:
+  - Scope is per sink env when sink is environment-aware.
+  - Scope is per source-group otherwise.
+  - Empty/null resolved values are invalid.
+  - Collisions are reported with value + conflicting routes.
 
 ## Warning behavior
 

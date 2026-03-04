@@ -315,6 +315,8 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
         'customer': customer_name,
         'schema': customer_data.get('schema', normalized_customer_name),
         'customer_id': customer_data.get('customer_id'),
+        'service': normalized_service_config.get('service'),
+        'server_group': normalized_service_config.get('server_group'),
         'cdc_tables': source_tables_flat,
         'environments': {}
     }
@@ -387,6 +389,10 @@ def _derive_customer_environments_from_source_groups(
             'database': {'name': database_name},
             'topic_prefix': f"{env_name}.{customer_name}.{database_name}",
         }
+
+        target_sink_env_raw = env_cfg.get('target_sink_env')
+        if isinstance(target_sink_env_raw, str) and target_sink_env_raw.strip():
+            env_data['target_sink_env'] = target_sink_env_raw.strip()
 
         server_cfg_raw = servers.get(server_name)
         if isinstance(server_cfg_raw, dict):

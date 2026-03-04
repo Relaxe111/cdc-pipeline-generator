@@ -20,6 +20,9 @@ from cdc_generator.core.column_templates import (
 from cdc_generator.core.column_templates import (
     set_templates_path,
 )
+from cdc_generator.validators.manage_service.validation import (
+    validate_service_sink_preflight,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -420,3 +423,140 @@ class TestResolveTransforms:
         resolved = resolve_transforms(table_cfg)
         assert len(resolved) == 1
         assert resolved[0].bloblang_ref == "file://services/_bloblang/examples/active_filter.blobl"
+
+    def test_resolve_defaults_execution_stage_to_source(self, setup_bloblang: Path) -> None:
+        table_cfg = _make_table_cfg()
+        table_cfg["transforms"] = [
+            {"bloblang_ref": "file://services/_bloblang/examples/active_filter.blobl"},
+        ]
+        resolved = resolve_transforms(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].execution_stage == "source"
+
+    def test_resolve_preserves_sink_execution_stage(self, setup_bloblang: Path) -> None:
+        table_cfg = _make_table_cfg()
+        table_cfg["transforms"] = [
+            {
+                "bloblang_ref": "file://services/_bloblang/examples/active_filter.blobl",
+                "execution_stage": "sink",
+            },
+        ]
+        resolved = resolve_transforms(table_cfg)
+        assert len(resolved) == 1
+        assert resolved[0].execution_stage == "sink"
+
+
+class TestUniqueTemplateValidation:
+    """Tests for unique template scope validation in manage-service flow."""
+
+    def _write_shared_files(self, tmp_path: Path) -> None:
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        schemas_dir = tmp_path / "services" / "_schemas"
+        schemas_dir.mkdir(parents=True)
+        templates_path = schemas_dir / "column-templates.yaml"
+        templates_path.write_text(
+            "templates:\n"
+            "  customer_id:\n"
+            "    type: text\n"
+            "    value_source: source_ref\n"
+            "    value: '{adopus.sources.*.customer_id}'\n"
+            "    unique: true\n"
+        )
+        set_templates_path(templates_path)
+        (tmp_path / "services").mkdir(exist_ok=True)
+        (tmp_path / "services" / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+            "  sinks:\n"
+            "    sink_asma.directory:\n"
+            "      tables:\n"
+            "        public.actor:\n"
+            "          target_exists: false\n"
+            "          from: dbo.Actor\n"
+            "          column_templates:\n"
+            "            - template: customer_id\n"
+        )
+
+    def test_unique_collision_scoped_per_sink_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._write_shared_files(tmp_path)
+        (tmp_path / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas: [dbo]\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: A\n"
+            "        customer_id: dup\n"
+            "        target_sink_env: dev\n"
+            "    CustomerB:\n"
+            "      schemas: [dbo]\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: B\n"
+            "        customer_id: dup\n"
+            "        target_sink_env: dev\n"
+        )
+        (tmp_path / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  environment_aware: true\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas: [public]\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+        )
+
+        monkeypatch.chdir(tmp_path)
+        errors, warnings = validate_service_sink_preflight("adopus")
+        assert warnings == []
+        assert any("unique template collision" in err for err in errors)
+
+    def test_unique_allows_same_value_in_different_sink_envs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._write_shared_files(tmp_path)
+        (tmp_path / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas: [dbo]\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: A\n"
+            "        customer_id: dup\n"
+            "        target_sink_env: dev\n"
+            "    CustomerB:\n"
+            "      schemas: [dbo]\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: B\n"
+            "        customer_id: dup\n"
+            "        target_sink_env: stage\n"
+        )
+        (tmp_path / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  environment_aware: true\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas: [public]\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+            "      stage:\n"
+            "        server: default\n"
+            "        database: directory_stage\n"
+        )
+
+        monkeypatch.chdir(tmp_path)
+        errors, _warnings = validate_service_sink_preflight("adopus")
+        assert not any("unique template collision" in err for err in errors)

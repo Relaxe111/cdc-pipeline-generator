@@ -73,6 +73,8 @@ pipeline:
         level: INFO
         message: "Processing ${!this.__cdc_operation} for ${!this.__routing_schema}.${!this.__routing_table} offset=${!this.__kafka_offset}"
 
+    {{SINK_RUNTIME_PROCESSORS}}
+
 output:
   switch:
     cases:

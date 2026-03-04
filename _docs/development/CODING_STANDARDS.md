@@ -19,9 +19,10 @@
 
 ### File Size Limits ⚠️ CRITICAL
 
-**Target: 200-400 lines | Maximum: 600 lines**
+#### Target: 200-400 lines | Maximum: 600 lines
 
 **Why this matters:**
+
 - Files <400 lines: AI can read in single operation
 - Files >600 lines: Multiple reads required, slows comprehension
 - Harder to locate functionality and understand relationships
@@ -49,7 +50,7 @@
 
 **Current structure (keep this pattern):**
 
-```
+```text
 cdc_generator/
 ├── cli/                    # Entry points only (routing to validators)
 ├── core/                   # Core pipeline generation logic
@@ -62,6 +63,7 @@ cdc_generator/
 ```
 
 **Principles:**
+
 - Folders: lowercase with underscores (`manage_server_group`)
 - Files: descriptive nouns (`db_inspector.py`, `yaml_writer.py`)
 - Organize by **feature**, not by **type** (avoid `utils/`, `models/`, `services/`)
@@ -74,6 +76,7 @@ cdc_generator/
 ### Function Size: 10-50 lines ideal, max 100
 
 **Why:**
+
 - Entire function visible at once
 - Clear single responsibility
 - Easier to modify without side effects
@@ -143,6 +146,7 @@ def create_service_schema(db_name: str, config: Config) -> Path:
 ### Use Functions for Data Transformations
 
 **Pure functions for:**
+
 - Data transformations
 - Validation logic
 - Filtering/mapping
@@ -164,6 +168,7 @@ def filter_excluded_databases(
 ### Use Classes for State and Orchestration
 
 **Classes for:**
+
 - Managing connections
 - Coordinating multi-step operations
 - Caching/memoization
@@ -325,6 +330,7 @@ ServerGroupPattern = Literal['db-shared', 'db-per-tenant']
 ### Docstring Format: Google Style with Examples
 
 **Required sections:**
+
 1. One-line summary
 2. Args (with types and examples)
 3. Returns (with structure)
@@ -622,6 +628,7 @@ Before committing:
 7. **Clear structure** - Locate functionality quickly
 
 **When in doubt:**
+
 - Readability over cleverness
 - Explicitness over brevity
 - Simplicity over performance (unless profiling shows bottleneck)

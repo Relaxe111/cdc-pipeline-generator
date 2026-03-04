@@ -738,6 +738,105 @@ class TestCliValidateConfig:
         finally:
             os.chdir(original_cwd)
 
+    def test_validate_config_fails_when_target_sink_env_missing(
+        self, tmp_path: Path,
+    ) -> None:
+        """Fast-fail when source is non-env-aware and sink requires target_sink_env."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusCustomerA\n"
+        )
+        (tmp_path / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  environment_aware: true\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+            "  sinks:\n"
+            "    sink_asma.directory:\n"
+            "      tables:\n"
+            "        public.actor:\n"
+            "          target_exists: false\n"
+            "          from: dbo.Actor\n"
+        )
+
+        import os
+        original_cwd = Path.cwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+
+            result = validate_service_config("adopus")
+            assert result is False
+        finally:
+            os.chdir(original_cwd)
+
+    def test_validate_config_warns_when_sink_topology_unavailable(
+        self, tmp_path: Path,
+    ) -> None:
+        """Sink topology missing is warning-only (non-blocking bootstrap)."""
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n  dev:\n    image: busybox\n"
+        )
+        (tmp_path / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusCustomerA\n"
+        )
+        (tmp_path / "services").mkdir()
+        (tmp_path / "services" / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+            "  sinks:\n"
+            "    sink_asma.directory:\n"
+            "      tables:\n"
+            "        public.actor:\n"
+            "          target_exists: false\n"
+            "          from: dbo.Actor\n"
+        )
+
+        import os
+        original_cwd = Path.cwd()
+        try:
+            os.chdir(tmp_path)
+            from cdc_generator.validators.manage_service.validation import validate_service_config
+
+            result = validate_service_config("adopus")
+            assert result is True
+        finally:
+            os.chdir(original_cwd)
+
 
 class TestCliInspect:
     """Inspect tests - unit tests calling inspect functions directly."""

@@ -16,9 +16,23 @@
           "not_null": { "type": "boolean" },
           "description": { "type": "string" },
           "value": { "type": "string" },
-          "default": { "type": "string" }
+          "value_source": {
+            "type": "string",
+            "enum": ["bloblang", "source_ref", "source-ref", "sql", "env"]
+          },
+          "default": { "type": "string" },
+          "applies_to": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            ]
+          },
+          "unique": { "type": "boolean" }
         },
-        "required": ["name", "type"]
+        "required": ["type", "value"]
       }
     }
   },

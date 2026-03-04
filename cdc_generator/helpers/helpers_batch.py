@@ -257,8 +257,16 @@ def build_batch_upsert_case(table_name: str, schema: str, postgres_url: str,
     )
 
 
-def build_staging_case(table_name: str, schema: str, postgres_url: str,
-                       postgres_fields: list[str], mssql_fields: list[str]) -> str:
+def build_staging_case(
+    table_name: str,
+    schema: str,
+    postgres_url: str,
+    postgres_fields: list[str],
+    mssql_fields: list[str],
+    extra_columns: list[str] | None = None,
+    extra_args: list[str] | None = None,
+    target_table_name: str | None = None,
+) -> str:
     """
     Generate staging table INSERT case using sql_insert with batching.
 
@@ -275,11 +283,15 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
     Returns:
         YAML configuration string for staging table INSERT case
     """
-    table_normalized = normalize_table_name(table_name)
+    target_name = target_table_name if target_table_name else table_name
+    table_normalized = normalize_table_name(target_name)
     stg_table = f"stg_{table_normalized}"
 
+    computed_columns = extra_columns if extra_columns is not None else []
+    computed_args = extra_args if extra_args is not None else []
+
     # Build columns list (business fields + all metadata fields including kafka tracking)
-    all_columns = list(postgres_fields) + [
+    all_columns = list(postgres_fields) + list(computed_columns) + [
         '__sync_timestamp',
         '__source',
         '__source_db',
@@ -295,6 +307,9 @@ def build_staging_case(table_name: str, schema: str, postgres_url: str,
     args_list: list[str] = []
     for mssql_field in mssql_fields:
         args_list.append(bloblang_field(mssql_field))
+
+    # Add computed/runtime values
+    args_list.extend(computed_args)
 
     # Add metadata values
     args_list.extend([

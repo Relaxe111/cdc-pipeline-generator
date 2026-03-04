@@ -1,0 +1,1172 @@
+{
+  "total_py_files": 252,
+  "total_functions_methods": 2991,
+  "file_max": 600,
+  "func_max": 100,
+  "files_over_max_count": 37,
+  "functions_over_max_count": 51,
+  "top_30_largest_files": [
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "lines": 2748
+    },
+    {
+      "path": "cdc_generator/cli/sink_group.py",
+      "lines": 2598
+    },
+    {
+      "path": "cdc_generator/cli/completions.py",
+      "lines": 1907
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "lines": 1873
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "lines": 1619
+    },
+    {
+      "path": "cdc_generator/cli/click_commands.py",
+      "lines": 1527
+    },
+    {
+      "path": "tests/cli/test_manage_services_config.py",
+      "lines": 1393
+    },
+    {
+      "path": "tests/test_sink_handlers.py",
+      "lines": 1263
+    },
+    {
+      "path": "tests/cli/coverage_report.py",
+      "lines": 1227
+    },
+    {
+      "path": "tests/test_fish_completions.py",
+      "lines": 1156
+    },
+    {
+      "path": "tests/test_migration_generator.py",
+      "lines": 1045
+    },
+    {
+      "path": "cdc_generator/cli/service_handlers_sink_custom.py",
+      "lines": 1029
+    },
+    {
+      "path": "tests/test_sink_from_field.py",
+      "lines": 1024
+    },
+    {
+      "path": "tests/test_template_validation_chain.py",
+      "lines": 1017
+    },
+    {
+      "path": "tests/test_autocompletion_helpers.py",
+      "lines": 1005
+    },
+    {
+      "path": "tests/cli/test_scaffold.py",
+      "lines": 999
+    },
+    {
+      "path": "cdc_generator/helpers/helpers_sink_groups.py",
+      "lines": 997
+    },
+    {
+      "path": "cdc_generator/cli/service.py",
+      "lines": 957
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/source_type_overrides.py",
+      "lines": 917
+    },
+    {
+      "path": "tests/cli/test_manage_sink_groups.py",
+      "lines": 900
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "lines": 863
+    },
+    {
+      "path": "tests/test_sink_group_handlers.py",
+      "lines": 859
+    },
+    {
+      "path": "tests/test_sink_map_columns.py",
+      "lines": 849
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "lines": 806
+    },
+    {
+      "path": "cdc_generator/helpers/autocompletions/sinks.py",
+      "lines": 796
+    },
+    {
+      "path": "cdc_generator/validators/template_validator.py",
+      "lines": 775
+    },
+    {
+      "path": "cdc_generator/cli/service_handlers_sink.py",
+      "lines": 765
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "lines": 734
+    },
+    {
+      "path": "cdc_generator/core/migration_apply.py",
+      "lines": 730
+    },
+    {
+      "path": "tests/cli/test_manage_source_groups.py",
+      "lines": 727
+    }
+  ],
+  "top_60_largest_functions": [
+    {
+      "path": "cdc_generator/cli/source_group.py",
+      "name": "main",
+      "start": 292,
+      "end": 719,
+      "lines": 428,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/sink_group.py",
+      "name": "main",
+      "start": 2168,
+      "end": 2594,
+      "lines": 427,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/service.py",
+      "name": "_build_parser",
+      "start": 371,
+      "end": 652,
+      "lines": 282,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "name": "get_docker_compose_template",
+      "start": 49,
+      "end": 291,
+      "lines": 243,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/service_creator.py",
+      "name": "create_service",
+      "start": 12,
+      "end": 236,
+      "lines": 225,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "name": "get_service_db_config",
+      "start": 108,
+      "end": 296,
+      "lines": 189,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/scaffold_command.py",
+      "name": "main",
+      "start": 156,
+      "end": 330,
+      "lines": 175,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_update.py",
+      "name": "handle_update",
+      "start": 376,
+      "end": 539,
+      "lines": 164,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "list_postgres_databases",
+      "start": 573,
+      "end": 734,
+      "lines": 162,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "name": "add_sink_table",
+      "start": 1627,
+      "end": 1788,
+      "lines": 162,
+      "is_method": false
+    },
+    {
+      "path": "tests/cli/coverage_report.py",
+      "name": "CoverageReport._print_cli_section",
+      "start": 826,
+      "end": 981,
+      "lines": 156,
+      "is_method": true
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_group.py",
+      "name": "handle_add_group",
+      "start": 188,
+      "end": 336,
+      "lines": 149,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/setup_local.py",
+      "name": "main",
+      "start": 67,
+      "end": 214,
+      "lines": 148,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "list_mssql_databases",
+      "start": 425,
+      "end": 570,
+      "lines": 146,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/yaml_writer.py",
+      "name": "update_server_group_yaml",
+      "start": 184,
+      "end": 325,
+      "lines": 142,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "name": "generate_migrations",
+      "start": 1452,
+      "end": 1589,
+      "lines": 138,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "generate_customer_pipelines",
+      "start": 624,
+      "end": 759,
+      "lines": 136,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_apply.py",
+      "name": "get_pg_connection",
+      "start": 95,
+      "end": 226,
+      "lines": 132,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/mini_schema_generators.py",
+      "name": "generate_schema_name_schemas",
+      "start": 202,
+      "end": 332,
+      "lines": 131,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/pipeline_templates.py",
+      "name": "get_source_pipeline_template",
+      "start": 4,
+      "end": 132,
+      "lines": 129,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/legacy_db_inspector.py",
+      "name": "save_detailed_schema",
+      "start": 21,
+      "end": 149,
+      "lines": 129,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_status.py",
+      "name": "check_migration_status",
+      "start": 207,
+      "end": 331,
+      "lines": 125,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/column_template_definitions.py",
+      "name": "edit_template_definition",
+      "start": 369,
+      "end": 492,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/create.py",
+      "name": "_copy_template_library_files",
+      "start": 91,
+      "end": 214,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/create.py",
+      "name": "scaffold_project_structure",
+      "start": 217,
+      "end": 340,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/update.py",
+      "name": "_copy_template_library_files",
+      "start": 96,
+      "end": 219,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_info.py",
+      "name": "handle_info",
+      "start": 14,
+      "end": 136,
+      "lines": 123,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "name": "get_env_example_template",
+      "start": 294,
+      "end": 415,
+      "lines": 122,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "build_source_table_inputs",
+      "start": 1107,
+      "end": 1227,
+      "lines": 121,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "get_postgres_connection",
+      "start": 304,
+      "end": 422,
+      "lines": 119,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/validation_schema_builder.py",
+      "name": "update_service_yaml_header",
+      "start": 133,
+      "end": 251,
+      "lines": 119,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/pipeline_templates.py",
+      "name": "get_sink_pipeline_template",
+      "start": 135,
+      "end": 251,
+      "lines": 117,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/type_definitions.py",
+      "name": "_introspect_postgres_types",
+      "start": 75,
+      "end": 190,
+      "lines": 116,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/validation_schema_builder.py",
+      "name": "build_json_schema_structure",
+      "start": 17,
+      "end": 130,
+      "lines": 114,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "name": "_detect_destructive_changes",
+      "start": 744,
+      "end": 855,
+      "lines": 112,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "generate_consolidated_sink",
+      "start": 947,
+      "end": 1057,
+      "lines": 111,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/autocomplete_definitions.py",
+      "name": "generate_service_autocomplete_definitions",
+      "start": 156,
+      "end": 266,
+      "lines": 111,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/click_commands.py",
+      "name": "manage_services_resources_cmd",
+      "start": 635,
+      "end": 744,
+      "lines": 110,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/template_validator.py",
+      "name": "validate_column_template",
+      "start": 443,
+      "end": 548,
+      "lines": 106,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "name": "_build_sink_connection",
+      "start": 706,
+      "end": 810,
+      "lines": 105,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "name": "_validate_add_table_schema_compatibility",
+      "start": 1520,
+      "end": 1624,
+      "lines": 105,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_target_column_completion_unions_base_and_override_types",
+      "start": 122,
+      "end": 225,
+      "lines": 104,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/completions.py",
+      "name": "complete_map_column",
+      "start": 1610,
+      "end": 1712,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "resolve_postgres_url_from_sink_groups",
+      "start": 255,
+      "end": 357,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/__init__.py",
+      "name": "generate_service_validation_schema",
+      "start": 47,
+      "end": 149,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/custom_table_ops.py",
+      "name": "parse_column_spec",
+      "start": 111,
+      "end": 213,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_saver.py",
+      "name": "save_detailed_schema_mssql",
+      "start": 167,
+      "end": 268,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_completion_applies_source_type_overrides",
+      "start": 18,
+      "end": 119,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_pair_completion_unions_base_and_override_types",
+      "start": 228,
+      "end": 329,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_pair_completion_supports_source_intent_prefix",
+      "start": 332,
+      "end": 433,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/type_definitions.py",
+      "name": "_introspect_mssql_types",
+      "start": 193,
+      "end": 293,
+      "lines": 101,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_ops.py",
+      "name": "enable_cdc_tables",
+      "start": 105,
+      "end": 204,
+      "lines": 100,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_template_ops.py",
+      "name": "add_column_template_to_table",
+      "start": 251,
+      "end": 350,
+      "lines": 100,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "build_table_routing_map",
+      "start": 1248,
+      "end": 1346,
+      "lines": 99,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/helpers/service_config.py",
+      "name": "merge_customer_config",
+      "start": 233,
+      "end": 330,
+      "lines": 98,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_saver.py",
+      "name": "save_detailed_schema_postgres",
+      "start": 271,
+      "end": 368,
+      "lines": 98,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_ops.py",
+      "name": "clean_cdc_data",
+      "start": 233,
+      "end": 329,
+      "lines": 97,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/helpers/update_compose.py",
+      "name": "update_docker_compose",
+      "start": 52,
+      "end": 148,
+      "lines": 97,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/bloblang_validator.py",
+      "name": "validate_bloblang_expression",
+      "start": 60,
+      "end": 156,
+      "lines": 97,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "name": "_load_source_type_overrides",
+      "start": 297,
+      "end": 393,
+      "lines": 97,
+      "is_method": false
+    }
+  ],
+  "files_over_max": [
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "lines": 2748
+    },
+    {
+      "path": "cdc_generator/cli/sink_group.py",
+      "lines": 2598
+    },
+    {
+      "path": "cdc_generator/cli/completions.py",
+      "lines": 1907
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "lines": 1873
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "lines": 1619
+    },
+    {
+      "path": "cdc_generator/cli/click_commands.py",
+      "lines": 1527
+    },
+    {
+      "path": "tests/cli/test_manage_services_config.py",
+      "lines": 1393
+    },
+    {
+      "path": "tests/test_sink_handlers.py",
+      "lines": 1263
+    },
+    {
+      "path": "tests/cli/coverage_report.py",
+      "lines": 1227
+    },
+    {
+      "path": "tests/test_fish_completions.py",
+      "lines": 1156
+    },
+    {
+      "path": "tests/test_migration_generator.py",
+      "lines": 1045
+    },
+    {
+      "path": "cdc_generator/cli/service_handlers_sink_custom.py",
+      "lines": 1029
+    },
+    {
+      "path": "tests/test_sink_from_field.py",
+      "lines": 1024
+    },
+    {
+      "path": "tests/test_template_validation_chain.py",
+      "lines": 1017
+    },
+    {
+      "path": "tests/test_autocompletion_helpers.py",
+      "lines": 1005
+    },
+    {
+      "path": "tests/cli/test_scaffold.py",
+      "lines": 999
+    },
+    {
+      "path": "cdc_generator/helpers/helpers_sink_groups.py",
+      "lines": 997
+    },
+    {
+      "path": "cdc_generator/cli/service.py",
+      "lines": 957
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/source_type_overrides.py",
+      "lines": 917
+    },
+    {
+      "path": "tests/cli/test_manage_sink_groups.py",
+      "lines": 900
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "lines": 863
+    },
+    {
+      "path": "tests/test_sink_group_handlers.py",
+      "lines": 859
+    },
+    {
+      "path": "tests/test_sink_map_columns.py",
+      "lines": 849
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "lines": 806
+    },
+    {
+      "path": "cdc_generator/helpers/autocompletions/sinks.py",
+      "lines": 796
+    },
+    {
+      "path": "cdc_generator/validators/template_validator.py",
+      "lines": 775
+    },
+    {
+      "path": "cdc_generator/cli/service_handlers_sink.py",
+      "lines": 765
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "lines": 734
+    },
+    {
+      "path": "cdc_generator/core/migration_apply.py",
+      "lines": 730
+    },
+    {
+      "path": "tests/cli/test_manage_source_groups.py",
+      "lines": 727
+    },
+    {
+      "path": "cdc_generator/cli/source_group.py",
+      "lines": 724
+    },
+    {
+      "path": "tests/test_dispatch_routing.py",
+      "lines": 680
+    },
+    {
+      "path": "tests/test_inspect_handlers.py",
+      "lines": 650
+    },
+    {
+      "path": "tests/cli/test_manage_services_schema.py",
+      "lines": 631
+    },
+    {
+      "path": "tests/test_cli_completions.py",
+      "lines": 619
+    },
+    {
+      "path": "cdc_generator/cli/commands.py",
+      "lines": 618
+    },
+    {
+      "path": "tests/test_template_validation_handlers.py",
+      "lines": 616
+    }
+  ],
+  "functions_over_max": [
+    {
+      "path": "cdc_generator/cli/source_group.py",
+      "name": "main",
+      "start": 292,
+      "end": 719,
+      "lines": 428,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/sink_group.py",
+      "name": "main",
+      "start": 2168,
+      "end": 2594,
+      "lines": 427,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/service.py",
+      "name": "_build_parser",
+      "start": 371,
+      "end": 652,
+      "lines": 282,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "name": "get_docker_compose_template",
+      "start": 49,
+      "end": 291,
+      "lines": 243,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/service_creator.py",
+      "name": "create_service",
+      "start": 12,
+      "end": 236,
+      "lines": 225,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "name": "get_service_db_config",
+      "start": 108,
+      "end": 296,
+      "lines": 189,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/scaffold_command.py",
+      "name": "main",
+      "start": 156,
+      "end": 330,
+      "lines": 175,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_update.py",
+      "name": "handle_update",
+      "start": 376,
+      "end": 539,
+      "lines": 164,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "list_postgres_databases",
+      "start": 573,
+      "end": 734,
+      "lines": 162,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "name": "add_sink_table",
+      "start": 1627,
+      "end": 1788,
+      "lines": 162,
+      "is_method": false
+    },
+    {
+      "path": "tests/cli/coverage_report.py",
+      "name": "CoverageReport._print_cli_section",
+      "start": 826,
+      "end": 981,
+      "lines": 156,
+      "is_method": true
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_group.py",
+      "name": "handle_add_group",
+      "start": 188,
+      "end": 336,
+      "lines": 149,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/setup_local.py",
+      "name": "main",
+      "start": 67,
+      "end": 214,
+      "lines": 148,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "list_mssql_databases",
+      "start": 425,
+      "end": 570,
+      "lines": 146,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/yaml_writer.py",
+      "name": "update_server_group_yaml",
+      "start": 184,
+      "end": 325,
+      "lines": 142,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "name": "generate_migrations",
+      "start": 1452,
+      "end": 1589,
+      "lines": 138,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "generate_customer_pipelines",
+      "start": 624,
+      "end": 759,
+      "lines": 136,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_apply.py",
+      "name": "get_pg_connection",
+      "start": 95,
+      "end": 226,
+      "lines": 132,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/mini_schema_generators.py",
+      "name": "generate_schema_name_schemas",
+      "start": 202,
+      "end": 332,
+      "lines": 131,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/pipeline_templates.py",
+      "name": "get_source_pipeline_template",
+      "start": 4,
+      "end": 132,
+      "lines": 129,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/legacy_db_inspector.py",
+      "name": "save_detailed_schema",
+      "start": 21,
+      "end": 149,
+      "lines": 129,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_status.py",
+      "name": "check_migration_status",
+      "start": 207,
+      "end": 331,
+      "lines": 125,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/column_template_definitions.py",
+      "name": "edit_template_definition",
+      "start": 369,
+      "end": 492,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/create.py",
+      "name": "_copy_template_library_files",
+      "start": 91,
+      "end": 214,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/create.py",
+      "name": "scaffold_project_structure",
+      "start": 217,
+      "end": 340,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/update.py",
+      "name": "_copy_template_library_files",
+      "start": 96,
+      "end": 219,
+      "lines": 124,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/handlers_info.py",
+      "name": "handle_info",
+      "start": 14,
+      "end": 136,
+      "lines": 123,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/templates.py",
+      "name": "get_env_example_template",
+      "start": 294,
+      "end": 415,
+      "lines": 122,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "build_source_table_inputs",
+      "start": 1107,
+      "end": 1227,
+      "lines": 121,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/db_inspector.py",
+      "name": "get_postgres_connection",
+      "start": 304,
+      "end": 422,
+      "lines": 119,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/validation_schema_builder.py",
+      "name": "update_service_yaml_header",
+      "start": 133,
+      "end": 251,
+      "lines": 119,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/scaffolding/pipeline_templates.py",
+      "name": "get_sink_pipeline_template",
+      "start": 135,
+      "end": 251,
+      "lines": 117,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/type_definitions.py",
+      "name": "_introspect_postgres_types",
+      "start": 75,
+      "end": 190,
+      "lines": 116,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/validation_schema_builder.py",
+      "name": "build_json_schema_structure",
+      "start": 17,
+      "end": 130,
+      "lines": 114,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/migration_generator.py",
+      "name": "_detect_destructive_changes",
+      "start": 744,
+      "end": 855,
+      "lines": 112,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "generate_consolidated_sink",
+      "start": 947,
+      "end": 1057,
+      "lines": 111,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_server_group/autocomplete_definitions.py",
+      "name": "generate_service_autocomplete_definitions",
+      "start": 156,
+      "end": 266,
+      "lines": 111,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/click_commands.py",
+      "name": "manage_services_resources_cmd",
+      "start": 635,
+      "end": 744,
+      "lines": 110,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/template_validator.py",
+      "name": "validate_column_template",
+      "start": 443,
+      "end": 548,
+      "lines": 106,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/db_inspector_common.py",
+      "name": "_build_sink_connection",
+      "start": 706,
+      "end": 810,
+      "lines": 105,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/sink_operations.py",
+      "name": "_validate_add_table_schema_compatibility",
+      "start": 1520,
+      "end": 1624,
+      "lines": 105,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_target_column_completion_unions_base_and_override_types",
+      "start": 122,
+      "end": 225,
+      "lines": 104,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/cli/completions.py",
+      "name": "complete_map_column",
+      "start": 1610,
+      "end": 1712,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/core/pipeline_generator.py",
+      "name": "resolve_postgres_url_from_sink_groups",
+      "start": 255,
+      "end": 357,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_generator/__init__.py",
+      "name": "generate_service_validation_schema",
+      "start": 47,
+      "end": 149,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/custom_table_ops.py",
+      "name": "parse_column_spec",
+      "start": 111,
+      "end": 213,
+      "lines": 103,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service/schema_saver.py",
+      "name": "save_detailed_schema_mssql",
+      "start": 167,
+      "end": 268,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_completion_applies_source_type_overrides",
+      "start": 18,
+      "end": 119,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_pair_completion_unions_base_and_override_types",
+      "start": 228,
+      "end": 329,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "tests/test_sink_autocompletion_type_overrides.py",
+      "name": "test_map_column_pair_completion_supports_source_intent_prefix",
+      "start": 332,
+      "end": 433,
+      "lines": 102,
+      "is_method": false
+    },
+    {
+      "path": "cdc_generator/validators/manage_service_schema/type_definitions.py",
+      "name": "_introspect_mssql_types",
+      "start": 193,
+      "end": 293,
+      "lines": 101,
+      "is_method": false
+    }
+  ]
+}

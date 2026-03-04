@@ -21,6 +21,7 @@ Service YAML structure:
 """
 
 from dataclasses import dataclass
+from typing import Literal
 from typing import cast
 
 from cdc_generator.core.bloblang_refs import (
@@ -68,10 +69,12 @@ class ResolvedTransform:
     Attributes:
         bloblang_ref: Project-relative path to Bloblang file.
         bloblang: Resolved Bloblang expression.
+        execution_stage: Where transform executes. One of ``source`` or ``sink``.
     """
 
     bloblang_ref: str
     bloblang: str
+    execution_stage: Literal["source", "sink"]
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +499,19 @@ def resolve_transforms(
         if not isinstance(bloblang_ref, str):
             continue
 
+        execution_stage_raw = entry.get("execution_stage", "source")
+        execution_stage = (
+            str(execution_stage_raw).strip().casefold()
+            if execution_stage_raw is not None
+            else "source"
+        )
+        if execution_stage not in {"source", "sink"}:
+            print_warning(
+                "Transform has invalid execution_stage; expected 'source' or 'sink': "
+                + f"'{execution_stage_raw}'. Falling back to 'source'."
+            )
+            execution_stage = "source"
+
         bloblang = read_bloblang_ref(bloblang_ref)
         if bloblang is None:
             print_warning(
@@ -508,6 +524,7 @@ def resolve_transforms(
             ResolvedTransform(
                 bloblang_ref=bloblang_ref,
                 bloblang=bloblang,
+                execution_stage=cast(Literal["source", "sink"], execution_stage),
             )
         )
 

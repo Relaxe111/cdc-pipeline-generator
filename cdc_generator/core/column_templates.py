@@ -66,6 +66,7 @@ class ColumnTemplate:
     value_source: Literal["bloblang", "source_ref", "sql", "env"] = "bloblang"
     default: str | None = None
     applies_to: list[str] | None = None
+    unique: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +254,9 @@ def _parse_single_template(
         elif isinstance(applies_to_raw, str):
             applies_to = [applies_to_raw]  # Convert single string to list
 
+    unique_raw = data.get("unique", False)
+    unique = bool(unique_raw) if isinstance(unique_raw, bool) else False
+
     return ColumnTemplate(
         key=key,
         name=name,
@@ -263,6 +267,7 @@ def _parse_single_template(
         value_source=value_source,
         default=default,
         applies_to=applies_to,
+        unique=unique,
     )
 
 

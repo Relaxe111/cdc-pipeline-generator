@@ -23,6 +23,7 @@ from cdc_generator.helpers.helpers_logging import (
 )
 from cdc_generator.helpers.service_config import get_project_root, load_service_config
 from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
+from cdc_generator.validators.manage_service.validation import validate_service_sink_preflight
 
 from .config import SERVICE_SCHEMAS_DIR, save_service_config
 
@@ -970,6 +971,16 @@ def add_sink_to_service(service: str, sink_key: str) -> bool:
         return False
 
     sinks[sink_key] = {"tables": {}}
+
+    preflight_errors, preflight_warnings = validate_service_sink_preflight(service, config)
+    if preflight_errors:
+        for error in preflight_errors:
+            print_error(f"  ✗ {error}")
+        del sinks[sink_key]
+        return False
+    for warning in preflight_warnings:
+        print_warning(f"  ⚠ {warning}")
+
     if not save_service_config(service, config):
         return False
 
@@ -1748,12 +1759,20 @@ def add_sink_table(
 
     tables[final_table_key] = _build_table_config(config_opts)
 
-    if not save_service_config(service, config):
+    preflight_errors, preflight_warnings = validate_service_sink_preflight(service, config)
+    if preflight_errors:
+        for error in preflight_errors:
+            print_error(f"  ✗ {error}")
+        del tables[final_table_key]
         return False
+    for warning in preflight_warnings:
+        print_warning(f"  ⚠ {warning}")
+
+    save_success = save_service_config(service, config)
 
     # Save custom table reference if replicate_structure is enabled
     # Use from_table if provided, otherwise source table is final_table_key
-    if sink_schema is not None and replicate_structure:
+    if save_success and sink_schema is not None and replicate_structure:
         source_table = str(from_table) if from_table else table_key
         _save_custom_table_structure(
             sink_key,
@@ -1762,9 +1781,11 @@ def add_sink_table(
             service,
         )
 
-    label = f"→ '{target}'" if target_exists and target else "(clone)"
-    print_success(f"Added table '{final_table_key}' {label} to sink '{sink_key}'")
-    return True
+    if save_success:
+        label = f"→ '{target}'" if target_exists and target else "(clone)"
+        print_success(f"Added table '{final_table_key}' {label} to sink '{sink_key}'")
+
+    return save_success
 
 
 def remove_sink_table(service: str, sink_key: str, table_key: str) -> bool:

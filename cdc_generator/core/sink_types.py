@@ -61,6 +61,7 @@ class SinkSourceEnvironment(TypedDict, total=False):
     server: str  # references sink group's servers section
     database: str  # for postgres sinks
     schema: str  # sink schema within database
+    target_sink_env: str  # optional explicit sink env routing hint
     path: str  # for http sinks
     table_count: int  # optional — for validation
 
