@@ -934,3 +934,266 @@ Delta:
 Next:
 
 - Continue Phase 3 by extracting the next coherent runtime cluster from `cdc_generator/cli/click_commands.py` (remaining grouped command adapters) and proceed until facade-size target is reached.
+
+### 2026-03-04 — Iteration 3.17 (Phase 3 in progress)
+
+Changed:
+
+- Extracted pipelines/migrations/test command declarations from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_pipeline_migrations.py`
+- Rewired facade to import and register:
+  - `manage_pipelines_cmd`
+  - `manage_migrations_cmd`
+  - `test_cmd`
+  - `test_coverage_cmd`
+- Removed in-file duplicated command blocks and cleaned now-unused imports.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_pipeline_migrations.py`: pass.
+- `get_errors` on touched click modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py -q`: `129 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1279 -> 978` lines in this iteration.
+- `cdc_generator/cli/click_commands_pipeline_migrations.py`
+  - new helper module (`321` lines).
+
+Next:
+
+- Continue Phase 3 with another declaration-level extraction from `cdc_generator/cli/click_commands.py` (`manage-source-groups` / `manage-sink-groups` cluster) to drive facade below `<= 600`.
+
+### 2026-03-04 — Iteration 3.18 (Phase 3 in progress)
+
+Changed:
+
+- Extracted source/sink group command declarations from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_server_groups.py`
+- Rewired facade imports/registry to use extracted `manage_source_groups_cmd` and `manage_sink_groups_cmd`.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_server_groups.py`: pass.
+- `get_errors` on touched click modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_server_group_dispatch.py tests/test_fish_completions.py tests/cli/test_manage_services_schema.py tests/test_pipeline_generation.py -q`: `129 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `978 -> 731` lines in this iteration.
+- `cdc_generator/cli/click_commands_server_groups.py`
+  - new helper module (`248` lines).
+
+Next:
+
+- Continue Phase 3 by extracting `manage-services config` declaration block from `cdc_generator/cli/click_commands.py`.
+
+### 2026-03-04 — Iteration 3.19 (Phase 3 checkpoint)
+
+Changed:
+
+- Extracted `manage-services config` command declaration from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_service_config.py`
+- Rewired facade import to use extracted `manage_services_config_cmd`.
+- Fixed discovered contract regression by restoring `--sink-all` alias on config command option in extracted module.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_service_config.py cdc_generator/cli/click_commands_server_groups.py cdc_generator/cli/click_commands_pipeline_migrations.py`: pass.
+- `get_errors` on touched click modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py tests/test_sink_handlers.py -q`: `189 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `731 -> 572` lines in this iteration.
+- `cdc_generator/cli/click_commands_service_config.py`
+  - new helper module (`184` lines).
+
+Next:
+
+- Continue Phase 3 on next hotspot (`cdc_generator/cli/completions.py`) now that `click_commands.py` facade target is achieved.
+
+### 2026-03-04 — Iteration 3.20 (Phase 3 in progress)
+
+Changed:
+
+- Extracted source-override completion cluster from:
+  - `cdc_generator/cli/completions.py`
+  into:
+  - `cdc_generator/cli/completions_source_overrides.py`
+- Replaced in-file completion implementations with delegating wrappers:
+  - `complete_set_source_override`
+  - `complete_remove_source_override`
+  - `complete_source_override_ref_for_set`
+  - `complete_source_override_type_for_ref`
+
+Validated:
+
+- `ruff check cdc_generator/cli/completions.py cdc_generator/cli/completions_source_overrides.py cdc_generator/cli/click_commands.py`: pass.
+- `get_errors` on touched completion modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/cli/test_manage_services_schema.py tests/test_server_group_dispatch.py tests/test_pipeline_generation.py -q`: `129 passed, 14 skipped`.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/cli/test_manage_services_schema.py -q`: `108 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/completions.py`
+  - `1908 -> 1813` lines in this iteration.
+- `cdc_generator/cli/completions_source_overrides.py`
+  - new helper module (`179` lines).
+
+Next:
+
+- Continue Phase 3 with next `completions.py` seam (table/sink completion cluster around map/include/accept flows) to keep reducing hotspot size.
+
+### 2026-03-04 — Iteration 3.21 (Phase 3 in progress)
+
+Changed:
+
+- Extracted map/include/accept completion cluster from:
+  - `cdc_generator/cli/completions.py`
+  into:
+  - `cdc_generator/cli/completions_map_columns.py`
+- Delegated these completion functions to extracted implementations:
+  - `complete_map_column`
+  - `complete_include_sink_columns`
+  - `complete_accept_column`
+- Preserved compatibility for in-module helper usage by alias-importing:
+  - `_resolve_map_column_tables`
+  - `_mapped_map_column_state`
+
+Validated:
+
+- `ruff check cdc_generator/cli/completions.py cdc_generator/cli/completions_map_columns.py cdc_generator/cli/completions_source_overrides.py cdc_generator/cli/click_commands.py`: pass.
+- `get_errors` on touched completion files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/cli/test_manage_services_schema.py tests/test_pipeline_generation.py tests/test_server_group_dispatch.py tests/test_sink_handlers.py -q`: `189 passed, 14 skipped`.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/cli/test_manage_services_schema.py tests/test_sink_handlers.py -q`: `168 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/completions.py`
+  - `1813 -> 1608` lines in this iteration.
+- `cdc_generator/cli/completions_map_columns.py`
+  - new helper module (`297` lines).
+
+Next:
+
+- Continue Phase 3 with next `completions.py` extraction seam (custom table + sink-group server completion cluster).
+
+### 2026-03-04 — Iteration 3.22 (Phase 3 in progress)
+
+Changed:
+
+- Extracted custom-table and sink-group completion cluster from:
+  - `cdc_generator/cli/completions.py`
+  into:
+  - `cdc_generator/cli/completions_custom_and_sink_groups.py`
+- Delegated these completion functions to extracted implementations:
+  - `complete_custom_tables`
+  - `complete_custom_table_columns`
+  - `complete_sink_group_servers`
+  - `complete_sink_group_context_aware`
+
+Validated:
+
+- `ruff check cdc_generator/cli/completions.py cdc_generator/cli/completions_custom_and_sink_groups.py cdc_generator/cli/completions_map_columns.py cdc_generator/cli/completions_source_overrides.py`: pass.
+- `get_errors` on touched completion modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py tests/test_pipeline_generation.py -q`: `129 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/completions.py`
+  - `1608 -> 1578` lines in this iteration.
+- `cdc_generator/cli/completions_custom_and_sink_groups.py`
+  - new helper module (`115` lines).
+
+Next:
+
+- Continue Phase 3 with next `completions.py` seam (`service/env/sink-group name` completion cluster around `complete_available_*` and `complete_*_group_names`) for another structural reduction.
+
+### 2026-03-04 — Iteration 3.23 (Phase 3 in progress)
+
+Changed:
+
+- Extracted service/server/env/sink-group name completion cluster from:
+  - `cdc_generator/cli/completions.py`
+  into:
+  - `cdc_generator/cli/completions_names_envs.py`
+- Delegated these completion functions to extracted implementations:
+  - `complete_existing_services`
+  - `complete_service_positional`
+  - `complete_schema_services`
+  - `complete_available_services`
+  - `complete_available_validation_databases`
+  - `complete_server_names`
+  - `complete_available_envs`
+  - `complete_migration_envs`
+  - `complete_server_group_names`
+  - `complete_sink_group_names`
+  - `complete_non_inherited_sink_group_names`
+
+Validated:
+
+- `ruff check cdc_generator/cli/completions.py cdc_generator/cli/completions_names_envs.py cdc_generator/cli/completions_custom_and_sink_groups.py cdc_generator/cli/completions_map_columns.py cdc_generator/cli/completions_source_overrides.py cdc_generator/cli/click_commands.py`: pass.
+- `get_errors` on touched completion modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py tests/test_pipeline_generation.py tests/test_sink_handlers.py -q`: `189 passed, 14 skipped`.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py -q`: `126 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/completions.py`
+  - `1578 -> 1535` lines in this iteration.
+- `cdc_generator/cli/completions_names_envs.py`
+  - new helper module (`197` lines).
+
+Next:
+
+- Continue Phase 3 on `cdc_generator/cli/completions.py` with next high-value seam (`available/source/sink table family`) and then move to next top hotspot (`cdc_generator/cli/sink_group.py`).
+
+### 2026-03-04 — Iteration 3.24 (Phase 3 in progress)
+
+Changed:
+
+- Extracted table/sink completion family from:
+  - `cdc_generator/cli/completions.py`
+  into:
+  - `cdc_generator/cli/completions_tables_and_sinks.py`
+- Delegated these completion functions to extracted implementations:
+  - `complete_available_tables`
+  - `complete_source_tables`
+  - `complete_track_tables`
+  - `complete_from_table`
+  - `complete_sink_keys`
+  - `complete_schemas`
+  - `complete_columns`
+  - `complete_sink_tables`
+  - `complete_add_sink_table`
+  - `complete_add_custom_sink_table`
+  - `complete_remove_sink_table`
+  - `complete_target_tables`
+
+Validated:
+
+- `ruff check cdc_generator/cli/completions.py cdc_generator/cli/completions_tables_and_sinks.py cdc_generator/cli/completions_names_envs.py cdc_generator/cli/completions_custom_and_sink_groups.py cdc_generator/cli/completions_map_columns.py cdc_generator/cli/completions_source_overrides.py`: pass.
+- `get_errors` on touched completion modules: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_server_group_dispatch.py tests/cli/test_manage_services_schema.py tests/test_pipeline_generation.py tests/test_sink_handlers.py -q`: `189 passed, 14 skipped`.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/cli/test_manage_services_schema.py tests/test_sink_handlers.py -q`: `168 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/completions.py`
+  - `1535 -> 1445` lines in this iteration.
+- `cdc_generator/cli/completions_tables_and_sinks.py`
+  - new helper module (`301` lines).
+
+Next:
+
+- Continue Phase 3 with next extraction seam in `cdc_generator/cli/completions.py` (`target-schema/templates/transforms` cluster), then reassess remaining hotspots for transition to `sink_group.py`.

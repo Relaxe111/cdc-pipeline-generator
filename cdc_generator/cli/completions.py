@@ -14,6 +14,62 @@ from typing import TYPE_CHECKING, Any, cast
 
 from click.shell_completion import CompletionItem
 
+from cdc_generator.cli.completions_custom_and_sink_groups import (
+    complete_custom_table_columns_impl,
+    complete_custom_tables_impl,
+    complete_sink_group_context_aware_impl,
+    complete_sink_group_servers_impl,
+)
+from cdc_generator.cli.completions_map_columns import (
+    complete_accept_column_impl,
+    complete_include_sink_columns_impl,
+    complete_map_column_impl,
+)
+from cdc_generator.cli.completions_map_columns import (
+    mapped_map_column_state as _mapped_map_column_state,
+)
+from cdc_generator.cli.completions_map_columns import (
+    resolve_map_column_tables as _resolve_map_column_tables,
+)
+from cdc_generator.cli.completions_names_envs import (
+    complete_available_envs_impl,
+    complete_available_services_impl,
+    complete_available_validation_databases_impl,
+    complete_existing_services_impl,
+    complete_migration_envs_impl,
+    complete_non_inherited_sink_group_names_impl,
+    complete_schema_services_impl,
+    complete_server_group_names_impl,
+    complete_server_names_impl,
+    complete_service_positional_impl,
+    complete_sink_group_names_impl,
+)
+from cdc_generator.cli.completions_source_overrides import (
+    complete_remove_source_override_impl,
+    complete_set_source_override_impl,
+    complete_source_override_ref_for_set_impl,
+    complete_source_override_type_for_ref_impl,
+)
+from cdc_generator.cli.completions_schema_templates import (
+    complete_target_schema_impl,
+    complete_templates_on_table_impl,
+    complete_transforms_on_table_impl,
+)
+from cdc_generator.cli.completions_tables_and_sinks import (
+    complete_add_custom_sink_table_impl,
+    complete_add_sink_table_impl,
+    complete_available_tables_impl,
+    complete_columns_impl,
+    complete_from_table_impl,
+    complete_remove_sink_table_impl,
+    complete_schemas_impl,
+    complete_sink_keys_impl,
+    complete_sink_tables_impl,
+    complete_source_tables_impl,
+    complete_target_tables_impl,
+    complete_track_tables_impl,
+)
+
 if TYPE_CHECKING:
     import click
 
@@ -395,92 +451,6 @@ def _get_existing_source_column_refs(
     return existing
 
 
-def _schemas_from_sink_tables(sink_cfg: dict[str, Any]) -> set[str]:
-    """Extract schema names from sink table keys (schema.table)."""
-    schemas: set[str] = set()
-    tables_raw = sink_cfg.get("tables")
-    if not isinstance(tables_raw, dict):
-        return schemas
-
-    tables = cast(dict[str, Any], tables_raw)
-    for table_key in tables:
-        if "." not in table_key:
-            continue
-        schema, _table = table_key.split(".", 1)
-        if schema:
-            schemas.add(schema)
-
-    return schemas
-
-
-def _schemas_from_schema_table_specs(items: list[str]) -> set[str]:
-    """Extract schema names from ``schema.table`` strings."""
-    schemas: set[str] = set()
-    for item in items:
-        if "." not in item:
-            continue
-        schema, _table = item.split(".", 1)
-        if schema:
-            schemas.add(schema)
-    return schemas
-
-
-def _common_sink_schema_data_for_all_sinks(
-    service: str,
-) -> tuple[list[str], set[str]]:
-    """Return common schemas plus subset that originates from custom-tables."""
-    from cdc_generator.helpers.autocompletions.schemas import list_schemas_for_service
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_custom_table_definitions_for_sink_target,
-    )
-    from cdc_generator.helpers.service_config import load_service_config
-
-    try:
-        config = load_service_config(service)
-    except FileNotFoundError:
-        return ([], set())
-
-    sinks_raw = config.get("sinks")
-    if not isinstance(sinks_raw, dict):
-        return ([], set())
-
-    sinks = cast(dict[str, Any], sinks_raw)
-    if not sinks:
-        return ([], set())
-
-    common: set[str] | None = None
-    common_custom: set[str] | None = None
-    for sink_key, sink_cfg_raw in sinks.items():
-        if "." not in sink_key:
-            continue
-
-        _sink_group, target_service = sink_key.split(".", 1)
-        sink_cfg = cast(dict[str, Any], sink_cfg_raw) if isinstance(sink_cfg_raw, dict) else {}
-
-        candidates: set[str] = set(_safe_call(list_schemas_for_service, target_service))
-        candidates.update(_schemas_from_sink_tables(sink_cfg))
-        custom_candidates = _schemas_from_schema_table_specs(
-            _safe_call(list_custom_table_definitions_for_sink_target, sink_key)
-        )
-        candidates.update(custom_candidates)
-
-        if common is None:
-            common = candidates
-        else:
-            common &= candidates
-
-        if common_custom is None:
-            common_custom = custom_candidates
-        else:
-            common_custom &= custom_candidates
-
-    if not common:
-        return ([], set())
-
-    custom_subset = (common_custom or set()) & common
-    return (sorted(common), custom_subset)
-
-
 # ---------------------------------------------------------------------------
 # No-arg completions (global lists)
 # ---------------------------------------------------------------------------
@@ -492,11 +462,7 @@ def complete_existing_services(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with existing service names from services/*.yaml."""
-    from cdc_generator.helpers.autocompletions.services import (
-        list_existing_services,
-    )
-
-    return _filter(_safe_call(list_existing_services), incomplete)
+    return complete_existing_services_impl(incomplete, _safe_call, _filter)
 
 
 def complete_service_positional(
@@ -510,11 +476,13 @@ def complete_service_positional(
     argparse may still consume them as option values (e.g. --add-source-tables).
     In that case, keep completing source tables instead of service names.
     """
-    add_source_table_value = ctx.params.get("add_source_table")
-    if add_source_table_value:
-        return complete_available_tables(ctx, param, incomplete)
-
-    return complete_existing_services(ctx, param, incomplete)
+    return complete_service_positional_impl(
+        ctx,
+        param,
+        incomplete,
+        complete_available_tables,
+        complete_existing_services,
+    )
 
 
 def complete_schema_services(
@@ -523,11 +491,7 @@ def complete_schema_services(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete services from schema directories (services/_schemas or legacy)."""
-    from cdc_generator.helpers.autocompletions.service_schemas import (
-        list_schema_services,
-    )
-
-    return _filter(_safe_call(list_schema_services), incomplete)
+    return complete_schema_services_impl(incomplete, _safe_call, _filter)
 
 
 def complete_available_services(
@@ -536,14 +500,7 @@ def complete_available_services(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with available services from source-groups.yaml."""
-    from cdc_generator.helpers.autocompletions.services import (
-        list_available_services_from_server_group,
-    )
-
-    return _filter(
-        _safe_call(list_available_services_from_server_group),
-        incomplete,
-    )
+    return complete_available_services_impl(incomplete, _safe_call, _filter)
 
 
 def complete_available_validation_databases(
@@ -552,17 +509,13 @@ def complete_available_validation_databases(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete validation database names from source-groups.yaml."""
-    from cdc_generator.helpers.autocompletions.services import (
-        list_available_validation_databases,
-    )
-
-    service_name = _get_param(ctx, "create_service")
-    if not service_name:
-        service_name = _get_service(ctx)
-
-    return _filter(
-        _safe_call(list_available_validation_databases, service_name),
+    return complete_available_validation_databases_impl(
+        ctx,
         incomplete,
+        _safe_call,
+        _filter,
+        _get_param,
+        _get_service,
     )
 
 
@@ -572,11 +525,7 @@ def complete_server_names(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with server names from source-groups.yaml."""
-    from cdc_generator.helpers.autocompletions.server_groups import (
-        list_servers_from_server_group,
-    )
-
-    return _filter(_safe_call(list_servers_from_server_group), incomplete)
+    return complete_server_names_impl(incomplete, _safe_call, _filter)
 
 
 def complete_available_envs(
@@ -585,22 +534,7 @@ def complete_available_envs(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with available environment names from source-groups.yaml."""
-    from cdc_generator.validators.manage_server_group import (
-        get_single_server_group,
-        load_server_groups,
-    )
-    from cdc_generator.validators.manage_server_group.handlers_validation_env import (
-        get_available_envs,
-    )
-
-    def _list_envs() -> list[str]:
-        config = load_server_groups()
-        server_group = get_single_server_group(config)
-        if not server_group:
-            return []
-        return get_available_envs(server_group)
-
-    return _filter(_safe_call(_list_envs), incomplete)
+    return complete_available_envs_impl(incomplete, _safe_call, _filter)
 
 
 def complete_migration_envs(
@@ -613,21 +547,12 @@ def complete_migration_envs(
     Uses selected ``--sink`` when present; otherwise uses the single sink's
     manifest when only one exists, or the union across sinks.
     """
-    from cdc_generator.cli.migration_cli_validation import list_manifest_envs
-    from cdc_generator.helpers.service_config import get_project_root
-
-    sink_filter = _get_param(ctx, "sink") or None
-    migrations_dir = get_project_root() / "migrations"
-
-    try:
-        envs = list_manifest_envs(
-            migrations_dir=migrations_dir,
-            sink_filter=sink_filter,
-        )
-    except Exception:
-        return []
-
-    return _filter(envs, incomplete)
+    return complete_migration_envs_impl(
+        ctx,
+        incomplete,
+        _get_param,
+        _filter,
+    )
 
 
 def complete_server_group_names(
@@ -636,11 +561,7 @@ def complete_server_group_names(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with server group names from source-groups.yaml."""
-    from cdc_generator.helpers.autocompletions.server_groups import (
-        list_server_group_names,
-    )
-
-    return _filter(_safe_call(list_server_group_names), incomplete)
+    return complete_server_group_names_impl(incomplete, _safe_call, _filter)
 
 
 def complete_sink_group_names(
@@ -649,11 +570,7 @@ def complete_sink_group_names(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with sink group names from sink-groups.yaml."""
-    from cdc_generator.helpers.autocompletions.server_groups import (
-        list_sink_group_names,
-    )
-
-    return _filter(_safe_call(list_sink_group_names), incomplete)
+    return complete_sink_group_names_impl(incomplete, _safe_call, _filter)
 
 
 def complete_non_inherited_sink_group_names(
@@ -662,13 +579,10 @@ def complete_non_inherited_sink_group_names(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with non-inherited sink group names."""
-    from cdc_generator.helpers.autocompletions.server_groups import (
-        list_non_inherited_sink_group_names,
-    )
-
-    return _filter(
-        _safe_call(list_non_inherited_sink_group_names),
+    return complete_non_inherited_sink_group_names_impl(
         incomplete,
+        _safe_call,
+        _filter,
     )
 
 
@@ -722,9 +636,9 @@ def complete_column_templates(
 ) -> list[CompletionItem]:
     """Complete column templates (plain or ``target:template`` in add mode)."""
     from cdc_generator.helpers.autocompletions.column_template_completions import (
+        list_column_template_keys,
         list_compatible_column_template_pairs_for_target_prefix,
         list_compatible_target_prefixes_for_column_template,
-        list_column_template_keys,
     )
 
     service = _get_service(ctx)
@@ -918,38 +832,14 @@ def complete_available_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with available tables from service-schemas."""
-    service = _get_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_source_tables_for_service,
-        list_tables_for_service,
+    return complete_available_tables_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _safe_call,
+        _filter,
+        _get_multi_param_values,
     )
-
-    candidates = _safe_call(list_tables_for_service, service)
-
-    selected_tables = {
-        table.casefold()
-        for table in _get_multi_param_values(ctx, "add_source_table")
-        if table.strip()
-    }
-
-    existing_source_tables = {
-        table.casefold()
-        for table in _safe_call(list_source_tables_for_service, service)
-        if table.strip()
-    }
-
-    excluded_tables = selected_tables.union(existing_source_tables)
-
-    filtered_candidates = [
-        table_name
-        for table_name in candidates
-        if table_name.casefold() not in excluded_tables
-    ]
-
-    return _filter(filtered_candidates, incomplete)
 
 
 def complete_source_tables(
@@ -958,17 +848,11 @@ def complete_source_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with existing source tables in service YAML."""
-    service = _get_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_source_tables_for_service,
-    )
-
-    return _filter(
-        _safe_call(list_source_tables_for_service, service),
+    return complete_source_tables_impl(
         incomplete,
+        _get_service(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -978,33 +862,15 @@ def complete_track_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete tracked table refs (schema.table) from existing schema resources."""
-    service = _get_service(ctx)
-    if not service:
-        return []
-
-    inspect_sink_value = _get_param(ctx, "inspect_sink")
-    if inspect_sink_value and inspect_sink_value not in {"", "__all_sinks__"}:
-        parts = inspect_sink_value.split(".", 1)
-        if len(parts) == _SINK_KEY_PARTS and parts[1].strip():
-            service = parts[1].strip()
-
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_tables_for_service_autocomplete,
+    return complete_track_tables_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _get_param(ctx, "inspect_sink"),
+        _safe_call,
+        _filter,
+        _get_multi_param_values,
     )
-
-    candidates = _safe_call(list_tables_for_service_autocomplete, service)
-    already_selected = {
-        value.casefold()
-        for value in _get_multi_param_values(ctx, "track_table")
-        if value.strip()
-    }
-
-    filtered = [
-        table_name
-        for table_name in candidates
-        if table_name.casefold() not in already_selected
-    ]
-    return _filter(filtered, incomplete)
 
 
 def _get_resource_service(ctx: click.Context) -> str:
@@ -1031,73 +897,14 @@ def complete_set_source_override(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete ``schema.table.column:type`` for --set-source-override."""
-    service = _get_resource_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        list_overridden_column_refs,
-        list_source_column_refs,
-        list_valid_override_types_for_column,
-        normalize_source_column_ref,
+    return complete_set_source_override_impl(
+        ctx,
+        incomplete,
+        _get_resource_service(ctx),
+        _safe_call,
+        _filter,
+        _get_multi_param_values,
     )
-
-    source_refs = _safe_call(list_source_column_refs, service)
-    ref_display_by_normalized: dict[str, str] = {}
-    for source_ref in source_refs:
-        try:
-            normalized_source_ref = normalize_source_column_ref(source_ref)
-        except Exception:
-            continue
-        ref_display_by_normalized.setdefault(normalized_source_ref, source_ref)
-
-    if ":" not in incomplete:
-        overridden_refs = {
-            normalize_source_column_ref(ref)
-            for ref in _safe_call(list_overridden_column_refs, service)
-            if ref.strip()
-        }
-        candidates = [
-            ref_display
-            for normalized_ref, ref_display in ref_display_by_normalized.items()
-            if normalized_ref not in overridden_refs
-        ]
-        candidates.extend(
-            f"{ref_display}:"
-            for normalized_ref, ref_display in ref_display_by_normalized.items()
-            if normalized_ref not in overridden_refs
-        )
-        return _filter(candidates, incomplete)
-
-    ref_part, type_part = incomplete.rsplit(":", 1)
-    if not ref_part.strip():
-        return []
-
-    try:
-        normalized_ref = normalize_source_column_ref(ref_part)
-    except Exception:
-        return []
-
-    display_ref = ref_display_by_normalized.get(normalized_ref, ref_part.strip())
-
-    selected_types = {
-        value.rsplit(":", 1)[1].strip().casefold()
-        for value in _get_multi_param_values(ctx, "set_source_override")
-        if ":" in value and value != incomplete
-    }
-
-    candidates: list[str] = []
-    for type_name in _safe_call(list_valid_override_types_for_column, service, normalized_ref):
-        normalized_type = type_name.strip().casefold()
-        if not normalized_type or normalized_type in selected_types:
-            continue
-
-        if not normalized_type.startswith(type_part.casefold()):
-            continue
-
-        candidates.append(f"{display_ref}:{normalized_type}")
-
-    return _filter(candidates, incomplete)
 
 
 def complete_remove_source_override(
@@ -1106,15 +913,12 @@ def complete_remove_source_override(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete existing ``schema.table.column`` override refs."""
-    service = _get_resource_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        list_overridden_column_refs,
+    return complete_remove_source_override_impl(
+        incomplete,
+        _get_resource_service(ctx),
+        _safe_call,
+        _filter,
     )
-
-    return _filter(_safe_call(list_overridden_column_refs, service), incomplete)
 
 
 def complete_source_override_ref_for_set(
@@ -1123,27 +927,12 @@ def complete_source_override_ref_for_set(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete source refs for canonical source-overrides set subcommand."""
-    service = _get_resource_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        list_overridden_column_refs,
-        list_source_column_refs,
+    return complete_source_override_ref_for_set_impl(
+        incomplete,
+        _get_resource_service(ctx),
+        _safe_call,
+        _filter,
     )
-
-    all_refs = _safe_call(list_source_column_refs, service)
-    overridden_refs = {
-        ref.casefold()
-        for ref in _safe_call(list_overridden_column_refs, service)
-        if ref.strip()
-    }
-    candidates = [
-        ref
-        for ref in all_refs
-        if ref.casefold() not in overridden_refs
-    ]
-    return _filter(candidates, incomplete)
 
 
 def complete_source_override_type_for_ref(
@@ -1152,38 +941,14 @@ def complete_source_override_type_for_ref(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete type values for canonical source-overrides set subcommand."""
-    service = _get_resource_service(ctx)
-    source_ref = _get_param(ctx, "source_ref") or _get_param(ctx, "source_spec")
-    if not service or not source_ref:
-        return []
-
-    if ":" in source_ref:
-        source_ref = source_ref.split(":", 1)[0]
-
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        list_valid_override_types_for_column,
-        normalize_source_column_ref,
+    return complete_source_override_type_for_ref_impl(
+        ctx,
+        incomplete,
+        _get_resource_service(ctx),
+        _safe_call,
+        _filter,
+        _get_param,
     )
-
-    try:
-        normalized_ref = normalize_source_column_ref(source_ref)
-    except Exception:
-        return []
-
-    candidates: list[str] = []
-    for type_name in _safe_call(
-        list_valid_override_types_for_column,
-        service,
-        normalized_ref,
-    ):
-        normalized_type = type_name.strip().casefold()
-        if not normalized_type:
-            continue
-        if not normalized_type.startswith(incomplete.casefold()):
-            continue
-        candidates.append(normalized_type)
-
-    return _filter(candidates, incomplete)
 
 
 def complete_from_table(
@@ -1193,10 +958,7 @@ def complete_from_table(
 ) -> list[CompletionItem]:
     """Complete --from from service ``source.tables`` keys plus ``all``."""
     base = complete_source_tables(ctx, _param, incomplete)
-    all_item = CompletionItem("all")
-    if "all".startswith(incomplete):
-        return [all_item, *base]
-    return base
+    return complete_from_table_impl(base, incomplete)
 
 
 def complete_sink_keys(
@@ -1205,17 +967,11 @@ def complete_sink_keys(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with sink keys for current service."""
-    service = _get_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_sink_keys_for_service,
-    )
-
-    return _filter(
-        _safe_call(list_sink_keys_for_service, service),
+    return complete_sink_keys_impl(
         incomplete,
+        _get_service(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1225,17 +981,11 @@ def complete_schemas(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete with schemas for current service."""
-    service = _get_service(ctx)
-    if not service:
-        return []
-
-    from cdc_generator.helpers.autocompletions.schemas import (
-        list_schemas_for_service,
-    )
-
-    return _filter(
-        _safe_call(list_schemas_for_service, service),
+    return complete_schemas_impl(
         incomplete,
+        _get_service(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1245,28 +995,16 @@ def complete_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for a service table (needs --source-table or --add-source-table)."""
-    service = _get_service(ctx)
-    table_spec = _get_table_spec(ctx)
-    if not service or not table_spec:
-        return []
-
-    parts = table_spec.split(".")
-    _schema_table_parts = 2
-    if len(parts) != _schema_table_parts:
-        return []
-
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_columns_for_table,
+    return complete_columns_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _get_table_spec(ctx),
+        _safe_call,
+        _filter,
+        _get_multi_param_values,
+        _get_existing_source_column_refs,
     )
-
-    candidates = _safe_call(list_columns_for_table, service, parts[0], parts[1])
-
-    excluded = set(_get_multi_param_values(ctx, "track_columns"))
-    excluded.update(_get_multi_param_values(ctx, "ignore_columns"))
-    excluded.update(_get_existing_source_column_refs(service, table_spec))
-
-    filtered = [col for col in candidates if col not in excluded]
-    return _filter(filtered, incomplete)
 
 
 # ---------------------------------------------------------------------------
@@ -1280,18 +1018,12 @@ def complete_sink_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete sink tables for current service and sink."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    if not service or not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_sink_tables_for_service,
-    )
-
-    return _filter(
-        _safe_call(list_sink_tables_for_service, service, sink_key),
+    return complete_sink_tables_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1311,16 +1043,11 @@ def complete_add_sink_table(
         result = _safe_call(get_default_sink_for_service, service)
         sink_key = result[0] if result else ""
 
-    if not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_tables_for_sink_target,
-    )
-
-    return _filter(
-        _safe_call(list_tables_for_sink_target, sink_key),
+    return complete_add_sink_table_impl(
         incomplete,
+        sink_key,
+        _safe_call,
+        _filter,
     )
 
 
@@ -1330,17 +1057,11 @@ def complete_add_custom_sink_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete table refs for --add-custom-sink-table from schema resources."""
-    sink_key = _get_sink_key_with_default(ctx)
-    if not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_custom_table_definitions_for_sink_target,
-    )
-
-    return _filter(
-        _safe_call(list_custom_table_definitions_for_sink_target, sink_key),
+    return complete_add_custom_sink_table_impl(
         incomplete,
+        _get_sink_key_with_default(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1350,18 +1071,12 @@ def complete_remove_sink_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete tables to remove from a sink."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    if not service or not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_sink_tables_for_service,
-    )
-
-    return _filter(
-        _safe_call(list_sink_tables_for_service, service, sink_key),
+    return complete_remove_sink_table_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1371,18 +1086,12 @@ def complete_target_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete target tables for a sink."""
-    service = _get_service(ctx)
-    sink_key = _get_param(ctx, "sink")
-    if not service or not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_target_tables_for_sink,
-    )
-
-    return _filter(
-        _safe_call(list_target_tables_for_sink, service, sink_key),
+    return complete_target_tables_impl(
         incomplete,
+        _get_service(ctx),
+        _get_param(ctx, "sink"),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1392,80 +1101,13 @@ def complete_target_schema(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete schemas for a sink's target service."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-
-    if not sink_key:
-        all_mode = bool(ctx.params.get("all_flag"))
-        if all_mode and service:
-            common_schemas, common_custom_schemas = _common_sink_schema_data_for_all_sinks(
-                service,
-            )
-            normalized_incomplete = incomplete.casefold()
-            items: list[CompletionItem] = []
-            for schema in common_schemas:
-                display_value = (
-                    f"custom:{schema}" if schema in common_custom_schemas else schema
-                )
-                if not display_value.casefold().startswith(normalized_incomplete):
-                    continue
-                if schema in common_custom_schemas:
-                    items.append(CompletionItem(display_value, help="custom-table schema"))
-                    continue
-
-                items.append(CompletionItem(display_value))
-
-            return items
-        return []
-
-    parts = sink_key.split(".")
-    _sink_key_parts = 2
-    if len(parts) < _sink_key_parts:
-        return []
-    target_service = parts[1]
-
-    from cdc_generator.helpers.autocompletions.schemas import (
-        list_schemas_for_service,
+    return complete_target_schema_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _safe_call,
     )
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_custom_table_definitions_for_sink_target,
-    )
-    from cdc_generator.helpers.service_config import load_service_config
-
-    candidates: set[str] = set(
-        _safe_call(list_schemas_for_service, target_service)
-    )
-    custom_schemas = _schemas_from_schema_table_specs(
-        _safe_call(list_custom_table_definitions_for_sink_target, sink_key)
-    )
-    candidates.update(custom_schemas)
-
-    try:
-        config = load_service_config(service)
-        sinks_raw = config.get("sinks")
-        if isinstance(sinks_raw, dict):
-            sink_cfg_raw = cast(dict[str, Any], sinks_raw).get(sink_key)
-            if isinstance(sink_cfg_raw, dict):
-                candidates.update(
-                    _schemas_from_sink_tables(cast(dict[str, Any], sink_cfg_raw))
-                )
-    except Exception:
-        pass
-
-    normalized_incomplete = incomplete.casefold()
-    items: list[CompletionItem] = []
-    for schema in sorted(candidates):
-        display_value = (
-            f"custom:{schema}" if schema in custom_schemas else schema
-        )
-        if not display_value.casefold().startswith(normalized_incomplete):
-            continue
-        if schema in custom_schemas:
-            items.append(CompletionItem(display_value, help="custom-table schema"))
-            continue
-
-        items.append(CompletionItem(display_value))
-    return items
 
 
 def complete_templates_on_table(
@@ -1474,21 +1116,13 @@ def complete_templates_on_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete column templates applied to a sink table."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    sink_table = _get_param(ctx, "sink_table")
-    if not service or not sink_key or not sink_table:
-        return []
-
-    from cdc_generator.helpers.autocompletions.column_template_completions import (
-        list_column_templates_for_table,
-    )
-
-    return _filter(
-        _safe_call(
-            list_column_templates_for_table, service, sink_key, sink_table
-        ),
+    return complete_templates_on_table_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _get_param(ctx, "sink_table"),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1498,113 +1132,14 @@ def complete_transforms_on_table(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete transforms applied to a sink table."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    sink_table = _get_param(ctx, "sink_table")
-    if not service or not sink_key or not sink_table:
-        return []
-
-    from cdc_generator.helpers.autocompletions.column_template_completions import (
-        list_transforms_for_table,
-    )
-
-    return _filter(
-        _safe_call(
-            list_transforms_for_table, service, sink_key, sink_table
-        ),
+    return complete_transforms_on_table_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _get_param(ctx, "sink_table"),
+        _safe_call,
+        _filter,
     )
-
-
-def _resolve_map_column_tables(
-    service: str,
-    sink_key: str,
-    sink_table: str,
-    target_table: str,
-    from_table: str,
-    add_sink_table: str,
-    sink_schema: str,
-) -> tuple[str | None, str | None]:
-    """Resolve source/target tables for map-column completions."""
-    from cdc_generator.helpers.autocompletions.sinks import (
-        load_sink_tables_for_autocomplete,
-    )
-
-    source_table: str | None = None
-    target_table_resolved: str | None = None
-
-    if sink_table:
-        source_table = sink_table
-        target_table_resolved = sink_table
-
-        sink_tables_dict = load_sink_tables_for_autocomplete(service, sink_key) or {}
-        table_cfg = sink_tables_dict.get(sink_table)
-        if isinstance(table_cfg, dict):
-            table_cfg_dict = cast(dict[str, object], table_cfg)
-            configured_from = table_cfg_dict.get("from")
-            configured_target = table_cfg_dict.get("target")
-            if isinstance(configured_from, str) and configured_from:
-                source_table = configured_from
-            if isinstance(configured_target, str) and configured_target:
-                target_table_resolved = configured_target
-
-    if add_sink_table:
-        source_table = from_table or add_sink_table
-        target_table_resolved = target_table or add_sink_table
-        if sink_schema and target_table_resolved and "." in target_table_resolved:
-            target_table_resolved = (
-                f"{sink_schema}.{target_table_resolved.split('.', 1)[1]}"
-            )
-
-    if from_table and target_table:
-        source_table = from_table
-        target_table_resolved = target_table
-
-    return source_table, target_table_resolved
-
-
-def _mapped_map_column_state(
-    values: list[str],
-) -> tuple[set[str], set[str], str | None]:
-    """Return mapped targets/sources and pending legacy source token."""
-    mapped_targets: set[str] = set()
-    mapped_sources: set[str] = set()
-    pending_legacy_source: str | None = None
-
-    for value in values:
-        if ":" in value:
-            target_name_raw, source_name_raw = value.split(":", 1)
-            target_name = target_name_raw.strip()
-            source_name = source_name_raw.strip()
-            if target_name:
-                mapped_targets.add(target_name.casefold())
-            if source_name:
-                mapped_sources.add(source_name.casefold())
-        else:
-            pending_legacy_source = value
-
-    return mapped_targets, mapped_sources, pending_legacy_source
-
-
-def _filter_unmapped_pairs(
-    pairs: list[str],
-    mapped_targets: set[str],
-    mapped_sources: set[str],
-) -> list[str]:
-    """Remove pairs whose target or source is already mapped."""
-    filtered_pairs: list[str] = []
-    for pair in pairs:
-        if ":" not in pair:
-            continue
-        target_name_raw, source_name_raw = pair.split(":", 1)
-        target_name = target_name_raw.strip()
-        source_name = source_name_raw.strip()
-        if target_name.casefold() in mapped_targets:
-            continue
-        if source_name.casefold() in mapped_sources:
-            continue
-        filtered_pairs.append(pair)
-    return filtered_pairs
 
 
 def complete_map_column(
@@ -1613,103 +1148,21 @@ def complete_map_column(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete --map-column args with source/target compatibility filtering."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    sink_table = _get_param(ctx, "sink_table")
-    target_table = _get_param(ctx, "target")
-    from_table = _get_param(ctx, "from_table")
-    add_sink_table = _get_param(ctx, "add_sink_table")
-    sink_schema = _get_param(ctx, "sink_schema")
-
-    if not service or not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_compatible_map_column_pairs_for_target_prefix,
-        list_compatible_target_columns_for_source_column,
-        list_compatible_target_prefixes_for_map_column,
+    return complete_map_column_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _get_param(ctx, "sink_table"),
+        _get_param(ctx, "target"),
+        _get_param(ctx, "from_table"),
+        _get_param(ctx, "add_sink_table"),
+        _get_param(ctx, "sink_schema"),
+        _safe_call,
+        _filter,
+        _get_multi_param_values,
+        _MAP_COLUMN_MAX_SUGGESTIONS,
     )
-
-    source_table, target_table_resolved = _resolve_map_column_tables(
-        service,
-        sink_key,
-        sink_table,
-        target_table,
-        from_table,
-        add_sink_table,
-        sink_schema,
-    )
-
-    if not source_table or not target_table_resolved:
-        return []
-
-    provided_parts = [
-        value for value in _get_multi_param_values(ctx, "map_column") if value
-    ]
-
-    mapped_targets, mapped_sources, pending_legacy_source = _mapped_map_column_state(
-        provided_parts,
-    )
-
-    if pending_legacy_source:
-        source_column = pending_legacy_source
-
-        target_candidates = _safe_call(
-            list_compatible_target_columns_for_source_column,
-            service,
-            sink_key,
-            source_table,
-            target_table_resolved,
-            source_column,
-        )
-        filtered_targets = [
-            target_name
-            for target_name in target_candidates
-            if target_name.casefold() not in mapped_targets
-        ]
-        return _filter(filtered_targets, incomplete)
-
-    if ":" in incomplete:
-        target_prefix, source_prefix = incomplete.split(":", 1)
-        try:
-            pair_suggestions = list_compatible_map_column_pairs_for_target_prefix(
-                service,
-                sink_key,
-                source_table,
-                target_table_resolved,
-                target_prefix,
-                source_prefix,
-                _MAP_COLUMN_MAX_SUGGESTIONS,
-            )
-        except Exception:
-            return []
-
-        filtered_pairs = _filter_unmapped_pairs(
-            pair_suggestions,
-            mapped_targets,
-            mapped_sources,
-        )
-
-        return _filter(filtered_pairs, incomplete)
-
-    try:
-        target_prefixes = list_compatible_target_prefixes_for_map_column(
-            service,
-            sink_key,
-            source_table,
-            target_table_resolved,
-            _MAP_COLUMN_MAX_SUGGESTIONS,
-        )
-    except Exception:
-        return []
-
-    filtered_prefixes = [
-        prefix
-        for prefix in target_prefixes
-        if prefix[:-1].casefold() not in mapped_targets
-    ]
-
-    return _filter(filtered_prefixes, incomplete)
 
 
 def complete_include_sink_columns(
@@ -1718,23 +1171,12 @@ def complete_include_sink_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for --include-sink-columns (from --add-sink-table)."""
-    service = _get_service(ctx)
-    table_spec = _get_param(ctx, "add_sink_table")
-    if not service or not table_spec:
-        return []
-
-    parts = table_spec.split(".")
-    _schema_table_parts = 2
-    if len(parts) != _schema_table_parts:
-        return []
-
-    from cdc_generator.helpers.autocompletions.tables import (
-        list_columns_for_table,
-    )
-
-    return _filter(
-        _safe_call(list_columns_for_table, service, parts[0], parts[1]),
+    return complete_include_sink_columns_impl(
         incomplete,
+        _get_service(ctx),
+        _get_param(ctx, "add_sink_table"),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1744,54 +1186,22 @@ def complete_accept_column(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete --accept-column with uncovered sink target columns."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    sink_table = _get_param(ctx, "sink_table")
-    target_table = _get_param(ctx, "target")
-    from_table = _get_param(ctx, "from_table")
-    add_sink_table = _get_param(ctx, "add_sink_table")
-    sink_schema = _get_param(ctx, "sink_schema")
-
-    if not service or not sink_key or not add_sink_table:
-        return []
-
-    source_table, target_table_resolved = _resolve_map_column_tables(
-        service,
-        sink_key,
-        sink_table,
-        target_table,
-        from_table,
-        add_sink_table,
-        sink_schema,
+    return complete_accept_column_impl(
+        ctx,
+        incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _get_param(ctx, "sink_table"),
+        _get_param(ctx, "target"),
+        _get_param(ctx, "from_table"),
+        _get_param(ctx, "add_sink_table"),
+        _get_param(ctx, "sink_schema"),
+        _safe_call,
+        _filter,
+        _get_selected_map_column_targets,
+        _get_selected_add_column_template_targets,
+        _get_selected_accept_columns,
     )
-    del source_table
-
-    if not target_table_resolved:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_target_columns_for_sink_table,
-    )
-
-    target_columns = _safe_call(
-        list_target_columns_for_sink_table,
-        sink_key,
-        target_table_resolved,
-    )
-
-    blocked_columns = (
-        _get_selected_map_column_targets(ctx)
-        | _get_selected_add_column_template_targets(ctx, incomplete)
-        | _get_selected_accept_columns(ctx, incomplete)
-    )
-
-    remaining_columns = [
-        column_name
-        for column_name in target_columns
-        if column_name.casefold() not in blocked_columns
-    ]
-
-    return _filter(remaining_columns, incomplete)
 
 
 # ---------------------------------------------------------------------------
@@ -1805,18 +1215,12 @@ def complete_custom_tables(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete custom tables for a sink."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    if not service or not sink_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_custom_tables_for_service_sink,
-    )
-
-    return _filter(
-        _safe_call(list_custom_tables_for_service_sink, service, sink_key),
+    return complete_custom_tables_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1826,24 +1230,13 @@ def complete_custom_table_columns(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete columns for a custom table."""
-    service = _get_service(ctx)
-    sink_key = _get_sink_key_with_default(ctx)
-    table_key = _get_param(ctx, "modify_custom_table")
-    if not service or not sink_key or not table_key:
-        return []
-
-    from cdc_generator.helpers.autocompletions.sinks import (
-        list_custom_table_columns_for_autocomplete,
-    )
-
-    return _filter(
-        _safe_call(
-            list_custom_table_columns_for_autocomplete,
-            service,
-            sink_key,
-            table_key,
-        ),
+    return complete_custom_table_columns_impl(
         incomplete,
+        _get_service(ctx),
+        _get_sink_key_with_default(ctx),
+        _get_param(ctx, "modify_custom_table"),
+        _safe_call,
+        _filter,
     )
 
 
@@ -1858,30 +1251,12 @@ def complete_sink_group_servers(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete servers for a sink group."""
-    sink_group = _get_param(ctx, "sink_group")
-    if not sink_group:
-        sink_group = _get_param(ctx, "sink_group_positional")
-    if not sink_group and ctx.args:
-        args_list = list(ctx.args)
-        for index, token in enumerate(args_list):
-            if token != "--update":
-                continue
-            next_index = index + 1
-            if next_index < len(args_list):
-                candidate = args_list[next_index]
-                if candidate and not candidate.startswith("-"):
-                    sink_group = candidate
-                    break
-    if not sink_group:
-        return []
-
-    from cdc_generator.helpers.autocompletions.server_groups import (
-        list_servers_for_sink_group,
-    )
-
-    return _filter(
-        _safe_call(list_servers_for_sink_group, sink_group),
+    return complete_sink_group_servers_impl(
+        ctx,
         incomplete,
+        _get_param,
+        _safe_call,
+        _filter,
     )
 
 
@@ -1896,12 +1271,11 @@ def complete_sink_group_context_aware(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete sink group — non-inherited when adding/removing servers."""
-    # Check if --add-server or --remove-server is on the command line
-    add_server = _get_param(ctx, "add_server")
-    remove_server = _get_param(ctx, "remove_server")
-
-    if add_server or remove_server:
-        return complete_non_inherited_sink_group_names(
-            ctx, _param, incomplete
-        )
-    return complete_sink_group_names(ctx, _param, incomplete)
+    return complete_sink_group_context_aware_impl(
+        ctx,
+        _param,
+        incomplete,
+        _get_param,
+        complete_non_inherited_sink_group_names,
+        complete_sink_group_names,
+    )
