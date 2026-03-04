@@ -28,6 +28,9 @@ from pathlib import Path
 
 import click
 
+from cdc_generator.cli.commands_help import (
+    print_help as print_help_impl,
+)
 from cdc_generator.cli.usage_stats import track_usage
 
 # Minimum number of CLI args (program name + command)
@@ -298,61 +301,18 @@ def print_help(
     is_dev_container: bool,
 ) -> None:
     """Print help message with all available commands."""
-    print(__doc__)
-
-    if is_dev_container:
-        if implementation_name:
-            print(f"📍 Environment: Dev container - /implementations/{implementation_name}")
-        else:
-            print("📍 Environment: Dev container - /workspace (generator)")
-    else:
-        print(f"📍 Environment: Host - {workspace_root}")
-        if implementation_name:
-            print(f"   Implementation: {implementation_name}")
-
-    print("\n📦 Top-level generator commands:")
-    for cmd, info in GENERATOR_COMMANDS.items():
-        print(f"  {cmd:20} - {info['description']}")
-
-    print("\n🧩 Service management:")
-    for cmd, info in SERVICE_COMMANDS.items():
-        desc = info["description"]
-        usage = info.get("usage")
-        if usage is not None:
-            desc += f"\n  {' ' * 20}   Usage: {usage}"
-        print(f"  {'manage-services ' + cmd:20} - {desc}")
-
-    print("\n⚡ Aliases:")
-    print("  ms                   - alias for manage-services")
-    print("  msc                  - alias for manage-services config")
-    print("  msr                  - alias for manage-services resources")
-    print("  mss                  - alias for manage-services resources")
-    print("  msog                 - alias for manage-source-groups")
-    print("  msig                 - alias for manage-sink-groups")
-    print("  mp                   - alias for manage-pipelines")
-    print("  mm                   - alias for manage-migrations")
-
-    print("\n🔄 Pipeline management:")
-    for cmd, info in PIPELINE_COMMANDS.items():
-        desc = info["description"]
-        usage = info.get("usage")
-        if usage is not None:
-            desc += f"\n  {' ' * 20}   Usage: {usage}"
-        print(f"  {'manage-pipelines ' + cmd:20} - {desc}")
-
-    print("\n🗄️ Migration management:")
-    for cmd, info in MIGRATION_COMMANDS.items():
-        desc = info["description"]
-        usage = info.get("usage")
-        if usage is not None:
-            desc += f"\n  {' ' * 20}   Usage: {usage}"
-        print(f"  {'manage-migrations ' + cmd:20} - {desc}")
-
-    print("\n🧪 Testing:")
-    print("  test                 - Run tests (--cli for e2e, --all for everything)")
-    print("  test-coverage        - Show test coverage report by cdc command (-v for details)")
-
-    print("\n💡 Tip: Run commands from implementation directory or dev container")
+    print_help_impl(
+        workspace_root,
+        implementation_name,
+        is_dev_container,
+        doc_text=__doc__,
+        command_groups={
+            "generator": GENERATOR_COMMANDS,
+            "service": SERVICE_COMMANDS,
+            "pipeline": PIPELINE_COMMANDS,
+            "migration": MIGRATION_COMMANDS,
+        },
+    )
 
 
 def _run_subprocess(

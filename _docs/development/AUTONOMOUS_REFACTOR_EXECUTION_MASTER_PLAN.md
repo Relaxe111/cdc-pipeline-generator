@@ -27,8 +27,8 @@ Current hotspots (from latest size scan, files > 600 lines in `cdc_generator/`):
 
 - `cdc_generator/cli/sink_group.py` (2599)
 - `cdc_generator/cli/completions.py` (1908)
-- `cdc_generator/cli/click_commands.py` (1528)
-- `cdc_generator/cli/service_handlers_sink_custom.py` (1030)
+- `cdc_generator/cli/click_commands.py` (1511)
+- `cdc_generator/cli/service_handlers_sink.py` (766)
 - `cdc_generator/helpers/helpers_sink_groups.py` (998)
 - `cdc_generator/cli/service.py` (958)
 - `cdc_generator/validators/manage_service_schema/source_type_overrides.py` (918)
@@ -36,11 +36,11 @@ Current hotspots (from latest size scan, files > 600 lines in `cdc_generator/`):
 - `cdc_generator/validators/manage_server_group/scaffolding/templates.py` (807)
 - `cdc_generator/helpers/autocompletions/sinks.py` (797)
 - `cdc_generator/validators/template_validator.py` (776)
-- `cdc_generator/cli/service_handlers_sink.py` (766)
 - `cdc_generator/validators/manage_server_group/db_inspector.py` (735)
 - `cdc_generator/core/migration_apply.py` (731)
-- `cdc_generator/cli/source_group.py` (725)
-- `cdc_generator/cli/commands.py` (619)
+- `cdc_generator/cli/click_commands.py` (1528)
+- `cdc_generator/cli/completions.py` (1908)
+- `cdc_generator/cli/sink_group.py` (2599)
 
 Current method/compliance audit snapshot:
 
@@ -279,8 +279,8 @@ This plan is complete when all are true:
 
 Continue with **Phase 3**, next seam:
 
-- Start with `cdc_generator/cli/service_handlers_sink_custom.py` (smallest-risk CLI hotspot),
-- extract parser/normalization helpers first,
+- Continue on `cdc_generator/cli/service_handlers_sink_custom.py` (smallest-risk CLI hotspot),
+- extract custom-table mutation/list helpers next,
 - run `ruff` + CLI/completion impacted tests,
 - publish short slice changelog and continue automatically.
 
@@ -455,3 +455,482 @@ Delta:
 Next:
 
 - Proceed to Phase 3 hotspot decomposition (`cli/*` mega-modules), starting with smallest-risk seam extraction.
+
+### 2026-03-04 — Iteration 3.1 (Phase 3 in progress)
+
+Changed:
+
+- Extracted pure custom-table parsing/normalization helpers from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_parsing.py`
+- Rewired handler module to delegate to extracted helpers while preserving existing function names used by tests/importers.
+- Tightened typing in touched handler paths to satisfy strict Pylance checks in modified file.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_parsing.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `1030 -> 843` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_parsing.py`
+  - new helper module (`208` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting schema-file IO/update helpers (`_load_columns_map_from_schema`, `_update_schema_file_add_column`, `_update_schema_file_remove_column`) into a dedicated module.
+
+### 2026-03-04 — Iteration 3.2 (Phase 3 in progress)
+
+Changed:
+
+- Extracted schema-file IO/update helpers from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_schema_files.py`
+- Kept facade compatibility in handler module by preserving existing internal function names as delegating wrappers:
+  - `_load_columns_map_from_schema`
+  - `_update_schema_file_add_column`
+  - `_update_schema_file_remove_column`
+- Preserved test monkeypatch behavior by injecting handler-level `SERVICE_SCHEMAS_DIR` and `yaml` into extracted helper calls.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_schema_files.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `843 -> 760` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_schema_files.py`
+  - new helper module (`148` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting output-formatting/help-text builders to further reduce facade size while preserving CLI behavior.
+
+### 2026-03-04 — Iteration 3.3 (Phase 3 in progress)
+
+Changed:
+
+- Extracted output/help-text builders from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_output.py`
+- Rewired facade module to consume pure message-builder helpers for:
+  - existing-table guidance,
+  - source table/schema-not-found guidance,
+  - custom-table modify restrictions,
+  - custom-table creation success output,
+  - missing-column guidance.
+- Preserved behavior by keeping all printing in the facade and extracting only message construction.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_output.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `760 -> 779` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_output.py`
+  - new helper module (`111` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting source-table load/validation helpers (`_load_columns_from_source_table` + related guidance) into a dedicated module while preserving CLI behavior.
+
+### 2026-03-04 — Iteration 3.4 (Phase 3 in progress)
+
+Changed:
+
+- Extracted source-table load/validation flow from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_source_loader.py`
+- Kept facade compatibility by preserving `_load_columns_from_source_table` in the handler as a delegating wrapper.
+- Added dependency injection container (`SourceLoaderDeps`) to keep extracted module testable and avoid lint violations from excessive function arguments.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_source_loader.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `779 -> 721` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_source_loader.py`
+  - new helper module (`108` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting sink/table config navigation helpers (`_get_sinks_dict`, `_get_sink_tables`, `_resolve_sink_config`, `_extract_target_service`) into a dedicated module while preserving facade behavior.
+
+### 2026-03-04 — Iteration 3.5 (Phase 3 in progress)
+
+Changed:
+
+- Extracted sink/table config navigation helpers from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_config_nav.py`
+- Kept facade compatibility by preserving existing internal helper names as delegating wrappers:
+  - `_get_sinks_dict`
+  - `_get_sink_tables`
+  - `_resolve_sink_config`
+  - `_extract_target_service`
+- Preserved user-facing behavior by keeping validation/error messaging in facade wrappers and extracting pure navigation logic only.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_config_nav.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `721 -> 723` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_config_nav.py`
+  - new helper module (`45` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting custom-table mutation/list helpers (`_load_custom_table`, `_get_tables_dict_from_config`, `list_custom_table_columns`, `list_custom_tables_for_sink`) into a dedicated module while preserving facade behavior.
+
+### 2026-03-04 — Iteration 3.6 (Phase 3 in progress)
+
+Changed:
+
+- Extracted custom-table mutation/list helpers from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_table_access.py`
+- Kept facade compatibility by preserving existing function names as delegates:
+  - `_load_custom_table`
+  - `list_custom_table_columns`
+  - `list_custom_tables_for_sink`
+- Stabilized dependency initialization order by creating table-access dependencies lazily.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_table_access.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `723 -> 632` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_table_access.py`
+  - new helper module (`182` lines).
+
+Next:
+
+- Continue Phase 3 on `service_handlers_sink_custom.py` by extracting custom-table column mutation handlers (`add_column_to_custom_table`, `remove_column_from_custom_table`) into a dedicated module to bring facade under `<= 600`.
+
+### 2026-03-04 — Iteration 3.7 (Phase 3 in progress)
+
+Changed:
+
+- Extracted custom-table column mutation handlers from:
+  - `cdc_generator/cli/service_handlers_sink_custom.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_custom_column_mutations.py`
+- Kept facade compatibility by preserving public handler function names as delegates:
+  - `add_column_to_custom_table`
+  - `remove_column_from_custom_table`
+- Introduced lazy dependency builder for column-mutation flow to preserve wiring stability and behavior.
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink_custom.py cdc_generator/cli/service_handlers_sink_custom_column_mutations.py`: pass.
+- `get_errors` on both touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_custom_table_parsing.py tests/test_sink_handlers.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - `632 -> 592` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_custom_column_mutations.py`
+  - new helper module (`122` lines).
+- Phase 3 local target met for this facade (`<= 600`).
+
+Next:
+
+- Continue Phase 3 with next CLI hotspot: extract helpers from `cdc_generator/cli/service_handlers_sink.py` (`766`) to reduce facade size while preserving CLI behavior.
+
+### 2026-03-04 — Iteration 3.8 (Phase 3 in progress)
+
+Changed:
+
+- Extracted add-table helper cluster from:
+  - `cdc_generator/cli/service_handlers_sink.py`
+  into:
+  - `cdc_generator/cli/service_handlers_sink_add_table_helpers.py`
+- Preserved facade-level compatibility for patch-sensitive flows by keeping these functions in facade and delegating only stable helper logic:
+  - `_apply_transform_after_add`
+  - `_handle_from_all_add_table`
+- Restored expected module patch-points used by tests (`add_transform_to_table`, `remove_sink_table`).
+
+Validated:
+
+- `ruff check cdc_generator/cli/service_handlers_sink.py cdc_generator/cli/service_handlers_sink_add_table_helpers.py`: pass.
+- `get_errors` on touched sink/custom handler files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_sink_handlers.py tests/test_custom_table_parsing.py -q`: `77 passed`.
+
+Delta:
+
+- `cdc_generator/cli/service_handlers_sink.py`
+  - `766 -> 529` lines in this iteration.
+- `cdc_generator/cli/service_handlers_sink_add_table_helpers.py`
+  - new helper module (`434` lines).
+- `cdc_generator/cli/service_handlers_sink_custom.py`
+  - remains under threshold (`596` lines).
+
+Next:
+
+- Continue Phase 3 with next smallest CLI hotspot: reduce `cdc_generator/cli/commands.py` (`619`) below `<= 600` with a minimal helper extraction.
+
+### 2026-03-04 — Iteration 3.9 (Phase 3 in progress)
+
+Changed:
+
+- Extracted CLI help rendering from:
+  - `cdc_generator/cli/commands.py`
+  into:
+  - `cdc_generator/cli/commands_help.py`
+- Kept facade-level `print_help` API as a delegating wrapper.
+
+Validated:
+
+- `ruff check cdc_generator/cli/commands.py cdc_generator/cli/commands_help.py`: pass.
+- `get_errors` on touched commands files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_sink_handlers.py -q`: pass.
+
+Delta:
+
+- `cdc_generator/cli/commands.py`
+  - `618 -> 578` lines in this iteration.
+- `cdc_generator/cli/commands_help.py`
+  - new helper module.
+
+Next:
+
+- Continue Phase 3 with `cdc_generator/cli/source_group.py` extraction to bring facade under `<= 600`.
+
+### 2026-03-04 — Iteration 3.10 (Phase 3 in progress)
+
+Changed:
+
+- Extracted special action handlers from:
+  - `cdc_generator/cli/source_group.py`
+  into:
+  - `cdc_generator/cli/source_group_special_handlers.py`
+- Kept facade compatibility by preserving function names as delegating wrappers:
+  - `_handle_introspect_types`
+  - `_handle_db_definitions`
+  - `_handle_add_source_custom_key`
+
+Validated:
+
+- `ruff check cdc_generator/cli/source_group.py cdc_generator/cli/source_group_special_handlers.py`: pass.
+- `get_errors` on touched source-group files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_server_group_dispatch.py tests/test_fish_completions.py -q`: `116 passed`.
+
+Delta:
+
+- `cdc_generator/cli/source_group.py`
+  - `724 -> 539` lines in this iteration.
+- `cdc_generator/cli/source_group_special_handlers.py`
+  - new helper module (`213` lines).
+
+Next:
+
+- Continue Phase 3 with next remaining mega-hotspot: `cdc_generator/cli/click_commands.py` seam extraction.
+
+### 2026-03-04 — Iteration 3.11 (Phase 3 in progress)
+
+Changed:
+
+- Reduced passthrough duplication in:
+  - `cdc_generator/cli/click_commands.py`
+- Added shared dispatch helpers for repeated command passthrough patterns:
+  - `_dispatch_grouped_passthrough`
+  - `_dispatch_command_passthrough`
+- Rewired repeated manage-pipelines/manage-migrations/test passthrough handlers to use these helpers.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py --select I001`: pass.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_server_group_dispatch.py tests/test_sink_handlers.py tests/test_fish_completions.py tests/test_pipeline_generation.py -q`: `179 passed`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1527 -> 1511` lines in this iteration.
+
+Notes:
+
+- `click_commands.py` has pre-existing Ruff complexity findings (`PLR0911`, `PLR0913`) in `manage_services_resources_cmd`; these were not introduced by this iteration and remain as next refactor target.
+
+Next:
+
+- Continue Phase 3 by decomposing `manage_services_resources_cmd` from `cdc_generator/cli/click_commands.py` into dedicated helper(s) to reduce complexity and unblock full-file Ruff checks.
+
+### 2026-03-04 — Iteration 3.12 (Phase 3 in progress)
+
+Changed:
+
+- Extracted resources runtime orchestration from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_resources.py`
+- Kept CLI declaration surface in facade and delegated runtime path via:
+  - `execute_manage_services_resources(ctx, options_from_kwargs(kwargs))`
+- Completed style/typing cleanup for extracted resources helper and removed dead return in facade handler.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_resources.py`: pass.
+- `get_errors` on touched click files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_sink_handlers.py tests/test_server_group_dispatch.py tests/test_custom_table_parsing.py -q`: `196 passed`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1511 -> 1413` lines in this iteration.
+- `cdc_generator/cli/click_commands_resources.py`
+  - new helper module (`177` lines).
+
+Next:
+
+- Continue Phase 3 with next `click_commands.py` runtime seam (`source-overrides` command cluster).
+
+### 2026-03-04 — Iteration 3.13 (Phase 3 in progress)
+
+Changed:
+
+- Extracted source-overrides runtime logic from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_source_overrides.py`
+- Rewired these command handlers to delegate runtime behavior while preserving Click command declarations:
+  - `manage_services_source_overrides_cmd`
+  - `manage_services_source_overrides_set_cmd`
+  - `manage_services_source_overrides_remove_cmd`
+  - `manage_services_source_overrides_list_cmd`
+- Cleaned extracted helper import/type issues and preserved command UX/error messaging.
+- Resolved diagnostics debt in sink facade extraction by exporting/importing public helper aliases:
+  - `cdc_generator/cli/service_handlers_sink_add_table_helpers.py`
+  - `cdc_generator/cli/service_handlers_sink.py`
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_resources.py cdc_generator/cli/click_commands_source_overrides.py cdc_generator/cli/service_handlers_sink.py cdc_generator/cli/service_handlers_sink_add_table_helpers.py`: pass.
+- `get_errors` on touched click/sink files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/cli/test_manage_services_schema.py tests/test_fish_completions.py tests/test_sink_handlers.py tests/test_server_group_dispatch.py tests/test_pipeline_generation.py tests/test_custom_table_parsing.py -q`: `206 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1413 -> 1354` lines in this iteration.
+- `cdc_generator/cli/click_commands_source_overrides.py`
+  - new helper module (`146` lines).
+
+Next:
+
+- Continue Phase 3 with next `click_commands.py` extraction seam (`manage_services_schema_custom_tables_cmd` + `manage_services_schema_transforms_cmd`) to keep reducing facade size and complexity.
+
+### 2026-03-04 — Iteration 3.14 (Phase 3 in progress)
+
+Changed:
+
+- Extracted schema resource command runtime logic from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_schema_resources.py`
+- Delegated these facade handlers to extracted helper functions while preserving Click option declarations:
+  - `manage_services_schema_custom_tables_cmd`
+  - `manage_services_schema_transforms_cmd`
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_schema_resources.py`: pass.
+- `get_errors` on touched click files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/cli/test_manage_services_schema.py tests/test_fish_completions.py tests/test_pipeline_generation.py -q`: `111 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1354 -> 1324` lines in this iteration.
+- `cdc_generator/cli/click_commands_schema_resources.py`
+  - new helper module (`74` lines).
+
+Next:
+
+- Continue Phase 3 by extracting the next cohesive runtime block from `cdc_generator/cli/click_commands.py` (column-templates / resources-inspect cluster).
+
+### 2026-03-04 — Iteration 3.15 (Phase 3 in progress)
+
+Changed:
+
+- Extracted resources inspect runtime logic from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_resources_inspect.py`
+- Delegated `manage_services_resources_inspect_cmd` to helper executor and removed now-unused facade imports.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_resources_inspect.py`: pass.
+- `get_errors` on touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/cli/test_manage_services_schema.py tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_server_group_dispatch.py -q`: `129 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1324 -> 1300` lines in this iteration.
+- `cdc_generator/cli/click_commands_resources_inspect.py`
+  - new helper module (`56` lines).
+
+Next:
+
+- Continue Phase 3 with the next `click_commands.py` extraction seam (`manage_column_templates_cmd` runtime block) and continue toward facade-size convergence.
+
+### 2026-03-04 — Iteration 3.16 (Phase 3 in progress)
+
+Changed:
+
+- Extracted column-templates runtime orchestration from:
+  - `cdc_generator/cli/click_commands.py`
+  into:
+  - `cdc_generator/cli/click_commands_column_templates.py`
+- Delegated `manage_column_templates_cmd` to helper executor and kept Click option declarations in facade.
+
+Validated:
+
+- `ruff check cdc_generator/cli/click_commands.py cdc_generator/cli/click_commands_column_templates.py`: pass.
+- `get_errors` on touched files: no errors.
+- `/Users/igor/carasent/cdc-pipelines-development/cdc-pipeline-generator/.venv/bin/python -m pytest tests/cli/test_manage_services_schema.py tests/test_fish_completions.py tests/test_pipeline_generation.py tests/test_server_group_dispatch.py -q`: `129 passed, 14 skipped`.
+
+Delta:
+
+- `cdc_generator/cli/click_commands.py`
+  - `1300 -> 1279` lines in this iteration.
+- `cdc_generator/cli/click_commands_column_templates.py`
+  - new helper module (`34` lines).
+
+Next:
+
+- Continue Phase 3 by extracting the next coherent runtime cluster from `cdc_generator/cli/click_commands.py` (remaining grouped command adapters) and proceed until facade-size target is reached.

@@ -20,15 +20,34 @@ The branching rules live in ``smart_command.py`` and are passed as
 
 from __future__ import annotations
 
-import argparse
 import sys
 
 import click
 
+from cdc_generator.cli.click_commands_column_templates import (
+    execute_manage_column_templates,
+)
+from cdc_generator.cli.click_commands_resources import (
+    execute_manage_services_resources,
+    options_from_kwargs,
+)
+from cdc_generator.cli.click_commands_resources_inspect import (
+    execute_manage_services_resources_inspect,
+)
+from cdc_generator.cli.click_commands_schema_resources import (
+    execute_manage_services_schema_custom_tables,
+    execute_manage_services_schema_transforms,
+)
+from cdc_generator.cli.click_commands_source_overrides import (
+    execute_source_overrides_group,
+    execute_source_overrides_list,
+    execute_source_overrides_remove,
+    execute_source_overrides_set,
+)
 from cdc_generator.cli.completions import (
+    complete_accept_column,
     complete_add_custom_sink_table,
     complete_add_sink_table,
-    complete_accept_column,
     complete_available_envs,
     complete_available_services,
     complete_available_sink_keys,
@@ -49,17 +68,17 @@ from cdc_generator.cli.completions import (
     complete_remove_sink_table,
     complete_remove_source_override,
     complete_schema_services,
-    complete_source_override_type_for_ref,
-    complete_set_source_override,
     complete_schemas,
     complete_server_group_names,
     complete_server_names,
     complete_service_positional,
+    complete_set_source_override,
     complete_sink_group_context_aware,
     complete_sink_group_names,
     complete_sink_group_servers,
     complete_sink_keys,
     complete_sink_tables,
+    complete_source_override_type_for_ref,
     complete_source_tables,
     complete_target_schema,
     complete_target_tables,
@@ -98,6 +117,20 @@ _MIN_NESTED_SCHEMA_ARGS = 4
 _NESTED_SCHEMA_SUBCOMMAND_INDEX = 3
 _NESTED_SCHEMA_EXTRA_ARGS_START = 4
 _INSPECT_ALL_SINKS = "__all_sinks__"
+
+
+def _dispatch_grouped_passthrough(group: str, subcommand: str) -> int:
+    """Dispatch to grouped argparse handlers using current CLI argv tail."""
+    from cdc_generator.cli.commands import execute_grouped_command
+
+    return execute_grouped_command(group, subcommand, sys.argv[3:])
+
+
+def _dispatch_command_passthrough(command: str) -> int:
+    """Dispatch to top-level argparse handlers using current CLI argv tail."""
+    from cdc_generator.cli.commands import execute_command
+
+    return execute_command(command, sys.argv[2:])
 
 
 # ============================================================================
@@ -515,18 +548,7 @@ def manage_services_schema_custom_tables_cmd(
     **_kwargs: object,
 ) -> int:
     """manage-services resources custom-tables passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    try:
-        subcommand_index = sys.argv.index("custom-tables")
-    except ValueError:
-        subcommand_index = _NESTED_SCHEMA_SUBCOMMAND_INDEX
-
-    return execute_grouped_command(
-        "manage-services",
-        "resources",
-        sys.argv[subcommand_index + 1:],
-    )
+    return execute_manage_services_schema_custom_tables()
 
 
 @click.command(
@@ -565,40 +587,17 @@ def manage_services_schema_transforms_cmd(  # noqa: PLR0913
     list_transform_rules: bool,
 ) -> int:
     """manage-services resources transforms passthrough."""
-    from cdc_generator.cli.service_handlers_templates import (
-        handle_add_transform,
-        handle_list_transform_rules,
-        handle_list_transforms,
-        handle_remove_transform,
+    return execute_manage_services_schema_transforms(
+        service,
+        sink,
+        sink_table,
+        add_transform,
+        remove_transform,
+        list_transforms,
+        skip_validation,
+        list_rules,
+        list_transform_rules,
     )
-
-    args = argparse.Namespace(
-        service=service,
-        sink=sink,
-        sink_table=sink_table,
-        add_transform=add_transform,
-        remove_transform=remove_transform,
-        list_transforms=list_transforms,
-        skip_validation=skip_validation,
-    )
-
-    if add_transform:
-        return handle_add_transform(args)
-    if remove_transform:
-        return handle_remove_transform(args)
-    if list_transforms:
-        return handle_list_transforms(args)
-
-    if not list_rules and not list_transform_rules:
-        click.echo("❌ Missing action for manage-services resources transforms")
-        click.echo(
-            "   Try: cdc manage-services resources transforms --service <svc> "
-            + "--sink <key> --sink-table <schema.table> --list-transforms"
-        )
-        click.echo("        cdc manage-services resources transforms --list-rules")
-        return 1
-
-    return handle_list_transform_rules(argparse.Namespace())
 
 
 @click.group(
@@ -634,131 +633,10 @@ def manage_services_schema_transforms_cmd(  # noqa: PLR0913
 @click.pass_context
 def manage_services_resources_cmd(
     ctx: click.Context,
-    service: str | None,
-    source: str | None,
-    sink: str | None,
-    track_table: tuple[str, ...],
-    custom_tables: bool,
-    column_templates: bool,
-    transforms: bool,
-    list_source_overrides: bool,
-    set_source_override: str | None,
-    remove_source_override: str | None,
+    **kwargs: object,
 ) -> int:
     """manage-services resources command group."""
-    if ctx.invoked_subcommand is None and (
-        list_source_overrides
-        or set_source_override
-        or remove_source_override
-    ):
-        from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-            autodetect_single_service,
-            print_source_overrides,
-            remove_source_override as remove_source_override_entry,
-            set_source_override as set_source_override_entry,
-        )
-
-        resolved_source = source or service
-        if not resolved_source:
-            resolved_source = autodetect_single_service()
-
-        if not resolved_source:
-            click.echo(
-                "❌ Source override actions require --service <name> "
-                + "(or --source <name>) when multiple services exist"
-            )
-            return 1
-
-        try:
-            if list_source_overrides:
-                print_source_overrides(resolved_source)
-                return 0
-            if set_source_override:
-                return 0 if set_source_override_entry(resolved_source, set_source_override) else 1
-            if remove_source_override:
-                return 0 if remove_source_override_entry(resolved_source, remove_source_override) else 1
-        except ValueError as exc:
-            click.echo(f"❌ {exc}")
-            return 1
-
-    if ctx.invoked_subcommand is None and track_table:
-        from cdc_generator.helpers.autocompletions.services import (
-            list_existing_services,
-        )
-        from cdc_generator.helpers.autocompletions.sinks import (
-            get_default_sink_for_service,
-        )
-        from cdc_generator.validators.manage_service.schema_saver import (
-            add_tracked_tables,
-        )
-
-        resolved_source = source or service
-        if not resolved_source:
-            existing_services = list_existing_services()
-            if len(existing_services) == 1:
-                resolved_source = existing_services[0]
-
-        if not resolved_source:
-            click.echo(
-                "❌ --track-table requires --source <service> "
-                + "(or exactly one existing service)"
-            )
-            return 1
-
-        resolved_sink = sink
-        if not resolved_sink:
-            sink_defaults = get_default_sink_for_service(resolved_source)
-            if len(sink_defaults) == 1:
-                resolved_sink = sink_defaults[0]
-
-        target_service = resolved_source
-        if resolved_sink and "." in resolved_sink:
-            target_service = resolved_sink.split(".", 1)[1]
-
-        ok = add_tracked_tables(target_service, list(track_table))
-        return 0 if ok else 1
-
-    if ctx.invoked_subcommand is None and (
-        custom_tables or column_templates or transforms
-    ):
-        return 0
-
-    if ctx.invoked_subcommand is None:
-        click.echo("❌ Missing subcommand for manage-services resources")
-        click.echo(
-            "   Try: cdc manage-services resources inspect "
-            + "--service directory --inspect --all"
-        )
-        click.echo(
-            "        cdc manage-services resources inspect "
-            + "--service directory --inspect-sink sink_asma.chat --all"
-        )
-        click.echo("   Try: cdc manage-services resources custom-tables --list-services")
-        click.echo("        cdc manage-services resources --source <svc> --track-table <schema.table>")
-        click.echo("        cdc mss source-overrides list --service <svc>")
-        click.echo("        cdc mss --service <svc> --set-source-override <schema.table.column:type>")
-        click.echo("        cdc manage-services resources column-templates --list")
-        click.echo("        cdc manage-services resources transforms --list-rules")
-        return 1
-
-    return 0
-
-
-def _resolve_source_override_service(
-    service: str | None,
-    source: str | None,
-    parent_service: str | None,
-) -> str:
-    """Resolve service for source-overrides subcommands."""
-    resolved = service or source or parent_service
-    if resolved:
-        return resolved
-
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        autodetect_single_service,
-    )
-
-    return autodetect_single_service()
+    return execute_manage_services_resources(ctx, options_from_kwargs(kwargs))
 
 
 @click.group(
@@ -779,18 +657,7 @@ def manage_services_source_overrides_cmd(
     source: str | None,
 ) -> int:
     """manage-services resources source-overrides command group."""
-    ctx.ensure_object(dict)
-    ctx.obj["source_overrides_service"] = service or source
-
-    if ctx.invoked_subcommand is None:
-        click.echo("❌ Missing subcommand for source-overrides")
-        click.echo("   Try: cdc mss source-overrides list [--service <svc>]")
-        click.echo("        cdc mss source-overrides set <schema.table.column:type> --reason <text> [--service <svc>]")
-        click.echo("        cdc mss source-overrides set <schema.table.column> <type> --reason <text> [--service <svc>]")
-        click.echo("        cdc mss source-overrides remove <schema.table.column> [--service <svc>]")
-        return 1
-
-    return 0
+    return execute_source_overrides_group(ctx, service, source)
 
 
 @manage_services_source_overrides_cmd.command(
@@ -817,23 +684,14 @@ def manage_services_source_overrides_set_cmd(
     reason: str,
 ) -> int:
     """Set a source type override via canonical subcommand."""
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        set_source_override as set_source_override_entry,
+    return execute_source_overrides_set(
+        ctx,
+        source_spec,
+        override_type,
+        service,
+        source,
+        reason,
     )
-
-    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
-    parent_service = str(parent_obj.get("source_overrides_service") or "")
-    resolved_service = _resolve_source_override_service(service, source, parent_service)
-    if not resolved_service:
-        click.echo("❌ source-overrides set requires --service when multiple services exist")
-        return 1
-
-    spec = source_spec if override_type is None else f"{source_spec}:{override_type}"
-    try:
-        return 0 if set_source_override_entry(resolved_service, spec, reason) else 1
-    except ValueError as exc:
-        click.echo(f"❌ {exc}")
-        return 1
 
 
 @manage_services_source_overrides_cmd.command(
@@ -855,22 +713,12 @@ def manage_services_source_overrides_remove_cmd(
     source: str | None,
 ) -> int:
     """Remove a source type override via canonical subcommand."""
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        remove_source_override as remove_source_override_entry,
+    return execute_source_overrides_remove(
+        ctx,
+        source_ref,
+        service,
+        source,
     )
-
-    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
-    parent_service = str(parent_obj.get("source_overrides_service") or "")
-    resolved_service = _resolve_source_override_service(service, source, parent_service)
-    if not resolved_service:
-        click.echo("❌ source-overrides remove requires --service when multiple services exist")
-        return 1
-
-    try:
-        return 0 if remove_source_override_entry(resolved_service, source_ref) else 1
-    except ValueError as exc:
-        click.echo(f"❌ {exc}")
-        return 1
 
 
 @manage_services_source_overrides_cmd.command(
@@ -890,23 +738,7 @@ def manage_services_source_overrides_list_cmd(
     source: str | None,
 ) -> int:
     """List source type overrides via canonical subcommand."""
-    from cdc_generator.validators.manage_service_schema.source_type_overrides import (
-        print_source_overrides,
-    )
-
-    parent_obj = ctx.parent.obj if ctx.parent is not None and isinstance(ctx.parent.obj, dict) else {}
-    parent_service = str(parent_obj.get("source_overrides_service") or "")
-    resolved_service = _resolve_source_override_service(service, source, parent_service)
-    if not resolved_service:
-        click.echo("❌ source-overrides list requires --service when multiple services exist")
-        return 1
-
-    try:
-        print_source_overrides(resolved_service)
-        return 0
-    except ValueError as exc:
-        click.echo(f"❌ {exc}")
-        return 1
+    return execute_source_overrides_list(ctx, service, source)
 
 
 # ============================================================================
@@ -969,31 +801,7 @@ def manage_column_templates_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-services resources column-templates passthrough."""
-    from cdc_generator.cli.commands import (
-        detect_environment,
-        get_script_paths,
-        run_generator_spec,
-    )
-
-    try:
-        start_index = sys.argv.index("column-templates") + 1
-    except ValueError:
-        start_index = 2
-
-    workspace_root, _implementation_name, is_dev_container = detect_environment()
-    paths = get_script_paths(workspace_root, is_dev_container)
-    cmd_info = {
-        "runner": "generator",
-        "module": "cdc_generator.cli.column_templates",
-        "script": "cli/column_templates.py",
-    }
-    return run_generator_spec(
-        "manage-services resources column-templates",
-        cmd_info,
-        paths,
-        sys.argv[start_index:],
-        workspace_root,
-    )
+    return execute_manage_column_templates()
 
 
 manage_services_resources_cmd.add_command(
@@ -1063,42 +871,16 @@ def manage_services_resources_inspect_cmd(  # noqa: PLR0913
     env: str,
 ) -> int:
     """manage-services resources inspect handler."""
-    from cdc_generator.cli.service_handlers_inspect import handle_inspect
-    from cdc_generator.cli.service_handlers_inspect_sink import handle_inspect_sink
-    from cdc_generator.helpers.autocompletions.services import (
-        list_existing_services,
+    return execute_manage_services_resources_inspect(
+        service,
+        inspect,
+        inspect_sink,
+        schema,
+        all_flag,
+        save,
+        track_table,
+        env,
     )
-
-    resolved_service = service
-    if not resolved_service:
-        existing_services = list_existing_services()
-        if len(existing_services) == 1:
-            resolved_service = existing_services[0]
-
-    args = argparse.Namespace(
-        service=resolved_service,
-        inspect=inspect,
-        inspect_sink=inspect_sink,
-        schema=schema,
-        all=all_flag,
-        save=save,
-        track_table=list(track_table),
-        env=env,
-    )
-
-    if inspect:
-        return handle_inspect(args)
-
-    if inspect_sink:
-        if not resolved_service:
-            click.echo("❌ --inspect-sink requires --service <name>")
-            return 1
-        return handle_inspect_sink(args)
-
-    click.echo("❌ Missing action for manage-services resources inspect")
-    click.echo("   Try: cdc manage-services resources inspect --service <svc> --inspect --all")
-    click.echo("        cdc manage-services resources inspect --service <svc> --inspect-sink sink_group.target --all")
-    return 1
 
 
 manage_services_resources_cmd.add_command(
@@ -1207,9 +989,7 @@ def manage_pipelines_cmd(ctx: click.Context) -> int:
 @click.pass_context
 def manage_pipelines_generate_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines generate passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "generate", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "generate")
 
 
 @manage_pipelines_cmd.command(
@@ -1223,9 +1003,7 @@ def manage_pipelines_generate_cmd(_ctx: click.Context, **_kwargs: object) -> int
 @click.pass_context
 def manage_pipelines_list_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines list passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "list", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "list")
 
 
 @manage_pipelines_cmd.command(
@@ -1242,9 +1020,7 @@ def manage_pipelines_list_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def manage_pipelines_verify_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines verify passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "verify", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "verify")
 
 
 @manage_pipelines_cmd.command(
@@ -1256,9 +1032,7 @@ def manage_pipelines_verify_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def manage_pipelines_diff_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines diff passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "diff", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "diff")
 
 
 @manage_pipelines_cmd.command(
@@ -1272,9 +1046,7 @@ def manage_pipelines_diff_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def manage_pipelines_health_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines health passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "health", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "health")
 
 
 @manage_pipelines_cmd.command(
@@ -1288,9 +1060,7 @@ def manage_pipelines_health_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def manage_pipelines_prune_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """manage-pipelines prune passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-pipelines", "prune", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-pipelines", "prune")
 
 
 # ============================================================================
@@ -1311,9 +1081,7 @@ def manage_pipelines_prune_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def test_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """Test passthrough."""
-    from cdc_generator.cli.commands import execute_command
-
-    return execute_command("test", sys.argv[2:])
+    return _dispatch_command_passthrough("test")
 
 
 # ============================================================================
@@ -1333,9 +1101,7 @@ def test_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 @click.pass_context
 def test_coverage_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """Test-coverage passthrough."""
-    from cdc_generator.cli.commands import execute_command
-
-    return execute_command("test-coverage", sys.argv[2:])
+    return _dispatch_command_passthrough("test-coverage")
 
 
 # ============================================================================
@@ -1373,9 +1139,7 @@ def manage_migrations_generate_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations generate passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "generate", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "generate")
 
 
 @manage_migrations_cmd.command(
@@ -1390,9 +1154,7 @@ def manage_migrations_schema_docs_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations schema-docs passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "schema-docs", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "schema-docs")
 
 
 @manage_migrations_cmd.command(
@@ -1408,9 +1170,7 @@ def manage_migrations_diff_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations diff passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "diff", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "diff")
 
 
 @manage_migrations_cmd.command(
@@ -1432,9 +1192,7 @@ def manage_migrations_apply_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations apply passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "apply", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "apply")
 
 
 @manage_migrations_cmd.command(
@@ -1456,9 +1214,7 @@ def manage_migrations_status_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations status passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "status", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "status")
 
 
 @manage_migrations_cmd.command(
@@ -1480,9 +1236,7 @@ def manage_migrations_enable_cdc_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations enable-cdc passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "enable-cdc", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "enable-cdc")
 
 
 @manage_migrations_cmd.command(
@@ -1505,9 +1259,7 @@ def manage_migrations_clean_cdc_cmd(
     _ctx: click.Context, **_kwargs: object,
 ) -> int:
     """manage-migrations clean-cdc passthrough."""
-    from cdc_generator.cli.commands import execute_grouped_command
-
-    return execute_grouped_command("manage-migrations", "clean-cdc", sys.argv[3:])
+    return _dispatch_grouped_passthrough("manage-migrations", "clean-cdc")
 
 
 # ============================================================================
