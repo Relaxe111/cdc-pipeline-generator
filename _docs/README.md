@@ -19,6 +19,7 @@ Core CDC concepts and system design:
 - **[EVENT_DRIVEN_MERGE_SYSTEM.md](./architecture/EVENT_DRIVEN_MERGE_SYSTEM.md)** - Merge/upsert strategy
 - **[CDC_PRODUCTION_SAFEGUARDS.md](./architecture/CDC_PRODUCTION_SAFEGUARDS.md)** - Production deployment checklist
 - **[STREAMING_ALTERNATIVES.md](./architecture/STREAMING_ALTERNATIVES.md)** - Bento, Bytewax, Materialize, and Vector comparison
+- **[POSTGRES_NATIVE_CDC_OPTION.md](./architecture/POSTGRES_NATIVE_CDC_OPTION.md)** - Proposed PostgreSQL-native CDC runtime using `tds_fdw` for MSSQL pull and logical replication for PostgreSQL fan-out
 - **[BENTO_MIGRATION_DECISION_PLAN.md](./architecture/BENTO_MIGRATION_DECISION_PLAN.md)** - Decision gates and phased plan for legacy runtime → Bento migration in generator-driven source/sink pipelines
 - **[CDC_EVENT_TRACING.md](./architecture/CDC_EVENT_TRACING.md)** - End-to-end event latency tracing with embedded timestamps, sampling strategies (≤5% permanent + 100% debug mode), bottleneck detection queries, and performance mitigations
 

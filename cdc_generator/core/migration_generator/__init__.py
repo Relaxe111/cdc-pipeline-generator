@@ -52,11 +52,6 @@ from .service_parsing import (
     resolve_sink_target,
 )
 
-_compute_checksum = compute_checksum
-_inject_checksum = inject_checksum
-_build_column_defs_sql = build_column_defs_sql
-_build_create_table_sql = build_create_table_sql
-
 __all__ = [
     "CDC_METADATA_COLUMNS",
     "ExistingColumnDef",
@@ -66,17 +61,17 @@ __all__ = [
     "SinkTarget",
     "TableMigration",
     "_add_cdc_metadata_columns",
-    "_build_column_defs_sql",
-    "_build_create_table_sql",
-    "_compute_checksum",
     "_derive_target_schemas",
-    "_inject_checksum",
+    "build_column_defs_sql",
     "build_columns_from_table_def",
+    "build_create_table_sql",
     "build_full_column_list",
+    "compute_checksum",
     "generate_migrations",
     "get_project_root",
     "get_service_schema_read_dirs",
     "get_sinks",
+    "inject_checksum",
     "load_service_config",
     "load_table_definitions",
     "load_yaml_file",

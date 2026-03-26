@@ -8,23 +8,28 @@ from unittest.mock import Mock, patch
 import pytest
 
 from cdc_generator.cli.sink_group import (
-    SinkGroupArgumentParser,
-    _auto_scaffold_sink_groups,
-    _check_readiness_and_warnings,
-    _check_structure_and_resolution,
-    _create_inherited_sink_group_from_source,
-    _create_standalone_sink,
-    _fetch_databases,
-    _run_inspection,
-    _validate_inspect_args,
-    get_sink_file_path,
-    get_source_group_file_path,
     handle_add_new_sink_group,
     handle_create,
     handle_info_command,
     handle_inspect_command,
     handle_introspect_types_command,
     handle_list,
+)
+from cdc_generator.cli.sink_group_common import (
+    get_sink_file_path,
+    get_source_group_file_path,
+    validate_inspect_args,
+)
+from cdc_generator.cli.sink_group_create import (
+    _auto_scaffold_sink_groups,
+    _create_inherited_sink_group_from_source,
+    _create_standalone_sink,
+)
+from cdc_generator.cli.sink_group_inspect import _fetch_databases, _run_inspection
+from cdc_generator.cli.sink_group_parser import SinkGroupArgumentParser
+from cdc_generator.cli.sink_group_validate import (
+    _check_readiness_and_warnings,
+    _check_structure_and_resolution,
 )
 
 
@@ -57,7 +62,7 @@ def test_parser_error_for_missing_flag_value() -> None:
 
 
 def test_get_sink_file_path_uses_project_root() -> None:
-    with patch("cdc_generator.cli.sink_group.get_project_root") as mock_root:
+    with patch("cdc_generator.cli.sink_group_common.get_project_root") as mock_root:
         mock_root.return_value = Path("/tmp/project")
 
         path = get_sink_file_path()
@@ -69,7 +74,7 @@ def test_get_source_group_file_path_returns_path_when_present(tmp_path: Path) ->
     source_file = tmp_path / "source-groups.yaml"
     source_file.write_text("asma: {}")
 
-    with patch("cdc_generator.cli.sink_group.get_project_root") as mock_root:
+    with patch("cdc_generator.cli.sink_group_common.get_project_root") as mock_root:
         mock_root.return_value = tmp_path
         result = get_source_group_file_path()
 
@@ -77,7 +82,7 @@ def test_get_source_group_file_path_returns_path_when_present(tmp_path: Path) ->
 
 
 def test_get_source_group_file_path_exits_when_missing(tmp_path: Path) -> None:
-    with patch("cdc_generator.cli.sink_group.get_project_root") as mock_root:
+    with patch("cdc_generator.cli.sink_group_common.get_project_root") as mock_root:
         mock_root.return_value = tmp_path
         with pytest.raises(SystemExit) as exc:
             get_source_group_file_path()
@@ -85,8 +90,8 @@ def test_get_source_group_file_path_exits_when_missing(tmp_path: Path) -> None:
     assert exc.value.code == 1
 
 
-@patch("cdc_generator.cli.sink_group.save_sink_groups")
-@patch("cdc_generator.cli.sink_group.create_inherited_sink_group")
+@patch("cdc_generator.cli.sink_group_create.save_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.create_inherited_sink_group")
 def test_auto_scaffold_creates_only_db_shared(
     mock_create: Mock,
     mock_save: Mock,
@@ -115,7 +120,7 @@ def test_auto_scaffold_creates_only_db_shared(
     assert mock_save.called
 
 
-@patch("cdc_generator.cli.sink_group.save_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.save_sink_groups")
 def test_auto_scaffold_no_new_groups_returns_zero(
     mock_save: Mock,
     tmp_path: Path,
@@ -136,8 +141,8 @@ def test_auto_scaffold_no_new_groups_returns_zero(
     assert not mock_save.called
 
 
-@patch("cdc_generator.cli.sink_group.save_sink_groups")
-@patch("cdc_generator.cli.sink_group.create_inherited_sink_group")
+@patch("cdc_generator.cli.sink_group_create.save_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.create_inherited_sink_group")
 def test_create_inherited_sink_group_success(
     mock_create: Mock,
     mock_save: Mock,
@@ -219,11 +224,11 @@ def test_create_standalone_sink_rejects_unknown_source_group(tmp_path: Path) -> 
     assert result == 1
 
 
-@patch("cdc_generator.cli.sink_group._auto_scaffold_sink_groups")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_create._auto_scaffold_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_create.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_create.get_sink_file_path")
 def test_handle_create_uses_auto_scaffold_when_no_source_group(
     mock_sink_path: Mock,
     mock_source_path: Mock,
@@ -243,11 +248,11 @@ def test_handle_create_uses_auto_scaffold_when_no_source_group(
     assert mock_auto.called
 
 
-@patch("cdc_generator.cli.sink_group._create_standalone_sink")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_create._create_standalone_sink")
+@patch("cdc_generator.cli.sink_group_create.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_create.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_create.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_create.get_sink_file_path")
 def test_handle_add_new_sink_group_handles_missing_sink_file(
     mock_sink_path: Mock,
     mock_source_path: Mock,
@@ -269,8 +274,8 @@ def test_handle_add_new_sink_group_handles_missing_sink_file(
     assert mock_create.called
 
 
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_info.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_info.get_sink_file_path")
 def test_handle_list_when_empty_reports_no_groups(
     mock_sink_path: Mock,
     mock_load: Mock,
@@ -281,8 +286,8 @@ def test_handle_list_when_empty_reports_no_groups(
     assert handle_list(_ns()) == 0
 
 
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_common.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_common.get_sink_file_path")
 def test_validate_inspect_args_rejects_inherited_group(
     mock_sink_path: Mock,
     mock_load: Mock,
@@ -296,19 +301,19 @@ def test_validate_inspect_args_rejects_inherited_group(
         },
     }
 
-    result = _validate_inspect_args(_ns(sink_group="sink_asma"))
+    result = validate_inspect_args(_ns(sink_group="sink_asma"))
 
     assert result == 1
 
 
 def test_validate_inspect_args_requires_sink_group() -> None:
-    result = _validate_inspect_args(_ns(sink_group=None))
+    result = validate_inspect_args(_ns(sink_group=None))
 
     assert result == 1
 
 
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_common.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_common.get_sink_file_path")
 def test_validate_inspect_args_success_returns_tuple(
     mock_sink_path: Mock,
     mock_load: Mock,
@@ -323,12 +328,12 @@ def test_validate_inspect_args_success_returns_tuple(
         },
     }
 
-    result = _validate_inspect_args(_ns(sink_group="sink_analytics"))
+    result = validate_inspect_args(_ns(sink_group="sink_analytics"))
 
     assert isinstance(result, tuple)
 
 
-@patch("cdc_generator.cli.sink_group._fetch_databases")
+@patch("cdc_generator.cli.sink_group_inspect._fetch_databases")
 def test_run_inspection_handles_import_error(mock_fetch: Mock) -> None:
     mock_fetch.side_effect = ImportError("psycopg")
     resolved = {
@@ -341,7 +346,7 @@ def test_run_inspection_handles_import_error(mock_fetch: Mock) -> None:
     assert result == 1
 
 
-@patch("cdc_generator.cli.sink_group._fetch_databases")
+@patch("cdc_generator.cli.sink_group_inspect._fetch_databases")
 def test_run_inspection_success(mock_fetch: Mock) -> None:
     mock_fetch.return_value = [
         {
@@ -373,11 +378,11 @@ def test_fetch_databases_rejects_unsupported_type() -> None:
         )
 
 
-@patch("cdc_generator.cli.sink_group._run_inspection")
-@patch("cdc_generator.cli.sink_group.resolve_sink_group")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group._validate_inspect_args")
+@patch("cdc_generator.cli.sink_group_inspect._run_inspection")
+@patch("cdc_generator.cli.sink_group_inspect.resolve_sink_group")
+@patch("cdc_generator.cli.sink_group_inspect.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_inspect.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_inspect.validate_inspect_args")
 def test_handle_inspect_command_success(
     mock_validate: Mock,
     mock_source_path: Mock,
@@ -407,7 +412,7 @@ def test_handle_inspect_command_success(
     assert mock_run.called
 
 
-@patch("cdc_generator.cli.sink_group._validate_inspect_args")
+@patch("cdc_generator.cli.sink_group_inspect.validate_inspect_args")
 def test_handle_inspect_command_propagates_validation_error(
     mock_validate: Mock,
 ) -> None:
@@ -419,10 +424,10 @@ def test_handle_inspect_command_propagates_validation_error(
 
 
 @patch("cdc_generator.validators.manage_server_group.type_introspector.introspect_types")
-@patch("cdc_generator.cli.sink_group.resolve_sink_group")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group._validate_inspect_args")
+@patch("cdc_generator.cli.sink_group_update.resolve_sink_group")
+@patch("cdc_generator.cli.sink_group_update.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_update.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_update.validate_inspect_args")
 def test_handle_introspect_types_uses_username_fallback(
     mock_validate: Mock,
     mock_source_path: Mock,
@@ -450,10 +455,10 @@ def test_handle_introspect_types_uses_username_fallback(
     assert mock_introspect.called
 
 
-@patch("cdc_generator.cli.sink_group.resolve_sink_group")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group._validate_inspect_args")
+@patch("cdc_generator.cli.sink_group_update.resolve_sink_group")
+@patch("cdc_generator.cli.sink_group_update.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_update.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_update.validate_inspect_args")
 def test_handle_introspect_types_requires_servers(
     mock_validate: Mock,
     mock_source_path: Mock,
@@ -481,11 +486,11 @@ def test_handle_introspect_types_requires_servers(
     assert result == 1
 
 
-@patch("cdc_generator.cli.sink_group.resolve_sink_group")
-@patch("cdc_generator.cli.sink_group.load_yaml_file")
-@patch("cdc_generator.cli.sink_group.load_sink_groups")
-@patch("cdc_generator.cli.sink_group.get_source_group_file_path")
-@patch("cdc_generator.cli.sink_group.get_sink_file_path")
+@patch("cdc_generator.cli.sink_group_info.resolve_sink_group")
+@patch("cdc_generator.cli.sink_group_info.load_yaml_file")
+@patch("cdc_generator.cli.sink_group_info.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_info.get_source_group_file_path")
+@patch("cdc_generator.cli.sink_group_info.get_sink_file_path")
 def test_handle_info_command_success(
     mock_sink_path: Mock,
     mock_source_path: Mock,
@@ -520,8 +525,8 @@ def test_handle_info_command_success(
     assert result == 0
 
 
-@patch("cdc_generator.cli.sink_group.get_sink_group_warnings")
-@patch("cdc_generator.cli.sink_group.is_sink_group_ready")
+@patch("cdc_generator.cli.sink_group_validate.get_sink_group_warnings")
+@patch("cdc_generator.cli.sink_group_validate.is_sink_group_ready")
 def test_check_readiness_and_warnings_reports_inheritance(
     mock_ready: Mock,
     mock_warnings: Mock,
@@ -539,8 +544,8 @@ def test_check_readiness_and_warnings_reports_inheritance(
     assert has_warnings is True
 
 
-@patch("cdc_generator.cli.sink_group.resolve_sink_group")
-@patch("cdc_generator.cli.sink_group.validate_sink_group_structure")
+@patch("cdc_generator.cli.sink_group_validate.resolve_sink_group")
+@patch("cdc_generator.cli.sink_group_validate.validate_sink_group_structure")
 def test_check_structure_and_resolution_handles_resolution_error(
     mock_validate: Mock,
     mock_resolve: Mock,

@@ -5,7 +5,7 @@ Covers:
 - build_columns_from_table_def (MSSQL→PG mapping, ignore_columns, PK detection)
 - build_full_column_list (full pipeline with CDC metadata + column templates)
 - _add_cdc_metadata_columns
-- _compute_checksum / _inject_checksum
+- compute_checksum / inject_checksum
 - get_sinks / resolve_sink_target
 - load_table_definitions
 - _derive_target_schemas
@@ -25,16 +25,20 @@ from cdc_generator.core.migration_generator import (
     SinkTarget,
     TableMigration,
     _add_cdc_metadata_columns,
-    _build_column_defs_sql,
-    _build_create_table_sql,
-    _compute_checksum,
     _derive_target_schemas,
-    _inject_checksum,
     build_columns_from_table_def,
     build_full_column_list,
     get_sinks,
     load_table_definitions,
     resolve_sink_target,
+)
+from cdc_generator.core.migration_generator.file_writers import (
+    compute_checksum,
+    inject_checksum,
+)
+from cdc_generator.core.migration_generator.rendering import (
+    build_column_defs_sql,
+    build_create_table_sql,
 )
 
 # ---------------------------------------------------------------------------
@@ -261,7 +265,7 @@ class TestAddCdcMetadataColumns:
 
 
 # ---------------------------------------------------------------------------
-# _compute_checksum / _inject_checksum
+# compute_checksum / inject_checksum
 # ---------------------------------------------------------------------------
 
 
@@ -271,11 +275,11 @@ class TestChecksum:
     def test_compute_deterministic(self) -> None:
         """Same content produces same checksum."""
         content = "SELECT 1;\n"
-        assert _compute_checksum(content) == _compute_checksum(content)
+        assert compute_checksum(content) == compute_checksum(content)
 
     def test_compute_different(self) -> None:
         """Different content produces different checksum."""
-        assert _compute_checksum("SELECT 1;") != _compute_checksum("SELECT 2;")
+        assert compute_checksum("SELECT 1;") != compute_checksum("SELECT 2;")
 
     def test_inject_adds_checksum_line(self) -> None:
         """Checksum is injected as a SQL comment."""
@@ -285,14 +289,14 @@ class TestChecksum:
             "-- " + "=" * 76 + "\n"
             "\nCREATE TABLE t (id INT);\n"
         )
-        result = _inject_checksum(content)
+        result = inject_checksum(content)
         assert "-- Checksum: sha256:" in result
 
     def test_inject_after_header_block(self) -> None:
         """Checksum line placed after the closing header separator."""
         header_sep = "-- " + "=" * 76
         content = f"{header_sep}\n-- Header\n{header_sep}\n\nSELECT 1;\n"
-        result = _inject_checksum(content)
+        result = inject_checksum(content)
         lines = result.splitlines()
         # Checksum should be on line index 3 (after 2nd separator)
         checksum_idx = next(
@@ -304,7 +308,7 @@ class TestChecksum:
     def test_inject_no_header(self) -> None:
         """If no header block, checksum is prepended."""
         content = "SELECT 1;\n"
-        result = _inject_checksum(content)
+        result = inject_checksum(content)
         assert result.startswith("-- Checksum: sha256:")
 
 
@@ -467,7 +471,7 @@ class TestDeriveTargetSchemas:
 
 
 # ---------------------------------------------------------------------------
-# _build_column_defs_sql / _build_create_table_sql
+# build_column_defs_sql / build_create_table_sql
 # ---------------------------------------------------------------------------
 
 
@@ -479,7 +483,7 @@ class TestSqlRendering:
             MigrationColumn(name="id", type="INTEGER", nullable=False),
             MigrationColumn(name="name", type="VARCHAR(255)"),
         ]
-        lines = _build_column_defs_sql(cols)
+        lines = build_column_defs_sql(cols)
         assert len(lines) == 2
         assert '"id" INTEGER NOT NULL' in lines[0]
         assert '"name" VARCHAR(255)' in lines[1]
@@ -491,7 +495,7 @@ class TestSqlRendering:
                 name="ts", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP",
             ),
         ]
-        lines = _build_column_defs_sql(cols)
+        lines = build_column_defs_sql(cols)
         assert "DEFAULT CURRENT_TIMESTAMP" in lines[0]
 
     def test_create_table_sql_format(self) -> None:
@@ -499,7 +503,7 @@ class TestSqlRendering:
             MigrationColumn(name="id", type="INTEGER", nullable=False, primary_key=True),
             MigrationColumn(name="val", type="TEXT"),
         ]
-        sql = _build_create_table_sql(
+        sql = build_create_table_sql(
             target_schema="myschema",
             table_name="MyTable",
             columns=cols,
@@ -514,7 +518,7 @@ class TestSqlRendering:
 
     def test_create_table_no_pk(self) -> None:
         cols = [MigrationColumn(name="val", type="TEXT")]
-        sql = _build_create_table_sql(
+        sql = build_create_table_sql(
             target_schema="s", table_name="T",
             columns=cols, primary_keys=[],
             source_schema="dbo", generated_at="now",
@@ -526,7 +530,7 @@ class TestSqlRendering:
             MigrationColumn(name="Id", type="INTEGER", nullable=False, primary_key=True),
             MigrationColumn(name="name", type="TEXT"),
         ]
-        sql = _build_create_table_sql(
+        sql = build_create_table_sql(
             target_schema="myschema",
             table_name="MyTable",
             columns=cols,

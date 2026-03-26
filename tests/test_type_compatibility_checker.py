@@ -5,10 +5,12 @@ from pathlib import Path
 import pytest
 
 from cdc_generator.validators.manage_service.sink_operations import (
+    check_type_compatibility,
+)
+from cdc_generator.validators.manage_service.sink_operations_type_compatibility import (
     _available_type_map_pairs,
     _load_source_type_overrides,
     _load_type_compatibility_map,
-    check_type_compatibility,
 )
 
 

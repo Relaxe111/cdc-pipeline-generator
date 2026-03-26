@@ -8,7 +8,7 @@ from cdc_generator.helpers.autocompletions.sinks import (
     list_compatible_map_column_pairs_for_target_prefix,
     list_compatible_target_columns_for_source_column,
 )
-from cdc_generator.validators.manage_service.sink_operations import (
+from cdc_generator.validators.manage_service.sink_operations_type_compatibility import (
     _available_type_map_pairs,
     _load_source_type_overrides,
     _load_type_compatibility_map,

@@ -8,18 +8,22 @@ from unittest.mock import Mock, patch
 import pytest
 
 from cdc_generator.cli.sink_group import (
-    _build_server_config,
-    _build_sink_sources_from_databases,
-    _check_server_references,
-    _load_sink_group_for_server_op,
-    _merge_server_sources_update,
-    _validate_single_sink_group,
     handle_add_server_command,
     handle_remove_server_command,
     handle_remove_sink_group_command,
     handle_update_command,
     handle_update_server_extraction_patterns_command,
 )
+from cdc_generator.cli.sink_group_common import load_sink_group_for_server_op
+from cdc_generator.cli.sink_group_server_ops import (
+    _build_server_config,
+    _check_server_references,
+)
+from cdc_generator.cli.sink_group_update import (
+    _build_sink_sources_from_databases,
+    _merge_server_sources_update,
+)
+from cdc_generator.cli.sink_group_validate import _validate_single_sink_group
 
 
 @pytest.fixture
@@ -197,12 +201,12 @@ class TestMergeServerSourcesUpdate:
 class TestHandleUpdateCommandMerge:
     """Regression tests for sequential per-server sink updates."""
 
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
-    @patch("cdc_generator.cli.sink_group.resolve_sink_group")
-    @patch("cdc_generator.cli.sink_group.load_yaml_file")
-    @patch("cdc_generator.cli.sink_group._fetch_databases")
-    @patch("cdc_generator.cli.sink_group._validate_inspect_args")
-    @patch("cdc_generator.cli.sink_group.get_source_group_file_path")
+    @patch("cdc_generator.cli.sink_group_update.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_update.resolve_sink_group")
+    @patch("cdc_generator.cli.sink_group_update.load_yaml_file")
+    @patch("cdc_generator.cli.sink_group_update._fetch_databases")
+    @patch("cdc_generator.cli.sink_group_update.validate_inspect_args")
+    @patch("cdc_generator.cli.sink_group_update.get_source_group_file_path")
     def test_sequential_server_updates_preserve_other_server_entries(
         self,
         _mock_source_file: Mock,
@@ -266,13 +270,13 @@ class TestHandleUpdateCommandMerge:
         assert sources["chat"]["dev"]["database"] == "chat_dev"
         assert sources["chat"]["prod"]["database"] == "chat_prod"
 
-    @patch("cdc_generator.cli.sink_group.generate_service_autocomplete_definitions")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
-    @patch("cdc_generator.cli.sink_group.resolve_sink_group")
-    @patch("cdc_generator.cli.sink_group.load_yaml_file")
-    @patch("cdc_generator.cli.sink_group._fetch_databases")
-    @patch("cdc_generator.cli.sink_group._validate_inspect_args")
-    @patch("cdc_generator.cli.sink_group.get_source_group_file_path")
+    @patch("cdc_generator.cli.sink_group_update.generate_service_autocomplete_definitions")
+    @patch("cdc_generator.cli.sink_group_update.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_update.resolve_sink_group")
+    @patch("cdc_generator.cli.sink_group_update.load_yaml_file")
+    @patch("cdc_generator.cli.sink_group_update._fetch_databases")
+    @patch("cdc_generator.cli.sink_group_update.validate_inspect_args")
+    @patch("cdc_generator.cli.sink_group_update.get_source_group_file_path")
     def test_update_generates_autocomplete_definitions(
         self,
         _mock_source_file: Mock,
@@ -418,27 +422,27 @@ class TestCheckServerReferences:
 
 
 class TestLoadSinkGroupForServerOp:
-    """Tests for ``_load_sink_group_for_server_op``."""
+    """Tests for ``load_sink_group_for_server_op``."""
 
-    @patch("cdc_generator.cli.sink_group.load_sink_groups")
+    @patch("cdc_generator.cli.sink_group_common.load_sink_groups")
     def test_missing_sink_group_returns_error(self, mock_load: Mock) -> None:
         mock_load.return_value = {"sink_other": {"servers": {}}}
 
-        result = _load_sink_group_for_server_op(
+        result = load_sink_group_for_server_op(
             _ns(sink_group="sink_analytics"), "--add-server",
         )
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group.load_sink_groups")
-    @patch("cdc_generator.cli.sink_group.get_sink_file_path")
+    @patch("cdc_generator.cli.sink_group_common.load_sink_groups")
+    @patch("cdc_generator.cli.sink_group_common.get_sink_file_path")
     def test_success_returns_tuple(self, mock_path: Mock, mock_load: Mock) -> None:
         sink_file = Path("/tmp/sink-groups.yaml")
         sink_group = {"servers": {"default": {}}}
         mock_path.return_value = sink_file
         mock_load.return_value = {"sink_analytics": sink_group}
 
-        result = _load_sink_group_for_server_op(
+        result = load_sink_group_for_server_op(
             _ns(sink_group="sink_analytics"), "--add-server",
         )
 
@@ -457,7 +461,7 @@ class TestHandleAddServerCommand:
         result = handle_add_server_command(_ns(sink_group=None, add_server=None))
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_fails_when_sink_group_load_fails(self, mock_load: Mock) -> None:
         mock_load.return_value = 1
 
@@ -467,7 +471,7 @@ class TestHandleAddServerCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_inherited_group_cannot_add_server(
         self,
         mock_load: Mock,
@@ -486,7 +490,7 @@ class TestHandleAddServerCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_duplicate_server_returns_error(
         self,
         mock_load: Mock,
@@ -505,10 +509,10 @@ class TestHandleAddServerCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group.print_env_update_summary")
-    @patch("cdc_generator.cli.sink_group.append_env_vars_to_dotenv")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.print_env_update_summary")
+    @patch("cdc_generator.cli.sink_group_server_ops.append_env_vars_to_dotenv")
+    @patch("cdc_generator.cli.sink_group_server_ops.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_add_server_success(
         self,
         mock_load: Mock,
@@ -555,8 +559,8 @@ class TestHandleRemoveServerCommand:
 class TestHandleUpdateServerExtractionPatternsCommand:
     """Tests for ``handle_update_server_extraction_patterns_command``."""
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.save_sink_groups")
     def test_update_server_extraction_patterns_success(
         self,
         mock_save: Mock,
@@ -587,8 +591,8 @@ class TestHandleUpdateServerExtractionPatternsCommand:
         assert updated["extraction_patterns"][0]["strip_patterns"] == ["_db"]
         assert mock_save.called
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.save_sink_groups")
     def test_update_server_extraction_patterns_appends(
         self,
         mock_save: Mock,
@@ -629,8 +633,8 @@ class TestHandleUpdateServerExtractionPatternsCommand:
         assert patterns[1]["pattern"] == "^(?P<service>\\w+)_db_(?P<env>\\w+)$"
         assert mock_save.called
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.save_sink_groups")
     def test_update_server_extraction_patterns_upserts_same_pattern(
         self,
         mock_save: Mock,
@@ -671,7 +675,7 @@ class TestHandleUpdateServerExtractionPatternsCommand:
         assert patterns[0]["description"] == "new-description"
         assert mock_save.called
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_server_not_found_returns_error(
         self,
         mock_load: Mock,
@@ -690,7 +694,7 @@ class TestHandleUpdateServerExtractionPatternsCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_inherited_group_cannot_remove_server(
         self,
         mock_load: Mock,
@@ -709,7 +713,7 @@ class TestHandleUpdateServerExtractionPatternsCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_remove_server_in_use_fails(
         self,
         mock_load: Mock,
@@ -743,10 +747,10 @@ class TestHandleUpdateServerExtractionPatternsCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group.print_env_removal_summary")
-    @patch("cdc_generator.cli.sink_group.remove_env_vars_from_dotenv")
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
-    @patch("cdc_generator.cli.sink_group._load_sink_group_for_server_op")
+    @patch("cdc_generator.cli.sink_group_server_ops.print_env_removal_summary")
+    @patch("cdc_generator.cli.sink_group_server_ops.remove_env_vars_from_dotenv")
+    @patch("cdc_generator.cli.sink_group_server_ops.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_server_ops.load_sink_group_for_server_op")
     def test_remove_server_success(
         self,
         mock_load: Mock,
@@ -786,7 +790,7 @@ class TestHandleRemoveSinkGroupCommand:
         result = handle_remove_sink_group_command(_ns(remove=None))
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group.load_sink_groups")
+    @patch("cdc_generator.cli.sink_group_patterns.load_sink_groups")
     def test_remove_inherited_group_fails(
         self, mock_load: Mock, inherited_sink_group: dict[str, Any],
     ) -> None:
@@ -796,8 +800,8 @@ class TestHandleRemoveSinkGroupCommand:
 
         assert result == 1
 
-    @patch("cdc_generator.cli.sink_group.save_sink_groups")
-    @patch("cdc_generator.cli.sink_group.load_sink_groups")
+    @patch("cdc_generator.cli.sink_group_patterns.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_patterns.load_sink_groups")
     def test_remove_standalone_group_success(
         self,
         mock_load: Mock,
@@ -815,8 +819,8 @@ class TestHandleRemoveSinkGroupCommand:
 class TestValidateSingleSinkGroup:
     """Tests for ``_validate_single_sink_group`` helper."""
 
-    @patch("cdc_generator.cli.sink_group._check_readiness_and_warnings")
-    @patch("cdc_generator.cli.sink_group._check_structure_and_resolution")
+    @patch("cdc_generator.cli.sink_group_validate._check_readiness_and_warnings")
+    @patch("cdc_generator.cli.sink_group_validate._check_structure_and_resolution")
     def test_invalid_structure_skips_warnings(
         self,
         mock_structure: Mock,
@@ -836,8 +840,8 @@ class TestValidateSingleSinkGroup:
         assert warned is False
         assert not mock_warnings.called
 
-    @patch("cdc_generator.cli.sink_group._check_readiness_and_warnings")
-    @patch("cdc_generator.cli.sink_group._check_structure_and_resolution")
+    @patch("cdc_generator.cli.sink_group_validate._check_readiness_and_warnings")
+    @patch("cdc_generator.cli.sink_group_validate._check_structure_and_resolution")
     def test_valid_structure_runs_warnings(
         self,
         mock_structure: Mock,
