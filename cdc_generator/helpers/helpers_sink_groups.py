@@ -18,6 +18,13 @@ from cdc_generator.core.sink_types import (
     SinkGroupConfig,
     SinkServerConfig,
 )
+from cdc_generator.helpers.topology_runtime import (
+    resolve_broker_topology,
+    resolve_runtime_engine,
+    resolve_topology,
+    resolve_topology_kind,
+    topology_uses_broker,
+)
 from cdc_generator.helpers.yaml_loader import load_yaml_file, yaml
 
 _SERVICES_PREVIEW_LIMIT = 20
@@ -112,18 +119,18 @@ def deduce_type(
     return None
 
 
-def deduce_kafka_topology(
+def deduce_broker_topology(
     source_group_name: str | None,
     source_groups: dict[str, Any],
 ) -> str | None:
-    """Deduce kafka_topology from source group's pattern.
+    """Deduce broker fan-out mode from source-group pattern.
 
     Args:
         source_group_name: Name of the source group
         source_groups: All source server groups
 
     Returns:
-        Kafka topology if deducible, None otherwise
+        Broker topology if deducible, None otherwise
 
     Mapping:
         db-per-tenant → shared
@@ -424,7 +431,7 @@ def resolve_sink_group(
     - source_group: from sink group name (strip 'sink_' prefix)
     - pattern: 'inherited' if any server has source_ref
     - type: from first server's type or connection string
-    - kafka_topology: from source group's pattern
+    - broker_topology: from source group's pattern
 
     Args:
         sink_group_name: Name of the sink group
@@ -456,15 +463,6 @@ def resolve_sink_group(
         if deduced_type:
             resolved["type"] = deduced_type
 
-    # Deduce kafka_topology if not specified
-    if "kafka_topology" not in resolved:
-        deduced_topology = deduce_kafka_topology(
-            source_group_name,
-            source_groups,
-        )
-        if deduced_topology:
-            resolved["kafka_topology"] = deduced_topology
-
     # Deduce environment_aware if not specified
     if "environment_aware" not in resolved:
         resolved["environment_aware"] = deduce_environment_aware(
@@ -495,6 +493,40 @@ def resolve_sink_group(
         # Add metadata
         if sink_group_name.startswith("sink_"):
             resolved["_inherited_from"] = source_group_name
+
+    source_group = source_groups.get(str(source_group_name), {}) if source_group_name else {}
+    topology = resolve_topology(
+        resolved,
+        source_group=cast(dict[str, Any], source_group) if isinstance(source_group, dict) else None,
+        source_type=str(resolved.get("type", "")),
+    )
+    if topology_uses_broker(topology):
+        if "broker_topology" not in resolved:
+            deduced_topology = deduce_broker_topology(
+                source_group_name,
+                source_groups,
+            )
+            if deduced_topology:
+                resolved["broker_topology"] = deduced_topology
+
+        broker_topology = resolve_broker_topology(
+            resolved,
+            topology=topology,
+            source_group=cast(dict[str, Any], source_group) if isinstance(source_group, dict) else None,
+        )
+        if broker_topology is not None:
+            resolved["broker_topology"] = broker_topology
+    else:
+        resolved.pop("broker_topology", None)
+
+    resolved["topology_kind"] = resolve_topology_kind(
+        resolved,
+        source_group=cast(dict[str, Any], source_group) if isinstance(source_group, dict) else None,
+    )
+    resolved["runtime_engine"] = resolve_runtime_engine(
+        resolved,
+        topology_kind=cast(str, resolved["topology_kind"]),
+    )
 
     return cast(ResolvedSinkGroup, resolved)
 

@@ -15,7 +15,10 @@
         "port": { "type": ["string", "integer"] },
         "user": { "type": "string" },
         "password": { "type": "string" },
-        "kafka_bootstrap_servers": { "type": "string" },
+        "kafka_bootstrap_servers": {
+          "type": "string",
+          "description": "Redpanda-only broker bootstrap setting; omit for fdw and pg_native topologies"
+        },
         "extraction_patterns": {
           "type": "array",
           "items": { "$ref": "#/definitions/extractionPattern" }
@@ -92,9 +95,14 @@
           "enum": ["mssql", "postgres"]
         },
         "description": { "type": "string" },
-        "kafka_topology": {
+        "topology": {
           "type": "string",
-          "enum": ["shared", "per-server"]
+          "enum": ["redpanda", "fdw", "pg_native"]
+        },
+        "broker_topology": {
+          "type": "string",
+          "enum": ["shared", "per-server"],
+          "description": "Redpanda-only broker fan-out mode; omit for fdw and pg_native"
         },
         "environment_aware": { "type": "boolean" },
         "validation_env": { "type": "string" },

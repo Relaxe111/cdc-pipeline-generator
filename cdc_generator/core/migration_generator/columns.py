@@ -10,7 +10,7 @@ from cdc_generator.core.column_template_operations import (
 )
 from cdc_generator.helpers.type_mapper import TypeMapper
 
-from .data_structures import MigrationColumn
+from .data_structures import MigrationColumn, RuntimeMode
 from .service_parsing import get_source_table_config
 
 CDC_METADATA_COLUMNS: list[dict[str, str | bool]] = [
@@ -20,6 +20,26 @@ CDC_METADATA_COLUMNS: list[dict[str, str | bool]] = [
     {"name": "__source_table", "type": "VARCHAR(255)", "nullable": True},
     {"name": "__source_ts_ms", "type": "BIGINT", "nullable": True},
     {"name": "__cdc_operation", "type": "VARCHAR(10)", "nullable": True},
+]
+
+NATIVE_CDC_METADATA_COLUMNS: list[dict[str, str | bool]] = [
+    {
+        "name": "__sync_timestamp",
+        "type": "TIMESTAMPTZ",
+        "nullable": False,
+        "default": "CURRENT_TIMESTAMP",
+    },
+    {
+        "name": "__source",
+        "type": "VARCHAR(255)",
+        "nullable": False,
+        "default": "'mssql_cdc'",
+    },
+    {"name": "__source_db", "type": "VARCHAR(255)", "nullable": False},
+    {"name": "__source_table", "type": "VARCHAR(255)", "nullable": False},
+    {"name": "__source_start_lsn", "type": "BYTEA", "nullable": True},
+    {"name": "__source_seqval", "type": "BYTEA", "nullable": True},
+    {"name": "__cdc_operation", "type": "INTEGER", "nullable": True},
 ]
 
 
@@ -133,8 +153,23 @@ def add_cdc_metadata_columns(
     columns: list[MigrationColumn],
 ) -> list[MigrationColumn]:
     """Append standard CDC metadata columns."""
+    return _add_metadata_columns(columns, CDC_METADATA_COLUMNS)
+
+
+def add_native_cdc_metadata_columns(
+    columns: list[MigrationColumn],
+) -> list[MigrationColumn]:
+    """Append metadata columns required by the native FDW runtime."""
+    return _add_metadata_columns(columns, NATIVE_CDC_METADATA_COLUMNS)
+
+
+def _add_metadata_columns(
+    columns: list[MigrationColumn],
+    metadata_columns: list[dict[str, str | bool]],
+) -> list[MigrationColumn]:
+    """Append metadata columns without duplicating existing names."""
     existing_names = {c.name for c in columns}
-    for meta in CDC_METADATA_COLUMNS:
+    for meta in metadata_columns:
         name = str(meta["name"])
         if name in existing_names:
             continue
@@ -153,6 +188,7 @@ def build_full_column_list(
     service_config: dict[str, object],
     source_key: str,
     type_mapper: TypeMapper | None = None,
+    runtime_mode: RuntimeMode = "brokered",
 ) -> tuple[list[MigrationColumn], list[str]]:
     """Build the complete column list using the full generation pipeline."""
     source_cfg = get_source_table_config(service_config, source_key)
@@ -168,7 +204,10 @@ def build_full_column_list(
 
     columns = add_column_template_columns(columns, sink_cfg)
     columns = add_transform_output_columns(columns, sink_cfg)
-    columns = add_cdc_metadata_columns(columns)
+    if runtime_mode == "native":
+        columns = add_native_cdc_metadata_columns(columns)
+    else:
+        columns = add_cdc_metadata_columns(columns)
 
     return columns, primary_keys
 

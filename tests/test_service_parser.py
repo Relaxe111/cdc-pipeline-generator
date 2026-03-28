@@ -65,6 +65,24 @@ class TestServiceParserHints:
             "public.customer_user.customer_id",
         ]]
 
+    def test_inspect_flags_are_parsed(self) -> None:
+        """--inspect family flags should be accepted by the parser."""
+        parser = _build_parser()
+        args = parser.parse_args([
+            "--service", "proxy",
+            "--inspect",
+            "--all",
+            "--save",
+            "--track-table", "public.customer_user",
+            "--env", "nonprod",
+        ])
+
+        assert args.inspect is True
+        assert args.all is True
+        assert args.save is True
+        assert args.track_table == ["public.customer_user"]
+        assert args.env == "nonprod"
+
 
 class TestMainServiceAssignment:
     """main() precedence and assignment semantics."""

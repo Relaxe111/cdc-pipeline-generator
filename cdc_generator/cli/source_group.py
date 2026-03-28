@@ -75,8 +75,9 @@ from cdc_generator.validators.manage_server_group import (
     handle_list_servers,
     handle_remove_extraction_pattern,
     handle_remove_server,
+    handle_set_broker_topology,
     handle_set_extraction_pattern,
-    handle_set_kafka_topology,
+    handle_set_topology,
     handle_set_validation_env,
     handle_update,
     load_database_exclude_patterns,
@@ -210,9 +211,24 @@ def main() -> int:
             "Cannot remove 'default' or servers with services."
         ),
     )
-    parser.add_argument("--set-kafka-topology", choices=["shared", "per-server"],
-                       help="Change the Kafka topology. 'shared' = same Kafka for all servers, " +
-                            "'per-server' = isolated Kafka per server.")
+    parser.add_argument(
+        "--set-topology",
+        dest="set_topology",
+        choices=["redpanda", "fdw", "pg_native"],
+        help=(
+            "Set the user-facing topology. Valid values depend on source type: "
+            + "MSSQL supports redpanda|fdw and PostgreSQL supports redpanda|pg_native."
+        ),
+    )
+    parser.add_argument(
+        "--set-broker-topology",
+        dest="set_broker_topology",
+        choices=["shared", "per-server"],
+        help=(
+            "Change the broker topology. 'shared' = same broker for all servers, "
+            + "'per-server' = isolated broker bootstrap per server."
+        ),
+    )
 
     # Validation environment management
     parser.add_argument(
@@ -421,8 +437,11 @@ def main() -> int:
     if args.remove_server:
         return handle_remove_server(args)
 
-    if args.set_kafka_topology:
-        return handle_set_kafka_topology(args)
+    if args.set_topology:
+        return handle_set_topology(args)
+
+    if args.set_broker_topology:
+        return handle_set_broker_topology(args)
 
     if args.set_extraction_pattern:
         return handle_set_extraction_pattern(args)

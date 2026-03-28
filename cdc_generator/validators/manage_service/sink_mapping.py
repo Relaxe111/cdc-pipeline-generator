@@ -2,13 +2,13 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import print_error, print_info, print_warning
-from cdc_generator.helpers.service_config import load_service_config
+from cdc_generator.helpers.service_config import get_project_root, load_service_config
+from cdc_generator.helpers.service_schema_paths import get_service_schema_read_dirs
 from cdc_generator.helpers.yaml_loader import load_yaml_file
-
-from .config import SERVICE_SCHEMAS_DIR
 from .sink_operations_helpers import (
     _get_sink_tables,
     _get_sinks_dict,
@@ -38,17 +38,24 @@ def load_table_columns(
         return None
 
     schema, table = table_key.split(".", 1)
-    schema_file = SERVICE_SCHEMAS_DIR / service / schema / f"{table}.yaml"
-    if not schema_file.exists():
-        return None
+    project_root = get_project_root()
+    schema_candidates = [
+        service_dir / schema / f"{table}.yaml"
+        for service_dir in get_service_schema_read_dirs(service, project_root)
+    ]
 
-    try:
-        data = load_yaml_file(schema_file)
-        columns = data.get("columns", [])
-        if isinstance(columns, list):
-            return cast(list[dict[str, Any]], columns)
-    except (FileNotFoundError, ValueError):
-        pass
+    for schema_file in schema_candidates:
+        if not schema_file.exists():
+            continue
+
+        try:
+            data = load_yaml_file(schema_file)
+            columns = data.get("columns", [])
+            if isinstance(columns, list):
+                return cast(list[dict[str, Any]], columns)
+        except (FileNotFoundError, ValueError):
+            continue
+
     return None
 
 

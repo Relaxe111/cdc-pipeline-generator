@@ -83,9 +83,17 @@ _PASSTHROUGH_CTX: dict[str, object] = {
               help="List all configured servers")
 @click.option("--remove-server",
               help="Remove a server configuration")
-@click.option("--set-kafka-topology",
+@click.option("--set-broker-topology",
               type=click.Choice(["shared", "per-server"]),
-              help="Change Kafka topology")
+              help="Change broker topology")
+@click.option(
+    "--set-topology",
+    type=click.Choice(["redpanda", "fdw", "pg_native"]),
+    help=(
+        "Set the user-facing topology. MSSQL supports redpanda|fdw and "
+        "PostgreSQL supports redpanda|pg_native."
+    ),
+)
 @click.option("--add-extraction-pattern",
               shell_complete=complete_server_names,
               help="Add extraction pattern: SERVER PATTERN")

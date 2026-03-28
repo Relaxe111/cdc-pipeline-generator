@@ -8,7 +8,7 @@ from cdc_generator.helpers.service_schema_paths import (
     get_schema_write_root,
     get_service_schema_read_dirs,
 )
-from cdc_generator.helpers.yaml_loader import yaml
+from cdc_generator.helpers.yaml_loader import load_yaml_file, yaml
 
 PROJECT_ROOT = get_project_root()
 SERVICES_DIR = PROJECT_ROOT / "services"
@@ -174,6 +174,9 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
 
         # Remove 'service' field if present (it's redundant in new format)
         config_to_save = {k: v for k, v in config.items() if k != 'service'}
+        if _resolve_service_pattern(config_to_save) == 'db-per-tenant':
+            # db-per-tenant customers are derived from source-groups at load time.
+            config_to_save.pop('customers', None)
 
         # Keep repetitive YAML blocks concise and deterministic.
         _compact_repetitive_yaml_blocks(config_to_save, [service], set())
@@ -189,6 +192,32 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
         return False
 
 
+def _normalize_service_pattern(raw_pattern: object) -> str | None:
+    """Normalize supported service/server-group patterns."""
+    normalized = str(raw_pattern).strip().lower()
+    if normalized in {'db-per-tenant', 'db_shared', 'db-shared'}:
+        return 'db-shared' if normalized in {'db_shared', 'db-shared'} else 'db-per-tenant'
+    if normalized in {'shared-db', 'shared_db'}:
+        return 'db-shared'
+    return None
+
+
+def _resolve_service_pattern(config: dict[str, object]) -> str | None:
+    """Resolve service pattern from source-groups when possible."""
+    server_group = config.get('server_group')
+    if isinstance(server_group, str) and server_group:
+        source_groups_file = get_project_root() / 'source-groups.yaml'
+        if source_groups_file.exists():
+            source_groups_data = load_yaml_file(source_groups_file)
+            group_cfg = source_groups_data.get(server_group)
+            if isinstance(group_cfg, dict):
+                resolved = _normalize_service_pattern(group_cfg.get('pattern'))
+                if resolved is not None:
+                    return resolved
+
+    return _normalize_service_pattern(config.get('mode'))
+
+
 def detect_service_mode(service: str) -> str:
     """Detect service mode (db-per-tenant or shared-db).
 
@@ -197,36 +226,11 @@ def detect_service_mode(service: str) -> str:
     - Legacy: mode field (direct value)
     """
     from cdc_generator.helpers.service_config import load_service_config
-    from cdc_generator.helpers.yaml_loader import load_yaml_file
-
-    def _normalize_mode(raw_mode: object) -> str | None:
-        normalized = str(raw_mode).strip().lower()
-        if normalized in {"db-per-tenant", "db_shared", "db-shared"}:
-            return "db-shared" if normalized in {"db_shared", "db-shared"} else "db-per-tenant"
-        if normalized in {"shared-db", "shared_db"}:
-            return "db-shared"
-        return None
 
     try:
         config = load_service_config(service)
 
-        # Resolve via source-groups using server_group key when available.
-        server_group = config.get('server_group')
-        if isinstance(server_group, str) and server_group:
-            source_groups_file = get_project_root() / 'source-groups.yaml'
-            source_groups_data = load_yaml_file(source_groups_file)
-            groups = source_groups_data.get('server_group')
-            if isinstance(groups, dict):
-                group_cfg = groups.get(server_group)
-                if isinstance(group_cfg, dict):
-                    resolved = _normalize_mode(
-                        group_cfg.get('pattern', '')
-                    )
-                    if resolved is not None:
-                        return resolved
-
-        # Fall back to legacy mode field
-        resolved_mode = _normalize_mode(config.get('mode', 'db-per-tenant'))
+        resolved_mode = _resolve_service_pattern(config)
         if resolved_mode is not None:
             return resolved_mode
         return 'db-per-tenant'

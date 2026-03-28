@@ -513,7 +513,7 @@ def test_handle_info_command_success(
         "source_group": "asma",
         "pattern": "db-shared",
         "type": "postgres",
-        "kafka_topology": "default",
+        "broker_topology": "default",
         "environment_aware": True,
         "description": "analytics sink",
         "servers": {"default": {"host": "localhost", "port": "5432"}},

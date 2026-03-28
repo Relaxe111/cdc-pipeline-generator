@@ -323,6 +323,34 @@ class TestHandleCreateService:
         content = service_path.read_text(encoding="utf-8")
         assert "customers:" not in content
 
+    def test_db_per_tenant_create_accepts_database_ref_as_database_name(
+        self, project_dir: Path,
+    ) -> None:
+        """db-per-tenant create resolves database_ref when it is a DB name."""
+        sg = project_dir / "source-groups.yaml"
+        sg.write_text(
+            "nonprod-local:\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  database_ref: AdOpusTest\n"
+            "  sources:\n"
+            "    Test:\n"
+            "      schemas:\n"
+            "      - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusTest\n"
+        )
+
+        args = _ns(service="nonprod-local", create_service="nonprod-local")
+        result = handle_create_service(args)
+
+        assert result == 0
+        service_path = project_dir / "services" / "nonprod-local.yaml"
+        content = service_path.read_text(encoding="utf-8")
+        assert "validation_database: AdOpusTest" in content
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_no_service

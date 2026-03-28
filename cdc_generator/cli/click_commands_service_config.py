@@ -28,6 +28,7 @@ from cdc_generator.cli.completions import (
     complete_sink_keys,
     complete_sink_tables,
     complete_source_tables,
+    complete_track_tables,
     complete_target_schema,
     complete_target_tables,
     complete_templates_on_table,
@@ -48,6 +49,7 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 _MIN_GROUPED_ARGS = 3
 _GROUPED_COMMAND_INDEX = 1
 _GROUPED_EXTRA_ARGS_START = 3
+_INSPECT_ALL_SINKS = "__all_sinks__"
 
 
 @click.command(
@@ -76,6 +78,19 @@ _GROUPED_EXTRA_ARGS_START = 3
               help="List all services from services/*.yaml")
 @click.option("--list-source-tables", is_flag=True,
               help="List all source tables in service")
+@click.option("--inspect", is_flag=True,
+              help="Inspect source database schema")
+@click.option("--inspect-sink", "--sink-inspect",
+              shell_complete=complete_sink_keys,
+              is_flag=False,
+              flag_value=_INSPECT_ALL_SINKS,
+              default=None,
+              metavar="SINK_KEY",
+              help=(
+                  "Inspect sink database schema for the selected service. "
+                  + "Provide SINK_KEY for one sink, or use --inspect-sink --all "
+                  + "to inspect all configured sinks."
+              ))
 @click.option("--add-source-table", shell_complete=complete_available_tables,
               multiple=True,
               help="Add single table (schema.table)")
@@ -85,6 +100,16 @@ _GROUPED_EXTRA_ARGS_START = 3
               help="Manage existing source table")
 @click.option("--schema", shell_complete=complete_schemas,
               help="Database schema hint for source-table operations")
+@click.option("--save", "--sink-save", is_flag=True,
+              help="Save detailed table schemas to YAML")
+@click.option("--track-table", multiple=True,
+              shell_complete=complete_track_tables,
+              help=(
+                  "Add tracked whitelist table(s) as schema.table under "
+                  + "services/_schemas/<service>/tracked-tables.yaml"
+              ))
+@click.option("--env", default="nonprod",
+              help="Environment for inspection (nonprod/prod)")
 @click.option("--generate-validation", is_flag=True,
               help="Generate JSON Schema for validation")
 @click.option("--validate-hierarchy", is_flag=True,

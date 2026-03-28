@@ -9,6 +9,14 @@ from .config import (
     get_single_server_group,
     load_server_groups,
 )
+from cdc_generator.helpers.topology_runtime import (
+    resolve_broker_topology,
+    resolve_runtime_mode,
+    resolve_topology,
+    resolve_runtime_engine,
+    resolve_topology_kind,
+    topology_uses_broker,
+)
 
 
 def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
@@ -53,7 +61,18 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
     description = sg_config.get('description', '')
     include_pattern = sg_config.get('include_pattern')
     environment_aware = sg_config.get('environment_aware', False)
-    kafka_topology = sg_config.get('kafka_topology', 'shared')
+    topology = resolve_topology(cast(dict[str, Any], sg_config), source_type=str(sg_type))
+    broker_topology = resolve_broker_topology(sg_config, topology=topology)
+    runtime_mode = resolve_runtime_mode(
+        cast(dict[str, Any], sg_config),
+        topology=topology,
+        source_type=str(sg_type),
+    )
+    topology_kind = resolve_topology_kind(cast(dict[str, Any], sg_config))
+    runtime_engine = resolve_runtime_engine(
+        cast(dict[str, Any], sg_config),
+        topology_kind=topology_kind,
+    )
 
     # Header
     print(f"\n{Colors.BLUE}{'='*80}{Colors.RESET}")
@@ -70,7 +89,12 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
     if include_pattern:
         print(f"    {Colors.YELLOW}Include Pattern:{Colors.RESET} {include_pattern}")
     print(f"    {Colors.YELLOW}Environment Aware:{Colors.RESET} {environment_aware}")
-    print(f"    {Colors.YELLOW}Kafka Topology:{Colors.RESET}  {kafka_topology}")
+    print(f"    {Colors.YELLOW}Topology:{Colors.RESET}        {topology or 'unknown'}")
+    print(f"    {Colors.YELLOW}Runtime Mode:{Colors.RESET}    {runtime_mode}")
+    if broker_topology is not None:
+        print(f"    {Colors.YELLOW}Broker Topology:{Colors.RESET} {broker_topology}")
+    print(f"    {Colors.YELLOW}Topology Kind:{Colors.RESET}   {topology_kind}")
+    print(f"    {Colors.YELLOW}Runtime Engine:{Colors.RESET}  {runtime_engine}")
 
     # Server configurations (multiple servers)
     servers_dict = cast(dict[str, Any], servers)
@@ -81,7 +105,8 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
         print(f"            {Colors.DIM}Host:{Colors.RESET} {srv.get('host', 'N/A')}")
         print(f"            {Colors.DIM}Port:{Colors.RESET} {srv.get('port', 'N/A')}")
         print(f"            {Colors.DIM}User:{Colors.RESET} {srv.get('user', 'N/A')}")
-        print(f"            {Colors.DIM}Kafka:{Colors.RESET} {srv.get('kafka_bootstrap_servers', 'N/A')}")
+        if topology_uses_broker(topology):
+            print(f"            {Colors.DIM}Kafka:{Colors.RESET} {srv.get('kafka_bootstrap_servers', 'N/A')}")
 
     # Include / exclude patterns
     if db_exclude or schema_exclude or table_include or table_exclude:

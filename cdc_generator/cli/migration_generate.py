@@ -6,6 +6,7 @@ Usage:
     cdc manage-migrations generate --service adopus
     cdc manage-migrations generate --table Actor
     cdc manage-migrations generate --dry-run
+    cdc manage-migrations generate --topology fdw
 """
 
 from __future__ import annotations
@@ -47,6 +48,16 @@ def main() -> int:
         default=None,
         help="Override output directory (default: migrations/)",
     )
+    parser.add_argument(
+        "--topology",
+        choices=["redpanda", "fdw", "pg_native"],
+        default=None,
+        help=(
+            "User-facing topology selection. If omitted, the generator uses the "
+            + "topology configured in source-groups.yaml and otherwise falls back "
+            + "to the brokered redpanda path."
+        ),
+    )
     args = parser.parse_args()
 
     from pathlib import Path
@@ -58,6 +69,7 @@ def main() -> int:
         table_filter=args.table,
         dry_run=args.dry_run,
         output_dir=output_dir,
+        topology=args.topology,
     )
 
     if result.errors:

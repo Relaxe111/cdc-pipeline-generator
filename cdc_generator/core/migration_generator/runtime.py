@@ -22,6 +22,14 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.topology_runtime import (
+    resolve_runtime_engine,
+    resolve_runtime_mode,
+    resolve_topology,
+    resolve_topology_kind,
+    supported_topologies_for_source_type,
+    topology_supported_for_source_type,
+)
 from cdc_generator.helpers.type_mapper import TypeMapper
 
 from .columns import (
@@ -34,8 +42,10 @@ from .data_structures import (
     GenerationResult,
     MigrationColumn,
     RenderContext,
+    RuntimeMode,
     ServiceData,
 )
+from .native_cdc_policy import build_native_cdc_policy_seeds
 from .file_writers import write_manifest
 from .manual_migrations import (
     detect_removed_tables_for_manual_files as _detect_removed_tables_for_manual_files,
@@ -60,12 +70,30 @@ from .service_parsing import (
     resolve_pattern as _resolve_pattern,
 )
 from .service_parsing import (
+    resolve_source_group_config as _resolve_source_group_config,
+)
+from .service_parsing import (
+    resolve_source_type as _resolve_source_type,
+)
+from .service_parsing import (
     validate_db_shared_customer_id as _validate_db_shared_customer_id,
 )
 from .table_processing import process_table as _process_table
 
 TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates" / "migrations"
 DEFAULT_DB_USER = "postgres"
+
+
+def _sql_literal(value: object | None) -> str:
+    """Render a Python value as a SQL literal for Jinja templates."""
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    text_value = str(value).replace("'", "''")
+    return "'" + text_value + "'"
 
 
 def _package_api() -> ModuleType:
@@ -84,6 +112,7 @@ def _create_jinja_env() -> Environment:
         lstrip_blocks=True,
     )
     env.filters["format_pk"] = lambda name: f'"{name}"'
+    env.filters["sql_literal"] = _sql_literal
     return env
 
 
@@ -162,6 +191,7 @@ def build_full_column_list(
     service_config: dict[str, object],
     source_key: str,
     type_mapper: TypeMapper | None = None,
+    runtime_mode: RuntimeMode = "brokered",
 ) -> tuple[list[MigrationColumn], list[str]]:
     """Build the full migration column pipeline (compatibility entrypoint)."""
     source_cfg = _get_source_table_config(service_config, source_key)
@@ -174,7 +204,12 @@ def build_full_column_list(
     columns, primary_keys = build_columns_from_table_def(table_def, ignore_cols, type_mapper)
     columns = _add_column_template_columns(columns, sink_cfg)
     columns = _add_transform_output_columns(columns, sink_cfg)
-    columns = _add_cdc_metadata_columns(columns)
+    if runtime_mode == "native":
+        from .columns import add_native_cdc_metadata_columns
+
+        columns = add_native_cdc_metadata_columns(columns)
+    else:
+        columns = _add_cdc_metadata_columns(columns)
     return columns, primary_keys
 
 
@@ -214,6 +249,8 @@ def generate_migrations(
     table_filter: str | None = None,
     dry_run: bool = False,
     output_dir: Path | None = None,
+    runtime_mode: RuntimeMode | None = None,
+    topology: str | None = None,
 ) -> GenerationResult:
     """Generate PostgreSQL migration files for a CDC service."""
     package_api = _package_api()
@@ -224,8 +261,6 @@ def generate_migrations(
 
     resolved_output_dir = output_dir if output_dir is not None else project_root / "migrations"
     result.output_dir = resolved_output_dir
-
-    print_header(f"Generating migrations for service: {service_name}")
 
     try:
         service_config = package_api.load_service_config(service_name)
@@ -257,12 +292,88 @@ def generate_migrations(
         return result
 
     pattern = _resolve_pattern(project_root)
+    source_type = _resolve_source_type(project_root)
+    source_group_config = _resolve_source_group_config(project_root)
+    effective_topology = cast(
+        str | None,
+        topology
+        or resolve_topology(
+            {},
+            source_group=source_group_config,
+            runtime_mode=runtime_mode,
+            source_type=source_type,
+        ),
+    )
+
+    if effective_topology is not None and not topology_supported_for_source_type(
+        cast(Any, effective_topology),
+        source_type,
+    ):
+        supported_topologies = ", ".join(supported_topologies_for_source_type(source_type))
+        result.errors.append(
+            f"Topology '{effective_topology}' is not supported for source type '{source_type}'. "
+            + f"Supported values: {supported_topologies}",
+        )
+        print_error(result.errors[-1])
+        return result
+
+    if runtime_mode is not None and effective_topology is not None:
+        derived_runtime_mode = resolve_runtime_mode(
+            {},
+            topology=cast(Any, effective_topology),
+            source_type=source_type,
+        )
+        if runtime_mode != derived_runtime_mode:
+            result.errors.append(
+                f"Runtime '{runtime_mode}' conflicts with topology '{effective_topology}'. "
+                + f"Use runtime '{derived_runtime_mode}' or omit runtime so it is derived automatically.",
+            )
+            print_error(result.errors[-1])
+            return result
+
+    effective_runtime_mode = resolve_runtime_mode(
+        {},
+        topology=cast(Any, effective_topology),
+        source_group=source_group_config,
+        runtime_mode=runtime_mode,
+        source_type=source_type,
+    )
+    if effective_topology is None:
+        effective_topology = cast(
+            str,
+            resolve_topology(
+                {},
+                runtime_mode=effective_runtime_mode,
+                source_type=source_type,
+            )
+            or "redpanda",
+        )
+
+    print_header(
+        f"Generating migrations for service: {service_name}"
+        + f" (topology: {effective_topology}, runtime: {effective_runtime_mode})",
+    )
+
     jinja_env = _create_jinja_env()
     svc_data = ServiceData(
         service_config=service_config,
         table_defs=table_defs,
         type_mapper=type_mapper,
     )
+
+    if effective_runtime_mode == "native":
+        if pattern != "db-per-tenant":
+            result.errors.append(
+                "Native runtime generation currently supports only db-per-tenant services",
+            )
+            print_error(result.errors[-1])
+            return result
+        if source_type != "mssql":
+            result.errors.append(
+                "Native runtime generation currently supports only MSSQL source groups",
+            )
+            print_error(result.errors[-1])
+            return result
 
     if pattern == "db-shared":
         _validate_db_shared_customer_id(sinks, result)
@@ -290,6 +401,11 @@ def generate_migrations(
             generated_at=generated_at,
             db_user=db_user,
             sink_target=sink_target,
+            runtime_mode=effective_runtime_mode,
+            native_cdc_policy_seeds=(
+                build_native_cdc_policy_seeds(tables_for_sink, service_config, result)
+                if effective_runtime_mode == "native" else []
+            ),
         )
 
         _generate_for_sink(
@@ -297,6 +413,7 @@ def generate_migrations(
             sink_tables=tables_for_sink,
             schemas=schemas,
             pattern=pattern,
+            source_type=source_type,
             svc_data=svc_data,
             result=result,
             dry_run=dry_run,
@@ -326,11 +443,28 @@ def _generate_for_sink(
     sink_tables: dict[str, dict[str, Any]],
     schemas: list[str],
     pattern: str,
+    source_type: str,
     svc_data: ServiceData,
     result: GenerationResult,
     dry_run: bool,
 ) -> None:
     """Generate all migration files for a single sink target."""
+    topology = resolve_topology(
+        {},
+        runtime_mode=ctx.runtime_mode,
+        source_type=source_type,
+    )
+    topology_kind = resolve_topology_kind(
+        {},
+        runtime_mode=ctx.runtime_mode,
+        source_type=source_type,
+    )
+    runtime_engine = resolve_runtime_engine(
+        {},
+        topology_kind=topology_kind,
+        runtime_mode=ctx.runtime_mode,
+    )
+
     if dry_run:
         db_list = ", ".join(
             f"{env_name}={db_name}"
@@ -340,6 +474,10 @@ def _generate_for_sink(
         print_info(f"  Output: {ctx.output_dir}")
         print_info(f"  Databases: {db_list or '(none resolved)'}")
         print_info(f"  Pattern: {pattern}")
+        print_info(f"  Topology: {topology or 'unknown'}")
+        print_info(f"  Runtime: {ctx.runtime_mode}")
+        print_info(f"  Topology Kind: {topology_kind}")
+        print_info(f"  Runtime Engine: {runtime_engine}")
         print_info(f"  Schemas: {len(schemas)}")
         print_info(f"  Tables: {len(sink_tables)}")
         for table_key in sorted(sink_tables):
@@ -356,8 +494,13 @@ def _generate_for_sink(
     )
 
     tables_generated: list[str] = []
+    source_table_name_counts = _count_source_table_names(sink_tables)
     for sink_key in sorted(sink_tables):
         sink_cfg = sink_tables[sink_key]
+        from_ref = sink_cfg.get("from")
+        source_table_name = ""
+        if isinstance(from_ref, str) and from_ref:
+            source_table_name = from_ref.split(".", 1)[-1]
         migration = _process_table(
             sink_key,
             sink_cfg,
@@ -365,6 +508,11 @@ def _generate_for_sink(
             svc_data.table_defs,
             result,
             svc_data.type_mapper,
+            runtime_mode=ctx.runtime_mode,
+            duplicate_source_table_name_count=source_table_name_counts.get(
+                source_table_name.casefold(),
+                1,
+            ),
         )
         if migration is None:
             continue
@@ -379,5 +527,24 @@ def _generate_for_sink(
         schemas,
         ctx.generated_at,
         ctx.sink_target,
+        runtime_mode=ctx.runtime_mode,
+        include_native_runtime=ctx.runtime_mode == "native",
+        source_type=source_type,
+        topology_kind=topology_kind,
+        runtime_engine=runtime_engine,
     )
     result.files_written += 1
+
+
+def _count_source_table_names(
+    sink_tables: dict[str, dict[str, Any]],
+) -> dict[str, int]:
+    """Count source table-name occurrences to keep FDW naming deterministic."""
+    counts: dict[str, int] = {}
+    for sink_cfg in sink_tables.values():
+        from_ref = sink_cfg.get("from")
+        if not isinstance(from_ref, str) or not from_ref:
+            continue
+        source_table_name = from_ref.split(".", 1)[-1].casefold()
+        counts[source_table_name] = counts.get(source_table_name, 0) + 1
+    return counts

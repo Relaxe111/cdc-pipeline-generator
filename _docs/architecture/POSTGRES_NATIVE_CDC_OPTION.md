@@ -9,6 +9,10 @@
 
 This option keeps the current CDC control plane intact while replacing the Redpanda/Bento transport layer with a PostgreSQL-native data plane.
 
+For the broader composition model that proposes a simpler hierarchy of `pattern -> source type -> topology`, see:
+
+- `TOPOLOGY_RUNTIME_COMPOSITION.md`
+
 What stays the same:
 
 - `cdc manage-source-groups` remains the source topology entry point.
@@ -449,13 +453,28 @@ For rollout:
 - certify the design against 15 behavior before calling it production-ready
 - if possible, standardize all logical replication participants onto the same major version before broad rollout
 
+### Verified Nonprod State
+
+Verified on 2026-03-26 from the generator dev container using the configured nonprod PostgreSQL credentials in `.env`:
+
+- server version is `17.9`
+- `wal_level` is currently `replica`, not `logical`
+- `tds_fdw` is installed in the checked database
+- `tds_fdw` is also available at the server level
+
+Operational meaning:
+
+- the `tds_fdw` prerequisite is already satisfied on the checked nonprod PostgreSQL database
+- PostgreSQL logical replication is not yet ready on that server because `wal_level` still needs to be changed to `logical`
+- enabling logical replication will require a PostgreSQL configuration change and a restart or managed-service equivalent maintenance action
+
 ---
 
 ## Recommended Rollout Plan
 
 ### Phase 1: Prove The MSSQL Pull Bridge
 
-- install `tds_fdw` and FreeTDS on a nonprod PostgreSQL 17 host
+- verify and complete `tds_fdw` and FreeTDS readiness on a nonprod PostgreSQL 17 host
 - map one MSSQL CDC capture table through foreign tables
 - implement one checkpoint table and one pull/apply procedure
 - verify inserts, updates, and deletes
@@ -468,6 +487,7 @@ For rollout:
 
 ### Phase 3: Add PostgreSQL Logical Replication
 
+- change `wal_level` from `replica` to `logical` in nonprod before testing publications and subscriptions
 - publish final materialized tables from the local PostgreSQL service database
 - subscribe from a downstream PostgreSQL database
 - test slot retention, lag monitoring, and restart behavior

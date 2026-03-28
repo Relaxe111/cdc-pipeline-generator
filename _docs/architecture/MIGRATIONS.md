@@ -27,6 +27,10 @@ Every step is driven by the CLI (`cdc manage-migrations <subcommand>`) and lives
 
 ## Architecture
 
+This document focuses on migration-local architecture: schema YAML input, generated SQL structure, diffing, and apply behavior.
+
+For the cross-topology runtime picture, including the brokered Redpanda path and the FDW/native pull path, see [TOPOLOGY_RUNTIME_COMPOSITION.md](TOPOLOGY_RUNTIME_COMPOSITION.md).
+
 ### Input: Service-Schema YAML
 
 Table definitions are stored as YAML files under `services/_schemas/{service}/{schema}/`:
@@ -251,7 +255,20 @@ Generate PostgreSQL migration SQL files from service config + table definitions.
 cdc manage-migrations generate                      # Generate all
 cdc manage-migrations generate --table Actor        # Single table
 cdc manage-migrations generate --dry-run            # Preview only
+cdc manage-migrations generate --topology fdw       # FDW-native pull/apply layer
 ```
+
+`--topology` values:
+
+- `redpanda` is the existing brokered default and generates the event-driven staging/merge files used by the brokered pipeline path.
+- `fdw` generates the MSSQL FDW runtime layer: shared staging, `native_cdc_checkpoint`, per-table pull functions, per-table merge procedures, and external-scheduler helper routines in `03-native-cdc-runtime.sql`.
+- `pg_native` is the PostgreSQL-native topology selector for PostgreSQL sources.
+
+Current behavior:
+
+- `--topology` is the user-facing selector; internal runtime is derived automatically
+- if omitted, the generator uses the topology configured in `source-groups.yaml`
+- `cdc manage-source-groups --set-topology ...` is the persistent way to control migration runtime behavior for a project
 
 ### `diff`
 

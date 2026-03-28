@@ -52,9 +52,15 @@ def create_service(
 
         if pattern == 'db-per-tenant':
             database_ref = group.get('database_ref')
+            validation_env = str(group.get('validation_env') or 'default')
+            source_for_database: dict[str, Any] | None = None
             if validation_database_override:
                 validation_database = validation_database_override
-                source_for_database = _find_source_by_database(sources, validation_database)
+                source_for_database = _find_source_by_database(
+                    sources,
+                    validation_database,
+                    preferred_env=validation_env,
+                )
                 if source_for_database is not None:
                     schemas = _extract_schemas_from_source(source_for_database)
                 else:
@@ -62,13 +68,28 @@ def create_service(
             # Use database_ref for validation
             elif database_ref and database_ref in sources:
                 source_config = cast(dict[str, Any], sources[database_ref])
+                source_for_database = source_config
                 schemas = _extract_schemas_from_source(source_config)
-                validation_database = _extract_database_from_source(source_config)
+                validation_database = _extract_database_from_source(
+                    source_config,
+                    preferred_env=validation_env,
+                )
+            elif database_ref:
+                source_for_database = _find_source_by_database(
+                    sources,
+                    str(database_ref),
+                    preferred_env=validation_env,
+                )
+                if source_for_database is not None:
+                    schemas = _extract_schemas_from_source(source_for_database)
+                    validation_database = str(database_ref).strip() or None
 
             if not validation_database:
                 raise ValueError(
                     f"Could not find validation database for server group '{server_group}'.\n" +
-                    f"Expected: sources.{database_ref}.<env>.database in source-groups.yaml"
+                    "Expected either:\n"
+                    + f"- sources.{database_ref}.<env>.database when database_ref is a source key\n"
+                    + f"- some sources.*.{validation_env}.database == {database_ref} when database_ref is a database name"
                 )
 
         elif pattern == 'db-shared':
@@ -249,8 +270,19 @@ def _extract_schemas_from_source(
     return [default_schema]
 
 
-def _extract_database_from_source(source_config: dict[str, Any]) -> str | None:
+def _extract_database_from_source(
+    source_config: dict[str, Any],
+    preferred_env: str | None = None,
+) -> str | None:
     """Extract preferred database from source entry environments."""
+    if preferred_env:
+        preferred = source_config.get(preferred_env)
+        if isinstance(preferred, dict):
+            preferred_dict = cast(dict[str, Any], preferred)
+            database_value = preferred_dict.get('database')
+            if database_value:
+                return str(database_value).strip() or None
+
     for env_name, env_config in source_config.items():
         if env_name == 'schemas' or not isinstance(env_config, dict):
             continue
@@ -271,11 +303,25 @@ def _extract_database_from_source(source_config: dict[str, Any]) -> str | None:
 def _find_source_by_database(
     sources: dict[str, Any],
     database_name: str,
+    preferred_env: str | None = None,
 ) -> dict[str, Any] | None:
     """Find source entry containing the given database in any env."""
     target = database_name.strip()
     if not target:
         return None
+
+    if preferred_env:
+        for source_cfg in sources.values():
+            if not isinstance(source_cfg, dict):
+                continue
+            source_dict = cast(dict[str, Any], source_cfg)
+            preferred_cfg = source_dict.get(preferred_env)
+            if not isinstance(preferred_cfg, dict):
+                continue
+            preferred_dict = cast(dict[str, Any], preferred_cfg)
+            database_value = preferred_dict.get('database')
+            if database_value is not None and str(database_value).strip() == target:
+                return source_dict
 
     for source_cfg in sources.values():
         if not isinstance(source_cfg, dict):

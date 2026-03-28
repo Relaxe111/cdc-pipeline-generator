@@ -83,3 +83,63 @@ def test_save_service_config_compacts_generic_similar_blocks(
     assert "<<: *shared_defaults_" in rendered
     assert "source: alpha" in rendered
     assert "source: beta" in rendered
+
+
+def test_save_service_config_omits_customers_for_db_per_tenant(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+    (tmp_path / "source-groups.yaml").write_text(
+        "adopus:\n"
+        "  pattern: db-per-tenant\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config_module, "SERVICES_DIR", services_dir)
+    monkeypatch.setattr(config_module, "SERVICE_SCHEMAS_DIR", services_dir)
+
+    config: dict[str, object] = {
+        "service": "adopus",
+        "server_group": "adopus",
+        "customers": [{"name": "avprod", "schema": "avprod"}],
+        "shared": {"source_tables": [], "ignore_tables": []},
+    }
+
+    assert config_module.save_service_config("adopus", config) is True
+
+    rendered = (services_dir / "adopus.yaml").read_text(encoding="utf-8")
+
+    assert "customers:" not in rendered
+
+
+def test_save_service_config_preserves_customers_for_non_db_per_tenant(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+    (tmp_path / "source-groups.yaml").write_text(
+        "directory:\n"
+        "  pattern: db-shared\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config_module, "SERVICES_DIR", services_dir)
+    monkeypatch.setattr(config_module, "SERVICE_SCHEMAS_DIR", services_dir)
+
+    config: dict[str, object] = {
+        "service": "directory",
+        "server_group": "directory",
+        "customers": [{"name": "demo", "schema": "demo"}],
+        "shared": {"source_tables": [], "ignore_tables": []},
+    }
+
+    assert config_module.save_service_config("directory", config) is True
+
+    rendered = (services_dir / "directory.yaml").read_text(encoding="utf-8")
+
+    assert "customers:" in rendered

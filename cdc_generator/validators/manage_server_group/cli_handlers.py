@@ -29,8 +29,9 @@ from .handlers_server import (
     handle_list_servers,
     handle_remove_extraction_pattern,
     handle_remove_server,
+    handle_set_broker_topology,
     handle_set_extraction_pattern,
-    handle_set_kafka_topology,
+    handle_set_topology,
 )
 from .handlers_update import (
     handle_update,
@@ -53,7 +54,8 @@ __all__ = [
     "handle_remove_extraction_pattern",
     "handle_remove_server",
     "handle_set_extraction_pattern",
-    "handle_set_kafka_topology",
+    "handle_set_broker_topology",
+    "handle_set_topology",
     "handle_update",
     "list_server_groups",
     "parse_env_mapping",

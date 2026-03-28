@@ -22,6 +22,7 @@ def mock_server_group() -> dict[str, Any]:
     return {
         "name": "mygroup",
         "type": "postgres",
+        "topology": "redpanda",
         "servers": {
             "default": {
                 "host": "${POSTGRES_SOURCE_HOST}",
@@ -50,7 +51,7 @@ def mock_server_group() -> dict[str, Any]:
                 },
             },
         },
-        "kafka_topology": "shared",
+        "broker_topology": "shared",
         "db_excludes": ["sys", "information_schema"],
         "schema_excludes": ["dbo"],
     }
@@ -64,7 +65,8 @@ def _ns(**kwargs: Any) -> Namespace:
         "info": False,
         "add_server": None,
         "remove_server": None,
-        "set_kafka_topology": None,
+        "set_topology": None,
+        "set_broker_topology": None,
         "add_to_ignore_list": None,
         "add_to_schema_excludes": None,
         "set_extraction_pattern": None,
@@ -304,6 +306,56 @@ class TestHandleListServers:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# handle_set_topology
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestHandleSetTopology:
+    """Tests for handle_set_topology() handler."""
+
+    @patch("cdc_generator.validators.manage_server_group.handlers_server.write_server_group_yaml")
+    @patch("cdc_generator.validators.manage_server_group.handlers_server.load_config_and_get_server_group")
+    def test_set_topology_supported_value_succeeds(
+        self,
+        mock_load: Mock,
+        mock_write: Mock,
+        mock_server_group: dict[str, Any],
+    ) -> None:
+        """Setting a supported topology persists the new value."""
+        from cdc_generator.validators.manage_server_group.handlers_server import handle_set_topology
+
+        mock_load.return_value = ({"mygroup": mock_server_group}, mock_server_group, "mygroup")
+        args = _ns(set_topology="pg_native")
+
+        result = handle_set_topology(args)
+
+        assert result == 0
+        assert mock_server_group["topology"] == "pg_native"
+        assert "broker_topology" not in mock_server_group
+        assert "kafka_bootstrap_servers" not in mock_server_group["servers"]["default"]
+        assert mock_write.called
+
+    @patch("cdc_generator.validators.manage_server_group.handlers_server.write_server_group_yaml")
+    @patch("cdc_generator.validators.manage_server_group.handlers_server.load_config_and_get_server_group")
+    def test_set_topology_unsupported_value_for_source_type_returns_error(
+        self,
+        mock_load: Mock,
+        mock_write: Mock,
+        mock_server_group: dict[str, Any],
+    ) -> None:
+        """Setting an unsupported topology for the source type should fail."""
+        from cdc_generator.validators.manage_server_group.handlers_server import handle_set_topology
+
+        mock_load.return_value = ({"mygroup": mock_server_group}, mock_server_group, "mygroup")
+        args = _ns(set_topology="fdw")
+
+        result = handle_set_topology(args)
+
+        assert result == 1
+        assert mock_server_group["topology"] == "redpanda"
+        assert not mock_write.called
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Quick smoke tests for other handlers (full coverage in integration tests)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -311,3 +363,27 @@ class TestOtherHandlers:
     """Smoke tests for remaining handler functions (basic invocation checks)."""
 
     pass  # Import smoke test removed — imports already tested by other tests in this file
+
+
+class TestHandleSetBrokerTopology:
+    """Tests for handle_set_broker_topology() topology gating."""
+
+    @patch("cdc_generator.validators.manage_server_group.handlers_server.load_server_groups")
+    def test_set_broker_topology_rejected_for_non_redpanda(
+        self,
+        mock_load: Mock,
+        mock_server_group: dict[str, Any],
+    ) -> None:
+        """broker topology should be rejected when the project is not redpanda."""
+        from cdc_generator.validators.manage_server_group.handlers_server import handle_set_broker_topology
+
+        mock_server_group["topology"] = "pg_native"
+        mock_server_group.pop("broker_topology", None)
+        for server in mock_server_group["servers"].values():
+            server.pop("kafka_bootstrap_servers", None)
+        mock_load.return_value = {"mygroup": mock_server_group}
+        args = _ns(set_broker_topology="per-server")
+
+        result = handle_set_broker_topology(args)
+
+        assert result == 1

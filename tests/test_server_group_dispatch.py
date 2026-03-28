@@ -100,15 +100,36 @@ class TestMainDispatch:
         assert mock_handler.called
         assert result == 0
 
-    @patch("cdc_generator.cli.source_group.handle_set_kafka_topology")
+    @patch("cdc_generator.cli.source_group.handle_set_broker_topology")
     @patch("cdc_generator.cli.source_group.validate_manage_server_group_flags")
-    @patch("sys.argv", ["cdc", "--set-kafka-topology", "shared"])
+    @patch("sys.argv", ["cdc", "--set-broker-topology", "shared"])
+    def test_set_broker_topology_dispatches_to_handler(
+        self,
+        mock_validator: Mock,
+        mock_handler: Mock,
+    ) -> None:
+        """--set-broker-topology → dispatches to handle_set_broker_topology()."""
+        from cdc_generator.cli.source_group import main
+
+        mock_result = Mock()
+        mock_result.level = "ok"
+        mock_validator.return_value = mock_result
+        mock_handler.return_value = 0
+
+        result = main()
+
+        assert mock_handler.called
+        assert result == 0
+
+    @patch("cdc_generator.cli.source_group.handle_set_topology")
+    @patch("cdc_generator.cli.source_group.validate_manage_server_group_flags")
+    @patch("sys.argv", ["cdc", "--set-topology", "fdw"])
     def test_set_topology_dispatches_to_handler(
         self,
         mock_validator: Mock,
         mock_handler: Mock,
     ) -> None:
-        """--set-kafka-topology → dispatches to handle_set_kafka_topology()."""
+        """--set-topology → dispatches to handle_set_topology()."""
         from cdc_generator.cli.source_group import main
 
         mock_result = Mock()
@@ -238,7 +259,7 @@ class TestDispatchValidation:
     @patch("cdc_generator.cli.source_group.print")
     @patch("cdc_generator.cli.source_group.print_error")
     @patch("cdc_generator.cli.source_group.validate_manage_server_group_flags")
-    @patch("sys.argv", ["cdc", "--set-kafka-topology", "shared"])
+    @patch("sys.argv", ["cdc", "--set-broker-topology", "shared"])
     def test_validation_error_with_suggestion_prints_both(
         self,
         mock_validator: Mock,

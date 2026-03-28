@@ -27,6 +27,7 @@ from .data_structures import (
     GenerationResult,
     ManualMigrationHints,
     MigrationColumn,
+    RuntimeMode,
     SinkTarget,
     TableMigration,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "GenerationResult",
     "ManualMigrationHints",
     "MigrationColumn",
+    "RuntimeMode",
     "SinkTarget",
     "TableMigration",
     "_add_cdc_metadata_columns",

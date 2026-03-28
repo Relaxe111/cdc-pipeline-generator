@@ -90,7 +90,7 @@ sink_analytics:
 | `source_group` | ✅ Yes | Which source group feeds this sink (for Kafka topics) |
 | `pattern` | ✅ Yes | `db-shared` or `db-per-tenant` (usually matches source) |
 | `type` | ✅ Yes | `postgres`, `mssql`, `http_client`, `http_server` |
-| `kafka_topology` | No | Inherited from source group if not specified |
+| `broker_topology` | No | Inherited from source group if not specified |
 | `description` | No | Human-readable description |
 | `servers` | ✅ Yes | Server connection configurations |
 | `sources` | Standalone | Service sink source mappings (configured in services/*.yaml) |

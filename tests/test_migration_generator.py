@@ -768,6 +768,10 @@ class TestGenerateMigrations:
         sink_dir = output / "sink_test.db"
         assert sink_dir.exists()
         assert (sink_dir / "manifest.yaml").exists()
+        manifest_text = (sink_dir / "manifest.yaml").read_text(encoding="utf-8")
+        assert 'runtime_mode: "brokered"' in manifest_text
+        assert 'topology_kind: "brokered_redpanda"' in manifest_text
+        assert 'runtime_engine: "bento"' in manifest_text
         assert (sink_dir / "00-infrastructure" / "01-create-schemas.sql").exists()
         assert (sink_dir / "00-infrastructure" / "02-cdc-management.sql").exists()
         assert (sink_dir / "01-tables" / "Actor.sql").exists()

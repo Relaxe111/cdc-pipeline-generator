@@ -96,7 +96,11 @@ def handle_info_command(args: argparse.Namespace) -> int:
     print(f"Source Group:      {resolved.get('source_group', 'N/A')}")
     print(f"Pattern:           {resolved.get('pattern', 'N/A')}")
     print(f"Type:              {resolved.get('type', 'N/A')}")
-    print(f"Kafka Topology:    {resolved.get('kafka_topology', 'N/A')}")
+    broker_topology = resolved.get('broker_topology')
+    if broker_topology is not None:
+        print(f"Broker Topology:   {broker_topology}")
+    print(f"Topology Kind:     {resolved.get('topology_kind', 'N/A')}")
+    print(f"Runtime Engine:    {resolved.get('runtime_engine', 'N/A')}")
     print(f"Environment Aware: {resolved.get('environment_aware', False)}")
     print(f"Description:       {resolved.get('description', 'N/A')}")
 

@@ -10,7 +10,8 @@ db-shared pattern (multi-server):
 asma:
   pattern: db-shared
   type: postgres                    # Database type (enforced for all servers)
-  kafka_topology: shared            # "shared" | "per-server"
+  topology: redpanda
+  broker_topology: shared           # Redpanda only: "shared" | "per-server"
   environment_aware: true
 
   servers:
@@ -46,7 +47,8 @@ db-per-tenant pattern (multi-server):
 adopus:
   pattern: db-per-tenant
   type: mssql                       # Database type (enforced for all servers)
-  kafka_topology: shared
+  topology: redpanda
+  broker_topology: shared           # Redpanda only
   extraction_pattern: '^AdOpus(?P<customer>.+)$'
   database_ref: AdOpusTest          # Reference database for schema discovery
 
@@ -82,6 +84,8 @@ adopus:
 ```
 """
 from typing import Literal, TypeAlias, TypedDict
+
+from cdc_generator.helpers.topology_runtime import Topology
 
 
 class ExtractionPattern(TypedDict, total=False):
@@ -145,7 +149,8 @@ class ServerConfig(TypedDict, total=False):
 
     All values support environment variable placeholders: ${VAR_NAME}
 
-    The kafka_bootstrap_servers value depends on kafka_topology:
+    The kafka_bootstrap_servers value applies only when topology is redpanda.
+    In that case it depends on broker_topology:
     - shared: All servers use same value (e.g., ${KAFKA_BOOTSTRAP_SERVERS})
     - per-server: Each server has postfixed value (e.g., ${KAFKA_BOOTSTRAP_SERVERS_EUROPE})
 
@@ -219,7 +224,8 @@ class ServerGroupConfig(TypedDict, total=False):
     Multi-server support:
     - type: Database type enforced for ALL servers (postgres | mssql)
     - servers: Dict of named server configurations
-    - kafka_topology: "shared" (same Kafka for all) or "per-server" (isolated Kafka)
+    - topology: User-facing topology selection (redpanda, fdw, pg_native)
+    - broker_topology: Redpanda-only broker fan-out mode
     - sources.{name}.{env}.server: References which server a database is on
     """
     # Runtime-injected field (not in YAML)
@@ -232,7 +238,8 @@ class ServerGroupConfig(TypedDict, total=False):
 
     # Multi-server configuration
     servers: dict[str, ServerConfig]
-    kafka_topology: Literal['shared', 'per-server']
+    topology: Topology
+    broker_topology: Literal['shared', 'per-server']
 
     # Feature flags
     environment_aware: bool

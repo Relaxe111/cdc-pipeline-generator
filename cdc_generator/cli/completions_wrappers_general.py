@@ -117,7 +117,7 @@ def complete_migration_envs(
     _param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
-    return complete_migration_envs_impl(incomplete, _safe_call, _filter)
+    return complete_migration_envs_impl(_ctx, incomplete, _get_param, _filter)
 
 
 def complete_server_group_names(

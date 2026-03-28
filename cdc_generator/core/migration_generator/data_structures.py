@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from jinja2 import Environment
 
 from cdc_generator.helpers.type_mapper import TypeMapper
+
+RuntimeMode = Literal["brokered", "native"]
 
 
 @dataclass
@@ -45,6 +47,11 @@ class TableMigration:
         primary_keys: List of primary key column names.
         replicate_structure: Whether structure comes from table-definition YAML.
         target_exists: Whether the target table already exists.
+        source_table: MSSQL source table name.
+        source_key: Full source reference (e.g., 'dbo.Actor').
+        foreign_table_name: Expected local FDW table name.
+        min_lsn_table_name: Expected local helper FDW table name.
+        capture_instance_name: MSSQL CDC capture instance name.
     """
 
     table_name: str
@@ -54,6 +61,11 @@ class TableMigration:
     primary_keys: list[str]
     replicate_structure: bool = True
     target_exists: bool = False
+    source_table: str | None = None
+    source_key: str | None = None
+    foreign_table_name: str | None = None
+    min_lsn_table_name: str | None = None
+    capture_instance_name: str | None = None
 
 
 @dataclass
@@ -74,6 +86,26 @@ class SinkTarget:
     sink_group: str
     sink_service: str
     databases: dict[str, str] = field(default_factory=dict[str, str])
+
+
+@dataclass(frozen=True)
+class NativeCdcPolicySeed:
+    """Resolved per-table native CDC policy defaults for SQL rendering."""
+
+    logical_table_name: str
+    target_schema_name: str
+    target_table_name: str
+    enabled: bool = True
+    schedule_profile: str = "warm"
+    base_poll_interval_seconds: int = 60
+    min_poll_interval_seconds: int = 15
+    max_poll_interval_seconds: int = 300
+    max_rows_per_pull: int = 1000
+    lease_seconds: int = 120
+    poll_priority: int = 100
+    jitter_millis: int = 500
+    max_backoff_seconds: int = 900
+    business_hours_profile_key: str | None = None
 
 
 @dataclass
@@ -124,6 +156,7 @@ class RenderContext:
         generated_at: Timestamp string.
         db_user: Database user for GRANT statements.
         sink_target: Resolved sink target info.
+        runtime_mode: Generated SQL runtime model.
     """
 
     jinja_env: Environment
@@ -131,6 +164,8 @@ class RenderContext:
     generated_at: str
     db_user: str
     sink_target: SinkTarget
+    runtime_mode: RuntimeMode = "brokered"
+    native_cdc_policy_seeds: list[NativeCdcPolicySeed] = field(default_factory=list[NativeCdcPolicySeed])
 
 
 @dataclass

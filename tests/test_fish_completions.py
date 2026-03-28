@@ -108,6 +108,13 @@ def _get_manage_migrations_group() -> click.Group:
     assert isinstance(group, click.Group)
     return group
 
+def _get_fdw_group() -> click.Group:
+    """Return the typed command group for `fdw`."""
+    cmds = _get_typed_commands()
+    group = cmds["fdw"]
+    assert isinstance(group, click.Group)
+    return group
+
 
 # ---------------------------------------------------------------------------
 # Tests: cdc.fish bootstrap file
@@ -245,6 +252,39 @@ class TestManageServicesConfigOptions:
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
+class TestFdwOptions:
+    """fdw must have typed Click subcommands and option declarations."""
+
+    def test_fdw_group_has_expected_subcommands(self) -> None:
+        """The top-level fdw group should expose plan and sql."""
+        group = _get_fdw_group()
+        assert "plan" in group.commands
+        assert "sql" in group.commands
+
+    def test_fdw_plan_has_common_options(self) -> None:
+        """fdw plan should declare the common planning options."""
+        group = _get_fdw_group()
+        opts = _get_command_option_names(group.commands["plan"])
+        for opt in [
+            "--service",
+            "--source-env",
+            "--customer",
+            "--table",
+            "--target-schema",
+            "--runner-role",
+            "--fdw-server-prefix",
+            "--fdw-schema-prefix",
+            "--keep-placeholders",
+        ]:
+            assert opt in opts, f"Missing option: {opt}"
+
+    def test_fdw_sql_has_output_options(self) -> None:
+        """fdw sql should declare SQL rendering-specific options."""
+        group = _get_fdw_group()
+        opts = _get_command_option_names(group.commands["sql"])
+        for opt in ["--metadata-only", "--output"]:
+            assert opt in opts, f"Missing option: {opt}"
+
     def test_has_source_table_options(self) -> None:
         """Source table management options must be declared."""
         opts = _get_command_option_names(_get_manage_services_config_command())
@@ -281,14 +321,16 @@ class TestManageServicesConfigOptions:
         opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--sink-all",
+            "--inspect",
+            "--inspect-sink",
+            "--sink-inspect",
+            "--sink-save",
+            "--track-table",
+            "--env",
             "--validate-config",
             "--validate-bloblang",
         ]:
             assert opt in opts, f"Missing option: {opt}"
-
-        assert "--inspect" not in opts
-        assert "--inspect-sink" not in opts
-        assert "--sink-inspect" not in opts
 
     def test_resources_inspect_has_inspect_options(self) -> None:
         """Inspect options must be declared on resources inspect command."""
@@ -455,7 +497,7 @@ class TestScaffoldOptions:
         """Core options must be declared."""
         cmds = _get_typed_commands()
         opts = _get_command_option_names(cmds["scaffold"])
-        for opt in ["--pattern", "--source-type", "--update"]:
+        for opt in ["--pattern", "--source-type", "--topology", "--update"]:
             assert opt in opts, f"Missing option: {opt}"
 
     def test_pattern_has_choices(self) -> None:
@@ -469,6 +511,19 @@ class TestScaffoldOptions:
                 assert "db-shared" in param.type.choices
                 return
         raise AssertionError("--pattern option not found")
+
+    def test_topology_has_choices(self) -> None:
+        """--topology must have Choice type with correct values."""
+        cmds = _get_typed_commands()
+        cmd = cmds["scaffold"]
+        for param in cmd.params:
+            if isinstance(param, click.Option) and "--topology" in param.opts:
+                assert isinstance(param.type, click.Choice)
+                assert "redpanda" in param.type.choices
+                assert "fdw" in param.type.choices
+                assert "pg_native" in param.type.choices
+                return
+        raise AssertionError("--topology option not found")
 
 
 class TestSetupLocalOptions:
@@ -547,6 +602,13 @@ class TestManageMigrationsOptions:
         group = cmds["manage-migrations"]
         assert isinstance(group, click.Group)
         assert "schema-docs" in group.commands
+
+    def test_generate_has_topology_option(self) -> None:
+        """manage-migrations generate should expose the topology selector."""
+        group = _get_manage_migrations_group()
+        opts = _get_command_option_names(group.commands["generate"])
+        for opt in ["--service", "--table", "--dry-run", "--topology"]:
+            assert opt in opts, f"Missing option: {opt}"
 
 
 class TestManageServicesOptions:

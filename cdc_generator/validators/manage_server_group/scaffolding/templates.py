@@ -65,12 +65,12 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 #
 # Services:
 # - Dev Container (Python development environment with Fish shell)
-# - PostgreSQL (target database for CDC)
+# - PostgreSQL (target database for CDC with tds_fdw installed)
 # - Redpanda (Kafka-compatible streaming platform)
 # - Bento Source (Source DB CDC → Redpanda)
 # - Bento Sink (Redpanda → PostgreSQL)
 # - Redpanda Console (Web UI for monitoring)
-# - Adminer (Database management UI)
+# - pgAdmin (Database management UI)
 #
 # Optional Services (use profiles):
 # - SQL Server 2022 (use --profile local-mssql for local testing)
@@ -110,10 +110,12 @@ services:
     entrypoint: ""
 
   # ===========================================================================
-  # PostgreSQL - CDC Target Database (Start with --enable-local-sink)
+  # PostgreSQL - CDC Target Database with tds_fdw (Start with --enable-local-sink)
   # ===========================================================================
   postgres:
-    image: postgres:17-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.pg17-tds-fdw
     hostname: {container_prefix}-postgres
     container_name: {container_prefix}-replica
     ports:
@@ -122,13 +124,14 @@ services:
       POSTGRES_USER: ${{POSTGRES_LOCAL_USER:-postgres}}
       POSTGRES_PASSWORD: ${{POSTGRES_LOCAL_PASSWORD:-postgres}}
       POSTGRES_DB: ${{POSTGRES_LOCAL_DB:-{server_group_name}_db}}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d
     networks:
       - cdc-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${{POSTGRES_LOCAL_USER:-postgres}} -d $${{POSTGRES_LOCAL_DB:-{server_group_name}_db}}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -202,19 +205,27 @@ services:
     # Console starts by default with Redpanda
 
   # ===========================================================================
-  # Adminer - Database Management UI
+  # pgAdmin - Database Management UI
   # ===========================================================================
-  adminer:
-    image: adminer:latest
-    hostname: {container_prefix}-adminer
-    container_name: {container_prefix}-adminer
+  pgadmin:
+    build:
+      context: .
+      dockerfile: Dockerfile.pgadmin
+    hostname: {container_prefix}-pgadmin
+    container_name: {container_prefix}-pgadmin
     ports:
-      - "8090:8080"
+      - "${{PGADMIN_PORT:-58081}}:80"
     environment:
-      ADMINER_DEFAULT_SERVER: postgres
+      PGADMIN_DEFAULT_EMAIL: ${{PGADMIN_DEFAULT_EMAIL:-admin@local.invalid}}
+      PGADMIN_DEFAULT_PASSWORD: ${{PGADMIN_DEFAULT_PASSWORD:-admin}}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     networks:
       - cdc-network
-    # Adminer starts by default for database management
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # pgAdmin starts by default for database management
 
   # ===========================================================================
   # Bento Source (Source DB → Redpanda)
@@ -295,7 +306,7 @@ def get_env_example_template(
     server_group_name: str,
     pattern: str,
     source_type: str,
-    kafka_topology: str = "shared",
+    broker_topology: str | None = "shared",
     servers: "dict[str, dict[str, str]] | None" = None,
 ) -> str:
     """Generate .env.example template with multi-server support.
@@ -304,7 +315,7 @@ def get_env_example_template(
         server_group_name: Name of the server group
         pattern: 'db-per-tenant' or 'db-shared'
         source_type: 'mssql' or 'postgres'
-        kafka_topology: 'shared' or 'per-server'
+        broker_topology: Broker topology when topology is redpanda
         servers: Dict of server configurations (optional, for multi-server support)
 
     Returns:
@@ -327,8 +338,8 @@ def get_env_example_template(
 #
 # MONITORING ACCESS:
 # - Redpanda Console: http://localhost:8080 (no login)
-# - Adminer: http://localhost:8090
-#   PostgreSQL: postgres / postgres / {server_group_name}_db
+# - pgAdmin: http://localhost:58081
+#   Login: admin@local.invalid / admin
 # =============================================================================
 
 """
@@ -378,10 +389,17 @@ POSTGRES_LOCAL_PASSWORD=postgres
 POSTGRES_LOCAL_DB=""" + f"{server_group_name}_db" + """
 POSTGRES_PORT=5432
 
+# ==========================================================================
+# pgAdmin Configuration
+# ==========================================================================
+PGADMIN_DEFAULT_EMAIL=admin@local.invalid
+PGADMIN_DEFAULT_PASSWORD=admin
+PGADMIN_PORT=58081
+
 """
 
-    # Kafka configuration based on topology
-    if kafka_topology == "per-server":
+    # Redpanda/Kafka configuration only applies to redpanda topology.
+    if broker_topology == "per-server":
         content += """# ===========================================================================
 # Redpanda/Kafka Configuration (per-server topology)
 # ===========================================================================
@@ -394,7 +412,7 @@ POSTGRES_PORT=5432
         content += """REDPANDA_SCHEMA_REGISTRY=http://redpanda:8081
 
 """
-    else:
+    elif broker_topology is not None:
         content += """# ===========================================================================
 # Redpanda/Kafka Configuration (shared topology)
 # ===========================================================================
@@ -475,7 +493,7 @@ docker compose exec dev fish
 ## Monitoring
 
 - **Redpanda Console**: http://localhost:8080
-- **Adminer (DB UI)**: http://localhost:8090
+- **pgAdmin (DB UI)**: http://localhost:58081
 - **Redpanda Admin API**: http://localhost:19644
 
 ## Directory Structure
@@ -583,6 +601,12 @@ This implementation uses `.env` (from `.env.example`) for local runtime configur
 - `POSTGRES_LOCAL_DB` (default `{server_group_name}_db`)
 - `POSTGRES_PORT` (default `5432`)
 
+## pgAdmin (Local)
+
+- `PGADMIN_DEFAULT_EMAIL` (default `admin@local.invalid`)
+- `PGADMIN_DEFAULT_PASSWORD` (default `admin`)
+- `PGADMIN_PORT` (default `58081`)
+
 ## Kafka / Redpanda
 
 - `KAFKA_BOOTSTRAP_SERVERS`
@@ -652,7 +676,8 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 - `--add-server NAME`
 - `--list-servers`
 - `--remove-server NAME`
-- `--set-kafka-topology shared|per-server`
+- `--set-topology redpanda|fdw|pg_native`
+- `--set-broker-topology shared|per-server`
 - Connection args used with add/update server flows: `--host`, `--port`, `--user`, `--password`
 
 ### Service/Environment Identification
@@ -687,8 +712,117 @@ This implementation uses the normalized canonical CLI surface from `cdc-pipeline
 
 - Prefer canonical grouped commands in docs and scripts.
 - Use canonical grouped commands only (`manage-services config` and `manage-services resources`).
+- Persist project topology with `cdc manage-source-groups --set-topology <redpanda|fdw|pg_native>` and let `cdc manage-migrations generate` derive the internal runtime automatically.
+- Use `cdc manage-migrations generate --topology <...>` only for one-off overrides.
 - Run commands from this implementation root (`{server_group_name}`) unless command docs state otherwise.
 """
+
+
+def get_postgres_fdw_dockerfile_template() -> str:
+  """Generate Dockerfile for local PostgreSQL with tds_fdw installed."""
+  return """FROM postgres:17-bookworm
+
+RUN set -eux; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    freetds-bin \
+    freetds-dev \
+    git \
+    pkg-config \
+    postgresql-server-dev-17; \
+  git clone --depth 1 https://github.com/tds-fdw/tds_fdw.git /tmp/tds_fdw; \
+  cd /tmp/tds_fdw; \
+  make USE_PGXS=1; \
+  make USE_PGXS=1 install; \
+  rm -rf /tmp/tds_fdw; \
+  apt-get purge -y --auto-remove git pkg-config; \
+  rm -rf /var/lib/apt/lists/*
+"""
+
+
+def get_pgadmin_dockerfile_template() -> str:
+  """Generate Dockerfile for local pgAdmin with imported server metadata."""
+  return """FROM dpage/pgadmin4:9
+
+USER root
+
+COPY pgadmin/servers.json /pgadmin4/servers.json.template
+COPY pgadmin/pgpass /pgadmin4/pgpass.template
+COPY pgadmin/entrypoint.sh /entrypoint-scaffold-pgadmin.sh
+
+RUN chmod 600 /pgadmin4/pgpass.template \
+  && chmod 755 /entrypoint-scaffold-pgadmin.sh
+
+ENTRYPOINT ["/entrypoint-scaffold-pgadmin.sh"]
+"""
+
+
+def get_pgadmin_entrypoint_template() -> str:
+  """Generate entrypoint that renders pgAdmin passfile and imported servers."""
+  return """#!/bin/sh
+set -eu
+
+pgadmin_email="${PGADMIN_DEFAULT_EMAIL:-admin@local.invalid}"
+postgres_host="${PGADMIN_POSTGRES_HOST:-postgres}"
+postgres_port="${POSTGRES_PORT:-5432}"
+postgres_db="${POSTGRES_LOCAL_DB:-postgres}"
+postgres_user="${POSTGRES_LOCAL_USER:-postgres}"
+postgres_password="${POSTGRES_LOCAL_PASSWORD:-postgres}"
+
+storage_dir="/var/lib/pgadmin/storage/$pgadmin_email"
+pgpass_target="$storage_dir/.pgpass"
+
+mkdir -p "$storage_dir"
+
+sed \
+  -e "s|__POSTGRES_HOST__|$postgres_host|g" \
+  -e "s|__POSTGRES_PORT__|$postgres_port|g" \
+  -e "s|__POSTGRES_DB__|$postgres_db|g" \
+  -e "s|__POSTGRES_USER__|$postgres_user|g" \
+  -e "s|__POSTGRES_PASSWORD__|$postgres_password|g" \
+  /pgadmin4/pgpass.template > "$pgpass_target"
+
+sed \
+  -e "s|__PGADMIN_EMAIL__|$pgadmin_email|g" \
+  -e "s|__POSTGRES_HOST__|$postgres_host|g" \
+  -e "s|__POSTGRES_PORT__|$postgres_port|g" \
+  -e "s|__POSTGRES_DB__|$postgres_db|g" \
+  -e "s|__POSTGRES_USER__|$postgres_user|g" \
+  /pgadmin4/servers.json.template > /pgadmin4/servers.json
+
+chmod 600 "$pgpass_target"
+
+exec /entrypoint.sh "$@"
+"""
+
+
+def get_pgadmin_servers_json_template(server_group_name: str) -> str:
+  """Generate imported pgAdmin server registration for the local sink database."""
+  return f"""{{
+  "Servers": {{
+  "1": {{
+    "Name": "{server_group_name}-local-target",
+    "Group": "scaffold-local",
+    "Host": "__POSTGRES_HOST__",
+    "Port": __POSTGRES_PORT__,
+    "MaintenanceDB": "__POSTGRES_DB__",
+    "Username": "__POSTGRES_USER__",
+    "SSLMode": "disable",
+    "ConnectionParameters": {{
+    "sslmode": "disable",
+    "passfile": "/var/lib/pgadmin/storage/__PGADMIN_EMAIL__/.pgpass"
+    }}
+  }}
+  }}
+}}
+"""
+
+
+def get_pgadmin_pgpass_template() -> str:
+  """Generate pgpass template for imported pgAdmin connections."""
+  return "__POSTGRES_HOST__:__POSTGRES_PORT__:__POSTGRES_DB__:__POSTGRES_USER__:__POSTGRES_PASSWORD__\n"
 
 
 def get_cdc_cli_flow_doc_template(server_group_name: str) -> str:
@@ -721,7 +855,8 @@ cdc manage-source-groups \
 
 ```bash
 cdc manage-source-groups --list-servers
-cdc manage-source-groups --set-kafka-topology per-server
+cdc manage-source-groups --set-topology <redpanda|fdw|pg_native>
+cdc manage-source-groups --set-broker-topology per-server
 cdc manage-source-groups --set-validation-env nonprod
 ```
 
@@ -798,6 +933,11 @@ __all__ = [
     "get_env_example_template",
     "get_env_variables_doc_template",
     "get_gitignore_template",
+  "get_pgadmin_dockerfile_template",
+  "get_pgadmin_entrypoint_template",
+  "get_pgadmin_pgpass_template",
+  "get_pgadmin_servers_json_template",
+  "get_postgres_fdw_dockerfile_template",
     "get_project_structure_doc_template",
     "get_readme_template",
     "get_sink_pipeline_template",

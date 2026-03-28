@@ -21,17 +21,18 @@ from cdc_generator.helpers.service_config import get_project_root
 def source_server_env_vars(
     db_type: str,
     server_name: str,
-    kafka_topology: str = "shared",
+    broker_topology: str | None = "shared",
 ) -> dict[str, str]:
     """Generate env variable placeholders for a source server.
 
     Args:
         db_type: Database type ('postgres' or 'mssql')
         server_name: Server name (e.g., 'default', 'nonprod', 'prod')
-        kafka_topology: 'shared' or 'per-server'
+        broker_topology: Broker fan-out mode when topology is redpanda
 
     Returns:
-        Dict with keys: host, port, user, password, kafka_bootstrap_servers
+        Dict with keys: host, port, user, password and, when applicable,
+        kafka_bootstrap_servers
         Values are env var placeholders like '${POSTGRES_SOURCE_HOST_NONPROD}'
 
     Example:
@@ -58,12 +59,12 @@ def source_server_env_vars(
         }
 
     # Kafka bootstrap servers: depends on topology
-    if kafka_topology == "per-server":
+    if broker_topology == "per-server":
         kafka_postfix = f"_{server_name.upper()}"
         placeholders["kafka_bootstrap_servers"] = (
             f"${{KAFKA_BOOTSTRAP_SERVERS{kafka_postfix}}}"
         )
-    else:
+    elif broker_topology is not None:
         placeholders["kafka_bootstrap_servers"] = "${KAFKA_BOOTSTRAP_SERVERS}"
 
     return placeholders

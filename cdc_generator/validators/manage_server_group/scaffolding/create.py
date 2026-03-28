@@ -16,6 +16,11 @@ from .templates import (
     get_env_variables_doc_template,
     get_gitignore_template,
     get_migrations_architecture_doc_template,
+    get_pgadmin_dockerfile_template,
+    get_pgadmin_entrypoint_template,
+    get_pgadmin_pgpass_template,
+    get_pgadmin_servers_json_template,
+    get_postgres_fdw_dockerfile_template,
     get_project_structure_doc_template,
     get_readme_template,
     get_sink_pipeline_template,
@@ -219,7 +224,7 @@ def scaffold_project_structure(
     pattern: str,
     source_type: str,
     project_root: Path,
-    kafka_topology: str = "shared",
+    broker_topology: str | None = "shared",
     servers: "dict[str, dict[str, str]] | None" = None,
 ) -> None:
     """Create complete directory structure and template files for new implementation.
@@ -238,7 +243,7 @@ def scaffold_project_structure(
         pattern: 'db-per-tenant' or 'db-shared'
         source_type: 'mssql' or 'postgres'
         project_root: Root directory of the implementation
-        kafka_topology: 'shared' or 'per-server' (default: 'shared')
+        broker_topology: Broker topology when topology is redpanda
         servers: Dict of server configurations for multi-server support
     """
     # Create directory structure
@@ -257,6 +262,7 @@ def scaffold_project_structure(
         "generated/schemas",
         "generated/pg-migrations",
         "_docs",
+        "pgadmin",
         ".vscode",
     ]
 
@@ -281,12 +287,17 @@ def scaffold_project_structure(
     # Create template files
     files_to_create = {
         "docker-compose.yml": get_docker_compose_template(server_group_name, pattern),
+        "Dockerfile.pg17-tds-fdw": get_postgres_fdw_dockerfile_template(),
+        "Dockerfile.pgadmin": get_pgadmin_dockerfile_template(),
         ".env.example": get_env_example_template(
             server_group_name, pattern, source_type,
-            kafka_topology=kafka_topology, servers=servers
+            broker_topology=broker_topology, servers=servers
         ),
         "README.md": get_readme_template(server_group_name, pattern),
         ".gitignore": get_gitignore_template(),
+        "pgadmin/entrypoint.sh": get_pgadmin_entrypoint_template(),
+        "pgadmin/servers.json": get_pgadmin_servers_json_template(server_group_name),
+        "pgadmin/pgpass": get_pgadmin_pgpass_template(),
     }
 
     docs_to_create = {
@@ -312,6 +323,7 @@ def scaffold_project_structure(
             continue  # Already handled above
 
         file_path = project_root / filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         if not file_path.exists():  # Don't overwrite existing files
             file_path.write_text(content)
             print(f"✓ Created file: {filename}")

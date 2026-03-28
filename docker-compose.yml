@@ -1,4 +1,3 @@
-# CDC Pipeline Generator - Development Container
 services:
   dev:
     build:
@@ -8,19 +7,61 @@ services:
     hostname: cdc-generator-dev
     network_mode: host
     env_file:
-      - .env
+    - .env
     volumes:
-      - .:/workspace
-      - ../adopus-cdc-pipeline:/implementations/adopus:rw
-      - ../asma-cdc-pipeline:/implementations/asma:rw
-      - /workspace/.venv
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ~/.gitconfig:/root/.gitconfig:ro
-      - ~/.ssh:/root/.ssh:ro
+    - .:/workspace
+    - ../adopus-cdc-pipeline:/implementations/adopus:rw
+    - ../asma-cdc-pipeline:/implementations/asma:rw
+    - ../cdc-fdw-local:/implementations/cdc-fdw-local:rw
+    - /workspace/.venv
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ~/.gitconfig:/root/.gitconfig:ro
+    - ~/.ssh:/root/.ssh:ro
     environment:
-      - PYTHONPATH=/workspace
-      - PYTHONUNBUFFERED=1
+    - PYTHONPATH=/workspace
+    - PYTHONUNBUFFERED=1
     working_dir: /workspace
     command: tail -f /dev/null
     stdin_open: true
     tty: true
+    depends_on:
+    - mssql
+    - postgres-target
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: Y
+      SA_PASSWORD: ${MSSQL_PASSWORD}
+      MSSQL_PID: Developer
+    ports:
+    - ${MSSQL_PORT:-1433}:1433
+    volumes:
+    - mssql-data:/var/opt/mssql
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT
+        1"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  postgres-target:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_TARGET_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_TARGET_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_TARGET_DB:-cdc_target}
+    ports:
+    - ${POSTGRES_TARGET_PORT:-5432}:5432
+    volumes:
+    - postgres-target-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER:-postgres}
+      interval: 10s
+      timeout: 3s
+      retries: 5
+volumes:
+  mssql-data: null
+  postgres-target-data: null

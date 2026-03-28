@@ -173,6 +173,8 @@ def display_server_info(
     name: str,
     server_config: ServerConfig,
     group_type: str,
+    *,
+    show_broker_details: bool = True,
 ) -> None:
     """Display information for a single server.
 
@@ -190,7 +192,8 @@ def display_server_info(
     print_info(f"    Type: {group_type}")
     print_info(f"    Host: {host}")
     print_info(f"    Port: {port}")
-    print_info(f"    Kafka: {kafka_bs}")
+    if show_broker_details:
+        print_info(f"    Kafka: {kafka_bs}")
 
 
 def count_sources_per_server(
@@ -248,4 +251,12 @@ def update_kafka_bootstrap_servers(
         else:
             # For shared topology: all servers use the same Kafka cluster
             srv_config['kafka_bootstrap_servers'] = '${KAFKA_BOOTSTRAP_SERVERS}'
+
+
+def remove_kafka_bootstrap_servers(
+    servers: dict[str, ServerConfig],
+) -> None:
+    """Remove broker-only bootstrap fields from all servers."""
+    for srv_config in servers.values():
+        srv_config.pop('kafka_bootstrap_servers', None)
 

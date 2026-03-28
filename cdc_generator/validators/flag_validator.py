@@ -42,7 +42,8 @@ class ManageServerGroupFlagValidator:
         'update', 'info',
         'db_definitions',
         'add_server', 'remove_server', 'list_servers',
-        'set_kafka_topology',
+        'set_topology',
+        'set_broker_topology',
         'add_to_ignore_list', 'list_ignore_patterns',
         'add_to_schema_excludes', 'list_schema_excludes',
         'add_to_table_includes', 'list_table_includes',
@@ -106,8 +107,10 @@ class ManageServerGroupFlagValidator:
             result = self._validate_add_server(args)
         elif action == 'remove_server':
             result = self._validate_remove_server(args)
-        elif action == 'set_kafka_topology':
-            result = self._validate_set_kafka_topology(args)
+        elif action == 'set_topology':
+            result = self._validate_set_topology(args)
+        elif action == 'set_broker_topology':
+            result = self._validate_set_broker_topology(args)
         elif action == 'add_source_custom_key':
             result = self._validate_add_source_custom_key(args)
         elif action in self.OK_ACTIONS:
@@ -221,28 +224,28 @@ class ManageServerGroupFlagValidator:
 
         return ValidationResult(valid=True, level='ok')
 
-    def _validate_set_kafka_topology(self, args: argparse.Namespace) -> ValidationResult:
-        """Validate --set-kafka-topology.
+    def _validate_set_broker_topology(self, args: argparse.Namespace) -> ValidationResult:
+        """Validate --set-broker-topology.
 
         Args:
             args: Parsed arguments
 
         Returns:
-            ValidationResult for set-kafka-topology action
+            ValidationResult for set-broker-topology action
         """
-        topology = getattr(args, 'set_kafka_topology', None)
+        topology = getattr(args, 'set_broker_topology', None)
 
         if not topology:
             return ValidationResult(
                 valid=False,
                 level='error',
-                message="❌ --set-kafka-topology requires a value",
+                message="❌ --set-broker-topology requires a value",
                 suggestion=(
                     "💡 Valid values:\n"
-                    "   cdc manage-source-groups --set-kafka-topology shared "
-                    "# Same Kafka for all servers\n"
-                    "   cdc manage-source-groups --set-kafka-topology per-server "
-                    "# Separate Kafka per server"
+                    "   cdc manage-source-groups --set-broker-topology shared "
+                    "# Same broker for all servers\n"
+                    "   cdc manage-source-groups --set-broker-topology per-server "
+                    "# Separate broker bootstrap per server"
                 )
             )
 
@@ -252,6 +255,40 @@ class ManageServerGroupFlagValidator:
                 level='error',
                 message=f"❌ Invalid topology: {topology}",
                 suggestion="💡 Valid values: shared, per-server"
+            )
+
+        return ValidationResult(valid=True, level='ok')
+
+    def _validate_set_topology(self, args: argparse.Namespace) -> ValidationResult:
+        """Validate --set-topology.
+
+        Args:
+            args: Parsed arguments
+
+        Returns:
+            ValidationResult for set-topology action
+        """
+        topology = getattr(args, 'set_topology', None)
+
+        if not topology:
+            return ValidationResult(
+                valid=False,
+                level='error',
+                message="❌ --set-topology requires a value",
+                suggestion=(
+                    "💡 Valid values depend on source type:\n"
+                    "   cdc manage-source-groups --set-topology redpanda\n"
+                    "   cdc manage-source-groups --set-topology fdw\n"
+                    "   cdc manage-source-groups --set-topology pg_native"
+                )
+            )
+
+        if topology not in {'redpanda', 'fdw', 'pg_native'}:
+            return ValidationResult(
+                valid=False,
+                level='error',
+                message=f"❌ Invalid topology: {topology}",
+                suggestion="💡 Valid values: redpanda, fdw, pg_native"
             )
 
         return ValidationResult(valid=True, level='ok')

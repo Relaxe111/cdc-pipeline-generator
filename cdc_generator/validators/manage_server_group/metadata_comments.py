@@ -34,7 +34,6 @@ def get_file_header_comments() -> list[str]:
         comments exist. These comments provide context and guidance to users.
     """
     return [
-        "# yaml-language-server: $schema=.vscode/schemas/source-groups.schema.json",
         "# ============================================================================",
         "# AUTO-GENERATED FILE - DO NOT EDIT DIRECTLY",
         "# Use 'cdc manage-source-groups' commands to modify this file",

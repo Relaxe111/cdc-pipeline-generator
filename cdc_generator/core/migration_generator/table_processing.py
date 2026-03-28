@@ -6,12 +6,18 @@ from typing import Any, cast
 
 from cdc_generator.core.migration_generator.data_structures import (
     GenerationResult,
+    RuntimeMode,
     TableMigration,
+)
+from cdc_generator.helpers.fdw_identifiers import (
+    build_foreign_table_name,
+    build_min_lsn_table_name,
 )
 from cdc_generator.helpers.type_mapper import TypeMapper
 
 from .columns import (
     add_cdc_metadata_columns,
+    add_native_cdc_metadata_columns,
     add_column_template_columns,
     build_columns_from_table_def,
 )
@@ -27,6 +33,9 @@ def process_table(
     table_defs: dict[str, dict[str, Any]],
     result: GenerationResult,
     type_mapper: TypeMapper | None = None,
+    *,
+    runtime_mode: RuntimeMode = "brokered",
+    duplicate_source_table_name_count: int = 1,
 ) -> TableMigration | None:
     """Process a single sink table into a TableMigration."""
     from_ref = sink_cfg.get("from", "")
@@ -71,11 +80,32 @@ def process_table(
     )
 
     columns = add_column_template_columns(columns, cast(dict[str, object], sink_cfg))
-    columns = add_cdc_metadata_columns(columns)
+    if runtime_mode == "native":
+        columns = add_native_cdc_metadata_columns(columns)
+    else:
+        columns = add_cdc_metadata_columns(columns)
 
     if not columns:
         result.warnings.append(f"Table {sink_key}: no columns resolved, skipped")
         return None
+
+    if runtime_mode == "native":
+        customer_id_present = any(
+            column.name.casefold() == "customer_id"
+            for column in columns
+        )
+        if not customer_id_present:
+            result.errors.append(
+                f"Table {sink_key}: native runtime requires a customer_id column template",
+            )
+            return None
+        primary_keys = _prepend_customer_id(primary_keys)
+
+    foreign_table_name = build_foreign_table_name(
+        source_schema,
+        source_table,
+        duplicate_table_name_count=duplicate_source_table_name_count,
+    )
 
     return TableMigration(
         table_name=table_name,
@@ -85,4 +115,19 @@ def process_table(
         primary_keys=primary_keys,
         replicate_structure=replicate_structure,
         target_exists=target_exists,
+        source_table=source_table,
+        source_key=from_ref,
+        foreign_table_name=foreign_table_name,
+        min_lsn_table_name=build_min_lsn_table_name(foreign_table_name),
+        capture_instance_name=f"{source_schema}_{source_table}",
     )
+
+
+def _prepend_customer_id(primary_keys: list[str]) -> list[str]:
+    """Ensure customer_id leads the composite PK in native runtime mode."""
+    deduped_primary_keys = [
+        primary_key
+        for primary_key in primary_keys
+        if primary_key.casefold() != "customer_id"
+    ]
+    return ["customer_id", *deduped_primary_keys]

@@ -105,7 +105,9 @@ class SinkGroupInherited(TypedDict, total=False):
     source_group: str  # deduced from sink name: sink_X → source group X
     pattern: str  # db-shared, db-per-tenant
     type: str  # postgres, mssql, http_client, http_server
-    kafka_topology: str  # shared, per-server, per-service
+    broker_topology: str  # preferred neutral name for broker fan-out shape
+    topology_kind: str  # brokered_redpanda, mssql_fdw_pull, pg_logical
+    runtime_engine: str  # bento, postgres_native, bun_runner, etc.
     environment_aware: bool  # inherited from source group
     description: str
     # Required:
@@ -129,7 +131,9 @@ class SinkGroupStandalone(TypedDict, total=False):
     # Optional (auto-deduced if not specified):
     pattern: str  # db-shared, db-per-tenant
     type: str  # postgres, mssql, http_client, http_server
-    kafka_topology: str  # optional — defaults to source group's topology
+    broker_topology: str  # preferred neutral name for broker fan-out shape
+    topology_kind: str  # brokered_redpanda, mssql_fdw_pull, pg_logical
+    runtime_engine: str  # bento, postgres_native, bun_runner, etc.
     environment_aware: bool  # inherited from source group
     description: str
     # Discovery/filtering patterns (same as source groups)
@@ -186,7 +190,9 @@ class ResolvedSinkGroup(TypedDict, total=False):
     source_group: str
     pattern: str
     type: str
-    kafka_topology: str
+    broker_topology: str
+    topology_kind: str
+    runtime_engine: str
     description: str
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]

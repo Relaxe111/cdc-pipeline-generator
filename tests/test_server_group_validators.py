@@ -46,7 +46,8 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "add_server": None,
         "list_servers": False,
         "remove_server": None,
-        "set_kafka_topology": None,
+        "set_topology": None,
+        "set_broker_topology": None,
         "set_extraction_pattern": None,
         "add_extraction_pattern": None,
         "env": None,
@@ -129,9 +130,9 @@ class TestFlagValidator:
         result = validator.validate(args)
         assert result.valid is True  # No action
 
-    def test_set_topology_invalid_value_returns_error(self) -> None:
-        """--set-kafka-topology with invalid value → error."""
-        args = _ns(set_kafka_topology="invalid")
+    def test_set_broker_topology_invalid_value_returns_error(self) -> None:
+        """--set-broker-topology with invalid value → error."""
+        args = _ns(set_broker_topology="invalid")
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is False
@@ -140,16 +141,33 @@ class TestFlagValidator:
             "shared" in result.suggestion or "per-server" in result.suggestion
         )
 
-    def test_set_topology_valid_shared(self) -> None:
-        """--set-kafka-topology shared → ok."""
-        args = _ns(set_kafka_topology="shared")
+    def test_set_broker_topology_valid_shared(self) -> None:
+        """--set-broker-topology shared → ok."""
+        args = _ns(set_broker_topology="shared")
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is True
 
-    def test_set_topology_valid_per_server(self) -> None:
-        """--set-kafka-topology per-server → ok."""
-        args = _ns(set_kafka_topology="per-server")
+    def test_set_broker_topology_valid_per_server(self) -> None:
+        """--set-broker-topology per-server → ok."""
+        args = _ns(set_broker_topology="per-server")
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is True
+
+    def test_set_topology_invalid_value_returns_error(self) -> None:
+        """--set-topology with invalid value → error."""
+        args = _ns(set_topology="invalid")
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is False
+        assert result.message and "Invalid topology" in result.message
+        assert result.suggestion and "redpanda" in result.suggestion
+
+    @pytest.mark.parametrize("topology", ["redpanda", "fdw", "pg_native"])
+    def test_set_topology_valid_values(self, topology: str) -> None:
+        """--set-topology supports all user-facing topology values."""
+        args = _ns(set_topology=topology)
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is True

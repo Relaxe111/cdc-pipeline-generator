@@ -27,6 +27,9 @@ import click
 from cdc_generator.cli.click_commands_column_templates import (
     execute_manage_column_templates,
 )
+from cdc_generator.cli.click_commands_fdw import (
+    fdw_cmd,
+)
 from cdc_generator.cli.click_commands_pipeline_migrations import (
     manage_migrations_cmd,
     manage_pipelines_cmd,
@@ -512,9 +515,12 @@ manage_services_cmd.add_command(manage_services_resources_cmd, name="resources")
               help="Regex pattern with named groups")
 @click.option("--environment-aware", is_flag=True,
               help="Enable environment-aware grouping")
-@click.option("--kafka-topology",
+@click.option("--topology",
+              type=click.Choice(["redpanda", "fdw", "pg_native"]),
+              help="User-facing topology")
+@click.option("--broker-topology",
               type=click.Choice(["shared", "per-server"]),
-              help="Kafka topology")
+              help="Broker topology")
 @click.option("--host", help="Database host")
 @click.option("--port", help="Database port")
 @click.option("--user", help="Database user")
@@ -560,6 +566,7 @@ def setup_local_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 # ============================================================================
 
 CLICK_COMMANDS: dict[str, click.Command] = {
+    "fdw": fdw_cmd,
     "manage-services": manage_services_cmd,
     "manage-source-groups": manage_source_groups_cmd,
     "manage-sink-groups": manage_sink_groups_cmd,

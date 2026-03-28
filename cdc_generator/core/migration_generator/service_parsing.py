@@ -19,6 +19,15 @@ def _load_source_groups(project_root: Path) -> dict[str, Any]:
     return cast(dict[str, Any], raw)
 
 
+def resolve_source_group_config(project_root: Path) -> dict[str, Any]:
+    """Return the first source-group config from source-groups.yaml."""
+    source_groups = _load_source_groups(project_root)
+    for _group_name, group_cfg_raw in source_groups.items():
+        if isinstance(group_cfg_raw, dict):
+            return cast(dict[str, Any], group_cfg_raw)
+    return {}
+
+
 def derive_target_schemas(
     sink_tables: dict[str, dict[str, Any]],
 ) -> list[str]:
@@ -108,15 +117,22 @@ def resolve_sink_target(sink_name: str, project_root: Path) -> SinkTarget:
 
 def resolve_pattern(project_root: Path) -> str:
     """Determine architecture pattern from source-groups.yaml."""
-    source_groups = _load_source_groups(project_root)
-    for _group_name, group_cfg_raw in source_groups.items():
-        if not isinstance(group_cfg_raw, dict):
-            continue
-        group_cfg = cast(dict[str, Any], group_cfg_raw)
-        pattern = str(group_cfg.get("pattern", "")).strip().lower()
-        if pattern:
-            return pattern
+    group_cfg = resolve_source_group_config(project_root)
+    pattern = str(group_cfg.get("pattern", "")).strip().lower()
+    if pattern:
+        return pattern
     return "db-per-tenant"
+
+
+def resolve_source_type(project_root: Path) -> str:
+    """Determine the source engine type from source-groups.yaml."""
+    group_cfg = resolve_source_group_config(project_root)
+    source_type = str(
+        group_cfg.get("type", group_cfg.get("server_type", "")),
+    ).strip().lower()
+    if source_type:
+        return source_type
+    return ""
 
 
 def validate_db_shared_customer_id(

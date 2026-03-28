@@ -43,6 +43,11 @@ from cdc_generator.helpers.helpers_logging import (
     print_error,
     print_info,
 )
+from cdc_generator.helpers.topology_runtime import (
+    supported_topologies_for_source_type,
+    topology_uses_broker,
+    topology_supported_for_source_type,
+)
 
 
 def _default_connection_placeholders(source_type: str, server_name: str = "default") -> dict[str, str]:
@@ -62,14 +67,17 @@ def _default_connection_placeholders(source_type: str, server_name: str = "defau
     }
 
 
-def _kafka_bootstrap_placeholder(kafka_topology: str, server_name: str = "default") -> str:
-    """Return Kafka bootstrap servers placeholder.
+def _broker_bootstrap_placeholder(
+    broker_topology: str,
+    server_name: str = "default",
+) -> str:
+    """Return broker bootstrap servers placeholder.
 
     Args:
-        kafka_topology: 'shared' or 'per-server'
+        broker_topology: Broker topology value: 'shared' or 'per-server'
         server_name: Server name for postfix (only used if per-server)
     """
-    if kafka_topology == 'shared':
+    if broker_topology == 'shared':
         return "${KAFKA_BOOTSTRAP_SERVERS}"
     postfix = f"_{server_name.upper()}"
     return f"${{KAFKA_BOOTSTRAP_SERVERS{postfix}}}"
@@ -244,10 +252,21 @@ Connection Defaults:
     )
 
     parser.add_argument(
-        "--kafka-topology",
+        "--topology",
+        choices=["redpanda", "fdw", "pg_native"],
+        default="redpanda",
+        help=(
+            "User-facing topology. MSSQL supports redpanda|fdw and PostgreSQL "
+            "supports redpanda|pg_native. Default: redpanda"
+        ),
+    )
+
+    parser.add_argument(
+        "--broker-topology",
+        dest="broker_topology",
         choices=["shared", "per-server"],
-        default="shared",
-        help="Kafka/Redpanda distribution: 'shared' (one for all servers) or 'per-server' (isolated per server). Default: shared",
+        default=None,
+        help="Broker distribution for redpanda topology only: 'shared' or 'per-server'",
     )
 
     parser.add_argument(
@@ -307,6 +326,18 @@ Connection Defaults:
             print_info("  --environment-aware: Required for db-shared pattern")
         return 1
 
+    if not topology_supported_for_source_type(args.topology, args.source_type):
+        supported = ', '.join(supported_topologies_for_source_type(args.source_type))
+        print_error(
+            f"Topology '{args.topology}' is not supported for source type '{args.source_type}'."
+        )
+        print_info(f"  Supported topologies: {supported}")
+        return 1
+
+    if args.broker_topology and not topology_uses_broker(args.topology):
+        print_error("--broker-topology is only valid when --topology redpanda")
+        return 1
+
     # Set default connection placeholders for 'default' server
     placeholders = _default_connection_placeholders(args.source_type, server_name="default")
     args.host = args.host or placeholders['host']
@@ -314,11 +345,15 @@ Connection Defaults:
     args.user = args.user or placeholders['user']
     args.password = args.password or placeholders['password']
 
-    # Set Kafka bootstrap servers based on topology
-    args.kafka_bootstrap_servers = _kafka_bootstrap_placeholder(
-        args.kafka_topology,
-        server_name="default"
-    )
+    # Set broker bootstrap servers based on topology
+    if topology_uses_broker(args.topology):
+        args.broker_topology = args.broker_topology or "shared"
+        args.kafka_bootstrap_servers = _broker_bootstrap_placeholder(
+            args.broker_topology,
+            server_name="default"
+        )
+    else:
+        args.kafka_bootstrap_servers = None
 
     # Map to handler expected names for backwards compatibility
     args.add_group = args.name

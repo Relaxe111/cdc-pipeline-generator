@@ -8,6 +8,7 @@ Usage:
 
 Commands:
     scaffold              Scaffold a new CDC pipeline project with source group configuration
+    fdw                   Plan and generate metadata-driven MSSQL FDW bootstrap SQL
     manage-services      Manage service config/schema commands
     manage-source-groups Manage source groups configuration
     manage-sink-groups   Manage sink groups configuration
@@ -134,6 +135,11 @@ def get_script_paths(workspace_root: Path, is_dev_container: bool) -> ScriptPath
 
 # Commands that use generator library
 GENERATOR_COMMANDS: dict[str, dict[str, str]] = {
+    "fdw": {
+        "module": "cdc_generator.cli.fdw",
+        "script": "cli/fdw.py",
+        "description": "Plan and generate metadata-driven MSSQL FDW bootstrap SQL",
+    },
     "scaffold": {
         "module": "cdc_generator.cli.scaffold_command",
         "script": "cli/scaffold_command.py",
@@ -238,7 +244,7 @@ MIGRATION_COMMANDS: dict[str, dict[str, str]] = {
         "module": "cdc_generator.cli.migration_generate",
         "script": "cli/migration_generate.py",
         "description": "Generate PostgreSQL migration SQL files",
-        "usage": "cdc manage-migrations generate [--service <name>] [--table <name>] [--dry-run]",
+        "usage": "cdc manage-migrations generate [--service <name>] [--table <name>] [--dry-run] [--topology <redpanda|fdw|pg_native>]",
     },
     "diff": {
         "runner": "generator",

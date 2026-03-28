@@ -114,6 +114,7 @@ def get_scaffold_directories() -> list[str]:
         "generated/schemas",
         "generated/pg-migrations",
         "_docs",
+        "pgadmin",
         ".vscode",
     ]
 

@@ -16,6 +16,11 @@ from .templates import (
     get_docker_compose_template,
     get_env_variables_doc_template,
     get_migrations_architecture_doc_template,
+    get_pgadmin_dockerfile_template,
+    get_pgadmin_entrypoint_template,
+    get_pgadmin_pgpass_template,
+    get_pgadmin_servers_json_template,
+    get_postgres_fdw_dockerfile_template,
     get_project_structure_doc_template,
     get_readme_template,
 )
@@ -353,7 +358,10 @@ def update_scaffold(project_root: Path) -> bool:
     # 7. Ensure scaffold markdown docs exist (README at root, docs under _docs)
     _ensure_docker_compose_file(project_root)
 
-    # 8. Ensure scaffold markdown docs exist (README at root, docs under _docs)
+    # 8. Ensure runtime support files exist for local Postgres + pgAdmin
+    _ensure_runtime_support_files(project_root)
+
+    # 9. Ensure scaffold markdown docs exist (README at root, docs under _docs)
     _ensure_scaffold_markdown_files(project_root)
 
     print_success("\n✅ Scaffold update complete!")
@@ -442,6 +450,29 @@ def _ensure_docker_compose_file(project_root: Path) -> None:
     content = get_docker_compose_template(server_group_name, pattern)
     docker_compose_path.write_text(content, encoding="utf-8")
     print_success("✓ Created file: docker-compose.yml")
+
+
+def _ensure_runtime_support_files(project_root: Path) -> None:
+    """Create missing scaffold runtime support files without overwriting existing."""
+    server_group_name, _pattern, _source_type = _infer_scaffold_metadata(project_root)
+
+    runtime_support_files = {
+        "Dockerfile.pg17-tds-fdw": get_postgres_fdw_dockerfile_template(),
+        "Dockerfile.pgadmin": get_pgadmin_dockerfile_template(),
+        "pgadmin/entrypoint.sh": get_pgadmin_entrypoint_template(),
+        "pgadmin/servers.json": get_pgadmin_servers_json_template(server_group_name),
+        "pgadmin/pgpass": get_pgadmin_pgpass_template(),
+    }
+
+    for relative_path, content in runtime_support_files.items():
+        target_path = project_root / relative_path
+        if target_path.exists():
+            print_info(f"⊘ Skipped (exists): {relative_path}")
+            continue
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content, encoding="utf-8")
+        print_success(f"✓ Created file: {relative_path}")
 
 
 def _update_vscode_settings(project_root: Path) -> None:

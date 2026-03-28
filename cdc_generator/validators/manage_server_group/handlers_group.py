@@ -24,6 +24,7 @@ from .config import (
 from .metadata_comments import get_file_header_comments, validate_output_has_metadata
 from .scaffolding import scaffold_project_structure
 from .types import ServerGroupConfig
+from cdc_generator.helpers.topology_runtime import topology_uses_broker
 
 
 def ensure_project_structure(server_group_name: str, server_group_config: ServerGroupConfig) -> None:
@@ -70,7 +71,7 @@ def validate_multi_server_config(server_group: dict[str, Any]) -> list[str]:
     Checks:
     1. 'type' is at group level (not per-server)
     2. All sources reference valid server names in their environment entries
-    3. kafka_bootstrap_servers is present on each server
+    3. kafka_bootstrap_servers is present on each server when topology is redpanda
     4. Each source.{env}.server references a valid server
 
     Args:
@@ -107,6 +108,10 @@ def validate_multi_server_config(server_group: dict[str, Any]) -> list[str]:
     elif group_type not in ('postgres', 'mssql'):
         errors.append(f"Invalid 'type': {group_type}. Must be 'postgres' or 'mssql'")
 
+    show_broker_details = topology_uses_broker(
+        str(server_group.get('topology', '')).strip().lower() or None,
+    )
+
     # Check individual servers (should NOT have 'type')
     servers_dict = cast(dict[str, Any], servers)
     for srv_name, srv_config in servers_dict.items():
@@ -115,7 +120,7 @@ def validate_multi_server_config(server_group: dict[str, Any]) -> list[str]:
         if srv_config_dict.get('type'):
             errors.append(f"Server '{srv_name}' has 'type' - move 'type' to group level")
 
-        if not srv_config_dict.get('kafka_bootstrap_servers'):
+        if show_broker_details and not srv_config_dict.get('kafka_bootstrap_servers'):
             errors.append(f"Server '{srv_name}' is missing 'kafka_bootstrap_servers'")
 
     # Check sources reference valid servers in their environment entries
@@ -221,9 +226,10 @@ def handle_add_group(args: Namespace) -> int:
                 print_error(f"Server group '{args.add_group}' already exists")
                 return 1
 
-    # Get kafka_topology (default to 'shared' if not provided)
-    kafka_topology = getattr(args, 'kafka_topology', 'shared')
+    broker_topology = getattr(args, 'broker_topology', None)
+    topology = getattr(args, 'topology', 'redpanda')
     kafka_bootstrap = getattr(args, 'kafka_bootstrap_servers', '${KAFKA_BOOTSTRAP_SERVERS}')
+    show_broker_details = topology_uses_broker(topology)
 
     # Create new server group with multi-server structure
     # NOTE: 'type' is at group level (enforced for all servers), not per-server
@@ -232,7 +238,7 @@ def handle_add_group(args: Namespace) -> int:
         'pattern': args.mode,
         'type': args.source_type,  # Database type at group level
         'description': f"{'Multi-tenant' if args.mode == 'db-per-tenant' else 'Shared'} {args.source_type.upper()} server",
-        'kafka_topology': kafka_topology,
+        'topology': topology,
         'servers': {
             'default': {
                 # No 'type' here - it's at group level
@@ -240,11 +246,14 @@ def handle_add_group(args: Namespace) -> int:
                 'port': args.port,
                 'user': args.user,
                 'password': args.password,
-                'kafka_bootstrap_servers': kafka_bootstrap,
             }
         },
         'sources': {}  # 'sources' instead of 'services'
     }
+
+    if show_broker_details:
+        new_group['broker_topology'] = broker_topology or 'shared'
+        cast(dict[str, Any], new_group['servers']['default'])['kafka_bootstrap_servers'] = kafka_bootstrap
 
     # Add extraction pattern (unified key for both db-per-tenant and db-shared)
     extraction_pattern = getattr(args, 'extraction_pattern', '')
@@ -306,7 +315,7 @@ def handle_add_group(args: Namespace) -> int:
             pattern=args.mode,
             source_type=args.source_type,
             project_root=PROJECT_ROOT,
-            kafka_topology=kafka_topology,
+            broker_topology=broker_topology,
             servers=servers_for_scaffold,
         )
     except Exception as e:

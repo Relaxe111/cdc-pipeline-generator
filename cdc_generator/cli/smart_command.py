@@ -347,8 +347,8 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "validate_hierarchy": set(),
     "validate_bloblang": set(),
     "generate_validation": set(),
-    "inspect": {"schema", "all_flag"},
-    "inspect_sink": {"all_flag"},
+    "inspect": {"schema", "all_flag", "save", "track_table", "env"},
+    "inspect_sink": {"schema", "all_flag", "save", "env"},
     # ── Sink lifecycle (standalone) ────────────────────────────
     "add_sink": set(),
     "remove_sink": set(),
@@ -470,7 +470,8 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     },
     "list_servers": set(),
     "remove_server": set(),
-    "set_kafka_topology": set(),
+    "set_topology": set(),
+    "set_broker_topology": set(),
     "add_extraction_pattern": {
         "env", "strip_suffixes", "description",
     },

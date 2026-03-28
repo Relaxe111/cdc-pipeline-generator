@@ -4,7 +4,7 @@ Tests the full flow through a real **fish** shell for:
 - ``--info`` — display server group information
 - ``--list-servers`` — list configured servers
 - ``--add-server`` / ``--remove-server`` — multi-server management
-- ``--set-kafka-topology`` — change Kafka topology
+- ``--set-broker-topology`` — change broker topology
 - ``--list-ignore-patterns`` / ``--add-to-ignore-list`` — database excludes
 - ``--list-schema-excludes`` / ``--add-to-schema-excludes`` — schema excludes
 - ``--set-extraction-pattern`` — set a regex on a server
@@ -32,7 +32,7 @@ _MINIMAL_SOURCE_GROUPS = (
     "mygroup:\n"
     "  pattern: db-shared\n"
     "  type: postgres\n"
-    "  kafka_topology: shared\n"
+    "  broker_topology: shared\n"
     "  servers:\n"
     "    default:\n"
     "      host: ${POSTGRES_SOURCE_HOST}\n"
@@ -47,7 +47,7 @@ _SOURCE_GROUPS_WITH_SOURCES = (
     "mygroup:\n"
     "  pattern: db-shared\n"
     "  type: postgres\n"
-    "  kafka_topology: shared\n"
+    "  broker_topology: shared\n"
     "  servers:\n"
     "    default:\n"
     "      host: ${POSTGRES_SOURCE_HOST}\n"
@@ -69,7 +69,7 @@ _MULTI_SERVER_SOURCE_GROUPS = (
     "mygroup:\n"
     "  pattern: db-shared\n"
     "  type: postgres\n"
-    "  kafka_topology: shared\n"
+    "  broker_topology: shared\n"
     "  servers:\n"
     "    default:\n"
     "      host: ${POSTGRES_SOURCE_HOST}\n"
@@ -271,19 +271,19 @@ class TestCliRemoveServer:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# --set-kafka-topology
+# --set-broker-topology
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestCliSetKafkaTopology:
-    """CLI e2e: --set-kafka-topology flag."""
+class TestCliSetBrokerTopology:
+    """CLI e2e: --set-broker-topology flag."""
 
     def test_change_to_per_server(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--set-kafka-topology", "per-server",
+            "manage-source-groups", "--set-broker-topology", "per-server",
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
@@ -294,11 +294,11 @@ class TestCliSetKafkaTopology:
     ) -> None:
         # Start with per-server, switch to shared
         content = _MINIMAL_SOURCE_GROUPS.replace(
-            "kafka_topology: shared", "kafka_topology: per-server",
+            "broker_topology: shared", "broker_topology: per-server",
         )
         _write_source_groups(isolated_project, content)
         result = run_cdc(
-            "manage-source-groups", "--set-kafka-topology", "shared",
+            "manage-source-groups", "--set-broker-topology", "shared",
         )
         assert result.returncode == 0
 
@@ -307,10 +307,47 @@ class TestCliSetKafkaTopology:
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--set-kafka-topology", "shared",
+            "manage-source-groups", "--set-broker-topology", "shared",
         )
         assert result.returncode == 0
         assert "already" in result.stdout.lower()
+
+    def test_rejected_for_non_redpanda_topology(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        content = _MINIMAL_SOURCE_GROUPS.replace(
+            "broker_topology: shared\n",
+            "",
+        ).replace(
+            "      kafka_bootstrap_servers: ${KAFKA_BOOTSTRAP_SERVERS}\n",
+            "",
+        )
+        content = content.replace(
+            "  type: postgres\n",
+            "  type: postgres\n  topology: pg_native\n",
+        )
+        _write_source_groups(isolated_project, content)
+        result = run_cdc(
+            "manage-source-groups", "--set-broker-topology", "shared",
+        )
+        assert result.returncode == 1
+
+
+class TestCliSetTopologyCleanup:
+    """CLI e2e: topology changes should prune irrelevant broker config."""
+
+    def test_switch_to_pg_native_removes_broker_fields(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups", "--set-topology", "pg_native",
+        )
+        assert result.returncode == 0
+        yaml_content = _read_source_groups(isolated_project)
+        assert "topology: pg_native" in yaml_content
+        assert "broker_topology:" not in yaml_content
+        assert "kafka_bootstrap_servers:" not in yaml_content
 
 
 # ═══════════════════════════════════════════════════════════════════════════

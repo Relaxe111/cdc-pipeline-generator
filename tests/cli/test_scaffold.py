@@ -8,7 +8,8 @@ Coverage matrix
 - All 4 pattern x source-type combos (db-per-tenant/db-shared x mssql/postgres)
 - Extraction pattern: regex written, empty string omitted
 - source-groups.yaml deep content (connection placeholders, kafka, description)
-- ``--kafka-topology per-server``
+- ``--broker-topology per-server``
+- Local sink runtime files (tds_fdw Postgres image + pgAdmin assets)
 - ``--environment-aware`` validation
 - ``--update`` mode (basic + creates missing dirs + merges settings + empty project)
 - Error paths (missing each required flag individually, duplicate, invalid values)
@@ -96,12 +97,15 @@ EXPECTED_DIRECTORIES = [
     "generated/schemas",
     "generated/pg-migrations",
     "_docs",
+    "pgadmin",
     ".vscode",
 ]
 
 EXPECTED_FILES = [
     "source-groups.yaml",
     "docker-compose.yml",
+    "Dockerfile.pg17-tds-fdw",
+    "Dockerfile.pgadmin",
     ".env.example",
     "README.md",
     "_docs/PROJECT_STRUCTURE.md",
@@ -112,6 +116,9 @@ EXPECTED_FILES = [
     "_docs/architecture/DESTRUCTIVE_CHANGES.md",
     ".gitignore",
     ".vscode/settings.json",
+    "pgadmin/entrypoint.sh",
+    "pgadmin/servers.json",
+    "pgadmin/pgpass",
     "services/_schemas/column-templates.yaml",
     "services/_schemas/transform-rules.yaml",
     "services/_schemas/_definitions/map-mssql-pgsql.yaml",
@@ -361,15 +368,25 @@ class TestScaffoldSourceGroupsContent:
         assert "${MSSQL_SOURCE_USER}" in content
         assert "${MSSQL_SOURCE_PASSWORD}" in content
 
-    def test_cdc_scaffold_source_groups_has_kafka_topology(
+    def test_cdc_scaffold_source_groups_has_broker_topology_for_redpanda(
         self,
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """source-groups.yaml contains kafka_topology field."""
+        """redpanda scaffolds persist broker_topology."""
         _scaffold_db_per_tenant_mssql(run_cdc, "kafkatest")
         content = _read_file(isolated_project, "source-groups.yaml")
-        assert "kafka_topology:" in content
+        assert "broker_topology:" in content
+
+    def test_cdc_scaffold_source_groups_has_default_topology(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """source-groups.yaml persists the default user-facing topology."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "topologydefault")
+        content = _read_file(isolated_project, "source-groups.yaml")
+        assert "topology: redpanda" in content
 
     def test_cdc_scaffold_source_groups_has_empty_sources_section(
         self,
@@ -424,64 +441,171 @@ class TestScaffoldSourceGroupsContent:
         assert "kafka_bootstrap_servers:" in content
         assert "${KAFKA_BOOTSTRAP_SERVERS}" in content
 
+    def test_cdc_scaffold_fdw_omits_broker_fields_from_source_groups(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """fdw scaffolds should not persist redpanda-only broker fields."""
+        run_cdc(
+            "scaffold", "fdwclean",
+            "--pattern", "db-per-tenant",
+            "--source-type", "mssql",
+            "--extraction-pattern", "^fdwclean_(?P<customer>[^_]+)$",
+            "--topology", "fdw",
+        )
+        content = _read_file(isolated_project, "source-groups.yaml")
+        assert "topology: fdw" in content
+        assert "broker_topology:" not in content
+        assert "kafka_bootstrap_servers:" not in content
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. Kafka topology
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestScaffoldKafkaTopology:
-    """Test --kafka-topology flag."""
+class TestScaffoldBrokerTopology:
+    """Test --broker-topology flag."""
 
-    def test_cdc_scaffold_kafka_topology_per_server_in_source_groups(
+    def test_cdc_scaffold_broker_topology_per_server_in_source_groups(
         self,
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """--kafka-topology per-server writes per-server kafka bootstrap to source-groups.yaml."""
+        """--broker-topology per-server writes per-server bootstrap in source-groups.yaml."""
         run_cdc(
-            "scaffold", "persvr",
+            "scaffold", "brokeralias",
             "--pattern", "db-per-tenant",
             "--source-type", "mssql",
-            "--extraction-pattern", "^persvr_(?P<customer>[^_]+)$",
-            "--kafka-topology", "per-server",
+            "--extraction-pattern", "^brokeralias_(?P<customer>[^_]+)$",
+            "--broker-topology", "per-server",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
-        assert "kafka_topology: per-server" in content
+        assert "broker_topology: per-server" in content
         assert "KAFKA_BOOTSTRAP_SERVERS_DEFAULT" in content
 
-    def test_cdc_scaffold_kafka_topology_per_server_env_example_has_per_server_entries(
+    def test_cdc_scaffold_broker_topology_per_server_env_example_has_per_server_entries(
         self,
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """--kafka-topology per-server generates per-server entries in .env.example."""
+        """--broker-topology per-server generates per-server entries in .env.example."""
         run_cdc(
             "scaffold", "persvr2",
             "--pattern", "db-per-tenant",
             "--source-type", "mssql",
             "--extraction-pattern", "^persvr2_(?P<customer>[^_]+)$",
-            "--kafka-topology", "per-server",
+            "--broker-topology", "per-server",
         )
         content = _read_file(isolated_project, ".env.example")
         assert "per-server" in content.lower() or "KAFKA_BOOTSTRAP_SERVERS_DEFAULT" in content
 
-    def test_cdc_scaffold_kafka_topology_shared_explicit_in_source_groups(
+    def test_cdc_scaffold_broker_topology_shared_explicit_in_source_groups(
         self,
         run_cdc: RunCdc,
         isolated_project: Path,
     ) -> None:
-        """--kafka-topology shared (explicit) writes shared bootstrap to source-groups.yaml."""
+        """--broker-topology shared (explicit) writes shared bootstrap to source-groups.yaml."""
         run_cdc(
             "scaffold", "sharedkafka",
             "--pattern", "db-per-tenant",
             "--source-type", "mssql",
             "--extraction-pattern", "^sk_(?P<customer>[^_]+)$",
-            "--kafka-topology", "shared",
+            "--broker-topology", "shared",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
-        assert "kafka_topology: shared" in content
+        assert "broker_topology: shared" in content
         assert "${KAFKA_BOOTSTRAP_SERVERS}" in content
+
+    def test_cdc_scaffold_rejects_broker_topology_for_fdw(
+        self,
+        run_cdc: RunCdc,
+    ) -> None:
+        """broker-topology should be rejected when scaffold topology is not redpanda."""
+        result = run_cdc(
+            "scaffold", "fdwbrokerbad",
+            "--pattern", "db-per-tenant",
+            "--source-type", "mssql",
+            "--extraction-pattern", "^fdwbrokerbad_(?P<customer>[^_]+)$",
+            "--topology", "fdw",
+            "--broker-topology", "per-server",
+        )
+        assert result.returncode != 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3b. User-facing topology
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestScaffoldTopology:
+    """Test --topology flag."""
+
+    def test_cdc_scaffold_topology_fdw_in_source_groups(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--topology fdw writes the explicit topology for MSSQL projects."""
+        run_cdc(
+            "scaffold", "fdwproj",
+            "--pattern", "db-per-tenant",
+            "--source-type", "mssql",
+            "--extraction-pattern", "^fdwproj_(?P<customer>[^_]+)$",
+            "--topology", "fdw",
+        )
+        content = _read_file(isolated_project, "source-groups.yaml")
+        assert "topology: fdw" in content
+        assert "broker_topology:" not in content
+
+    def test_cdc_scaffold_topology_fdw_env_example_omits_redpanda_section(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """fdw scaffolds should not emit Redpanda env settings."""
+        run_cdc(
+            "scaffold", "fdwenv",
+            "--pattern", "db-per-tenant",
+            "--source-type", "mssql",
+            "--extraction-pattern", "^fdwenv_(?P<customer>[^_]+)$",
+            "--topology", "fdw",
+        )
+        content = _read_file(isolated_project, ".env.example")
+        assert "KAFKA_BOOTSTRAP_SERVERS" not in content
+        assert "REDPANDA_SCHEMA_REGISTRY" not in content
+
+    def test_cdc_scaffold_topology_pg_native_in_source_groups(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--topology pg_native writes the explicit topology for PostgreSQL projects."""
+        run_cdc(
+            "scaffold", "pgnativeproj",
+            "--pattern", "db-shared",
+            "--source-type", "postgres",
+            "--extraction-pattern", "",
+            "--environment-aware",
+            "--topology", "pg_native",
+        )
+        content = _read_file(isolated_project, "source-groups.yaml")
+        assert "topology: pg_native" in content
+
+    def test_cdc_scaffold_rejects_topology_source_type_mismatch(
+        self,
+        run_cdc: RunCdc,
+    ) -> None:
+        """Unsupported topology/source-type combinations should fail fast."""
+        result = run_cdc(
+            "scaffold", "badtopology",
+            "--pattern", "db-per-tenant",
+            "--source-type", "mssql",
+            "--extraction-pattern", "",
+            "--topology", "pg_native",
+        )
+        assert result.returncode != 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -502,6 +626,19 @@ class TestScaffoldGeneratedFileContent:
         content = _read_file(isolated_project, "docker-compose.yml")
         assert "dctest" in content
         assert "services:" in content
+
+    def test_cdc_scaffold_docker_compose_uses_fdw_postgres_and_pgadmin(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """docker-compose.yml should build the FDW Postgres target and pgAdmin UI."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "fdwlocal")
+        content = _read_file(isolated_project, "docker-compose.yml")
+        assert "Dockerfile.pg17-tds-fdw" in content
+        assert "Dockerfile.pgadmin" in content
+        assert "pgadmin:" in content
+        assert "adminer:" not in content
 
     def test_cdc_scaffold_readme_contains_pattern_and_project_name(
         self,
@@ -577,6 +714,18 @@ class TestScaffoldGeneratedFileContent:
         assert "POSTGRES_LOCAL_USER" in content
         assert "POSTGRES_LOCAL_PASSWORD" in content
         assert "POSTGRES_LOCAL_DB" in content
+
+    def test_cdc_scaffold_env_example_has_pgadmin_section(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """.env.example includes pgAdmin configuration defaults."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "pgadminenv")
+        content = _read_file(isolated_project, ".env.example")
+        assert "PGADMIN_DEFAULT_EMAIL" in content
+        assert "PGADMIN_DEFAULT_PASSWORD" in content
+        assert "PGADMIN_PORT" in content
 
     def test_cdc_scaffold_env_example_has_kafka_section(
         self,
@@ -750,17 +899,17 @@ class TestScaffoldErrors:
         )
         assert result.returncode != 0
 
-    def test_cdc_scaffold_invalid_kafka_topology_exits_with_error(
+    def test_cdc_scaffold_invalid_broker_topology_exits_with_error(
         self,
         run_cdc: RunCdc,
     ) -> None:
-        """cdc scaffold --kafka-topology invalid (invalid choice) exits with error."""
+        """cdc scaffold --broker-topology invalid (invalid choice) exits with error."""
         result = run_cdc(
-            "scaffold", "badkafka",
+            "scaffold", "badbroker",
             "--pattern", "db-per-tenant",
             "--source-type", "mssql",
             "--extraction-pattern", "",
-            "--kafka-topology", "invalid",
+            "--broker-topology", "invalid",
         )
         assert result.returncode != 0
 
@@ -922,6 +1071,24 @@ class TestScaffoldUpdate:
         assert result.returncode == 0
         assert compose_file.is_file(), "Missing docker-compose.yml should be recreated by --update"
         assert "redpanda" in compose_file.read_text(encoding="utf-8").lower()
+
+    def test_cdc_scaffold_update_recreates_missing_pgadmin_support_files(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        """--update creates missing pgAdmin support files introduced by newer scaffolds."""
+        _scaffold_db_per_tenant_mssql(run_cdc, "updpgadmin")
+
+        dockerfile = isolated_project / "Dockerfile.pgadmin"
+        entrypoint = isolated_project / "pgadmin" / "entrypoint.sh"
+        dockerfile.unlink(missing_ok=True)
+        entrypoint.unlink(missing_ok=True)
+
+        result = run_cdc("scaffold", "--update")
+        assert result.returncode == 0
+        assert dockerfile.is_file(), "Missing Dockerfile.pgadmin should be recreated by --update"
+        assert entrypoint.is_file(), "Missing pgadmin/entrypoint.sh should be recreated by --update"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

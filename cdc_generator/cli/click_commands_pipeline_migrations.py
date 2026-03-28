@@ -193,6 +193,12 @@ def manage_migrations_cmd(ctx: click.Context) -> int:
 @click.option("--service", default="adopus", help="Service name")
 @click.option("--table", default=None, help="Filter by table name")
 @click.option("--dry-run", is_flag=True, help="Preview without writing")
+@click.option(
+    "--topology",
+    type=click.Choice(["redpanda", "fdw", "pg_native"]),
+    default=None,
+    help="User-facing topology selection",
+)
 @click.pass_context
 def manage_migrations_generate_cmd(
     _ctx: click.Context, **_kwargs: object,

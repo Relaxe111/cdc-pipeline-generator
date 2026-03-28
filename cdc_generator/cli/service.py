@@ -422,6 +422,23 @@ def _build_parser() -> ServiceArgumentParser:
         help="List source tables configured for the selected service",
     )
     parser.add_argument(
+        "--inspect",
+        action="store_true",
+        help="Inspect source database schema",
+    )
+    parser.add_argument(
+        "--inspect-sink", "--sink-inspect",
+        nargs="?",
+        const="__all_sinks__",
+        default=None,
+        metavar="SINK_KEY",
+        help=(
+            "Inspect sink database schema for the selected service. "
+            + "Provide SINK_KEY for one sink, or use --inspect-sink --all "
+            + "to inspect all configured sinks."
+        ),
+    )
+    parser.add_argument(
         "--add-source-table",
         action="append",
         metavar="TABLE",
@@ -449,6 +466,25 @@ def _build_parser() -> ServiceArgumentParser:
     parser.add_argument(
         "--schema",
         help="Source schema for source-table operations",
+    )
+    parser.add_argument(
+        "--save", "--sink-save",
+        action="store_true",
+        help="Save detailed table schemas to YAML",
+    )
+    parser.add_argument(
+        "--track-table",
+        action="append",
+        metavar="TABLE",
+        help=(
+            "Add tracked whitelist table(s) as schema.table under "
+            + "services/_schemas/<service>/tracked-tables.yaml"
+        ),
+    )
+    parser.add_argument(
+        "--env",
+        default="nonprod",
+        help="Environment for inspection (nonprod/prod)",
     )
     parser.add_argument(
         "--generate-validation",
@@ -711,8 +747,7 @@ def _dispatch_validation(args: argparse.Namespace) -> int | None:
             continue
         return handler(args)
 
-    # Backward-compat dispatch support for test-level namespaces and internal routing.
-    # CLI parser no longer exposes inspect flags under manage-services config.
+    # Dispatch inspect flows from manage-services config.
     if getattr(args, "inspect", False) or getattr(args, "inspect_sink", False):
         return _dispatch_inspect(args)
 

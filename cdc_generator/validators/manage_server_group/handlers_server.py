@@ -17,6 +17,13 @@ from cdc_generator.helpers.helpers_logging import (
     print_success,
     print_warning,
 )
+from cdc_generator.helpers.topology_runtime import (
+    resolve_broker_topology,
+    resolve_topology,
+    supported_topologies_for_source_type,
+    topology_uses_broker,
+    topology_supported_for_source_type,
+)
 
 from .common import (
     check_sources_using_server,
@@ -24,6 +31,7 @@ from .common import (
     display_server_info,
     display_sources_using_server,
     load_config_and_get_server_group,
+    remove_kafka_bootstrap_servers,
     update_kafka_bootstrap_servers,
     validate_server_in_group,
 )
@@ -40,7 +48,9 @@ from .yaml_io import write_server_group_yaml
 
 
 def default_connection_placeholders(
-    source_type: str, server_name: str, kafka_topology: str
+    source_type: str,
+    server_name: str,
+    broker_topology: str | None,
 ) -> dict[str, str]:
     """Return default environment variable placeholders for a server.
 
@@ -49,7 +59,7 @@ def default_connection_placeholders(
     Args:
         source_type: 'postgres' or 'mssql'
         server_name: Server name (e.g., 'default', 'analytics')
-        kafka_topology: 'shared' or 'per-server'
+        broker_topology: Broker topology value when topology is redpanda
 
     Returns:
         Dict with host, port, user, password, kafka_bootstrap_servers placeholders
@@ -58,7 +68,7 @@ def default_connection_placeholders(
         >>> default_connection_placeholders('postgres', 'analytics', 'per-server')
         {'host': '${POSTGRES_SOURCE_HOST_ANALYTICS}', ...}
     """
-    return source_server_env_vars(source_type, server_name, kafka_topology)
+    return source_server_env_vars(source_type, server_name, broker_topology)
 
 
 def handle_add_server(args: Namespace) -> int:
@@ -100,11 +110,21 @@ def handle_add_server(args: Namespace) -> int:
     if not is_valid:
         return 1
 
-    # Get kafka topology
-    kafka_topology = cast(str, server_group.get('kafka_topology', 'shared'))
+    source_topology = resolve_topology(
+        cast(dict[str, Any], server_group),
+        source_type=str(final_source_type),
+    )
+    broker_topology = resolve_broker_topology(
+        cast(dict[str, Any], server_group),
+        topology=source_topology,
+    )
 
     # Generate default placeholders
-    placeholders = default_connection_placeholders(final_source_type, server_name, kafka_topology)
+    placeholders = default_connection_placeholders(
+        final_source_type,
+        server_name,
+        broker_topology,
+    )
 
     # Create new server config (NO 'type' - it's at group level)
     new_server: dict[str, Any] = {
@@ -112,8 +132,10 @@ def handle_add_server(args: Namespace) -> int:
         'port': getattr(args, 'port', None) or placeholders['port'],
         'user': getattr(args, 'user', None) or placeholders['user'],
         'password': getattr(args, 'password', None) or placeholders['password'],
-        'kafka_bootstrap_servers': placeholders['kafka_bootstrap_servers'],
     }
+
+    if 'kafka_bootstrap_servers' in placeholders:
+        new_server['kafka_bootstrap_servers'] = placeholders['kafka_bootstrap_servers']
 
     # Add server to configuration
     servers[server_name] = new_server
@@ -127,7 +149,8 @@ def handle_add_server(args: Namespace) -> int:
         print_success(f"✓ Added server '{server_name}' to server group '{server_group_name}'")
         print_info(f"  Type: {source_type}")
         print_info(f"  Host: {new_server['host']}")
-        print_info(f"  Kafka: {new_server['kafka_bootstrap_servers']}")
+        if 'kafka_bootstrap_servers' in new_server:
+            print_info(f"  Kafka: {new_server['kafka_bootstrap_servers']}")
         # Append env variables to .env
         env_count = append_env_vars_to_dotenv(
             placeholders,
@@ -168,7 +191,14 @@ def handle_list_servers(_args: Namespace) -> int:
             break
 
     servers: dict[str, Any] = server_group.get('servers', {})
-    kafka_topology = server_group.get('kafka_topology', 'shared')
+    topology = resolve_topology(
+        cast(dict[str, Any], server_group),
+        source_type=str(server_group.get('type', '')),
+    )
+    broker_topology = resolve_broker_topology(
+        cast(dict[str, Any], server_group),
+        topology=topology,
+    )
 
     # Handle legacy single-server format
     if not servers:
@@ -176,7 +206,10 @@ def handle_list_servers(_args: Namespace) -> int:
         legacy_server = server_group.get('server', {})
         servers = {'default': legacy_server} if legacy_server else {}
 
-    print_header(f"Servers in '{server_group_name}' (kafka_topology: {kafka_topology})")
+    if broker_topology is not None:
+        print_header(f"Servers in '{server_group_name}' (broker topology: {broker_topology})")
+    else:
+        print_header(f"Servers in '{server_group_name}'")
 
     if not servers:
         print_warning("No servers configured")
@@ -187,7 +220,12 @@ def handle_list_servers(_args: Namespace) -> int:
 
     # Display all servers
     for name, server_config in servers.items():
-        display_server_info(name, cast(ServerConfig, server_config), group_type)
+        display_server_info(
+            name,
+            cast(ServerConfig, server_config),
+            group_type,
+            show_broker_details=topology_uses_broker(topology),
+        )
 
     # Count and display sources per server
     sources: dict[str, Any] = server_group.get('sources', server_group.get('services', {}))
@@ -240,9 +278,16 @@ def handle_remove_server(args: Namespace) -> int:
         print_success(f"✓ Removed server '{server_name}' from server group '{server_group_name}'")
         # Remove env variables from .env
         group_type = str(server_group.get('type', 'postgres'))
-        kafka_topology = cast(str, server_group.get('kafka_topology', 'shared'))
+        topology = resolve_topology(
+            cast(dict[str, Any], server_group),
+            source_type=str(group_type),
+        )
+        broker_topology = resolve_broker_topology(
+            cast(dict[str, Any], server_group),
+            topology=topology,
+        )
         placeholders = source_server_env_vars(
-            group_type, server_name, kafka_topology,
+            group_type, server_name, broker_topology,
         )
         env_count = remove_env_vars_from_dotenv(placeholders)
         print_env_removal_summary(env_count, placeholders)
@@ -252,20 +297,20 @@ def handle_remove_server(args: Namespace) -> int:
         return 1
 
 
-def handle_set_kafka_topology(args: Namespace) -> int:
-    """Handle changing the Kafka topology setting.
+def handle_set_broker_topology(args: Namespace) -> int:
+    """Handle changing the broker topology setting.
 
     When changing topology, all servers' kafka_bootstrap_servers are updated:
     - shared: All servers get '${KAFKA_BOOTSTRAP_SERVERS}'
     - per-server: Each server gets '${KAFKA_BOOTSTRAP_SERVERS_<NAME>}'
 
     Args:
-        args: Parsed arguments with set_kafka_topology ('shared' or 'per-server')
+        args: Parsed arguments with set_broker_topology ('shared' or 'per-server')
 
     Returns:
         Exit code (0 for success, 1 for error)
     """
-    new_topology = args.set_kafka_topology
+    new_topology = args.set_broker_topology
 
     # Load configuration
     try:
@@ -290,13 +335,24 @@ def handle_set_kafka_topology(args: Namespace) -> int:
         print_error("Could not determine server group name")
         return 1
 
-    current_topology = server_group.get('kafka_topology', 'shared')
+    source_type = str(server_group.get('type', '')).strip().lower()
+    topology = resolve_topology(
+        cast(dict[str, Any], server_group),
+        source_type=source_type,
+    )
+    if not topology_uses_broker(topology):
+        print_error(
+            "broker_topology only applies when topology is 'redpanda'",
+        )
+        return 1
+
+    current_topology = server_group.get('broker_topology', 'shared')
     if current_topology == new_topology:
-        print_info(f"Kafka topology is already '{new_topology}'")
+        print_info(f"Broker topology is already '{new_topology}'")
         return 0
 
     # Update topology
-    server_group['kafka_topology'] = new_topology
+    server_group['broker_topology'] = new_topology
 
     # Update all servers' kafka_bootstrap_servers
     servers: dict[str, Any] = server_group.get('servers', {})
@@ -305,7 +361,7 @@ def handle_set_kafka_topology(args: Namespace) -> int:
     # Save the updated configuration
     try:
         write_server_group_yaml(server_group_name, server_group)
-        print_success(f"✓ Changed Kafka topology from '{current_topology}' to '{new_topology}'")
+        print_success(f"✓ Changed broker topology from '{current_topology}' to '{new_topology}'")
 
         # Show updated bootstrap servers
         print_info("\nUpdated kafka_bootstrap_servers:")
@@ -313,6 +369,61 @@ def handle_set_kafka_topology(args: Namespace) -> int:
             srv = cast(dict[str, Any], srv_config)
             print_info(f"    {srv_name}: {srv.get('kafka_bootstrap_servers')}")
 
+        return 0
+    except Exception as e:
+        print_error(f"Failed to save configuration: {e}")
+        return 1
+
+
+def handle_set_topology(args: Namespace) -> int:
+    """Handle changing the user-facing topology setting.
+
+    Args:
+        args: Parsed arguments with set_topology
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    new_topology = args.set_topology
+
+    config, server_group, server_group_name = load_config_and_get_server_group()
+    if not config or not server_group or not server_group_name:
+        return 1
+
+    source_type = str(server_group.get('type', '')).strip().lower()
+    supported = supported_topologies_for_source_type(source_type)
+    if not topology_supported_for_source_type(new_topology, source_type):
+        supported_display = ', '.join(supported) if supported else 'unknown'
+        print_error(
+            f"Topology '{new_topology}' is not supported for source type '{source_type}'. "
+            f"Supported values: {supported_display}"
+        )
+        return 1
+
+    current_topology = resolve_topology(server_group, source_type=source_type)
+    if current_topology == new_topology and server_group.get('topology') == new_topology:
+        print_info(f"Topology is already '{new_topology}'")
+        return 0
+
+    server_group['topology'] = new_topology
+
+    servers = cast(dict[str, ServerConfig], server_group.get('servers', {}))
+    if topology_uses_broker(new_topology):
+        broker_topology = cast(str, server_group.get('broker_topology', 'shared'))
+        server_group['broker_topology'] = broker_topology
+        update_kafka_bootstrap_servers(servers, broker_topology)
+    else:
+        server_group.pop('broker_topology', None)
+        remove_kafka_bootstrap_servers(servers)
+
+    try:
+        write_server_group_yaml(server_group_name, server_group)
+        if current_topology and current_topology != new_topology:
+            print_success(f"✓ Changed topology from '{current_topology}' to '{new_topology}'")
+        else:
+            print_success(f"✓ Set topology to '{new_topology}'")
+        if supported:
+            print_info(f"  Supported for {source_type}: {', '.join(supported)}")
         return 0
     except Exception as e:
         print_error(f"Failed to save configuration: {e}")
