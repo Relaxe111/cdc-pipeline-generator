@@ -125,12 +125,18 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     manifest_text = (sink_dir / "manifest.yaml").read_text(encoding="utf-8")
 
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_checkpoint"' in native_infra_sql
+    assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_bootstrap_state"' in native_infra_sql
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_schedule_policy"' in native_infra_sql
+    assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_tier_assignment"' in native_infra_sql
+    assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_activity_rollup_hourly"' in native_infra_sql
     assert 'CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state"' in native_infra_sql
     assert 'ALTER TABLE "cdc_management"."native_cdc_runtime_state" SET UNLOGGED' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."claim_due_native_cdc_work"' in native_infra_sql
+    assert 'CREATE OR REPLACE FUNCTION "cdc_management"."bootstrap_native_cdc_tables"' in native_infra_sql
     assert 'CREATE OR REPLACE PROCEDURE "cdc_management"."renew_native_cdc_lease"' in native_infra_sql
     assert 'CREATE OR REPLACE VIEW "cdc_management"."v_native_cdc_health"' in native_infra_sql
+    assert 'ADD COLUMN IF NOT EXISTS "tier_mode" text' in native_infra_sql
+    assert 'ADD COLUMN IF NOT EXISTS "manual_schedule_profile" text' in native_infra_sql
     assert 'ADD COLUMN IF NOT EXISTS "jitter_millis" integer' in native_infra_sql
     assert "interval '1 millisecond'" in native_infra_sql
     assert 'runtime_mode: "native"' in manifest_text
@@ -144,8 +150,13 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert '"__cdc_operation" INTEGER' in final_table_sql
 
     assert 'CREATE OR REPLACE FUNCTION "adopus"."pull_actor_batch"' in staging_sql
+    assert 'CREATE OR REPLACE FUNCTION "adopus"."bootstrap_actor_snapshot"' in staging_sql
     assert 'CREATE OR REPLACE PROCEDURE "adopus"."sp_merge_actor"' in staging_sql
+    assert 'Actor_base' in staging_sql
+    assert 'cdc_max_lsn' in staging_sql
     assert 'cdc_min_lsn_Actor' in staging_sql
+    assert 'native_cdc_bootstrap_state' in staging_sql
+    assert 'INSERT INTO "adopus"."Actor"' in staging_sql
     assert 'INSERT INTO "adopus"."stg_Actor"' in staging_sql
 
 
@@ -161,6 +172,8 @@ def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) 
                     "native_cdc": {
                         "enabled": False,
                         "schedule_profile": "hot",
+                        "tier_mode": "manual",
+                        "manual_schedule_profile": "cool",
                         "poll_interval_seconds": 5,
                         "min_poll_interval_seconds": 1,
                         "max_poll_interval_seconds": 600,
@@ -208,6 +221,8 @@ def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) 
 
     assert "'weekday_hot'" in native_infra_sql
     assert "'hot'" in native_infra_sql
+    assert "'manual'" in native_infra_sql
+    assert "'cool'" in native_infra_sql
     assert "2000" in native_infra_sql
     assert "1200" in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"' in native_infra_sql

@@ -241,6 +241,276 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION {{ target_schema }}."bootstrap_{{ table_name | lower }}_snapshot"(
+    p_source_instance_key text,
+    p_enable_after boolean DEFAULT true
+)
+RETURNS TABLE(
+    "rows_loaded" bigint,
+    "captured_start_lsn" bytea,
+    "captured_seqval" bytea,
+    "enabled_after" boolean
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_customer_id uuid;
+    v_fdw_schema text;
+    v_source_db text;
+    v_registration_enabled boolean;
+    v_policy_enabled boolean;
+    v_lease_owner text;
+    v_lease_expires_at timestamptz;
+    v_boundary_start_lsn bytea;
+    v_boundary_seqval bytea;
+    v_rows_loaded bigint := 0;
+    v_sql text;
+BEGIN
+    SET LOCAL statement_timeout = '30min';
+
+    SELECT
+        cr."customer_id",
+        si."fdw_schema_name",
+        si."source_database",
+        reg."enabled",
+        policy."enabled",
+        runtime."lease_owner",
+        runtime."lease_expires_at"
+    INTO
+        v_customer_id,
+        v_fdw_schema,
+        v_source_db,
+        v_registration_enabled,
+        v_policy_enabled,
+        v_lease_owner,
+        v_lease_expires_at
+    FROM "cdc_management"."source_instance" si
+    JOIN "cdc_management"."customer_registry" cr
+        ON cr."customer_key" = si."customer_key"
+    JOIN "cdc_management"."source_table_registration" reg
+        ON reg."source_instance_key" = si."source_instance_key"
+    JOIN "cdc_management"."native_cdc_schedule_policy" policy
+        ON policy."source_instance_key" = reg."source_instance_key"
+       AND policy."logical_table_name" = reg."logical_table_name"
+    JOIN "cdc_management"."native_cdc_runtime_state" runtime
+        ON runtime."source_instance_key" = reg."source_instance_key"
+       AND runtime."logical_table_name" = reg."logical_table_name"
+    WHERE si."source_instance_key" = p_source_instance_key
+      AND reg."logical_table_name" = '{{ table_name }}'
+      AND si."enabled" = true
+    FOR UPDATE OF reg, policy, runtime;
+
+    IF v_customer_id IS NULL THEN
+        RAISE EXCEPTION 'No bootstrap registration found for % / {{ table_name }}', p_source_instance_key;
+    END IF;
+
+    INSERT INTO "cdc_management"."native_cdc_bootstrap_state" (
+        "source_instance_key",
+        "logical_table_name",
+        "bootstrap_status",
+        "last_started_at",
+        "last_error",
+        "updated_at"
+    )
+    VALUES (
+        p_source_instance_key,
+        '{{ table_name }}',
+        'in_progress',
+        NOW(),
+        NULL,
+        NOW()
+    )
+    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+    SET
+        "bootstrap_status" = 'in_progress',
+        "last_started_at" = NOW(),
+        "last_error" = NULL,
+        "updated_at" = NOW();
+
+    IF COALESCE(v_registration_enabled, false) OR COALESCE(v_policy_enabled, false) THEN
+        RAISE EXCEPTION
+            'Bootstrap for {{ table_name }} requires source_table_registration.enabled=false and native_cdc_schedule_policy.enabled=false before execution';
+    END IF;
+
+    IF v_lease_owner IS NOT NULL AND COALESCE(v_lease_expires_at, NOW()) > NOW() THEN
+        RAISE EXCEPTION 'Bootstrap for {{ table_name }} blocked by active lease owner % until %',
+            v_lease_owner,
+            v_lease_expires_at;
+    END IF;
+
+    EXECUTE format(
+        'SELECT "max_lsn" FROM %I.%I',
+        v_fdw_schema,
+        'cdc_max_lsn'
+    )
+    INTO v_boundary_start_lsn;
+
+    IF v_boundary_start_lsn IS NULL THEN
+        RAISE EXCEPTION 'Could not read max LSN for {{ table_name }} from FDW schema %', v_fdw_schema;
+    END IF;
+
+    EXECUTE format(
+        'SELECT f."__$seqval" FROM %I.%I f WHERE f."__$start_lsn" = $1::bytea ORDER BY f."__$seqval" DESC LIMIT 1',
+        v_fdw_schema,
+        '{{ foreign_table_name }}'
+    )
+    INTO v_boundary_seqval
+    USING v_boundary_start_lsn;
+
+    DELETE FROM {{ target_schema }}."stg_{{ table_name }}"
+    WHERE "source_instance_key" = p_source_instance_key;
+
+    DELETE FROM {{ target_schema }}."{{ table_name }}"
+    WHERE "customer_id" = v_customer_id;
+
+    v_sql := format(
+        $fmt$
+        INSERT INTO {{ target_schema }}."{{ table_name }}" (
+            {{ all_column_names }}
+        )
+        SELECT
+{{ snapshot_select_sql }}
+        FROM %I.%I f
+{% if snapshot_order_by_sql %}        ORDER BY {{ snapshot_order_by_sql }}
+{% endif %}        $fmt$,
+        v_fdw_schema,
+        '{{ base_foreign_table_name }}'
+    );
+
+    EXECUTE v_sql USING
+        v_customer_id,
+        v_source_db,
+        v_boundary_start_lsn,
+        v_boundary_seqval;
+
+    GET DIAGNOSTICS v_rows_loaded = ROW_COUNT;
+
+    INSERT INTO "cdc_management"."native_cdc_checkpoint" (
+        "customer_id",
+        "table_name",
+        "last_start_lsn",
+        "last_seqval"
+    )
+    VALUES (
+        v_customer_id,
+        '{{ table_name }}',
+        v_boundary_start_lsn,
+        v_boundary_seqval
+    )
+    ON CONFLICT ("customer_id", "table_name") DO UPDATE
+    SET
+        "last_start_lsn" = EXCLUDED."last_start_lsn",
+        "last_seqval" = EXCLUDED."last_seqval",
+        "updated_at" = NOW();
+
+    UPDATE "cdc_management"."native_cdc_runtime_state" runtime
+    SET
+        "empty_pull_streak" = 0,
+        "next_pull_at" = NOW(),
+        "lease_owner" = NULL,
+        "lease_expires_at" = NULL,
+        "last_success_at" = NOW(),
+        "last_nonempty_at" = CASE
+            WHEN v_rows_loaded > 0 THEN NOW()
+            ELSE runtime."last_nonempty_at"
+        END,
+        "last_batch_rows" = v_rows_loaded,
+        "consecutive_failures" = 0,
+        "last_error" = NULL,
+        "updated_at" = NOW()
+    WHERE runtime."source_instance_key" = p_source_instance_key
+      AND runtime."logical_table_name" = '{{ table_name }}';
+
+    IF p_enable_after THEN
+        UPDATE "cdc_management"."source_table_registration"
+        SET "enabled" = true
+        WHERE "source_instance_key" = p_source_instance_key
+          AND "logical_table_name" = '{{ table_name }}';
+
+        UPDATE "cdc_management"."native_cdc_schedule_policy"
+        SET
+            "enabled" = true,
+            "config_version" = "config_version" + 1,
+            "updated_at" = NOW()
+        WHERE "source_instance_key" = p_source_instance_key
+          AND "logical_table_name" = '{{ table_name }}';
+    END IF;
+
+    INSERT INTO "cdc_management"."native_cdc_bootstrap_state" (
+        "source_instance_key",
+        "logical_table_name",
+        "bootstrap_status",
+        "last_completed_at",
+        "last_rows_loaded",
+        "last_captured_start_lsn",
+        "last_captured_seqval",
+        "last_error",
+        "updated_at"
+    )
+    VALUES (
+        p_source_instance_key,
+        '{{ table_name }}',
+        'completed',
+        NOW(),
+        v_rows_loaded,
+        v_boundary_start_lsn,
+        v_boundary_seqval,
+        NULL,
+        NOW()
+    )
+    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+    SET
+        "bootstrap_status" = 'completed',
+        "last_completed_at" = NOW(),
+        "last_failed_at" = NULL,
+        "last_rows_loaded" = EXCLUDED."last_rows_loaded",
+        "last_captured_start_lsn" = EXCLUDED."last_captured_start_lsn",
+        "last_captured_seqval" = EXCLUDED."last_captured_seqval",
+        "last_error" = NULL,
+        "updated_at" = NOW();
+
+    RETURN QUERY
+    SELECT
+        v_rows_loaded,
+        v_boundary_start_lsn,
+        v_boundary_seqval,
+        p_enable_after;
+EXCEPTION
+    WHEN OTHERS THEN
+        IF EXISTS (
+            SELECT 1
+            FROM "cdc_management"."source_table_registration" reg
+            WHERE reg."source_instance_key" = p_source_instance_key
+              AND reg."logical_table_name" = '{{ table_name }}'
+        ) THEN
+            INSERT INTO "cdc_management"."native_cdc_bootstrap_state" (
+                "source_instance_key",
+                "logical_table_name",
+                "bootstrap_status",
+                "last_failed_at",
+                "last_error",
+                "updated_at"
+            )
+            VALUES (
+                p_source_instance_key,
+                '{{ table_name }}',
+                'failed',
+                NOW(),
+                SQLERRM,
+                NOW()
+            )
+            ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+            SET
+                "bootstrap_status" = 'failed',
+                "last_failed_at" = NOW(),
+                "last_error" = SQLERRM,
+                "updated_at" = NOW();
+        END IF;
+        RAISE;
+END;
+$$;
+
 GRANT INSERT, SELECT, DELETE ON {{ target_schema }}."stg_{{ table_name }}" TO "{{ db_user }}";
 GRANT EXECUTE ON FUNCTION {{ target_schema }}."pull_{{ table_name | lower }}_batch"(text, integer) TO "{{ db_user }}";
+GRANT EXECUTE ON FUNCTION {{ target_schema }}."bootstrap_{{ table_name | lower }}_snapshot"(text, boolean) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE {{ target_schema }}."sp_merge_{{ table_name | lower }}"(uuid) TO "{{ db_user }}";

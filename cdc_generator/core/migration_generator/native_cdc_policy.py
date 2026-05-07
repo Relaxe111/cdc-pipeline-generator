@@ -8,12 +8,50 @@ from .data_structures import GenerationResult, NativeCdcPolicySeed
 from .service_parsing import get_source_table_config
 
 _DEFAULT_SCHEDULE_PROFILE = "warm"
-_DEFAULT_BASE_INTERVAL_SECONDS = 60
-_DEFAULT_MAX_ROWS_PER_PULL = 1000
-_DEFAULT_LEASE_SECONDS = 120
+_DEFAULT_TIER_MODE = "auto"
 _DEFAULT_POLL_PRIORITY = 100
-_DEFAULT_JITTER_MILLIS = 500
-_DEFAULT_MAX_BACKOFF_SECONDS = 900
+
+_VALID_SCHEDULE_PROFILES = frozenset({"hot", "warm", "cool", "cold"})
+_VALID_TIER_MODES = frozenset({"auto", "manual"})
+
+_TIER_DEFAULTS: dict[str, dict[str, int]] = {
+    "hot": {
+        "base_poll_interval_seconds": 1,
+        "min_poll_interval_seconds": 1,
+        "max_poll_interval_seconds": 30,
+        "max_rows_per_pull": 2000,
+        "lease_seconds": 120,
+        "jitter_millis": 0,
+        "max_backoff_seconds": 60,
+    },
+    "warm": {
+        "base_poll_interval_seconds": 5,
+        "min_poll_interval_seconds": 5,
+        "max_poll_interval_seconds": 60,
+        "max_rows_per_pull": 1000,
+        "lease_seconds": 120,
+        "jitter_millis": 250,
+        "max_backoff_seconds": 300,
+    },
+    "cool": {
+        "base_poll_interval_seconds": 30,
+        "min_poll_interval_seconds": 30,
+        "max_poll_interval_seconds": 300,
+        "max_rows_per_pull": 750,
+        "lease_seconds": 120,
+        "jitter_millis": 1000,
+        "max_backoff_seconds": 300,
+    },
+    "cold": {
+        "base_poll_interval_seconds": 60,
+        "min_poll_interval_seconds": 60,
+        "max_poll_interval_seconds": 1800,
+        "max_rows_per_pull": 500,
+        "lease_seconds": 180,
+        "jitter_millis": 5000,
+        "max_backoff_seconds": 900,
+    },
+}
 
 
 def build_native_cdc_policy_seeds(
@@ -76,11 +114,50 @@ def _build_native_cdc_policy_seed(
         default=_DEFAULT_SCHEDULE_PROFILE,
         result=result,
     ).casefold()
+    if schedule_profile not in _VALID_SCHEDULE_PROFILES:
+        result.warnings.append(
+            f"Source table {source_key}: native_cdc.schedule_profile must be one of "
+            + f"{sorted(_VALID_SCHEDULE_PROFILES)}; using {_DEFAULT_SCHEDULE_PROFILE}",
+        )
+        schedule_profile = _DEFAULT_SCHEDULE_PROFILE
+
+    tier_defaults = _get_tier_defaults(schedule_profile)
+    tier_mode = _read_text(
+        settings,
+        source_key=source_key,
+        field_name="tier_mode",
+        default=_DEFAULT_TIER_MODE,
+        result=result,
+    ).casefold()
+    if tier_mode not in _VALID_TIER_MODES:
+        result.warnings.append(
+            f"Source table {source_key}: native_cdc.tier_mode must be one of "
+            + f"{sorted(_VALID_TIER_MODES)}; using {_DEFAULT_TIER_MODE}",
+        )
+        tier_mode = _DEFAULT_TIER_MODE
+
+    manual_schedule_profile = _read_optional_text(
+        settings,
+        source_key=source_key,
+        field_name="manual_schedule_profile",
+        result=result,
+    )
+    if manual_schedule_profile is not None:
+        manual_schedule_profile = manual_schedule_profile.casefold()
+        if manual_schedule_profile not in _VALID_SCHEDULE_PROFILES:
+            result.warnings.append(
+                f"Source table {source_key}: native_cdc.manual_schedule_profile must be one of "
+                + f"{sorted(_VALID_SCHEDULE_PROFILES)}; ignoring invalid value",
+            )
+            manual_schedule_profile = None
+    if tier_mode == "manual" and manual_schedule_profile is None:
+        manual_schedule_profile = schedule_profile
+
     base_poll_interval_seconds = _read_int(
         settings,
         source_key=source_key,
         field_names=("base_poll_interval_seconds", "poll_interval_seconds"),
-        default=_DEFAULT_BASE_INTERVAL_SECONDS,
+        default=tier_defaults["base_poll_interval_seconds"],
         min_value=1,
         result=result,
     )
@@ -88,7 +165,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("min_poll_interval_seconds",),
-        default=_default_min_interval(base_poll_interval_seconds),
+        default=tier_defaults["min_poll_interval_seconds"],
         min_value=1,
         result=result,
     )
@@ -103,7 +180,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("max_poll_interval_seconds",),
-        default=max(base_poll_interval_seconds * 5, 300),
+        default=tier_defaults["max_poll_interval_seconds"],
         min_value=1,
         result=result,
     )
@@ -118,7 +195,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("max_rows_per_pull",),
-        default=_DEFAULT_MAX_ROWS_PER_PULL,
+        default=tier_defaults["max_rows_per_pull"],
         min_value=1,
         result=result,
     )
@@ -126,7 +203,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("lease_seconds",),
-        default=_DEFAULT_LEASE_SECONDS,
+        default=tier_defaults["lease_seconds"],
         min_value=1,
         result=result,
     )
@@ -142,7 +219,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("jitter_millis",),
-        default=_DEFAULT_JITTER_MILLIS,
+        default=tier_defaults["jitter_millis"],
         min_value=0,
         result=result,
     )
@@ -150,7 +227,7 @@ def _build_native_cdc_policy_seed(
         settings,
         source_key=source_key,
         field_names=("max_backoff_seconds",),
-        default=_DEFAULT_MAX_BACKOFF_SECONDS,
+        default=tier_defaults["max_backoff_seconds"],
         min_value=1,
         result=result,
     )
@@ -174,6 +251,8 @@ def _build_native_cdc_policy_seed(
         target_table_name=target_table_name,
         enabled=enabled,
         schedule_profile=schedule_profile,
+        tier_mode=tier_mode,
+        manual_schedule_profile=manual_schedule_profile,
         base_poll_interval_seconds=base_poll_interval_seconds,
         min_poll_interval_seconds=min_poll_interval_seconds,
         max_poll_interval_seconds=max_poll_interval_seconds,
@@ -203,9 +282,8 @@ def _get_native_cdc_settings(
     return {}
 
 
-def _default_min_interval(base_poll_interval_seconds: int) -> int:
-    quarter_interval = max(base_poll_interval_seconds // 4, 5)
-    return max(1, min(base_poll_interval_seconds, quarter_interval))
+def _get_tier_defaults(schedule_profile: str) -> dict[str, int]:
+    return _TIER_DEFAULTS.get(schedule_profile, _TIER_DEFAULTS[_DEFAULT_SCHEDULE_PROFILE])
 
 
 def _read_bool(

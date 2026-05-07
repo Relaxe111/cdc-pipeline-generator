@@ -10,6 +10,7 @@ from cdc_generator.core.migration_generator.data_structures import (
     TableMigration,
 )
 from cdc_generator.helpers.fdw_identifiers import (
+    build_base_foreign_table_name,
     build_foreign_table_name,
     build_min_lsn_table_name,
 )
@@ -118,6 +119,11 @@ def process_table(
         source_table=source_table,
         source_key=from_ref,
         foreign_table_name=foreign_table_name,
+        base_foreign_table_name=build_base_foreign_table_name(
+            source_schema,
+            source_table,
+            duplicate_table_name_count=duplicate_source_table_name_count,
+        ),
         min_lsn_table_name=build_min_lsn_table_name(foreign_table_name),
         capture_instance_name=f"{source_schema}_{source_table}",
     )

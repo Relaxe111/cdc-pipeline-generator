@@ -244,6 +244,10 @@ def generate_table_files(
                     migration.columns,
                 ),
                 "pull_select_sql": _build_native_pull_select_sql(migration),
+                "snapshot_select_sql": _build_native_snapshot_select_sql(migration),
+                "snapshot_order_by_sql": _build_snapshot_order_by_sql(
+                    migration.primary_keys,
+                ),
                 "pk_column_names": pk_column_names,
                 "delete_join_sql": _build_join_conditions_sql(
                     "target_row",
@@ -254,6 +258,10 @@ def generate_table_files(
                 "foreign_table_name": (
                     migration.foreign_table_name
                     or f"{migration.table_name}_CT"
+                ),
+                "base_foreign_table_name": (
+                    migration.base_foreign_table_name
+                    or f"{migration.table_name}_base"
                 ),
                 "min_lsn_table_name": (
                     migration.min_lsn_table_name
@@ -361,6 +369,36 @@ def _build_native_pull_select_sql(migration: TableMigration) -> str:
     return ",\n".join(select_lines)
 
 
+def _build_native_snapshot_select_sql(migration: TableMigration) -> str:
+    """Build the SELECT list used by the native bootstrap snapshot function."""
+    source_table_name = migration.source_table or migration.table_name
+    source_table_literal = f"'{migration.source_schema}.{source_table_name}'"
+    select_lines: list[str] = []
+    for column in migration.columns:
+        column_name = column.name
+        normalized_name = column_name.casefold()
+        if normalized_name == "customer_id":
+            expression = "$1::uuid"
+        elif column_name == "__sync_timestamp":
+            expression = "clock_timestamp()"
+        elif column_name == "__source":
+            expression = "'mssql_snapshot'"
+        elif column_name == "__source_db":
+            expression = "$2"
+        elif column_name == "__source_table":
+            expression = source_table_literal
+        elif column_name == "__source_start_lsn":
+            expression = "$3::bytea"
+        elif column_name == "__source_seqval":
+            expression = "$4::bytea"
+        elif column_name == "__cdc_operation":
+            expression = "2"
+        else:
+            expression = f'f.{_quote_ident(column_name)}'
+        select_lines.append(f"            {expression}")
+    return ",\n".join(select_lines)
+
+
 def _build_join_conditions_sql(
     left_alias: str,
     right_alias: str,
@@ -371,3 +409,13 @@ def _build_join_conditions_sql(
         f'{left_alias}.{_quote_ident(primary_key)} = {right_alias}.{_quote_ident(primary_key)}'
         for primary_key in primary_keys
     )
+
+
+def _build_snapshot_order_by_sql(primary_keys: list[str]) -> str:
+    """Build a deterministic ORDER BY for base-table snapshot loads."""
+    source_primary_keys = [
+        primary_key
+        for primary_key in _dedupe_names_case_insensitive(primary_keys)
+        if primary_key.casefold() != "customer_id"
+    ]
+    return ", ".join(f'f.{_quote_ident(primary_key)}' for primary_key in source_primary_keys)

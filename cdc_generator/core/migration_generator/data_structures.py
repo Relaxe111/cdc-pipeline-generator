@@ -64,6 +64,7 @@ class TableMigration:
     source_table: str | None = None
     source_key: str | None = None
     foreign_table_name: str | None = None
+    base_foreign_table_name: str | None = None
     min_lsn_table_name: str | None = None
     capture_instance_name: str | None = None
 
@@ -97,14 +98,16 @@ class NativeCdcPolicySeed:
     target_table_name: str
     enabled: bool = True
     schedule_profile: str = "warm"
-    base_poll_interval_seconds: int = 60
-    min_poll_interval_seconds: int = 15
-    max_poll_interval_seconds: int = 300
+    tier_mode: str = "auto"
+    manual_schedule_profile: str | None = None
+    base_poll_interval_seconds: int = 5
+    min_poll_interval_seconds: int = 5
+    max_poll_interval_seconds: int = 60
     max_rows_per_pull: int = 1000
     lease_seconds: int = 120
     poll_priority: int = 100
-    jitter_millis: int = 500
-    max_backoff_seconds: int = 900
+    jitter_millis: int = 250
+    max_backoff_seconds: int = 300
     business_hours_profile_key: str | None = None
 
 

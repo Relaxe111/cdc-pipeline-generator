@@ -9,6 +9,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from cdc_generator.helpers.fdw_identifiers import (
+    build_base_foreign_table_name,
+    build_foreign_table_name,
+)
 from cdc_generator.helpers.service_config import get_project_root, load_service_config
 from cdc_generator.helpers.type_mapper import TypeMapper
 from cdc_generator.helpers.yaml_loader import load_yaml_file
@@ -22,6 +26,7 @@ _FDW_META_COLUMNS: tuple[tuple[str, str], ...] = (
     ("__$operation", "integer"),
     ("__$update_mask", "bytea"),
 )
+_MAX_LSN_TABLE_NAME = "cdc_max_lsn"
 _ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _SQL_TYPE_BASE_PATTERN = re.compile(r"^\s*([A-Za-z0-9_]+)")
 _IDENTIFIER_SANITIZE_PATTERN = re.compile(r"[^A-Za-z0-9_]+")
@@ -40,12 +45,14 @@ class FdwTablePlan:
     source_table_name: str
     logical_table_name: str
     foreign_table_name: str
+    base_foreign_table_name: str
     min_lsn_table_name: str
     capture_instance_name: str
     remote_table_name: str
     target_schema_name: str
     target_table_name: str
     columns: tuple[tuple[str, str], ...]
+    base_columns: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -174,7 +181,9 @@ def render_fdw_plan_summary(plan: FdwBootstrapPlan) -> list[str]:
         f"Tracked tables: {len(plan.table_plans)}",
         f"Customer sources: {len(plan.source_plans)}",
         f"Foreign tables to create: {len(plan.table_plans) * len(plan.source_plans)}",
+        f"Base-table foreign tables to create: {len(plan.table_plans) * len(plan.source_plans)}",
         f"Gap helpers to create: {len(plan.table_plans) * len(plan.source_plans)}",
+        f"Max-LSN helpers to create: {len(plan.source_plans)}",
     ]
 
     lines.append("")
@@ -196,6 +205,7 @@ def render_fdw_plan_summary(plan: FdwBootstrapPlan) -> list[str]:
             + f"{table_plan.source_schema_name}.{table_plan.source_table_name} -> "
             + f"{table_plan.target_schema_name}.{table_plan.target_table_name} | "
             + f"foreign {table_plan.foreign_table_name} | "
+            + f"base {table_plan.base_foreign_table_name} | "
             + f"columns {len(table_plan.columns)}"
         )
 
@@ -246,8 +256,10 @@ def render_fdw_bootstrap_sql(
         sections.append(_render_schema_sql(source_plan))
         sections.append(_render_server_sql(source_plan))
         sections.append(_render_user_mapping_sql(plan.runner_role, source_plan))
+        sections.append(_render_max_lsn_table_sql(source_plan))
         for table_plan in plan.table_plans:
             sections.append(_render_foreign_table_sql(source_plan, table_plan))
+            sections.append(_render_base_foreign_table_sql(source_plan, table_plan))
             sections.append(_render_gap_table_sql(source_plan, table_plan))
 
     return "\n".join(section for section in sections if section).rstrip() + "\n"
@@ -415,16 +427,17 @@ def _build_table_plans(
         table_name = str(tracked_table.get("table", "")).strip()
         schema_path = project_root / "services" / "_schemas" / service_name / schema_name / f"{table_name}.yaml"
         schema_data = load_yaml_file(schema_path)
-        columns = _load_fdw_columns(
+        base_columns = _load_fdw_columns(
             schema_data,
             mapper,
             include_columns=tracked_table.get("include_columns"),
             ignore_columns=tracked_table.get("ignore_columns"),
         )
-        foreign_table_name = _build_foreign_table_name(
+        duplicate_table_name_count = table_name_counts.get(table_name.casefold(), 0)
+        foreign_table_name = build_foreign_table_name(
             schema_name,
             table_name,
-            duplicate_table_name_count=table_name_counts.get(table_name.casefold(), 0),
+            duplicate_table_name_count=duplicate_table_name_count,
         )
         logical_table_name = table_name
         capture_instance_name = f"{schema_name}_{table_name}"
@@ -434,28 +447,22 @@ def _build_table_plans(
                 source_table_name=table_name,
                 logical_table_name=logical_table_name,
                 foreign_table_name=foreign_table_name,
+                base_foreign_table_name=build_base_foreign_table_name(
+                    schema_name,
+                    table_name,
+                    duplicate_table_name_count=duplicate_table_name_count,
+                ),
                 min_lsn_table_name=f"cdc_min_lsn_{_sanitize_object_name(foreign_table_name.removesuffix('_CT'))}",
                 capture_instance_name=capture_instance_name,
                 remote_table_name=f"{schema_name}_{table_name}_CT",
                 target_schema_name=target_schema_name,
                 target_table_name=table_name,
-                columns=columns,
+                columns=(*_FDW_META_COLUMNS, *base_columns),
+                base_columns=base_columns,
             )
         )
 
     return table_plans
-
-
-def _build_foreign_table_name(
-    schema_name: str,
-    table_name: str,
-    *,
-    duplicate_table_name_count: int,
-) -> str:
-    sanitized_table_name = _sanitize_object_name(table_name)
-    if duplicate_table_name_count > 1 or schema_name.casefold() != "dbo":
-        return f"{_sanitize_object_name(schema_name)}_{sanitized_table_name}_CT"
-    return f"{sanitized_table_name}_CT"
 
 
 def _load_fdw_columns(
@@ -472,7 +479,7 @@ def _load_fdw_columns(
     if not isinstance(columns_raw, list):
         raise ValueError("Schema file does not contain a valid columns list")
 
-    fdw_columns = list(_FDW_META_COLUMNS)
+    fdw_columns: list[tuple[str, str]] = []
     for column_raw in cast(list[object], columns_raw):
         if not isinstance(column_raw, dict):
             continue
@@ -1016,6 +1023,43 @@ def _render_foreign_table_sql(source_plan: FdwSourcePlan, table_plan: FdwTablePl
         f"    table_name {_quote_literal(table_plan.remote_table_name)},",
         "    match_column_names 'true',",
         "    row_estimate_method 'showplan_all'",
+        ');',
+        '',
+    ])
+
+
+def _render_base_foreign_table_sql(source_plan: FdwSourcePlan, table_plan: FdwTablePlan) -> str:
+    column_lines = [
+        f"    {_quote_ident(column_name)} {column_type}"
+        for column_name, column_type in table_plan.base_columns
+    ]
+    return "\n".join([
+        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)};',
+        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)} (',
+        ",\n".join(column_lines),
+        ')',
+        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
+        'OPTIONS (',
+        f"    schema_name {_quote_literal(table_plan.source_schema_name)},",
+        f"    table_name {_quote_literal(table_plan.source_table_name)},",
+        "    match_column_names 'true',",
+        "    row_estimate_method 'showplan_all'",
+        ');',
+        '',
+    ])
+
+
+def _render_max_lsn_table_sql(source_plan: FdwSourcePlan) -> str:
+    query = 'SELECT sys.fn_cdc_get_max_lsn() AS max_lsn'
+    return "\n".join([
+        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)};',
+        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)} (',
+        '    "max_lsn" bytea',
+        ')',
+        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
+        'OPTIONS (',
+        f"    query {_quote_literal(query)},",
+        "    row_estimate_method 'execute'",
         ');',
         '',
     ])

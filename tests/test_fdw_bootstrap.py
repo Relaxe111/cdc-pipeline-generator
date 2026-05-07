@@ -141,8 +141,10 @@ def test_build_fdw_bootstrap_plan_derives_sources_and_tables(
         table_plan for table_plan in plan.table_plans if table_plan.logical_table_name == "Actor"
     )
     assert actor_plan.foreign_table_name == "Actor_CT"
+    assert actor_plan.base_foreign_table_name == "Actor_base"
     assert actor_plan.remote_table_name == "dbo_Actor_CT"
     assert actor_plan.columns[0] == ("__$start_lsn", "bytea")
+    assert actor_plan.base_columns[0] == ("actno", "integer")
     assert ("actno", "integer") in actor_plan.columns
     assert ("Navn", "varchar") in actor_plan.columns
     assert ("changedt", "timestamp") in actor_plan.columns
@@ -164,8 +166,11 @@ def test_render_fdw_bootstrap_sql_includes_metadata_and_foreign_tables(
     assert 'CREATE EXTENSION IF NOT EXISTS tds_fdw;' in sql_text
     assert 'INSERT INTO "cdc_management"."source_instance"' in sql_text
     assert 'CREATE FOREIGN TABLE "fdw_default_test"."Actor_CT"' in sql_text
+    assert 'CREATE FOREIGN TABLE "fdw_default_test"."Actor_base"' in sql_text
     assert 'CREATE FOREIGN TABLE "fdw_default_test"."cdc_min_lsn_Actor"' in sql_text
+    assert 'CREATE FOREIGN TABLE "fdw_default_test"."cdc_max_lsn"' in sql_text
     assert "SELECT sys.fn_cdc_get_min_lsn(''dbo_Actor'') AS min_lsn" in sql_text
+    assert 'SELECT sys.fn_cdc_get_max_lsn() AS max_lsn' in sql_text
 
 
 def test_fdw_cli_sql_writes_metadata_only_output(

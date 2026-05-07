@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_schedule_policy" (
     "logical_table_name" text NOT NULL,
     "enabled" boolean NOT NULL DEFAULT true,
     "schedule_profile" text NOT NULL DEFAULT 'warm',
+    "tier_mode" text NOT NULL DEFAULT 'auto',
+    "manual_schedule_profile" text,
     "base_poll_interval_seconds" integer NOT NULL,
     "min_poll_interval_seconds" integer NOT NULL,
     "max_poll_interval_seconds" integer NOT NULL,
@@ -73,6 +75,8 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_schedule_policy" (
 ALTER TABLE "cdc_management"."native_cdc_schedule_policy"
     ADD COLUMN IF NOT EXISTS "enabled" boolean,
     ADD COLUMN IF NOT EXISTS "schedule_profile" text,
+    ADD COLUMN IF NOT EXISTS "tier_mode" text,
+    ADD COLUMN IF NOT EXISTS "manual_schedule_profile" text,
     ADD COLUMN IF NOT EXISTS "base_poll_interval_seconds" integer,
     ADD COLUMN IF NOT EXISTS "min_poll_interval_seconds" integer,
     ADD COLUMN IF NOT EXISTS "max_poll_interval_seconds" integer,
@@ -90,6 +94,9 @@ ALTER TABLE "cdc_management"."native_cdc_schedule_policy"
 
 ALTER TABLE "cdc_management"."native_cdc_schedule_policy"
     ALTER COLUMN "schedule_profile" SET DEFAULT 'warm';
+
+ALTER TABLE "cdc_management"."native_cdc_schedule_policy"
+    ALTER COLUMN "tier_mode" SET DEFAULT 'auto';
 
 ALTER TABLE "cdc_management"."native_cdc_schedule_policy"
     ALTER COLUMN "poll_priority" SET DEFAULT 100;
@@ -110,14 +117,73 @@ UPDATE "cdc_management"."native_cdc_schedule_policy"
 SET
     "enabled" = COALESCE("enabled", true),
     "schedule_profile" = COALESCE("schedule_profile", 'warm'),
-    "base_poll_interval_seconds" = COALESCE("base_poll_interval_seconds", 60),
-    "min_poll_interval_seconds" = COALESCE("min_poll_interval_seconds", 15),
-    "max_poll_interval_seconds" = COALESCE("max_poll_interval_seconds", 300),
-    "max_rows_per_pull" = COALESCE("max_rows_per_pull", 1000),
-    "lease_seconds" = COALESCE("lease_seconds", 120),
+    "tier_mode" = COALESCE("tier_mode", 'auto'),
+    "manual_schedule_profile" = CASE
+        WHEN COALESCE("tier_mode", 'auto') = 'manual'
+            THEN COALESCE("manual_schedule_profile", COALESCE("schedule_profile", 'warm'))
+        ELSE "manual_schedule_profile"
+    END,
+    "base_poll_interval_seconds" = COALESCE(
+        "base_poll_interval_seconds",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 1
+            WHEN 'cool' THEN 30
+            WHEN 'cold' THEN 60
+            ELSE 5
+        END
+    ),
+    "min_poll_interval_seconds" = COALESCE(
+        "min_poll_interval_seconds",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 1
+            WHEN 'cool' THEN 30
+            WHEN 'cold' THEN 60
+            ELSE 5
+        END
+    ),
+    "max_poll_interval_seconds" = COALESCE(
+        "max_poll_interval_seconds",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 30
+            WHEN 'cool' THEN 300
+            WHEN 'cold' THEN 1800
+            ELSE 60
+        END
+    ),
+    "max_rows_per_pull" = COALESCE(
+        "max_rows_per_pull",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 2000
+            WHEN 'cool' THEN 750
+            WHEN 'cold' THEN 500
+            ELSE 1000
+        END
+    ),
+    "lease_seconds" = COALESCE(
+        "lease_seconds",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'cold' THEN 180
+            ELSE 120
+        END
+    ),
     "poll_priority" = COALESCE("poll_priority", 100),
-    "jitter_millis" = COALESCE("jitter_millis", 500),
-    "max_backoff_seconds" = COALESCE("max_backoff_seconds", 900),
+    "jitter_millis" = COALESCE(
+        "jitter_millis",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 0
+            WHEN 'cool' THEN 1000
+            WHEN 'cold' THEN 5000
+            ELSE 250
+        END
+    ),
+    "max_backoff_seconds" = COALESCE(
+        "max_backoff_seconds",
+        CASE COALESCE("schedule_profile", 'warm')
+            WHEN 'hot' THEN 60
+            WHEN 'cold' THEN 900
+            ELSE 300
+        END
+    ),
     "config_version" = COALESCE("config_version", 1),
     "updated_at" = COALESCE("updated_at", NOW())
 WHERE true;
@@ -128,6 +194,119 @@ CREATE INDEX IF NOT EXISTS "idx_native_cdc_schedule_policy_enabled_priority"
         "poll_priority",
         "source_instance_key",
         "logical_table_name"
+    );
+
+CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_tier_assignment" (
+    "source_instance_key" text NOT NULL,
+    "logical_table_name" text NOT NULL,
+    "effective_schedule_profile" text NOT NULL DEFAULT 'warm',
+    "previous_schedule_profile" text,
+    "change_reason" text,
+    "last_evaluated_at" timestamptz,
+    "last_promoted_at" timestamptz,
+    "last_demoted_at" timestamptz,
+    "updated_at" timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY ("source_instance_key", "logical_table_name"),
+    FOREIGN KEY ("source_instance_key", "logical_table_name")
+        REFERENCES "cdc_management"."source_table_registration" (
+            "source_instance_key",
+            "logical_table_name"
+        )
+        ON DELETE CASCADE
+);
+
+ALTER TABLE "cdc_management"."native_cdc_tier_assignment"
+    ADD COLUMN IF NOT EXISTS "effective_schedule_profile" text,
+    ADD COLUMN IF NOT EXISTS "previous_schedule_profile" text,
+    ADD COLUMN IF NOT EXISTS "change_reason" text,
+    ADD COLUMN IF NOT EXISTS "last_evaluated_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "last_promoted_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "last_demoted_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "updated_at" timestamptz;
+
+ALTER TABLE "cdc_management"."native_cdc_tier_assignment"
+    ALTER COLUMN "effective_schedule_profile" SET DEFAULT 'warm';
+
+ALTER TABLE "cdc_management"."native_cdc_tier_assignment"
+    ALTER COLUMN "updated_at" SET DEFAULT NOW();
+
+UPDATE "cdc_management"."native_cdc_tier_assignment"
+SET
+    "effective_schedule_profile" = COALESCE("effective_schedule_profile", 'warm'),
+    "updated_at" = COALESCE("updated_at", NOW())
+WHERE true;
+
+CREATE INDEX IF NOT EXISTS "idx_native_cdc_tier_assignment_updated_at"
+    ON "cdc_management"."native_cdc_tier_assignment" ("updated_at" DESC);
+
+CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_activity_rollup_hourly" (
+    "source_instance_key" text NOT NULL,
+    "logical_table_name" text NOT NULL,
+    "bucket_start" timestamptz NOT NULL,
+    "pulls_total" bigint NOT NULL DEFAULT 0,
+    "empty_pulls_total" bigint NOT NULL DEFAULT 0,
+    "nonempty_pulls_total" bigint NOT NULL DEFAULT 0,
+    "full_batches_total" bigint NOT NULL DEFAULT 0,
+    "rows_total" bigint NOT NULL DEFAULT 0,
+    "failures_total" bigint NOT NULL DEFAULT 0,
+    "last_nonempty_at" timestamptz,
+    "updated_at" timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY ("source_instance_key", "logical_table_name", "bucket_start"),
+    FOREIGN KEY ("source_instance_key", "logical_table_name")
+        REFERENCES "cdc_management"."source_table_registration" (
+            "source_instance_key",
+            "logical_table_name"
+        )
+        ON DELETE CASCADE
+);
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ADD COLUMN IF NOT EXISTS "pulls_total" bigint,
+    ADD COLUMN IF NOT EXISTS "empty_pulls_total" bigint,
+    ADD COLUMN IF NOT EXISTS "nonempty_pulls_total" bigint,
+    ADD COLUMN IF NOT EXISTS "full_batches_total" bigint,
+    ADD COLUMN IF NOT EXISTS "rows_total" bigint,
+    ADD COLUMN IF NOT EXISTS "failures_total" bigint,
+    ADD COLUMN IF NOT EXISTS "last_nonempty_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "updated_at" timestamptz;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "pulls_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "empty_pulls_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "nonempty_pulls_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "full_batches_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "rows_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "failures_total" SET DEFAULT 0;
+
+ALTER TABLE "cdc_management"."native_cdc_activity_rollup_hourly"
+    ALTER COLUMN "updated_at" SET DEFAULT NOW();
+
+UPDATE "cdc_management"."native_cdc_activity_rollup_hourly"
+SET
+    "pulls_total" = COALESCE("pulls_total", 0),
+    "empty_pulls_total" = COALESCE("empty_pulls_total", 0),
+    "nonempty_pulls_total" = COALESCE("nonempty_pulls_total", 0),
+    "full_batches_total" = COALESCE("full_batches_total", 0),
+    "rows_total" = COALESCE("rows_total", 0),
+    "failures_total" = COALESCE("failures_total", 0),
+    "updated_at" = COALESCE("updated_at", NOW())
+WHERE true;
+
+CREATE INDEX IF NOT EXISTS "idx_native_cdc_activity_rollup_recent"
+    ON "cdc_management"."native_cdc_activity_rollup_hourly" (
+        "source_instance_key",
+        "logical_table_name",
+        "bucket_start" DESC
     );
 
 CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
@@ -235,6 +414,57 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_checkpoint" (
 CREATE INDEX IF NOT EXISTS "idx_native_cdc_checkpoint_updated_at"
     ON "cdc_management"."native_cdc_checkpoint" ("updated_at" DESC);
 
+CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_bootstrap_state" (
+    "source_instance_key" text NOT NULL,
+    "logical_table_name" text NOT NULL,
+    "bootstrap_status" text NOT NULL DEFAULT 'pending',
+    "last_started_at" timestamptz,
+    "last_completed_at" timestamptz,
+    "last_failed_at" timestamptz,
+    "last_rows_loaded" bigint,
+    "last_captured_start_lsn" bytea,
+    "last_captured_seqval" bytea,
+    "last_error" text,
+    "updated_at" timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY ("source_instance_key", "logical_table_name"),
+    FOREIGN KEY ("source_instance_key", "logical_table_name")
+        REFERENCES "cdc_management"."source_table_registration" (
+            "source_instance_key",
+            "logical_table_name"
+        )
+        ON DELETE CASCADE
+);
+
+ALTER TABLE "cdc_management"."native_cdc_bootstrap_state"
+    ADD COLUMN IF NOT EXISTS "bootstrap_status" text,
+    ADD COLUMN IF NOT EXISTS "last_started_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "last_completed_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "last_failed_at" timestamptz,
+    ADD COLUMN IF NOT EXISTS "last_rows_loaded" bigint,
+    ADD COLUMN IF NOT EXISTS "last_captured_start_lsn" bytea,
+    ADD COLUMN IF NOT EXISTS "last_captured_seqval" bytea,
+    ADD COLUMN IF NOT EXISTS "last_error" text,
+    ADD COLUMN IF NOT EXISTS "updated_at" timestamptz;
+
+ALTER TABLE "cdc_management"."native_cdc_bootstrap_state"
+    ALTER COLUMN "bootstrap_status" SET DEFAULT 'pending';
+
+ALTER TABLE "cdc_management"."native_cdc_bootstrap_state"
+    ALTER COLUMN "updated_at" SET DEFAULT NOW();
+
+UPDATE "cdc_management"."native_cdc_bootstrap_state"
+SET
+    "bootstrap_status" = COALESCE("bootstrap_status", 'pending'),
+    "updated_at" = COALESCE("updated_at", NOW())
+WHERE true;
+
+CREATE INDEX IF NOT EXISTS "idx_native_cdc_bootstrap_state_status"
+    ON "cdc_management"."native_cdc_bootstrap_state" (
+        "bootstrap_status",
+        "source_instance_key",
+        "logical_table_name"
+    );
+
 CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"(
     p_logical_table_name text,
     p_target_schema_name text,
@@ -244,6 +474,8 @@ CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"
 RETURNS TABLE(
     "enabled" boolean,
     "schedule_profile" text,
+    "tier_mode" text,
+    "manual_schedule_profile" text,
     "base_poll_interval_seconds" integer,
     "min_poll_interval_seconds" integer,
     "max_poll_interval_seconds" integer,
@@ -264,6 +496,8 @@ WITH configured_policy AS (
         cfg."target_table_name",
         cfg."enabled",
         cfg."schedule_profile",
+        cfg."tier_mode",
+        cfg."manual_schedule_profile",
         cfg."base_poll_interval_seconds",
         cfg."min_poll_interval_seconds",
         cfg."max_poll_interval_seconds",
@@ -282,6 +516,8 @@ WITH configured_policy AS (
                 {{ seed.target_table_name | sql_literal }},
                 {{ seed.enabled | sql_literal }},
                 {{ seed.schedule_profile | sql_literal }},
+                {{ seed.tier_mode | sql_literal }},
+                {{ seed.manual_schedule_profile | sql_literal }},
                 {{ seed.base_poll_interval_seconds | sql_literal }},
                 {{ seed.min_poll_interval_seconds | sql_literal }},
                 {{ seed.max_poll_interval_seconds | sql_literal }},
@@ -299,6 +535,8 @@ WITH configured_policy AS (
         "target_table_name",
         "enabled",
         "schedule_profile",
+        "tier_mode",
+        "manual_schedule_profile",
         "base_poll_interval_seconds",
         "min_poll_interval_seconds",
         "max_poll_interval_seconds",
@@ -316,6 +554,8 @@ WITH configured_policy AS (
         NULL::text AS "target_table_name",
         NULL::boolean AS "enabled",
         NULL::text AS "schedule_profile",
+        NULL::text AS "tier_mode",
+        NULL::text AS "manual_schedule_profile",
         NULL::integer AS "base_poll_interval_seconds",
         NULL::integer AS "min_poll_interval_seconds",
         NULL::integer AS "max_poll_interval_seconds",
@@ -335,18 +575,83 @@ selected_policy AS (
       AND "target_schema_name" = p_target_schema_name
       AND "target_table_name" = p_target_table_name
     LIMIT 1
+),
+resolved_profile AS (
+    SELECT COALESCE((SELECT "schedule_profile" FROM selected_policy), 'warm') AS "schedule_profile"
 )
 SELECT
     COALESCE((SELECT "enabled" FROM selected_policy), COALESCE(p_registration_enabled, true)) AS "enabled",
-    COALESCE((SELECT "schedule_profile" FROM selected_policy), 'warm') AS "schedule_profile",
-    COALESCE((SELECT "base_poll_interval_seconds" FROM selected_policy), 60) AS "base_poll_interval_seconds",
-    COALESCE((SELECT "min_poll_interval_seconds" FROM selected_policy), 15) AS "min_poll_interval_seconds",
-    COALESCE((SELECT "max_poll_interval_seconds" FROM selected_policy), 300) AS "max_poll_interval_seconds",
-    COALESCE((SELECT "max_rows_per_pull" FROM selected_policy), 1000) AS "max_rows_per_pull",
-    COALESCE((SELECT "lease_seconds" FROM selected_policy), 120) AS "lease_seconds",
+    (SELECT "schedule_profile" FROM resolved_profile) AS "schedule_profile",
+    COALESCE((SELECT "tier_mode" FROM selected_policy), 'auto') AS "tier_mode",
+    CASE
+        WHEN COALESCE((SELECT "tier_mode" FROM selected_policy), 'auto') = 'manual'
+            THEN COALESCE(
+                (SELECT "manual_schedule_profile" FROM selected_policy),
+                (SELECT "schedule_profile" FROM resolved_profile)
+            )
+        ELSE (SELECT "manual_schedule_profile" FROM selected_policy)
+    END AS "manual_schedule_profile",
+    COALESCE(
+        (SELECT "base_poll_interval_seconds" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 1
+            WHEN 'cool' THEN 30
+            WHEN 'cold' THEN 60
+            ELSE 5
+        END
+    ) AS "base_poll_interval_seconds",
+    COALESCE(
+        (SELECT "min_poll_interval_seconds" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 1
+            WHEN 'cool' THEN 30
+            WHEN 'cold' THEN 60
+            ELSE 5
+        END
+    ) AS "min_poll_interval_seconds",
+    COALESCE(
+        (SELECT "max_poll_interval_seconds" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 30
+            WHEN 'cool' THEN 300
+            WHEN 'cold' THEN 1800
+            ELSE 60
+        END
+    ) AS "max_poll_interval_seconds",
+    COALESCE(
+        (SELECT "max_rows_per_pull" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 2000
+            WHEN 'cool' THEN 750
+            WHEN 'cold' THEN 500
+            ELSE 1000
+        END
+    ) AS "max_rows_per_pull",
+    COALESCE(
+        (SELECT "lease_seconds" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'cold' THEN 180
+            ELSE 120
+        END
+    ) AS "lease_seconds",
     COALESCE((SELECT "poll_priority" FROM selected_policy), 100) AS "poll_priority",
-    COALESCE((SELECT "jitter_millis" FROM selected_policy), 500) AS "jitter_millis",
-    COALESCE((SELECT "max_backoff_seconds" FROM selected_policy), 900) AS "max_backoff_seconds",
+    COALESCE(
+        (SELECT "jitter_millis" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 0
+            WHEN 'cool' THEN 1000
+            WHEN 'cold' THEN 5000
+            ELSE 250
+        END
+    ) AS "jitter_millis",
+    COALESCE(
+        (SELECT "max_backoff_seconds" FROM selected_policy),
+        CASE (SELECT "schedule_profile" FROM resolved_profile)
+            WHEN 'hot' THEN 60
+            WHEN 'cold' THEN 900
+            ELSE 300
+        END
+    ) AS "max_backoff_seconds",
     (SELECT "business_hours_profile_key" FROM selected_policy) AS "business_hours_profile_key";
 $$;
 
@@ -360,6 +665,10 @@ AS $$
 DECLARE
     v_registration record;
     v_policy record;
+    v_customer_id uuid;
+    v_checkpoint_start_lsn bytea;
+    v_checkpoint_seqval bytea;
+    v_checkpoint_updated_at timestamptz;
 BEGIN
     SELECT
         reg."source_instance_key",
@@ -385,11 +694,32 @@ BEGIN
         v_registration."enabled"
     );
 
+    SELECT cr."customer_id"
+    INTO v_customer_id
+    FROM "cdc_management"."source_instance" si
+    JOIN "cdc_management"."customer_registry" cr
+        ON cr."customer_key" = si."customer_key"
+    WHERE si."source_instance_key" = v_registration."source_instance_key";
+
+    SELECT
+        checkpoint."last_start_lsn",
+        checkpoint."last_seqval",
+        checkpoint."updated_at"
+    INTO
+        v_checkpoint_start_lsn,
+        v_checkpoint_seqval,
+        v_checkpoint_updated_at
+    FROM "cdc_management"."native_cdc_checkpoint" checkpoint
+    WHERE checkpoint."customer_id" = v_customer_id
+      AND checkpoint."table_name" = v_registration."logical_table_name";
+
     INSERT INTO "cdc_management"."native_cdc_schedule_policy" (
         "source_instance_key",
         "logical_table_name",
         "enabled",
         "schedule_profile",
+        "tier_mode",
+        "manual_schedule_profile",
         "base_poll_interval_seconds",
         "min_poll_interval_seconds",
         "max_poll_interval_seconds",
@@ -405,6 +735,8 @@ BEGIN
         v_registration."logical_table_name",
         v_policy."enabled",
         v_policy."schedule_profile",
+        v_policy."tier_mode",
+        v_policy."manual_schedule_profile",
         v_policy."base_poll_interval_seconds",
         v_policy."min_poll_interval_seconds",
         v_policy."max_poll_interval_seconds",
@@ -419,6 +751,8 @@ BEGIN
     SET
         "enabled" = EXCLUDED."enabled",
         "schedule_profile" = EXCLUDED."schedule_profile",
+        "tier_mode" = EXCLUDED."tier_mode",
+        "manual_schedule_profile" = EXCLUDED."manual_schedule_profile",
         "base_poll_interval_seconds" = EXCLUDED."base_poll_interval_seconds",
         "min_poll_interval_seconds" = EXCLUDED."min_poll_interval_seconds",
         "max_poll_interval_seconds" = EXCLUDED."max_poll_interval_seconds",
@@ -433,6 +767,8 @@ BEGIN
     WHERE
         "cdc_management"."native_cdc_schedule_policy"."enabled" IS DISTINCT FROM EXCLUDED."enabled"
         OR "cdc_management"."native_cdc_schedule_policy"."schedule_profile" IS DISTINCT FROM EXCLUDED."schedule_profile"
+        OR "cdc_management"."native_cdc_schedule_policy"."tier_mode" IS DISTINCT FROM EXCLUDED."tier_mode"
+        OR "cdc_management"."native_cdc_schedule_policy"."manual_schedule_profile" IS DISTINCT FROM EXCLUDED."manual_schedule_profile"
         OR "cdc_management"."native_cdc_schedule_policy"."base_poll_interval_seconds" IS DISTINCT FROM EXCLUDED."base_poll_interval_seconds"
         OR "cdc_management"."native_cdc_schedule_policy"."min_poll_interval_seconds" IS DISTINCT FROM EXCLUDED."min_poll_interval_seconds"
         OR "cdc_management"."native_cdc_schedule_policy"."max_poll_interval_seconds" IS DISTINCT FROM EXCLUDED."max_poll_interval_seconds"
@@ -473,6 +809,145 @@ BEGIN
         "cdc_management"."native_cdc_runtime_state"."checkpoint_table_name" IS DISTINCT FROM EXCLUDED."checkpoint_table_name"
         OR "cdc_management"."native_cdc_runtime_state"."current_poll_interval_seconds" IS NULL
         OR "cdc_management"."native_cdc_runtime_state"."next_pull_at" IS NULL;
+
+    INSERT INTO "cdc_management"."native_cdc_tier_assignment" (
+        "source_instance_key",
+        "logical_table_name",
+        "effective_schedule_profile",
+        "change_reason",
+        "updated_at"
+    )
+    VALUES (
+        v_registration."source_instance_key",
+        v_registration."logical_table_name",
+        CASE
+            WHEN v_policy."tier_mode" = 'manual'
+                THEN COALESCE(v_policy."manual_schedule_profile", v_policy."schedule_profile", 'warm')
+            ELSE COALESCE(v_policy."schedule_profile", 'warm')
+        END,
+        CASE
+            WHEN v_policy."tier_mode" = 'manual' THEN 'manual policy sync'
+            ELSE 'initial baseline tier'
+        END,
+        NOW()
+    )
+    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+    SET
+        "previous_schedule_profile" = CASE
+            WHEN v_policy."tier_mode" = 'manual'
+                AND "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile" IS DISTINCT FROM COALESCE(
+                    v_policy."manual_schedule_profile",
+                    v_policy."schedule_profile",
+                    'warm'
+                )
+                THEN "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile"
+            ELSE "cdc_management"."native_cdc_tier_assignment"."previous_schedule_profile"
+        END,
+        "effective_schedule_profile" = CASE
+            WHEN v_policy."tier_mode" = 'manual'
+                THEN COALESCE(v_policy."manual_schedule_profile", v_policy."schedule_profile", 'warm')
+            ELSE "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile"
+        END,
+        "change_reason" = CASE
+            WHEN v_policy."tier_mode" = 'manual'
+                THEN 'manual policy sync'
+            ELSE "cdc_management"."native_cdc_tier_assignment"."change_reason"
+        END,
+        "updated_at" = CASE
+            WHEN "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile" IS NULL
+                THEN NOW()
+            WHEN v_policy."tier_mode" = 'manual'
+                AND "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile" IS DISTINCT FROM COALESCE(
+                    v_policy."manual_schedule_profile",
+                    v_policy."schedule_profile",
+                    'warm'
+                )
+                THEN NOW()
+            ELSE "cdc_management"."native_cdc_tier_assignment"."updated_at"
+        END
+    WHERE
+        "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile" IS NULL
+        OR (
+            v_policy."tier_mode" = 'manual'
+            AND "cdc_management"."native_cdc_tier_assignment"."effective_schedule_profile" IS DISTINCT FROM COALESCE(
+                v_policy."manual_schedule_profile",
+                v_policy."schedule_profile",
+                'warm'
+            )
+        );
+
+    IF v_policy."tier_mode" = 'manual' THEN
+        UPDATE "cdc_management"."native_cdc_runtime_state"
+        SET
+            "current_poll_interval_seconds" = CASE COALESCE(
+                v_policy."manual_schedule_profile",
+                v_policy."schedule_profile",
+                'warm'
+            )
+                WHEN 'hot' THEN 1
+                WHEN 'cool' THEN 30
+                WHEN 'cold' THEN 60
+                ELSE 5
+            END,
+            "next_pull_at" = NOW()
+                + make_interval(
+                    secs => CASE COALESCE(
+                        v_policy."manual_schedule_profile",
+                        v_policy."schedule_profile",
+                        'warm'
+                    )
+                        WHEN 'hot' THEN 1
+                        WHEN 'cool' THEN 30
+                        WHEN 'cold' THEN 60
+                        ELSE 5
+                    END::double precision
+                ),
+            "updated_at" = NOW()
+        WHERE "source_instance_key" = v_registration."source_instance_key"
+          AND "logical_table_name" = v_registration."logical_table_name"
+          AND "current_poll_interval_seconds" IS DISTINCT FROM CASE COALESCE(
+                v_policy."manual_schedule_profile",
+                v_policy."schedule_profile",
+                'warm'
+            )
+                WHEN 'hot' THEN 1
+                WHEN 'cool' THEN 30
+                WHEN 'cold' THEN 60
+                ELSE 5
+            END;
+    END IF;
+
+    INSERT INTO "cdc_management"."native_cdc_bootstrap_state" (
+        "source_instance_key",
+        "logical_table_name",
+        "bootstrap_status",
+        "last_completed_at",
+        "last_captured_start_lsn",
+        "last_captured_seqval",
+        "updated_at"
+    )
+    VALUES (
+        v_registration."source_instance_key",
+        v_registration."logical_table_name",
+        CASE
+            WHEN v_checkpoint_start_lsn IS NOT NULL
+                OR v_registration."enabled"
+                OR v_policy."enabled"
+                THEN 'completed'
+            ELSE 'pending'
+        END,
+        CASE
+            WHEN v_checkpoint_start_lsn IS NOT NULL
+                OR v_registration."enabled"
+                OR v_policy."enabled"
+                THEN COALESCE(v_checkpoint_updated_at, NOW())
+            ELSE NULL
+        END,
+        v_checkpoint_start_lsn,
+        v_checkpoint_seqval,
+        NOW()
+    )
+    ON CONFLICT ("source_instance_key", "logical_table_name") DO NOTHING;
 END;
 $$;
 
@@ -510,7 +985,27 @@ SELECT
     reg."target_schema_name",
     reg."target_table_name",
     (reg."enabled" AND si."enabled" AND policy."enabled") AS "enabled",
+    COALESCE(
+        bootstrap."bootstrap_status",
+        CASE
+            WHEN reg."enabled" OR policy."enabled" THEN 'completed'
+            ELSE 'pending'
+        END
+    ) AS "bootstrap_status",
+    bootstrap."last_started_at" AS "bootstrap_last_started_at",
+    bootstrap."last_completed_at" AS "bootstrap_last_completed_at",
+    bootstrap."last_failed_at" AS "bootstrap_last_failed_at",
+    bootstrap."last_error" AS "bootstrap_last_error",
     policy."schedule_profile",
+    policy."tier_mode",
+    policy."manual_schedule_profile",
+    CASE
+        WHEN policy."tier_mode" = 'manual'
+            THEN COALESCE(policy."manual_schedule_profile", policy."schedule_profile", 'warm')
+        WHEN assignment."effective_schedule_profile" IS NOT NULL
+            THEN assignment."effective_schedule_profile"
+        ELSE COALESCE(policy."schedule_profile", 'warm')
+    END AS "effective_schedule_profile",
     policy."base_poll_interval_seconds",
     runtime."current_poll_interval_seconds" AS "poll_interval_seconds",
     policy."min_poll_interval_seconds",
@@ -532,6 +1027,11 @@ SELECT
     runtime."lease_owner",
     runtime."lease_expires_at",
     runtime."empty_pull_streak",
+    assignment."previous_schedule_profile",
+    assignment."change_reason",
+    assignment."last_evaluated_at",
+    assignment."last_promoted_at",
+    assignment."last_demoted_at",
     policy."config_version",
     si."source_database",
     si."fdw_schema_name",
@@ -546,7 +1046,13 @@ JOIN "cdc_management"."native_cdc_runtime_state" runtime
 JOIN "cdc_management"."source_instance" si
     ON si."source_instance_key" = reg."source_instance_key"
 JOIN "cdc_management"."customer_registry" cr
-    ON cr."customer_key" = si."customer_key";
+    ON cr."customer_key" = si."customer_key"
+LEFT JOIN "cdc_management"."native_cdc_tier_assignment" assignment
+    ON assignment."source_instance_key" = reg."source_instance_key"
+   AND assignment."logical_table_name" = reg."logical_table_name"
+LEFT JOIN "cdc_management"."native_cdc_bootstrap_state" bootstrap
+    ON bootstrap."source_instance_key" = reg."source_instance_key"
+   AND bootstrap."logical_table_name" = reg."logical_table_name";
 
 CREATE OR REPLACE VIEW "cdc_management"."v_native_cdc_health" AS
 SELECT
@@ -557,7 +1063,30 @@ SELECT
     reg."enabled" AS "registration_enabled",
     si."enabled" AS "source_instance_enabled",
     policy."enabled" AS "policy_enabled",
+    COALESCE(
+        bootstrap."bootstrap_status",
+        CASE
+            WHEN reg."enabled" OR policy."enabled" THEN 'completed'
+            ELSE 'pending'
+        END
+    ) AS "bootstrap_status",
+    bootstrap."last_started_at" AS "bootstrap_last_started_at",
+    bootstrap."last_completed_at" AS "bootstrap_last_completed_at",
+    bootstrap."last_failed_at" AS "bootstrap_last_failed_at",
+    bootstrap."last_rows_loaded" AS "bootstrap_last_rows_loaded",
+    bootstrap."last_captured_start_lsn" AS "bootstrap_last_captured_start_lsn",
+    bootstrap."last_captured_seqval" AS "bootstrap_last_captured_seqval",
+    bootstrap."last_error" AS "bootstrap_last_error",
     policy."schedule_profile",
+    policy."tier_mode",
+    policy."manual_schedule_profile",
+    CASE
+        WHEN policy."tier_mode" = 'manual'
+            THEN COALESCE(policy."manual_schedule_profile", policy."schedule_profile", 'warm')
+        WHEN assignment."effective_schedule_profile" IS NOT NULL
+            THEN assignment."effective_schedule_profile"
+        ELSE COALESCE(policy."schedule_profile", 'warm')
+    END AS "effective_schedule_profile",
     policy."base_poll_interval_seconds",
     policy."min_poll_interval_seconds",
     policy."max_poll_interval_seconds",
@@ -586,6 +1115,11 @@ SELECT
     runtime."last_duration_ms",
     runtime."consecutive_failures",
     runtime."last_error",
+    assignment."previous_schedule_profile",
+    assignment."change_reason",
+    assignment."last_evaluated_at",
+    assignment."last_promoted_at",
+    assignment."last_demoted_at",
     checkpoint."last_start_lsn",
     checkpoint."last_seqval",
     checkpoint."updated_at" AS "checkpoint_updated_at",
@@ -603,6 +1137,12 @@ JOIN "cdc_management"."source_instance" si
     ON si."source_instance_key" = reg."source_instance_key"
 JOIN "cdc_management"."customer_registry" cr
     ON cr."customer_key" = si."customer_key"
+LEFT JOIN "cdc_management"."native_cdc_tier_assignment" assignment
+    ON assignment."source_instance_key" = reg."source_instance_key"
+   AND assignment."logical_table_name" = reg."logical_table_name"
+LEFT JOIN "cdc_management"."native_cdc_bootstrap_state" bootstrap
+    ON bootstrap."source_instance_key" = reg."source_instance_key"
+   AND bootstrap."logical_table_name" = reg."logical_table_name"
 LEFT JOIN "cdc_management"."native_cdc_checkpoint" checkpoint
     ON checkpoint."customer_id" = cr."customer_id"
    AND checkpoint."table_name" = runtime."checkpoint_table_name";
@@ -617,6 +1157,7 @@ RETURNS TABLE(
     "logical_table_name" text,
     "target_schema_name" text,
     "target_table_name" text,
+    "effective_schedule_profile" text,
     "current_poll_interval_seconds" integer,
     "max_rows_per_pull" integer,
     "lease_seconds" integer,
@@ -642,9 +1183,19 @@ BEGIN
            AND reg."logical_table_name" = runtime."logical_table_name"
         JOIN "cdc_management"."source_instance" si
             ON si."source_instance_key" = runtime."source_instance_key"
+        LEFT JOIN "cdc_management"."native_cdc_bootstrap_state" bootstrap
+            ON bootstrap."source_instance_key" = runtime."source_instance_key"
+           AND bootstrap."logical_table_name" = runtime."logical_table_name"
         WHERE reg."enabled" = true
           AND policy."enabled" = true
           AND si."enabled" = true
+          AND COALESCE(
+                bootstrap."bootstrap_status",
+                CASE
+                    WHEN reg."enabled" OR policy."enabled" THEN 'completed'
+                    ELSE 'pending'
+                END
+              ) = 'completed'
           AND COALESCE(runtime."next_pull_at", NOW()) <= NOW()
           AND (
                 runtime."lease_expires_at" IS NULL
@@ -685,9 +1236,21 @@ BEGIN
         claimed."logical_table_name",
         reg."target_schema_name",
         reg."target_table_name",
+        resolved."effective_schedule_profile",
         COALESCE(runtime."current_poll_interval_seconds", policy."base_poll_interval_seconds", 60) AS "current_poll_interval_seconds",
-        COALESCE(policy."max_rows_per_pull", 1000) AS "max_rows_per_pull",
-        COALESCE(NULLIF(p_lease_seconds, 0), policy."lease_seconds", 120) AS "lease_seconds",
+        CASE resolved."effective_schedule_profile"
+            WHEN 'hot' THEN 2000
+            WHEN 'cool' THEN 750
+            WHEN 'cold' THEN 500
+            ELSE 1000
+        END AS "max_rows_per_pull",
+        COALESCE(
+            NULLIF(p_lease_seconds, 0),
+            CASE resolved."effective_schedule_profile"
+                WHEN 'cold' THEN 180
+                ELSE 120
+            END
+        ) AS "lease_seconds",
         COALESCE(policy."poll_priority", 100) AS "poll_priority"
     FROM claimed
     JOIN "cdc_management"."source_table_registration" reg
@@ -699,7 +1262,278 @@ BEGIN
     JOIN "cdc_management"."native_cdc_runtime_state" runtime
         ON runtime."source_instance_key" = claimed."source_instance_key"
        AND runtime."logical_table_name" = claimed."logical_table_name"
+    LEFT JOIN "cdc_management"."native_cdc_tier_assignment" assignment
+        ON assignment."source_instance_key" = claimed."source_instance_key"
+       AND assignment."logical_table_name" = claimed."logical_table_name"
+    CROSS JOIN LATERAL (
+        SELECT CASE
+            WHEN policy."tier_mode" = 'manual'
+                THEN COALESCE(policy."manual_schedule_profile", policy."schedule_profile", 'warm')
+            WHEN assignment."effective_schedule_profile" IS NOT NULL
+                THEN assignment."effective_schedule_profile"
+            ELSE COALESCE(policy."schedule_profile", 'warm')
+        END AS "effective_schedule_profile"
+    ) AS resolved
     ORDER BY "poll_priority", claimed."source_instance_key", claimed."logical_table_name";
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cdc_management"."bootstrap_native_cdc_tables"(
+    p_source_instance_key text DEFAULT NULL,
+    p_table_names text[] DEFAULT NULL,
+    p_enable_after boolean DEFAULT true
+)
+RETURNS TABLE(
+    "source_instance_key" text,
+    "logical_table_name" text,
+    "target_schema_name" text,
+    "target_table_name" text,
+    "result_status" text,
+    "bootstrap_status" text,
+    "rows_loaded" bigint,
+    "captured_start_lsn" bytea,
+    "captured_seqval" bytea,
+    "enabled_after" boolean,
+    "message" text
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_candidate record;
+    v_requested_table_name text;
+    v_rows_loaded bigint;
+    v_captured_start_lsn bytea;
+    v_captured_seqval bytea;
+    v_enabled_after boolean;
+    v_has_requested_tables boolean := COALESCE(array_length(p_table_names, 1), 0) > 0;
+BEGIN
+    PERFORM "cdc_management"."sync_native_cdc_registration_state"(
+        reg."source_instance_key",
+        reg."logical_table_name"
+    )
+    FROM "cdc_management"."source_table_registration" reg
+    WHERE (p_source_instance_key IS NULL OR reg."source_instance_key" = p_source_instance_key)
+      AND (
+            NOT v_has_requested_tables
+            OR EXISTS (
+                SELECT 1
+                FROM unnest(p_table_names) requested_table_name
+                WHERE lower(requested_table_name) = lower(reg."logical_table_name")
+            )
+      );
+
+    FOR v_candidate IN
+        SELECT
+            reg."source_instance_key",
+            reg."logical_table_name",
+            reg."target_schema_name",
+            reg."target_table_name",
+            reg."enabled" AS "registration_enabled",
+            si."enabled" AS "source_instance_enabled",
+            policy."enabled" AS "policy_enabled",
+            COALESCE(
+                bootstrap."bootstrap_status",
+                CASE
+                    WHEN reg."enabled" OR policy."enabled" THEN 'completed'
+                    ELSE 'pending'
+                END
+            ) AS "bootstrap_status"
+        FROM "cdc_management"."source_table_registration" reg
+        JOIN "cdc_management"."source_instance" si
+            ON si."source_instance_key" = reg."source_instance_key"
+        JOIN "cdc_management"."native_cdc_schedule_policy" policy
+            ON policy."source_instance_key" = reg."source_instance_key"
+           AND policy."logical_table_name" = reg."logical_table_name"
+        LEFT JOIN "cdc_management"."native_cdc_bootstrap_state" bootstrap
+            ON bootstrap."source_instance_key" = reg."source_instance_key"
+           AND bootstrap."logical_table_name" = reg."logical_table_name"
+        WHERE (p_source_instance_key IS NULL OR reg."source_instance_key" = p_source_instance_key)
+          AND (
+                NOT v_has_requested_tables
+                OR EXISTS (
+                    SELECT 1
+                    FROM unnest(p_table_names) requested_table_name
+                    WHERE lower(requested_table_name) = lower(reg."logical_table_name")
+                )
+          )
+          AND (
+                v_has_requested_tables
+                OR COALESCE(
+                    bootstrap."bootstrap_status",
+                    CASE
+                        WHEN reg."enabled" OR policy."enabled" THEN 'completed'
+                        ELSE 'pending'
+                    END
+                ) = 'pending'
+          )
+        ORDER BY reg."source_instance_key", reg."logical_table_name"
+    LOOP
+        IF NOT v_candidate."source_instance_enabled" THEN
+            RETURN QUERY
+            SELECT
+                v_candidate."source_instance_key",
+                v_candidate."logical_table_name",
+                v_candidate."target_schema_name",
+                v_candidate."target_table_name",
+                'skipped_source_disabled',
+                v_candidate."bootstrap_status",
+                NULL::bigint,
+                NULL::bytea,
+                NULL::bytea,
+                false,
+                'Source instance is disabled';
+        ELSIF v_candidate."bootstrap_status" = 'completed' THEN
+            RETURN QUERY
+            SELECT
+                v_candidate."source_instance_key",
+                v_candidate."logical_table_name",
+                v_candidate."target_schema_name",
+                v_candidate."target_table_name",
+                'skipped_already_initialized',
+                v_candidate."bootstrap_status",
+                NULL::bigint,
+                NULL::bytea,
+                NULL::bytea,
+                false,
+                'Table is already bootstrapped';
+        ELSIF v_candidate."bootstrap_status" = 'in_progress' THEN
+            RETURN QUERY
+            SELECT
+                v_candidate."source_instance_key",
+                v_candidate."logical_table_name",
+                v_candidate."target_schema_name",
+                v_candidate."target_table_name",
+                'skipped_in_progress',
+                v_candidate."bootstrap_status",
+                NULL::bigint,
+                NULL::bytea,
+                NULL::bytea,
+                false,
+                'Bootstrap is already in progress';
+        ELSIF v_candidate."registration_enabled" OR v_candidate."policy_enabled" THEN
+            RETURN QUERY
+            SELECT
+                v_candidate."source_instance_key",
+                v_candidate."logical_table_name",
+                v_candidate."target_schema_name",
+                v_candidate."target_table_name",
+                'skipped_active',
+                v_candidate."bootstrap_status",
+                NULL::bigint,
+                NULL::bytea,
+                NULL::bytea,
+                false,
+                'Disable registration and policy before bootstrap';
+        ELSIF v_candidate."bootstrap_status" NOT IN ('pending', 'failed') THEN
+            RETURN QUERY
+            SELECT
+                v_candidate."source_instance_key",
+                v_candidate."logical_table_name",
+                v_candidate."target_schema_name",
+                v_candidate."target_table_name",
+                'skipped_unknown_state',
+                v_candidate."bootstrap_status",
+                NULL::bigint,
+                NULL::bytea,
+                NULL::bytea,
+                false,
+                'Bootstrap state is not eligible for execution';
+        ELSE
+            BEGIN
+                EXECUTE format(
+                    'SELECT "rows_loaded", "captured_start_lsn", "captured_seqval", "enabled_after" FROM %I.%I($1, $2)',
+                    v_candidate."target_schema_name",
+                    format('bootstrap_%s_snapshot', lower(v_candidate."target_table_name"))
+                )
+                INTO
+                    v_rows_loaded,
+                    v_captured_start_lsn,
+                    v_captured_seqval,
+                    v_enabled_after
+                USING v_candidate."source_instance_key", p_enable_after;
+
+                RETURN QUERY
+                SELECT
+                    v_candidate."source_instance_key",
+                    v_candidate."logical_table_name",
+                    v_candidate."target_schema_name",
+                    v_candidate."target_table_name",
+                    'bootstrapped',
+                    'completed',
+                    v_rows_loaded,
+                    v_captured_start_lsn,
+                    v_captured_seqval,
+                    v_enabled_after,
+                    'Bootstrap completed successfully';
+            EXCEPTION
+                WHEN OTHERS THEN
+                    INSERT INTO "cdc_management"."native_cdc_bootstrap_state" (
+                        "source_instance_key",
+                        "logical_table_name",
+                        "bootstrap_status",
+                        "last_failed_at",
+                        "last_error",
+                        "updated_at"
+                    )
+                    VALUES (
+                        v_candidate."source_instance_key",
+                        v_candidate."logical_table_name",
+                        'failed',
+                        NOW(),
+                        SQLERRM,
+                        NOW()
+                    )
+                    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+                    SET
+                        "bootstrap_status" = 'failed',
+                        "last_failed_at" = NOW(),
+                        "last_error" = SQLERRM,
+                        "updated_at" = NOW();
+
+                    RETURN QUERY
+                    SELECT
+                        v_candidate."source_instance_key",
+                        v_candidate."logical_table_name",
+                        v_candidate."target_schema_name",
+                        v_candidate."target_table_name",
+                        'failed',
+                        'failed',
+                        NULL::bigint,
+                        NULL::bytea,
+                        NULL::bytea,
+                        false,
+                        SQLERRM;
+            END;
+        END IF;
+    END LOOP;
+
+    IF v_has_requested_tables THEN
+        FOR v_requested_table_name IN
+            SELECT DISTINCT requested_table_name
+            FROM unnest(p_table_names) requested_table_name
+        LOOP
+            IF NOT EXISTS (
+                SELECT 1
+                FROM "cdc_management"."source_table_registration" reg
+                WHERE (p_source_instance_key IS NULL OR reg."source_instance_key" = p_source_instance_key)
+                  AND lower(reg."logical_table_name") = lower(v_requested_table_name)
+            ) THEN
+                RETURN QUERY
+                SELECT
+                    p_source_instance_key,
+                    v_requested_table_name,
+                    NULL::text,
+                    NULL::text,
+                    'skipped_not_found',
+                    NULL::text,
+                    NULL::bigint,
+                    NULL::bytea,
+                    NULL::bytea,
+                    false,
+                    'Requested table is not registered for bootstrap';
+            END IF;
+        END LOOP;
+    END IF;
 END;
 $$;
 
@@ -827,11 +1661,15 @@ GRANT SELECT, INSERT, UPDATE ON "cdc_management"."environment_profile" TO "{{ db
 GRANT SELECT, INSERT, UPDATE ON "cdc_management"."source_instance" TO "{{ db_user }}";
 GRANT SELECT, INSERT, UPDATE ON "cdc_management"."source_table_registration" TO "{{ db_user }}";
 GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_schedule_policy" TO "{{ db_user }}";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_tier_assignment" TO "{{ db_user }}";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_activity_rollup_hourly" TO "{{ db_user }}";
 GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_runtime_state" TO "{{ db_user }}";
 GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_checkpoint" TO "{{ db_user }}";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_bootstrap_state" TO "{{ db_user }}";
 GRANT SELECT ON "cdc_management"."v_native_cdc_schedule" TO "{{ db_user }}";
 GRANT SELECT ON "cdc_management"."v_native_cdc_health" TO "{{ db_user }}";
 GRANT EXECUTE ON FUNCTION "cdc_management"."claim_due_native_cdc_work"(integer, integer, text) TO "{{ db_user }}";
+GRANT EXECUTE ON FUNCTION "cdc_management"."bootstrap_native_cdc_tables"(text, text[], boolean) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE "cdc_management"."renew_native_cdc_lease"(text, text, text, integer) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_success"(text, text, bigint, bigint) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_failure"(text, text, text, integer) TO "{{ db_user }}";

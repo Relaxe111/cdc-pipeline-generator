@@ -131,7 +131,9 @@ The command renders idempotent SQL for:
 - `CREATE SERVER` or `ALTER SERVER`
 - `CREATE USER MAPPING` or `ALTER USER MAPPING`
 - `CREATE FOREIGN TABLE` for tracked MSSQL CDC tables
+- `CREATE FOREIGN TABLE` for tracked live MSSQL base tables
 - `CREATE FOREIGN TABLE` helper objects for `sys.fn_cdc_get_min_lsn(...)`
+- `CREATE FOREIGN TABLE` helper objects for `sys.fn_cdc_get_max_lsn()` per source database
 
 ### What `cdc fdw` Does Not Generate
 
@@ -278,7 +280,9 @@ Before applying, verify these parts in the output:
 - one FDW schema per source database
 - one FDW server per source database
 - one foreign table per tracked CDC table per source database
+- one base-table foreign table per tracked table per source database
 - one gap-detection helper foreign table per tracked CDC table per source database
+- one `cdc_max_lsn` helper per source database
 
 At this stage you are checking naming, scope, and credentials resolution, not only syntax.
 
@@ -319,11 +323,26 @@ FROM "fdw_default_test"."Actor_CT"
 LIMIT 10;
 ```
 
+Then read the corresponding live base-table foreign table:
+
+```sql
+SELECT *
+FROM "fdw_default_test"."Actor_base"
+LIMIT 10;
+```
+
 Then check the retention-horizon helper:
 
 ```sql
 SELECT *
 FROM "fdw_default_test"."cdc_min_lsn_Actor";
+```
+
+Then check the current capture-boundary helper:
+
+```sql
+SELECT *
+FROM "fdw_default_test"."cdc_max_lsn";
 ```
 
 If these fail, fix FDW connectivity first. Do not debug pull functions before this is green.
@@ -368,7 +387,9 @@ The generated SQL adds:
 - `cdc_management.claim_due_native_cdc_work(...)`
 - `cdc_management.mark_native_cdc_success(...)`
 - `cdc_management.mark_native_cdc_failure(...)`
+- `cdc_management.bootstrap_native_cdc_tables(source_instance_key, table_names, enable_after)`
 - per-table `pull_<table>_batch(...)` functions
+- per-table `bootstrap_<table>_snapshot(source_instance_key, enable_after)` functions
 - per-table `sp_merge_<table>(uuid)` procedures
 
 ### Step 7: Apply The Native Runtime Migrations
@@ -384,6 +405,45 @@ At this point the database has both:
 - FDW/bootstrap objects from `cdc fdw sql`
 - local pull/apply objects from `cdc manage-migrations generate --topology fdw`
 
+For newly tracked tables, do not hand the table to steady-state scheduling before the generated bootstrap function succeeds.
+
+Canonical bootstrap contract:
+
+- keep `source_table_registration.enabled = false` before bootstrap
+- keep `native_cdc_schedule_policy.enabled = false` before bootstrap
+- call the common wrapper function to bootstrap all pending tables or an explicit table subset
+- let the function capture the current max LSN, load the live base table, seed `native_cdc_checkpoint`, reset runtime state, and optionally enable the table at the final commit point
+
+Recommended mutation-friendly entry point:
+
+```sql
+SELECT *
+FROM "cdc_management"."bootstrap_native_cdc_tables"(
+    '<source_instance_key>',
+    NULL,
+    true
+);
+```
+
+Behavior:
+
+- `p_table_names = NULL` bootstraps all tables for the source instance whose bootstrap state is still `pending`
+- `p_table_names = ARRAY['Actor', 'Soknad']` limits execution to those logical table names and will retry tables currently in `failed` state
+- the function returns one row per table with statuses like `bootstrapped`, `skipped_already_initialized`, `skipped_active`, `skipped_in_progress`, or `failed`
+
+Example:
+
+```sql
+SELECT *
+FROM "cdc_management"."bootstrap_native_cdc_tables"(
+    '<source_instance_key>',
+    ARRAY['Actor'],
+    true
+);
+```
+
+The wrapper dispatches to the generated per-table `bootstrap_<table>_snapshot(...)` functions internally. With `p_enable_after = true`, the function enables both registration and schedule policy only after the snapshot load and checkpoint seed commit successfully. If you want a dry operational pause after loading, call it with `false` and enable the rows separately later.
+
 ### Step 8: Hand Off To The External Scheduler
 
 The generator does **not** register `pg_cron` jobs or any other scheduler.
@@ -396,7 +456,7 @@ The external scheduler should:
 4. on success, call `cdc_management.mark_native_cdc_success(...)`
 5. on failure, call `cdc_management.mark_native_cdc_failure(...)`
 
-This keeps scheduling deployment-specific while still making the runtime behavior metadata-driven and generator-owned.
+This keeps scheduling deployment-specific while still making the runtime behavior metadata-driven and generator-owned. For a newly tracked table, this handoff starts only after `bootstrap_<table>_snapshot(...)` has completed successfully.
 
 ### Step 9: Use The Remaining Sections As SQL Reference
 
