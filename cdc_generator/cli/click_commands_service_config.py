@@ -25,6 +25,7 @@ from cdc_generator.cli.completions import (
     complete_remove_sink_table,
     complete_schemas,
     complete_service_positional,
+    complete_target_sink_env,
     complete_sink_keys,
     complete_sink_tables,
     complete_source_tables,
@@ -129,6 +130,11 @@ _INSPECT_ALL_SINKS = "__all_sinks__"
               help="Column to track (schema.table.column)")
 @click.option("--add-sink", shell_complete=complete_available_sink_keys,
               help="Add sink destination (sink_group.target_service)")
+@click.option("--target-sink-env", shell_complete=complete_target_sink_env,
+              help=(
+                  "Target sink environment key for env-aware sinks. "
+                  + "Required when adding an env-aware sink to a non-env-aware source group."
+              ))
 @click.option("--remove-sink", shell_complete=complete_sink_keys,
               help="Remove sink destination")
 @click.option("--sink", shell_complete=complete_sink_keys,

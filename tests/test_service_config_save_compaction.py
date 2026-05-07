@@ -143,3 +143,61 @@ def test_save_service_config_preserves_customers_for_non_db_per_tenant(
     rendered = (services_dir / "directory.yaml").read_text(encoding="utf-8")
 
     assert "customers:" in rendered
+
+
+def test_save_service_config_adds_default_header_when_missing(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config_module, "SERVICES_DIR", services_dir)
+    monkeypatch.setattr(config_module, "SERVICE_SCHEMAS_DIR", services_dir)
+
+    config: dict[str, object] = {
+        "service": "demo",
+        "source": {"tables": {"dbo.Actor": {}}},
+    }
+
+    assert config_module.save_service_config("demo", config) is True
+
+    rendered = (services_dir / "demo.yaml").read_text(encoding="utf-8")
+
+    assert "CDC Service Configuration - Auto-managed" in rendered
+    assert "cdc manage-services config --service demo --add-source-table" in rendered
+
+
+def test_save_service_config_preserves_existing_header_comment(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+    service_file = services_dir / "demo.yaml"
+    service_file.write_text(
+        "# custom header\n"
+        "# second line\n"
+        "\n"
+        "demo:\n"
+        "  source:\n"
+        "    tables: {}\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config_module, "SERVICES_DIR", services_dir)
+    monkeypatch.setattr(config_module, "SERVICE_SCHEMAS_DIR", services_dir)
+
+    config: dict[str, object] = {
+        "service": "demo",
+        "source": {"tables": {"dbo.Actor": {}}},
+    }
+
+    assert config_module.save_service_config("demo", config) is True
+
+    rendered = service_file.read_text(encoding="utf-8")
+
+    assert rendered.startswith("# custom header\n# second line\n\n")
+    assert "CDC Service Configuration - Auto-managed" not in rendered

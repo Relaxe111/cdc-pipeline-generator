@@ -350,7 +350,7 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "inspect": {"schema", "all_flag", "save", "track_table", "env"},
     "inspect_sink": {"schema", "all_flag", "save", "env"},
     # ── Sink lifecycle (standalone) ────────────────────────────
-    "add_sink": set(),
+    "add_sink": {"target_sink_env"},
     "remove_sink": set(),
     "list_sinks": set(),
     "validate_sinks": set(),
@@ -446,6 +446,7 @@ MANAGE_SERVICE_REQUIRES: dict[str, set[str]] = {
     "column_name": {"add_column_template"},
     "value": {"add_column_template"},
     "add_validation_database": {"create_service"},
+    "target_sink_env": {"add_sink"},
 }
 
 

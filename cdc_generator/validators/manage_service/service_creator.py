@@ -7,6 +7,9 @@ import yaml
 from cdc_generator.helpers.helpers_logging import print_header, print_success
 from cdc_generator.helpers.service_config import get_project_root
 from cdc_generator.validators.manage_server_group.config import load_server_groups
+from cdc_generator.validators.manage_service.config import (
+    resolve_service_file_header_comment,
+)
 
 
 def create_service(
@@ -188,33 +191,7 @@ def create_service(
         template = existing_service
 
     # Write YAML with header comment and proper formatting
-    sep = "=" * 76
-    header_comment = f"""# {sep}
-# CDC Service Configuration - Auto-managed
-# {sep}
-# ⚠️  This file is mostly READ-ONLY - modify only through CDC commands:
-#
-#   cdc manage-services config --service {service_name} --add-source-table <schema.table>
-#   cdc manage-services config --service {service_name} --remove-table <schema.table>
-#   cdc manage-services config --create-service {service_name}
-#
-# 📝 MANUAL EDITS ALLOWED:
-#   - source.tables - You can manually add/edit table entries (use schema.table format)
-#   - Table properties: primary_key, ignore_columns, include_columns
-#   - environments - Environment-specific settings (kafka, etc.)
-#
-# 🚫 DO NOT MANUALLY EDIT:
-#   - Service name is derived from filename ({service_name}.yaml)
-#   - source.validation_database (auto-populated from source-groups.yaml)
-#
-# [i] NOTE:
-#   - server_group: Auto-detected (only one per implementation)
-#   - server: Determined by environment (from source-groups.yaml)
-#   - source.type: From source-groups.yaml type field
-#   - Database connections: From source-groups.yaml servers configuration
-# {sep}
-
-"""
+    header_comment = resolve_service_file_header_comment(service_name, service_file)
 
     with service_file.open('w') as f:
         f.write(header_comment)

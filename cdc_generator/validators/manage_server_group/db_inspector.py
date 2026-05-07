@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ from cdc_generator.helpers.psycopg2_loader import (
     ensure_psycopg2,
     has_psycopg2,
 )
+from cdc_generator.helpers.service_config import get_project_root
 
 from .filters import (
     should_exclude_schema,
@@ -80,6 +82,60 @@ _INTERESTING_ENV_KEYWORDS = (
 
 
 _ENV_REFERENCE_PATTERN = re.compile(r"\$(?:\{(?P<braced>[A-Za-z0-9_]+)\}|(?P<plain>[A-Za-z0-9_]+))")
+
+
+def _read_project_dotenv_value(var_name: str) -> str | None:
+    """Read a single variable from the implementation ``.env`` file."""
+    env_path = get_project_root() / ".env"
+    if not env_path.exists():
+        return None
+
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip() != var_name:
+                continue
+            return value.strip().strip('"').strip("'")
+    except OSError:
+        return None
+
+    return None
+
+
+def _resolve_local_postgres_compose_target(
+    host: str,
+    port: int,
+) -> tuple[str, int] | None:
+    """Map local docker-compose postgres service hostnames to host access."""
+    normalized_host = host.strip().lower()
+    if normalized_host != "postgres":
+        return None
+
+    compose_path = get_project_root() / "docker-compose.yml"
+    if not compose_path.exists():
+        return None
+
+    try:
+        compose_text = compose_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    if not re.search(r"(?m)^\s{2}postgres:\s*$", compose_text):
+        return None
+
+    published_port_raw = os.environ.get("POSTGRES_PORT") or _read_project_dotenv_value(
+        "POSTGRES_PORT"
+    )
+    if published_port_raw:
+        try:
+            return ("localhost", int(published_port_raw))
+        except ValueError:
+            pass
+
+    return ("localhost", port)
 
 
 def extract_identifiers(
@@ -331,6 +387,31 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
         )
     except pg.OperationalError as e:
         error_msg = str(e).lower()
+
+        fallback_target = _resolve_local_postgres_compose_target(host, port)
+        if fallback_target and (
+            "could not translate host name" in error_msg
+            or "name or service not known" in error_msg
+        ):
+            fallback_host, fallback_port = fallback_target
+            print_info(
+                "Detected local docker-compose PostgreSQL service host "
+                + f"'{host}'. Retrying via {fallback_host}:{fallback_port}."
+            )
+            try:
+                return pg.connect(
+                    host=fallback_host,
+                    port=fallback_port,
+                    user=user,
+                    password=password,
+                    database=database,
+                    connect_timeout=10,
+                )
+            except pg.OperationalError as retry_error:
+                e = retry_error
+                error_msg = str(retry_error).lower()
+                host = fallback_host
+                port = fallback_port
 
         # DNS resolution failure
         if "could not translate host name" in error_msg or "name or service not known" in error_msg:

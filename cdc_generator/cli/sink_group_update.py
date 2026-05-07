@@ -108,7 +108,9 @@ def _merge_server_sources_update(
     1. Remove existing env entries that belong to ``server_name``.
     2. Keep entries from other servers unchanged.
     3. Merge in newly discovered entries for ``server_name``.
-    4. Union ``schemas`` lists per service.
+     4. If the service still has other server entries, preserve their schema
+         coverage by unioning schema lists. Otherwise replace schemas with the
+         newly inspected set so removed schemas do not linger.
     """
     merged = _copy_existing_sources_without_server(
         existing_sources_raw,
@@ -123,12 +125,24 @@ def _merge_server_sources_update(
         incoming_source = cast(dict[str, Any], source_raw)
         target_source = cast(dict[str, Any], merged.setdefault(service_name, {}))
 
-        merged_schemas = _merge_schema_lists(
-            target_source.get("schemas", []),
-            incoming_source.get("schemas", []),
+        has_other_server_entries = any(
+            env_name_raw != "schemas" and isinstance(env_cfg_raw, dict)
+            for env_name_raw, env_cfg_raw in target_source.items()
         )
+        if has_other_server_entries:
+            merged_schemas = _merge_schema_lists(
+                target_source.get("schemas", []),
+                incoming_source.get("schemas", []),
+            )
+        else:
+            merged_schemas = _merge_schema_lists(
+                incoming_source.get("schemas", []),
+                [],
+            )
         if merged_schemas:
             target_source["schemas"] = merged_schemas
+        else:
+            target_source.pop("schemas", None)
 
         for env_name_raw, env_cfg_raw in incoming_source.items():
             if env_name_raw == "schemas" or not isinstance(env_cfg_raw, dict):

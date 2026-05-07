@@ -246,7 +246,11 @@ def handle_sink_add(args: argparse.Namespace) -> int:
     success_count = 0
 
     for sink_key in sink_keys:
-        if add_sink_to_service(args.service, sink_key):
+        if add_sink_to_service(
+            args.service,
+            sink_key,
+            getattr(args, "target_sink_env", None),
+        ):
             success_count += 1
 
     if success_count > 0:

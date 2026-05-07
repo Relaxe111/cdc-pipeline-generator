@@ -14,6 +14,7 @@ import pytest
 from cdc_generator.validators.manage_server_group.db_inspector import (
     MissingEnvironmentVariableError,
     PostgresConnectionError,
+    get_postgres_connection,
 )
 from cdc_generator.validators.manage_server_group.handlers_update import (
     _apply_updates,
@@ -316,6 +317,70 @@ class TestHandleUpdateExceptionHandling:
         result = handle_update(_ns())
 
         assert result == 1
+
+
+class TestPostgresConnectionFallback:
+    """Tests for local docker-compose PostgreSQL hostname fallback."""
+
+    def test_retries_local_compose_postgres_via_localhost(
+        self,
+        tmp_path: Any,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Retries via localhost and published POSTGRES_PORT for compose hostnames."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "source-groups.yaml").write_text("testgroup: {}\n")
+        (tmp_path / "docker-compose.yml").write_text(
+            "services:\n"
+            "  postgres:\n"
+            "    image: postgres:17\n"
+        )
+        (tmp_path / ".env").write_text("POSTGRES_PORT=55432\n")
+
+        class FakeOperationalError(Exception):
+            pass
+
+        connect_calls: list[dict[str, Any]] = []
+        expected_connection = object()
+
+        def fake_connect(**kwargs: Any) -> object:
+            connect_calls.append(kwargs)
+            if len(connect_calls) == 1:
+                raise FakeOperationalError(
+                    'could not translate host name "postgres" to address: '
+                    'nodename nor servname provided, or not known'
+                )
+            return expected_connection
+
+        fake_pg = MagicMock()
+        fake_pg.connect.side_effect = fake_connect
+        fake_pg.OperationalError = FakeOperationalError
+
+        monkeypatch.setattr(
+            "cdc_generator.validators.manage_server_group.db_inspector.has_psycopg2",
+            True,
+        )
+        monkeypatch.setattr(
+            "cdc_generator.validators.manage_server_group.db_inspector.ensure_psycopg2",
+            lambda: fake_pg,
+        )
+
+        connection = get_postgres_connection(
+            {
+                "host": "postgres",
+                "port": 5432,
+                "user": "postgres",
+                "password": "postgres",
+            },
+            "directory_dev",
+        )
+
+        assert connection is expected_connection
+        assert len(connect_calls) == 2
+        assert connect_calls[0]["host"] == "postgres"
+        assert connect_calls[0]["port"] == 5432
+        assert connect_calls[1]["host"] == "localhost"
+        assert connect_calls[1]["port"] == 55432
 
     @patch('cdc_generator.validators.manage_server_group.handlers_update.load_server_groups')
     @patch('cdc_generator.validators.manage_server_group.handlers_update.get_single_server_group')

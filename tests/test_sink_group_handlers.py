@@ -197,6 +197,39 @@ class TestMergeServerSourcesUpdate:
         notification = merged["notification"]
         assert notification["dev"]["database"] == "notification_dev"
 
+    def test_replaces_stale_schemas_when_only_target_server_exists(self) -> None:
+        existing_sources: dict[str, Any] = {
+            "directory": {
+                "schemas": ["adopus", "cdc_management", "public"],
+                "local-server": {
+                    "server": "local-server",
+                    "database": "directory_dev",
+                    "table_count": 3,
+                },
+            },
+        }
+
+        updated_sources: dict[str, Any] = {
+            "directory": {
+                "schemas": ["public"],
+                "local-server": {
+                    "server": "local-server",
+                    "database": "directory_dev",
+                    "table_count": 0,
+                },
+            },
+        }
+
+        merged = _merge_server_sources_update(
+            existing_sources,
+            updated_sources,
+            "local-server",
+        )
+
+        directory = merged["directory"]
+        assert directory["schemas"] == ["public"]
+        assert directory["local-server"]["table_count"] == 0
+
 
 class TestHandleUpdateCommandMerge:
     """Regression tests for sequential per-server sink updates."""

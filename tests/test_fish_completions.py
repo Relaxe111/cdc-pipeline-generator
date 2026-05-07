@@ -244,6 +244,7 @@ class TestManageServicesConfigOptions:
         opts = _get_command_option_names(_get_manage_services_config_command())
         for opt in [
             "--add-sink",
+            "--target-sink-env",
             "--remove-sink",
             "--sink",
             "--add-sink-table",
@@ -831,6 +832,13 @@ class TestSmartCompletion:
         # But deeper options still hidden (need --sink first)
         assert "--add-sink-table" not in opts
         assert "--sink-table" not in opts
+
+    def test_add_sink_context_shows_target_sink_env(self) -> None:
+        """--target-sink-env appears once --add-sink is active."""
+        opts = self._complete(
+            "cdc manage-services config --service directory --add-sink sink_asma.chat --"
+        )
+        assert "--target-sink-env" in opts
 
     def test_positional_service_unlocks_sink(self) -> None:
         """Positional service name also satisfies the service prerequisite."""

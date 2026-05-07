@@ -254,6 +254,59 @@ class TestCliSinkAdd:
         assert result.returncode == 0
         assert "sink_asma.chat" in _read_yaml(isolated_project)
 
+    def test_add_sink_persists_target_sink_env_when_required(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        """Adding an env-aware sink persists target_sink_env into source-groups.yaml."""
+        (isolated_project / "docker-compose.yml").write_text(
+            "services:\n"
+            "  dev:\n"
+            "    image: busybox\n"
+        )
+        (isolated_project / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusCustomerA\n"
+        )
+        (isolated_project / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  environment_aware: true\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+        )
+        services_dir = isolated_project / "services"
+        services_dir.mkdir(exist_ok=True)
+        (services_dir / "adopus.yaml").write_text(
+            "adopus:\n"
+            "  source:\n"
+            "    tables:\n"
+            "      dbo.Actor: {}\n"
+        )
+
+        result = run_cdc(
+            "manage-services", "config", "--service", "adopus",
+            "--add-sink", "sink_asma.directory",
+            "--target-sink-env", "dev",
+        )
+
+        assert result.returncode == 0
+        assert "sink_asma.directory" in (services_dir / "adopus.yaml").read_text()
+        assert "target_sink_env: dev" in (
+            isolated_project / "source-groups.yaml"
+        ).read_text()
+
 
 class TestCliSinkRemove:
     """CLI e2e: --remove-sink."""
@@ -1080,6 +1133,71 @@ class TestCliManageServiceCompletions:
         )
         out = result.stdout
         assert "--sink-schema" in out
+
+    def test_target_sink_env_flag_visible_after_add_sink(
+        self, run_cdc_completion: RunCdcCompletion,
+    ) -> None:
+        """--target-sink-env becomes visible when --add-sink is active."""
+        result = run_cdc_completion(
+            "cdc manage-services config --service adopus --add-sink sink_asma.directory --target-"
+        )
+        out = result.stdout
+        assert "--target-sink-env" in out
+
+    def test_target_sink_env_value_completion_suggests_sink_envs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        """--target-sink-env value completion suggests available sink env keys."""
+        (isolated_project / "docker-compose.yml").write_text(
+            "services:\n"
+            "  dev:\n"
+            "    image: busybox\n"
+        )
+        (isolated_project / "source-groups.yaml").write_text(
+            "adopus:\n"
+            "  pattern: db-per-tenant\n"
+            "  environment_aware: false\n"
+            "  sources:\n"
+            "    CustomerA:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      default:\n"
+            "        server: default\n"
+            "        database: AdOpusCustomerA\n"
+        )
+        (isolated_project / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  environment_aware: true\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+            "      stage:\n"
+            "        server: default\n"
+            "        database: directory_stage\n"
+        )
+
+        original_cwd = Path.cwd()
+        try:
+            os.chdir(isolated_project)
+            dev_result = run_cdc_completion(
+                "cdc manage-services config --service adopus "
+                "--add-sink sink_asma.directory --target-sink-env d"
+            )
+            stage_result = run_cdc_completion(
+                "cdc manage-services config --service adopus "
+                "--add-sink sink_asma.directory --target-sink-env st"
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        assert "dev" in dev_result.stdout
+        assert "stage" in stage_result.stdout
 
     def test_sink_schema_value_completion_suggests_available_schemas(
         self,

@@ -62,28 +62,23 @@ def validate_inspect_args(
 
     sink_group_name = args.sink_group
     if not sink_group_name:
-        if action_flag == "--update":
-            if len(sink_groups) == 1:
-                sink_group_name = next(iter(sink_groups.keys()))
-                print_info(
-                    "No --sink-group specified; using only available sink group: "
-                    + f"{sink_group_name}"
-                )
-                args.sink_group = sink_group_name
-            else:
+        if action_flag in {"--inspect", "--update"} and len(sink_groups) == 1:
+            sink_group_name = next(iter(sink_groups.keys()))
+            print_info(
+                "No --sink-group specified; using only available sink group: "
+                + f"{sink_group_name}"
+            )
+            args.sink_group = sink_group_name
+        else:
+            if action_flag in {"--inspect", "--update"}:
                 print_error(
                     "More than one sink group found. Please pick one sink group with --sink-group."
                 )
                 print_info(f"Available sink groups: {list(sink_groups.keys())}")
-                print_info(
-                    "Usage: cdc manage-sink-groups "
-                    + f"{action_flag} --sink-group <name>"
+            else:
+                print_error(
+                    f"Error: {action_flag} requires --sink-group <name>"
                 )
-                return 1
-        else:
-            print_error(
-                f"Error: {action_flag} requires --sink-group <name>"
-            )
             print_info(
                 "Usage: cdc manage-sink-groups "
                 + f"{action_flag} --sink-group <name>"

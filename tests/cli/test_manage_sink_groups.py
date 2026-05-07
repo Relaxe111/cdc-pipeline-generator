@@ -277,7 +277,7 @@ class TestCliListInfoValidate:
 class TestCliInspectAndIntrospect:
     """CLI e2e: inspect/introspect argument and guard rails."""
 
-    def test_inspect_requires_sink_group(
+    def test_inspect_auto_resolves_single_sink_group(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
@@ -286,7 +286,27 @@ class TestCliInspectAndIntrospect:
         result = run_cdc("manage-sink-groups", "--inspect")
 
         assert result.returncode == 1
-        assert "--inspect requires --sink-group" in result.stdout + result.stderr
+        output = result.stdout + result.stderr
+        assert "using only available sink group" in output
+        assert "Connecting to PostgreSQL server" in output
+
+    def test_inspect_persists_discovered_sources_on_success(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _STANDALONE_SINK_GROUPS)
+
+        result = run_cdc(
+            "manage-sink-groups",
+            "--inspect",
+            "--sink-group",
+            "sink_analytics",
+            "--server",
+            "ghost",
+        )
+
+        assert result.returncode == 1
+        assert "Server 'ghost' not found" in result.stdout + result.stderr
 
     def test_update_auto_resolves_single_sink_group(
         self, run_cdc: RunCdc, isolated_project: Path,
@@ -317,6 +337,17 @@ class TestCliInspectAndIntrospect:
         assert result.returncode == 1
         assert "More than one sink group found" in result.stdout + result.stderr
 
+    def test_inspect_without_sink_group_fails_for_multiple_groups(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _MULTI_STANDALONE_SINK_GROUPS)
+
+        result = run_cdc("manage-sink-groups", "--inspect")
+
+        assert result.returncode == 1
+        assert "More than one sink group found" in result.stdout + result.stderr
+
     def test_update_without_server_uses_first_available_server(
         self, run_cdc: RunCdc, isolated_project: Path,
     ) -> None:
@@ -328,6 +359,18 @@ class TestCliInspectAndIntrospect:
         assert result.returncode == 1
         output = result.stdout + result.stderr
         assert "Inspecting server 'reporting'" in output
+
+    def test_inspect_without_server_uses_first_available_server(
+        self, run_cdc: RunCdc, isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        _write_sink_groups(isolated_project, _SINGLE_SINK_GROUP_NON_DEFAULT_SERVER)
+
+        result = run_cdc("manage-sink-groups", "--inspect", "--sink-group", "sink_asma")
+
+        assert result.returncode == 1
+        output = result.stdout + result.stderr
+        assert "Inspecting Sink Server: reporting" in output
 
     def test_update_accepts_sink_group_as_optional_value(
         self, run_cdc: RunCdc, isolated_project: Path,

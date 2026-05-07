@@ -306,7 +306,51 @@ def test_validate_inspect_args_rejects_inherited_group(
     assert result == 1
 
 
-def test_validate_inspect_args_requires_sink_group() -> None:
+@patch("cdc_generator.cli.sink_group_common.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_common.get_sink_file_path")
+def test_validate_inspect_args_auto_detects_single_sink_group(
+    mock_sink_path: Mock,
+    mock_load: Mock,
+) -> None:
+    mock_sink_path.return_value = Path("/tmp/sink-groups.yaml")
+    mock_load.return_value = {
+        "sink_analytics": {
+            "source_group": "asma",
+            "type": "postgres",
+            "servers": {"default": {"host": "localhost", "port": "5432"}},
+            "sources": {},
+        },
+    }
+
+    args = _ns(sink_group=None)
+    result = validate_inspect_args(args)
+
+    assert isinstance(result, tuple)
+    assert args.sink_group == "sink_analytics"
+
+
+@patch("cdc_generator.cli.sink_group_common.load_sink_groups")
+@patch("cdc_generator.cli.sink_group_common.get_sink_file_path")
+def test_validate_inspect_args_requires_sink_group_when_multiple_exist(
+    mock_sink_path: Mock,
+    mock_load: Mock,
+) -> None:
+    mock_sink_path.return_value = Path("/tmp/sink-groups.yaml")
+    mock_load.return_value = {
+        "sink_analytics": {
+            "source_group": "asma",
+            "type": "postgres",
+            "servers": {"default": {"host": "localhost", "port": "5432"}},
+            "sources": {},
+        },
+        "sink_reporting": {
+            "source_group": "asma",
+            "type": "postgres",
+            "servers": {"default": {"host": "localhost", "port": "5432"}},
+            "sources": {},
+        },
+    }
+
     result = validate_inspect_args(_ns(sink_group=None))
 
     assert result == 1
@@ -378,7 +422,9 @@ def test_fetch_databases_rejects_unsupported_type() -> None:
         )
 
 
-@patch("cdc_generator.cli.sink_group_inspect._run_inspection")
+@patch("cdc_generator.cli.sink_group_inspect.generate_service_autocomplete_definitions")
+@patch("cdc_generator.cli.sink_group_inspect.save_sink_groups")
+@patch("cdc_generator.cli.sink_group_inspect._fetch_databases")
 @patch("cdc_generator.cli.sink_group_inspect.resolve_sink_group")
 @patch("cdc_generator.cli.sink_group_inspect.load_yaml_file")
 @patch("cdc_generator.cli.sink_group_inspect.get_source_group_file_path")
@@ -388,7 +434,9 @@ def test_handle_inspect_command_success(
     mock_source_path: Mock,
     mock_load_yaml: Mock,
     mock_resolve: Mock,
-    mock_run: Mock,
+    mock_fetch: Mock,
+    mock_save: Mock,
+    mock_autocomplete: Mock,
 ) -> None:
     sink_group = {
         "source_group": "asma",
@@ -404,12 +452,22 @@ def test_handle_inspect_command_success(
     mock_source_path.return_value = Path("/tmp/source-groups.yaml")
     mock_load_yaml.return_value = {"asma": {"servers": {}, "sources": {}}}
     mock_resolve.return_value = resolved
-    mock_run.return_value = 0
+    mock_fetch.return_value = [
+        {
+            "name": "analytics",
+            "service": "directory",
+            "environment": "default",
+            "schemas": ["public"],
+            "table_count": 10,
+        },
+    ]
 
     result = handle_inspect_command(_ns(sink_group="sink_analytics", server="default"))
 
     assert result == 0
-    assert mock_run.called
+    assert mock_fetch.called
+    assert mock_save.called
+    assert mock_autocomplete.called
 
 
 @patch("cdc_generator.cli.sink_group_inspect.validate_inspect_args")

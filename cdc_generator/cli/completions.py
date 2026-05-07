@@ -293,6 +293,30 @@ def complete_sink_keys(
     )
 
 
+def complete_target_sink_env(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete target sink env keys from the selected ``--add-sink`` value."""
+    sink_key = _get_param(ctx, "add_sink")
+    if not sink_key:
+        selected_sink_keys = _get_option_values_from_args(ctx, "--add-sink")
+        sink_key = selected_sink_keys[0] if selected_sink_keys else ""
+
+    if not sink_key:
+        return []
+
+    from cdc_generator.core.sink_env_routing import get_sink_target_env_keys
+    from cdc_generator.helpers.service_config import get_project_root
+
+    env_keys, _warning = get_sink_target_env_keys(get_project_root(), sink_key)
+    if not env_keys:
+        return []
+
+    return _filter(sorted(env_keys), incomplete)
+
+
 def complete_schemas(
     ctx: click.Context,
     _param: click.Parameter,

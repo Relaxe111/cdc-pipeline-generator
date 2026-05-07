@@ -1,22 +1,25 @@
-# ASMA Bun CDC Runner Architecture And Implementation Plan
+# ASMA CDC Orchestrator Architecture And Implementation Plan
 
 ## Purpose
 
-Define the long-term production runtime for adaptive native CDC polling when sub-minute polling is required.
+Define the long-term production runtime for multi-source CDC orchestration:
+
+1. **Native CDC polling** — adaptive, sub-minute polling of PostgreSQL-native CDC (leases, checkpoints, pull/merge coordination)
+2. **External API connectors** — polling external services via REST APIs for change manifests and data fetch
 
 Canonical ASMA naming for new work:
 
-- `asma-bun-cdcrunner`
+- `asma-cdc-orchestrator`
 
 This document captures the best practices agreed during design review and translates them into a concrete long-term implementation target.
 
 ## Recommendation
 
-Use a stateless Bun worker deployment in Kubernetes.
+Use a stateless Bun.js worker deployment in Kubernetes.
 
 Recommended shape:
 
-- one repository: `asma-bun-cdcrunner`
+- one repository: `asma-cdc-orchestrator`
 - one Kubernetes `Deployment`
 - `2` to `3` active replicas
 - one worker process per pod
@@ -24,9 +27,9 @@ Recommended shape:
 
 Recommended placement:
 
-- `asma-modules/cdc/asma-bun-cdcrunner`
+- `asma-modules/cdc/asma-cdc-orchestrator`
 
-This keeps the runner in the same CDC workspace area as the current CDC repositories:
+This keeps the orchestrator in the same CDC workspace area as the current CDC repositories:
 
 - `asma-modules/cdc/adopus-cdc-pipeline`
 - `asma-modules/cdc/asma-cdc-pipelines`
@@ -47,9 +50,75 @@ The PostgreSQL-native CDC design already has the correct database-side foundatio
 
 What is missing for production sub-minute polling is a safe orchestrator.
 
-The Bun runner should be that orchestrator.
+This component fills that role.
 
 It should not own correctness-critical state.
+
+## Multi-Source Architecture
+
+The orchestrator coordinates CDC across two source types with different ingestion patterns.
+
+### Source Type 1: PostgreSQL-Native CDC
+
+Covered in detail throughout this document. The orchestrator claims work via PostgreSQL leases (`FOR UPDATE SKIP LOCKED`), invokes generated pull/merge functions, and manages lease renewal and success/failure bookkeeping. All authoritative state (due work, lease ownership, checkpoints) lives in PostgreSQL.
+
+### Source Type 2: External API Connectors
+
+For services the orchestrator does not control (e.g., `adcuris-srv-connector`), it polls their REST API on a configurable interval (`5s` to `30s`).
+
+**API contract for external connectors:**
+
+Each external connector SHOULD expose a single "have any changes?" endpoint that returns a change manifest:
+
+```json
+[
+  {
+    "table": "Actor",
+    "url": "/api/actor",
+    "method": "GET",
+    "token": "eyJ..."
+  }
+]
+```
+
+**Field descriptions:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `table` | Yes | Logical table name that was modified |
+| `url` | Yes | Endpoint to fetch the changed data |
+| `method` | Yes | HTTP method for the data fetch (typically `GET`) |
+| `token` | No | Short-lived access token (e.g., valid for `30s`) for authenticated data fetch |
+
+**Polling flow:**
+
+1. Orchestrator polls the connector's change endpoint every `5s`–`30s`
+2. If the manifest is non-empty, the orchestrator fetches data from each listed URL
+3. Fetched data is staged into PostgreSQL sink tables
+4. Generated merge procedures process the staged data
+5. Success/failure is recorded per table, per connector
+
+**Connector configuration (per source):**
+
+```yaml
+connectors:
+  - name: adcuris
+    change_endpoint: https://adcuris.example.com/api/cdc/changes
+    poll_interval_seconds: 10
+    auth:
+      type: static_token
+      token: "${ADCURIS_API_TOKEN}"
+    tables:
+      - Actor
+      - Address
+```
+
+**Design constraints:**
+
+- The orchestrator does **not** own the connector — it only consumes its API
+- Connector downtime or API errors trigger standard backoff and retry (same failure model as native CDC)
+- Token expiry is handled transparently: if a data fetch returns `401`, the orchestrator re-polls the change endpoint for a fresh token before retrying
+- All fetched data flows through the same staging → merge pipeline as native CDC
 
 ## Core Principles
 
@@ -65,7 +134,7 @@ Authoritative state must stay in PostgreSQL:
 - failure streaks
 - next scheduled pull time
 
-The Bun runner may cache policy metadata, but it must not become the source of truth for runtime state.
+The orchestrator may cache policy metadata, but it must not become the source of truth for runtime state.
 
 ### 2. Keep The Worker Stateless
 
@@ -80,7 +149,7 @@ That means:
 
 ### 3. Keep Heavy Data Work In PostgreSQL
 
-The Bun runner should coordinate work, not reimplement merge logic.
+The orchestrator should coordinate work, not reimplement merge logic.
 
 Use Bun for:
 
@@ -105,6 +174,39 @@ Run several active replicas.
 Do not start with one active pod and sleeping backups.
 
 The database already has the right coordination mechanism via leases and `FOR UPDATE SKIP LOCKED`.
+
+## Adaptive Polling
+
+The orchestrator uses smart, profile-driven polling that adjusts intervals based on table activity — rather than polling every table at a fixed rate forever.
+
+### Profile Tiers
+
+Each table is assigned a `schedule_profile` that defines its polling behavior:
+
+| Profile | Target Interval | Idle Behavior | Max Rows/Pull | Use Case |
+|---------|----------------|---------------|---------------|----------|
+| **Hot** | `1s` | Demotes to `30s` after `2m` idle | `2000` | Frequently updated, latency-sensitive |
+| **Warm** | `5s` | Ceiling `1m` after idle | `1000` | Regularly updated, moderate latency |
+| **Cool** | `30s` | Demotes to `5m` after `30m` idle | `750` | Occasionally updated |
+| **Cold** | `1m` | Ceiling `30m` outside hours | `500` | Rarely updated, audit/archive |
+
+### Adaptive Behavior
+
+The `current_poll_interval_seconds` in `native_cdc_runtime_state` is not static — the orchestrator adjusts it at runtime:
+
+| Signal | Action |
+|--------|--------|
+| **Empty pull** | Increment `empty_pull_streak` → widen interval toward `max_poll_interval_seconds` |
+| **Full batch** (rows == `max_rows_per_pull`) | Shrink interval toward `min_poll_interval_seconds` (more data waiting) |
+| **Partial batch** | Keep current interval (steady state) |
+| **Consecutive failures** | Exponential backoff up to `max_backoff_seconds` |
+| **First success after failures** | Reset to `base_poll_interval_seconds` |
+
+This means hot tables get sub-second attention when active, but cool down automatically when idle — no manual tuning required.
+
+### Business Hours
+
+Optional `business_hours_profile_key` allows different intervals during vs. outside business hours. A hot table might poll at `1s` during the workday and `5m` overnight.
 
 ## Long-Term Data Model: Option B
 
@@ -379,7 +481,7 @@ That split matters operationally:
 
 Because `next_pull_at` is `timestamptz`, PostgreSQL can store subsecond scheduled times.
 
-That means `asma-bun-cdcrunner` can be made subsecond-aware in Bun or TypeScript, but only if:
+That means `asma-cdc-orchestrator` can be made subsecond-aware in Bun.js or TypeScript, but only if:
 
 - policy stores `jitter_millis` instead of whole-second jitter
 - the runner heartbeat is faster than `1s`, for example `100ms` or `250ms`
@@ -608,7 +710,7 @@ for (;;) {
 
 Use the canonical ASMA repo naming convention:
 
-- `asma-bun-cdcrunner`
+- `asma-cdc-orchestrator`
 
 Use the same canonical base for:
 
@@ -619,7 +721,7 @@ Use the same canonical base for:
 
 Repository location:
 
-- `asma-modules/cdc/asma-bun-cdcrunner`
+- `asma-modules/cdc/asma-cdc-orchestrator`
 
 Avoid new `asma-srv-*` names for this service.
 
@@ -716,9 +818,9 @@ Do not:
 - verify the Bun runtime can call the same DB contract later
 - validate error handling and success bookkeeping
 
-### Phase 3: Bun Runner Skeleton
+### Phase 3: Orchestrator Skeleton
 
-- create `asma-bun-cdcrunner`
+- create `asma-cdc-orchestrator`
 - implement heartbeat loop
 - implement claim, pull, merge, mark-success, mark-failure flow
 - derive `worker_id` from pod identity

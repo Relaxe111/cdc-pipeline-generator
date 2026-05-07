@@ -1,5 +1,6 @@
 """Configuration management for CDC service files."""
 
+from pathlib import Path
 from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import print_error
@@ -16,6 +17,71 @@ SERVICE_SCHEMAS_DIR = get_schema_write_root(PROJECT_ROOT)
 MIN_SIMILAR_BLOCK_SIZE = 2
 ANCHOR_SUFFIX_START = 2
 ANCHOR_PATH_PARTS = 2
+
+
+def build_service_file_header_comment(service: str) -> str:
+    """Build the standard auto-managed service-file header comment."""
+    sep = "=" * 76
+    return f"""# {sep}
+# CDC Service Configuration - Auto-managed
+# {sep}
+# WARNING: This file is mostly READ-ONLY - modify only through CDC commands:
+#
+#   cdc manage-services config --service {service} --add-source-table <schema.table>
+#   cdc manage-services config --service {service} --remove-table <schema.table>
+#   cdc manage-services config --create-service {service}
+#
+# MANUAL EDITS ALLOWED:
+#   - source.tables - You can manually add/edit table entries (use schema.table format)
+#   - Table properties: primary_key, ignore_columns, include_columns
+#   - environments - Environment-specific settings (kafka, etc.)
+#
+# DO NOT MANUALLY EDIT:
+#   - Service name is derived from filename ({service}.yaml)
+#   - source.validation_database (auto-populated from source-groups.yaml)
+#
+# NOTE:
+#   - server_group: Auto-detected (only one per implementation)
+#   - server: Determined by environment (from source-groups.yaml)
+#   - source.type: From source-groups.yaml type field
+#   - Database connections: From source-groups.yaml servers configuration
+# {sep}
+
+"""
+
+
+def resolve_service_file_header_comment(service: str, service_file: Path) -> str:
+    """Return the existing leading comment block or the standard header."""
+    existing_header = _extract_leading_comment_block(service_file)
+    if existing_header is not None:
+        return existing_header
+    return build_service_file_header_comment(service)
+
+
+def _extract_leading_comment_block(service_file: Path) -> str | None:
+    """Read the leading file comment block, preserving exact formatting."""
+    if not service_file.exists():
+        return None
+
+    header_lines: list[str] = []
+    has_comment = False
+    for line in service_file.read_text(encoding='utf-8').splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith('#'):
+            header_lines.append(line)
+            has_comment = True
+            continue
+        if not stripped and header_lines:
+            header_lines.append(line)
+            continue
+        if not stripped and not header_lines:
+            header_lines.append(line)
+            continue
+        break
+
+    if not has_comment:
+        return None
+    return ''.join(header_lines)
 
 
 def _sanitize_anchor_part(value: str) -> str:
@@ -171,6 +237,7 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
     """Save service configuration to file, using new format (service name as root key)."""
     try:
         service_file = SERVICES_DIR / f"{service}.yaml"
+        header_comment = resolve_service_file_header_comment(service, service_file)
 
         # Remove 'service' field if present (it's redundant in new format)
         config_to_save = {k: v for k, v in config.items() if k != 'service'}
@@ -185,6 +252,7 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
         wrapped_config = {service: config_to_save}
 
         with service_file.open('w', encoding='utf-8') as f:
+            f.write(header_comment)
             yaml.dump(wrapped_config, f)
         return True
     except Exception as e:

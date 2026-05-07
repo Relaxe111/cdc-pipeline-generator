@@ -100,7 +100,11 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-def add_sink_to_service(service: str, sink_key: str) -> bool:
+def add_sink_to_service(
+    service: str,
+    sink_key: str,
+    target_sink_env: str | None = None,
+) -> bool:
     """Add a sink destination to *service*.
 
     Args:
@@ -110,7 +114,7 @@ def add_sink_to_service(service: str, sink_key: str) -> bool:
     Returns:
         True on success, False otherwise.
     """
-    return _add_sink_to_service(service, sink_key)
+    return _add_sink_to_service(service, sink_key, target_sink_env)
 
 
 def remove_sink_from_service(service: str, sink_key: str) -> bool:

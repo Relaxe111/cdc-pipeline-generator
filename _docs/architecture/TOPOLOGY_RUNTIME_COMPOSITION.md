@@ -93,7 +93,7 @@ This is the current runtime-oriented view of how source changes reach the sink-s
 
 ```mermaid
 flowchart LR
-  source["source<br/>(mssql)"]
+  source["Adopus source<br/>(mssql)"]
   sink["sink<br/>(pgsql)<br/>staging tables, pull logic,<br/>merge procedures, and helpers"]
 
   subgraph k8s["k8s"]
@@ -110,13 +110,17 @@ flowchart LR
 
     subgraph fdw["fdw"]
       direction TB
-      runner["asma-bun-cdcrunner"]
-      replicaA["asma-bun-cdcrunner<br/>replica"]
-      replicaB["asma-bun-cdcrunner<br/>replica"]
+      runner["asma-cdc-orchestrator"]
+      replicaA["asma-cdc-orchestrator<br/>replica"]
+      replicaB["asma-cdc-orchestrator<br/>replica"]
 
       runner --- replicaA
       runner --- replicaB
     end
+  end
+
+  subgraph external["external"]
+    connector["adcuris-srv-connector<br/>(REST API)"]
   end
 
   source -->|brokered CDC feed| bentoSource
@@ -124,19 +128,24 @@ flowchart LR
   sink -->|FDW reads MSSQL CDC tables| source
   runner -->|adaptive db+table polling| source
   runner -->|sync procedures + metadata coordination| sink
+  runner -->|poll changes + fetch data| connector
+  connector -->|change manifest + data| runner
 
   classDef transport fill:#f8d7da,stroke:#c95f5f,color:#111111;
   classDef runtime fill:#ffffff,stroke:#444444,color:#111111;
+  classDef external fill:#d4edda,stroke:#28a745,color:#111111;
 
   class bentoSource,mq,bentoSink transport;
   class source,sink,runner,replicaA,replicaB runtime;
+  class connector external;
 ```
 
 Notes:
 
-- Brokered path: MSSQL changes flow through Bento and Redpanda before reaching the PostgreSQL sink.
-- FDW path: the PostgreSQL sink and `asma-bun-cdcrunner` pull directly from MSSQL CDC tables and execute sink-side sync and merge logic.
-- In both paths, the sink-side PostgreSQL layer is where generated tables, staging objects, procedures, and operational helpers live.
+- **Brokered path:** Adopus MSSQL changes flow through Bento and Redpanda before reaching the PostgreSQL sink.
+- **FDW path:** the PostgreSQL sink and `asma-cdc-orchestrator` pull directly from Adopus MSSQL CDC tables and execute sink-side sync and merge logic.
+- **API connector path:** the orchestrator polls external connectors (e.g., `adcuris-srv-connector`) for change manifests, fetches data via REST, and stages it into PostgreSQL sink tables.
+- In all paths, the sink-side PostgreSQL layer is where generated tables, staging objects, procedures, and operational helpers live.
 
 ---
 

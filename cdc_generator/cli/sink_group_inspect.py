@@ -6,6 +6,7 @@ import argparse
 from typing import Any, cast
 
 from cdc_generator.cli.sink_group_common import (
+    get_sink_file_path,
     get_source_group_file_path,
     validate_inspect_args,
 )
@@ -16,8 +17,15 @@ from cdc_generator.helpers.helpers_logging import (
     print_info,
     print_success,
 )
-from cdc_generator.helpers.helpers_sink_groups import resolve_sink_group
+from cdc_generator.helpers.helpers_sink_groups import resolve_sink_group, save_sink_groups
+from cdc_generator.helpers.source_custom_keys import (
+    execute_source_custom_keys,
+    normalize_source_custom_keys,
+)
 from cdc_generator.helpers.yaml_loader import ConfigDict, load_yaml_file
+from cdc_generator.validators.manage_server_group.autocomplete_definitions import (
+    generate_service_autocomplete_definitions,
+)
 
 
 def _run_inspection(
@@ -30,8 +38,8 @@ def _run_inspection(
     Returns:
         Exit code (0 for success, 1 for failure).
     """
-    server_name = args.server or "default"
     servers = resolved.get("servers", {})
+    server_name = args.server or next(iter(servers), "default")
     if server_name not in servers:
         print_error(
             f"Server '{server_name}' not found" +
@@ -66,7 +74,12 @@ def _run_inspection(
         print_error(f"Failed to inspect databases: {e}")
         return 1
 
-    # Display results
+    _print_inspection_results(databases)
+    return 0
+
+
+def _print_inspection_results(databases: list[dict[str, Any]]) -> None:
+    """Print discovered sink database details."""
     print_success(f"\nFound {len(databases)} database(s):\n")
     for db in databases:
         schemas_str = ", ".join(db["schemas"])
@@ -78,14 +91,8 @@ def _run_inspection(
         print()
 
     print_info(
-        "Note: Use this information to manually configure"
-        + " sink destinations."
+        "Persisted discovered databases into sink-group sources."
     )
-    print_info(
-        "Future enhancement: Add databases to sink group"
-        + " configuration automatically."
-    )
-    return 0
 
 
 def _fetch_databases(
@@ -157,7 +164,7 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     if isinstance(result, int):
         return result
 
-    _sink_groups, sink_group, sink_group_name = result
+    sink_groups, sink_group, sink_group_name = result
 
     # Load source groups for resolution
     source_groups = cast(dict[str, ConfigDict], load_yaml_file(source_file))
@@ -165,4 +172,98 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     # Resolve sink group
     resolved = resolve_sink_group(sink_group_name, sink_group, source_groups)
 
-    return _run_inspection(resolved, sink_group_name, args)
+    servers = resolved.get("servers", {})
+    server_name = args.server or next(iter(servers), "default")
+    if server_name not in servers:
+        print_error(
+            f"Server '{server_name}' not found"
+            + f" in sink group '{sink_group_name}'"
+        )
+        print_info(f"Available servers: {list(servers.keys())}")
+        return 1
+
+    server_config = servers[server_name]
+    print_header(
+        f"Inspecting Sink Server: {server_name}"
+        + f" ({resolved.get('type', 'postgres')})"
+    )
+
+    try:
+        databases = _fetch_databases(
+            resolved.get("type", "postgres"),
+            server_config,
+            resolved,
+            args,
+            server_name,
+        )
+    except ValueError as e:
+        print_error(str(e))
+        print_info(
+            "Only 'postgres' and 'mssql' sink types support inspection."
+        )
+        return 1
+    except ImportError as e:
+        print_error(f"Database driver not installed: {e}")
+        return 1
+    except Exception as e:
+        print_error(f"Failed to inspect databases: {e}")
+        return 1
+
+    _persist_inspection_results(
+        databases,
+        sink_group_name,
+        server_name,
+        resolved,
+        sink_groups,
+        sink_group,
+        server_config,
+    )
+    _print_inspection_results(databases)
+    return 0
+
+
+def _persist_inspection_results(
+    databases: list[dict[str, Any]],
+    sink_group_name: str,
+    server_name: str,
+    resolved: ResolvedSinkGroup,
+    sink_groups: dict[str, SinkGroupConfig],
+    sink_group: SinkGroupConfig,
+    server_config: object,
+) -> int:
+    """Render inspect output and persist discovered sink sources."""
+    source_custom_keys = normalize_source_custom_keys(
+        sink_group.get("source_custom_keys", {})
+    )
+    if source_custom_keys:
+        execute_source_custom_keys(
+            databases,
+            db_type=str(resolved.get("type", "postgres")),
+            server_name=server_name,
+            server_config=server_config,
+            source_custom_keys=source_custom_keys,
+            context_label=f"sink-group '{sink_group_name}'",
+        )
+
+    from cdc_generator.cli.sink_group_update import (
+        _build_sink_sources_from_databases,
+        _merge_server_sources_update,
+    )
+
+    updated_sources = _build_sink_sources_from_databases(databases, server_name)
+    sink_group_entry = sink_groups[sink_group_name]
+    merged_sources = _merge_server_sources_update(
+        sink_group_entry.get("sources", {}),
+        updated_sources,
+        server_name,
+    )
+    sink_group_entry["sources"] = merged_sources
+    save_sink_groups(sink_groups, get_sink_file_path())
+
+    generate_service_autocomplete_definitions(
+        resolved,
+        databases,
+        table_include_patterns=resolved.get("table_include_patterns", []),
+        table_exclude_patterns=resolved.get("table_exclude_patterns", []),
+        schema_exclude_patterns=resolved.get("schema_exclude_patterns", []),
+    )

@@ -38,7 +38,7 @@ Contributing and coding standards:
 - **[PIPELINE_TEST_MODES.md](./development/PIPELINE_TEST_MODES.md)** - AI-friendly test mode definitions (`--fast-pipelines` vs `--full-pipelines`)
 - **[GAP_ANALYSIS_COMMAND_GROUPING.md](./development/GAP_ANALYSIS_COMMAND_GROUPING.md)** - Pipeline/migration command grouping gaps and rollout plan
 - **[ADAPTIVE_NATIVE_CDC_POLLING_GAP_ANALYSIS_AND_IMPLEMENTATION_PLAN.md](./development/ADAPTIVE_NATIVE_CDC_POLLING_GAP_ANALYSIS_AND_IMPLEMENTATION_PLAN.md)** - Concrete gap analysis and rollout plan for turning the native MSSQL FDW runtime from fixed-interval polling into adaptive central scheduling
-- **[ASMA_BUN_CDCRUNNER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md](./development/ASMA_BUN_CDCRUNNER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md)** - Long-term architecture, best practices, cache boundaries, replica model, and phased implementation plan for the ASMA Bun CDC runner
+- **[ASMA_CDC_ORCHESTRATOR_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md](./development/ASMA_CDC_ORCHESTRATOR_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md)** - Long-term architecture, best practices, cache boundaries, replica model, and phased implementation plan for the ASMA CDC orchestrator
 
 ### [CLI Reference](./cli/)
 

@@ -103,6 +103,13 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
         "Sink key to add (format: sink_group.target_service)",
         "cdc manage-services config --service directory --add-sink sink_asma.chat",
     ),
+    "--target-sink-env": (
+        "Target sink environment key for env-aware sinks (for example: local-server, dev, stage)",
+        (
+            "cdc manage-services config --service nonprod-local "
+            "--add-sink sink_local-sink.directory_dev --target-sink-env local-server"
+        ),
+    ),
     "--remove-sink": (
         "Sink key to remove",
         "cdc manage-services config --service directory --remove-sink sink_asma.chat",
@@ -263,6 +270,9 @@ Examples:
 
   # Sink management
   cdc manage-services config --service directory --add-sink sink_asma.chat
+  cdc manage-services config --service nonprod-local \
+      --add-sink sink_local-sink.directory_dev \
+      --target-sink-env local-server
   cdc manage-services config --service directory \
       --sink sink_asma.chat \\
       --add-sink-table public.customer_user
@@ -535,6 +545,14 @@ def _build_parser() -> ServiceArgumentParser:
         metavar="SINK_KEY",
         action="append",
         help="Add sink (sink_group.target_service). Can be used multiple times.",
+    )
+    parser.add_argument(
+        "--target-sink-env",
+        metavar="ENV_KEY",
+        help=(
+            "Target sink environment key for env-aware sinks. "
+            + "Required when adding an env-aware sink to a non-env-aware source group."
+        ),
     )
     parser.add_argument(
         "--remove-sink",

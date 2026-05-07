@@ -12,9 +12,9 @@ This document covers:
 4. the exact generator/runtime files that need to change
 5. the rollout sequence that keeps the system restart-safe
 
-For the dedicated long-term runtime architecture based on an ASMA Bun.js worker, see:
+For the dedicated long-term runtime architecture based on an ASMA Bun.js CDC orchestrator, see:
 
-- `ASMA_BUN_CDCRUNNER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md`
+- `ASMA_CDC_ORCHESTRATOR_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md`
 
 ## Scope
 
@@ -271,7 +271,7 @@ It is:
 
 Dedicated design document:
 
-- `ASMA_BUN_CDCRUNNER_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md`
+- `ASMA_CDC_ORCHESTRATOR_ARCHITECTURE_AND_IMPLEMENTATION_PLAN.md`
 
 ## Long-Term Data Model Preference: Option B
 
@@ -386,7 +386,7 @@ Important caveat:
 - `1s` only makes sense for a small number of truly hot tables
 - do not make `1s` the default for broad table sets or all customers
 - for subsecond-aware scheduling, use `jitter_millis` instead of whole-second jitter
-- if `1s` remains a real requirement, the Bun runner heartbeat must be faster than `1s`, for example `100ms` to `250ms`
+- if `1s` remains a real requirement, the orchestrator heartbeat must be faster than `1s`, for example `100ms` to `250ms`
 
 ## Recommended Profile Defaults
 
@@ -493,7 +493,7 @@ Practical note:
 
 - for the `1s` tier, use `jitter_millis = 0`
 - for the `5s` tier, keep `jitter_millis` small, for example `0-250`
-- PostgreSQL can store subsecond `timestamptz` values, but the Bun runner must poll often enough to honor them
+- PostgreSQL can store subsecond `timestamptz` values, but the orchestrator must poll often enough to honor them
 
 ## Failure Rules
 
@@ -580,13 +580,13 @@ This should live in `cdc_management` and join registration, policy, runtime, sou
 
 Long-term preferred runtime:
 
-- `asma-bun-cdcrunner`
+- `asma-cdc-orchestrator`
 
-Use the dedicated Bun runner design document for runtime best practices, replica model, cache boundaries, and Kubernetes deployment shape.
+Use the dedicated orchestrator design document for runtime best practices, replica model, cache boundaries, and Kubernetes deployment shape.
 
 Recommended repository placement:
 
-- `asma-modules/cdc/asma-bun-cdcrunner`
+- `asma-modules/cdc/asma-cdc-orchestrator`
 
 This keeps the runtime next to the existing CDC implementations, including:
 
@@ -615,7 +615,7 @@ Recommended production shape when sub-minute polling is required:
 
 If this is implemented in the ASMA ecosystem as a dedicated repository, follow the canonical naming convention already documented there:
 
-- `asma-bun-cdcrunner`
+- `asma-cdc-orchestrator`
 
 Do not use legacy `asma-srv-*` naming for a new Bun service.
 
@@ -852,7 +852,7 @@ Acceptance:
 ## Phase 5: Add The Runner Runtime
 
 - implement the one-shot runner command
-- implement the long-running stateless `asma-bun-cdcrunner` deployment shape for sub-minute polling
+- implement the long-running stateless `asma-cdc-orchestrator` deployment shape for sub-minute polling
 - make the runtime claim due work and call generated helpers
 - add structured logging, worker ids, and lease renewal
 - keep policy metadata cacheable but keep due-work state authoritative in PostgreSQL
@@ -905,12 +905,12 @@ The right next implementation step is not another listener technology. It is fin
 
 For production execution, the preferred runtime shape is a stateless worker deployment with active/active replicas and PostgreSQL-owned leases.
 
-If the runtime is implemented inside the ASMA platform, use the canonical ASMA naming convention for a new Bun service, for example:
+If the runtime is implemented inside the ASMA platform, use the canonical ASMA naming convention for a new Bun.js service, for example:
 
-- `asma-bun-cdcrunner`
+- `asma-cdc-orchestrator`
 
 Recommended location:
 
-- `asma-modules/cdc/asma-bun-cdcrunner`
+- `asma-modules/cdc/asma-cdc-orchestrator`
 
 For long-term maintainability, use Option B data separation rather than keeping all scheduler policy and runtime state on one registration row.
