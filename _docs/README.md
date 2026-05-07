@@ -66,7 +66,7 @@ This library supports two CDC patterns:
 - Multi-tenancy at table level (customer_id)
 - 1 shared database → 1 source pipeline
 - All customers in same database with `customer_id` field
-- Example: All directory data in one database
+- Example: shared directory data in one owner database, with selected tables fanned out downstream to other services
 
 **Note:** Environment differentiation (dev/staging/prod) is handled by each implementation, not by the generator library.
 

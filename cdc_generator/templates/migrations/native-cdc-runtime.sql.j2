@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS "idx_native_cdc_schedule_policy_enabled_priority"
         "logical_table_name"
     );
 
-CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
+CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
     "source_instance_key" text NOT NULL,
     "logical_table_name" text NOT NULL,
     "checkpoint_table_name" text NOT NULL,
@@ -185,6 +185,23 @@ ALTER TABLE "cdc_management"."native_cdc_runtime_state"
 
 ALTER TABLE "cdc_management"."native_cdc_runtime_state"
     ALTER COLUMN "updated_at" SET DEFAULT NOW();
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_catalog.pg_class cls
+        JOIN pg_catalog.pg_namespace ns
+            ON ns.oid = cls.relnamespace
+        WHERE ns.nspname = 'cdc_management'
+          AND cls.relname = 'native_cdc_runtime_state'
+          AND cls.relkind = 'r'
+          AND cls.relpersistence <> 'u'
+    ) THEN
+        EXECUTE 'ALTER TABLE "cdc_management"."native_cdc_runtime_state" SET UNLOGGED';
+    END IF;
+END;
+$$;
 
 UPDATE "cdc_management"."native_cdc_runtime_state"
 SET

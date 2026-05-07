@@ -126,7 +126,8 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
 
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_checkpoint"' in native_infra_sql
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_schedule_policy"' in native_infra_sql
-    assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state"' in native_infra_sql
+    assert 'CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state"' in native_infra_sql
+    assert 'ALTER TABLE "cdc_management"."native_cdc_runtime_state" SET UNLOGGED' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."claim_due_native_cdc_work"' in native_infra_sql
     assert 'CREATE OR REPLACE PROCEDURE "cdc_management"."renew_native_cdc_lease"' in native_infra_sql
     assert 'CREATE OR REPLACE VIEW "cdc_management"."v_native_cdc_health"' in native_infra_sql
@@ -152,7 +153,7 @@ def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) 
     """Native runtime should render explicit source-table native_cdc policy metadata."""
     schema_base = _write_native_project(tmp_path)
     output_dir = tmp_path / "migrations"
-    service_config = {
+    service_config: dict[str, object] = {
         **_SERVICE_CONFIG,
         "source": {
             "tables": {
@@ -218,7 +219,7 @@ def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:
     """Native runtime mode should reject shared tables without customer_id."""
     schema_base = _write_native_project(tmp_path)
     output_dir = tmp_path / "migrations"
-    service_config = {
+    service_config: dict[str, object] = {
         **_SERVICE_CONFIG,
         "sinks": {
             "sink_test.db": {

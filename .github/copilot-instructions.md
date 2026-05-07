@@ -23,13 +23,13 @@
 - Treat generator as the only script/code location; implementations stay YAML/artifacts only.
 - Route detailed constraints to scoped guides below; do not duplicate policy text here.
 
-### Preprod Phase Policy (Temporary)
+### Unreleased Development Phase (Temporary)
 
-- Current phase is **preprod** (no production consumers yet).
+- The generator and CDC stack are still **unreleased** and in **development/preprod**, not production.
 - **Do not preserve legacy/backward compatibility by default.**
 - Remove deprecated aliases, legacy paths, and obsolete code immediately when touched.
 - Prefer clean replacement over compatibility shims.
-- This policy is temporary and must be removed when production rollout starts.
+- Keep this policy in force until the user explicitly marks production rollout in these instructions.
 
 ---
 

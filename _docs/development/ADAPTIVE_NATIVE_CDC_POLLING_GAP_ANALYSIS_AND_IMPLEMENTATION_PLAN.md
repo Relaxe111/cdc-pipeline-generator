@@ -526,8 +526,8 @@ Release the lease.
 
 Add:
 
-- `native_cdc_schedule_policy`
-- `native_cdc_runtime_state`
+- `native_cdc_schedule_policy` (standard logged table)
+- `native_cdc_runtime_state` (**UNLOGGED** — high write frequency, data is ephemeral and recoverable from policy + activity; see crash-recovery analysis in [DATA_MODEL.md](../../_docs/cdc-orchestrator/DATA_MODEL.md))
 - backfill SQL from current registration data into the split tables
 - `v_native_cdc_health` view
 - `renew_native_cdc_lease(...)` procedure

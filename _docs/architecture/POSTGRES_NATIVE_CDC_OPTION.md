@@ -121,6 +121,41 @@ Not recommended as the default:
 
 That chain couples environments and reintroduces the kind of domino effect this proposal is trying to reduce. If environments must remain isolated, each environment should ingest independently from its own approved source path.
 
+### 4. Canonical Owner Database Rule
+
+For MSSQL-derived tables, "service-local PostgreSQL" should be read as the canonical owner database for that table, not as every database that happens to consume a copy.
+
+Recommended default:
+
+- pull each source table once from MSSQL into one owner PostgreSQL database
+- keep checkpoints, staging tables, merge procedures, and runtime state in that owner database
+- fan out to additional ASMA service databases from PostgreSQL, not by repeating the MSSQL pull in each consumer database
+- choose the owner by domain ownership; shared reference tables may land in `directory`, while domain-owned tables should land in the database that owns that domain
+
+Avoid by default:
+
+- registering the same MSSQL CDC table as direct FDW/native ingestion work in multiple consumer databases
+
+Why:
+
+- one checkpoint stream per source table and customer
+- less load on MSSQL CDC tables and the source server
+- simpler recovery, because consumers can be rebuilt from PostgreSQL rather than by rereading MSSQL
+- clearer schema ownership and downstream contracts
+
+### 5. Administration And Versioning Model
+
+For both FDW-backed MSSQL ingestion and PostgreSQL-native downstream fan-out, the normal administration path in this workspace should stay generator-managed.
+
+Recommended default:
+
+- keep implementation YAML and inspected schema files as the input source of truth
+- generate versioned SQL and runtime helpers through `cdc` commands from `cdc-pipeline-generator`
+- keep generated migration artifacts versioned in the implementation repository that owns the runtime
+- treat live database state as the result of generator-managed inputs, not as the authoring surface
+
+Manual SQL or setup is still possible, but it should be treated as a fallback path for debugging, one-off bootstrap, or gaps in current CLI support. Any manual change that becomes permanent must be reconciled back into the implementation inputs and regenerated artifacts so the repository remains the source of truth.
+
 ---
 
 ## What We Keep From The Current CDC Model

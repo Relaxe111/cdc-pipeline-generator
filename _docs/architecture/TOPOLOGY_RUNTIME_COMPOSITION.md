@@ -147,6 +147,21 @@ Notes:
 - **API connector path:** the orchestrator polls external connectors (e.g., `adcuris-srv-connector`) for change manifests, fetches data via REST, and stages it into PostgreSQL sink tables.
 - In all paths, the sink-side PostgreSQL layer is where generated tables, staging objects, procedures, and operational helpers live.
 
+## Canonical Owner Database Rule
+
+`fdw` and `pg_native` describe transport and materialization families, but they do not imply that the same external table should be ingested separately into every consumer database.
+
+Default rule:
+
+- each logical table has one canonical owner PostgreSQL database
+- external MSSQL tables are pulled once into that owner database
+- downstream consumers get PostgreSQL-to-PostgreSQL fan-out from there
+
+Current ASMA example:
+
+- shared Adopus directory and reference data can land in `directory`
+- other domain-owned data should land in the domain database that owns it
+
 ---
 
 ## Naming Direction

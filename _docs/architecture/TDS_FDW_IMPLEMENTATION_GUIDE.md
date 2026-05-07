@@ -17,6 +17,19 @@ It is written for the practical workflow discussed for Adopus-style ingestion:
 - an async merge procedure moves them into one shared final table
 - `customer_id` is stored on the target rows so multiple source databases can land in one shared PostgreSQL schema
 
+## Canonical Landing Principle
+
+Use `tds_fdw` to establish the first PostgreSQL landing zone for external data, not to create identical MSSQL pull paths in every consumer database.
+
+Recommended default:
+
+- each logical table has one canonical owner PostgreSQL database
+- Adopus MSSQL tables are pulled once into that owner database
+- downstream ASMA services consume from PostgreSQL, via `asma-cdc-pipeline`, logical replication, or another PostgreSQL-native fan-out mechanism
+- shared reference data can reasonably land in `directory`; domain-owned data should land in the service database that owns the domain
+
+The examples in this guide use `directory_dev` because the current first target is shared directory-style data. That example should not be read as a rule that every consumer database should run its own FDW bootstrap or that all Adopus data belongs in `directory`.
+
 ---
 
 ## Mental Model
@@ -83,6 +96,19 @@ If you are working inside this generator-driven repository, the recommended boot
 10. let an external scheduler call the generated claim/pull/merge helpers
 
 This removes the slow, error-prone part of the workflow: hand-writing one `CREATE SERVER`, `CREATE USER MAPPING`, and `CREATE FOREIGN TABLE` bundle per customer database.
+
+### Canonical Administration Model
+
+For this repository, the normal FDW administration path is:
+
+- maintain source definitions in implementation YAML
+- render FDW bootstrap SQL with `cdc fdw`
+- render PostgreSQL materialization/runtime SQL with `cdc manage-migrations`
+- version the resulting artifacts in the implementation repository
+
+That means the long-term source of truth is the implementation inputs plus generated artifacts, not a manually curated database state.
+
+The manual SQL sections later in this guide remain supported as a reference and fallback path, but they are not the recommended day-to-day administration model. If manual SQL is used for a lasting change, reconcile it back into the implementation files and regenerate.
 
 ### What `cdc fdw` Reads
 
@@ -375,6 +401,8 @@ This keeps scheduling deployment-specific while still making the runtime behavio
 ### Step 9: Use The Remaining Sections As SQL Reference
 
 The next sections remain valuable as the low-level SQL reference path and for understanding the generated design, but the generator workflow above is now the recommended path for this repository.
+
+Use the remaining sections when you need to debug, bootstrap around a temporary tooling gap, or run a one-off smoke test. Do not treat the manual path as the primary versioning or administration surface.
 
 ---
 

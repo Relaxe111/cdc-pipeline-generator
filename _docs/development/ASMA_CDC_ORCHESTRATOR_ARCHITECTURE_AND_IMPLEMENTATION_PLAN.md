@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_schedule_policy" (
         ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
+CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
     "source_instance_key" text NOT NULL,
     "logical_table_name" text NOT NULL,
     "checkpoint_table_name" text NOT NULL,
@@ -426,8 +426,8 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state" (
 Design rule:
 
 - `source_table_registration` remains the durable identity anchor
-- `native_cdc_schedule_policy` holds rare-changing scheduler policy and enablement
-- `native_cdc_runtime_state` holds all hot mutable execution state
+- `native_cdc_schedule_policy` holds rare-changing scheduler policy and enablement (standard logged table)
+- `native_cdc_runtime_state` holds all hot mutable execution state (UNLOGGED for performance — see [DATA_MODEL.md](../../_docs/cdc-orchestrator/DATA_MODEL.md) for crash-recovery analysis)
 - `native_cdc_checkpoint` continues to own committed LSN progress
 
 ## Claiming And Leasing With Split Tables
