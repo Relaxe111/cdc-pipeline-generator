@@ -444,6 +444,8 @@ FROM "cdc_management"."bootstrap_native_cdc_tables"(
 
 The wrapper dispatches to the generated per-table `bootstrap_<table>_snapshot(...)` functions internally. With `p_enable_after = true`, the function enables both registration and schedule policy only after the snapshot load and checkpoint seed commit successfully. If you want a dry operational pause after loading, call it with `false` and enable the rows separately later.
 
+For admin UI queries, customer/table status screens, and representative Hasura calls, see [_docs/cdc-orchestrator/ADMIN_INTERFACE_GUIDE.md](../../_docs/cdc-orchestrator/ADMIN_INTERFACE_GUIDE.md).
+
 ### Step 8: Hand Off To The External Scheduler
 
 The generator does **not** register `pg_cron` jobs or any other scheduler.
