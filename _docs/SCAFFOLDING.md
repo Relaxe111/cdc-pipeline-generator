@@ -79,8 +79,8 @@ When you create a new server group with `--create`, the generator automatically 
 ### Creating a New Implementation
 
 ```bash
-# From the cdc-pipeline-generator dev container
-cd /workspace
+# From the cdc-pipeline-generator root
+cd ~/carasent/asma-modules/_tools/cdc_cli
 
 # For db-per-tenant pattern (e.g., adopus)
 cdc manage-source-groups \
@@ -151,7 +151,7 @@ cdc manage-source-groups --update
 
 If directories like `services/`, `scripts/`, or `generated/` are missing, they'll be created automatically with a friendly notification.
 
-## Docker Container Naming
+## Infrastructure Container Naming (Docker, optional)
 
 The scaffolding uses your server_group name to create unique container and image names:
 
@@ -221,10 +221,9 @@ This means you're missing `.env.example` or other core files. Run the suggested 
 
 ### Permission Issues
 
-If scaffolding fails with permission errors, ensure you're running inside the dev container:
+If scaffolding fails with permission errors, ensure you're running from the generator root:
 ```bash
-docker compose exec dev fish
-cd /workspace
+cd ~/carasent/asma-modules/_tools/cdc_cli
 ```
 
 ### Existing Implementation

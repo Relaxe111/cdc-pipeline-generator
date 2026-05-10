@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """CDC Pipeline CLI - Main Entry Point.
 
-This CLI runs inside a Docker dev container with all dependencies pre-installed.
+This CLI runs directly on the host using the local Python environment.
+Docker-based execution can be added later as an optional workflow.
 
 Usage:
     cdc <command> [options]
@@ -180,13 +181,8 @@ SERVICE_COMMANDS: dict[str, dict[str, str]] = {
         "runner": "generator",
         "module": "cdc_generator.cli.service_schema",
         "script": "cli/service_schema.py",
-        "description": (
-            "Manage service resources "
-            + "(inspect, custom-tables, column-templates, transforms)"
-        ),
-        "usage": (
-            "cdc manage-services resources <inspect|custom-tables|column-templates|transforms>"
-        ),
+        "description": ("Manage service resources " + "(inspect, custom-tables, column-templates, transforms)"),
+        "usage": ("cdc manage-services resources <inspect|custom-tables|column-templates|transforms>"),
     },
 }
 
@@ -406,8 +402,7 @@ def execute_grouped_command(
     if runner == "generator":
         return run_generator_spec(command_name, cmd_info, paths, extra_args, workspace_root)
     print(
-        "❌ This command is not available in canonical generator-only mode: "
-        + command_name,
+        "❌ This command is not available in canonical generator-only mode: " + command_name,
     )
     return 1
 

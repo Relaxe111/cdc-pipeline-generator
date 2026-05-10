@@ -126,9 +126,7 @@ def _resolve_local_postgres_compose_target(
     if not re.search(r"(?m)^\s{2}postgres:\s*$", compose_text):
         return None
 
-    published_port_raw = os.environ.get("POSTGRES_PORT") or _read_project_dotenv_value(
-        "POSTGRES_PORT"
-    )
+    published_port_raw = os.environ.get("POSTGRES_PORT") or _read_project_dotenv_value("POSTGRES_PORT")
     if published_port_raw:
         try:
             return ("localhost", int(published_port_raw))
@@ -138,11 +136,7 @@ def _resolve_local_postgres_compose_target(
     return ("localhost", port)
 
 
-def extract_identifiers(
-    db_name: str,
-    server_group_config: ServerGroupConfig,
-    server_name: str = "default"
-) -> ExtractedIdentifiers:
+def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, server_name: str = "default") -> ExtractedIdentifiers:
     """
     Extract identifiers (customer/service/env/suffix) from database name using configured patterns.
 
@@ -164,81 +158,61 @@ def extract_identifiers(
         match_single_pattern,
     )
 
-    pattern_type = server_group_config.get('pattern')
-    servers = server_group_config.get('servers', {})
+    pattern_type = server_group_config.get("pattern")
+    servers = server_group_config.get("servers", {})
     server_config = servers.get(server_name, {})
 
     # For db-shared: try ordered extraction patterns first (NEW)
-    if pattern_type == 'db-shared':
-        extraction_patterns = server_config.get('extraction_patterns', [])
+    if pattern_type == "db-shared":
+        extraction_patterns = server_config.get("extraction_patterns", [])
         if extraction_patterns:
             result = match_extraction_patterns(db_name, extraction_patterns, server_name)
             if result:
                 service, env = result
-                return {
-                    'customer': '',
-                    'service': service,
-                    'env': env,
-                    'suffix': ''
-                }
+                return {"customer": "", "service": service, "env": env, "suffix": ""}
 
         # Fallback to single extraction_pattern (backward compat)
-        extraction_pattern = server_config.get('extraction_pattern', '')
+        extraction_pattern = server_config.get("extraction_pattern", "")
         if not extraction_pattern:
-            extraction_pattern = server_group_config.get('extraction_pattern', '')
+            extraction_pattern = server_group_config.get("extraction_pattern", "")
 
         if extraction_pattern:
             result = match_single_pattern(db_name, extraction_pattern)
             if result:
                 service, env = result
-                return {
-                    'customer': '',
-                    'service': service,
-                    'env': env,
-                    'suffix': ''
-                }
+                return {"customer": "", "service": service, "env": env, "suffix": ""}
 
     # For db-per-tenant: use extraction_pattern for customer extraction
-    elif pattern_type == 'db-per-tenant':
-        extraction_pattern = server_config.get('extraction_pattern', '')
+    elif pattern_type == "db-per-tenant":
+        extraction_pattern = server_config.get("extraction_pattern", "")
         if not extraction_pattern:
-            extraction_pattern = server_group_config.get('extraction_pattern', '')
+            extraction_pattern = server_group_config.get("extraction_pattern", "")
 
         if extraction_pattern:
             match = re.match(extraction_pattern, db_name)
             if match:
                 groups = match.groupdict()
-                return {
-                    'customer': groups.get('customer', db_name),
-                    'service': server_group_config.get('name', ''),
-                    'env': '',
-                    'suffix': ''
-                }
+                return {"customer": groups.get("customer", db_name), "service": server_group_config.get("name", ""), "env": "", "suffix": ""}
 
     # Fallback logic when no pattern or pattern doesn't match
-    if pattern_type == 'db-per-tenant':
+    if pattern_type == "db-per-tenant":
         # Use database name as customer
-        return {'customer': db_name, 'service': server_group_config.get('name', ''), 'env': '', 'suffix': ''}
+        return {"customer": db_name, "service": server_group_config.get("name", ""), "env": "", "suffix": ""}
 
-    if pattern_type == 'db-shared':
+    if pattern_type == "db-shared":
         # Fallback: no pattern matched
         # Use database name as service and server name as env
-        return {
-            'customer': '',
-            'service': db_name,
-            'env': server_name,
-            'suffix': ''
-        }
+        return {"customer": "", "service": db_name, "env": server_name, "suffix": ""}
 
     # Default: use database name as service
-    return {'customer': '', 'service': db_name, 'env': '', 'suffix': ''}
+    return {"customer": "", "service": db_name, "env": "", "suffix": ""}
 
 
 def _collect_missing_env_vars(template: str) -> list[str]:
     """Return env var names referenced in template that are not exported."""
     missing: list[str] = []
     for match in _ENV_REFERENCE_PATTERN.finditer(template):
-        var_name = match.group('braced') or match.group('plain')
+        var_name = match.group("braced") or match.group("plain")
         if var_name and os.environ.get(var_name) is None:
             missing.append(var_name)
     return missing
@@ -270,11 +244,11 @@ def _build_missing_env_message(field_name: str, missing_vars: list[str]) -> str:
         "    Required variables:\n"
         f"{required_block}\n"
         "\n"
-        "Currently exported docker env variables:\n"
+        "Currently exported environment variables:\n"
         f"{available_block}\n"
         "\n"
         "Next steps:\n"
-        "    - Export the missing variables inside the dev container (set -x VAR_NAME value)\n"
+        "    - Export the missing variable in your shell (set -x VAR_NAME value)\n"
         "    - Or update source-groups.yaml to use literal credentials when appropriate\n"
     )
 
@@ -285,7 +259,7 @@ def _build_missing_field_message(field_name: str) -> str:
         "Server configuration is missing a required connection field.\n"
         f"    Field: {field_name}\n"
         "\n"
-        "Currently exported docker env variables:\n"
+        "Currently exported environment variables:\n"
         f"{available_block}\n"
     )
 
@@ -330,7 +304,7 @@ def _resolve_env_value(value: str | int | None, field_name: str) -> str:
 
 def get_mssql_connection(
     server_config: ServerConfig,
-    database: str = '',
+    database: str = "",
 ) -> MSSQLConnection:
     """Get MSSQL connection from server config.
 
@@ -340,24 +314,15 @@ def get_mssql_connection(
     if not has_pymssql:
         raise ImportError("pymssql not installed - run: pip install pymssql")
 
-    host = _resolve_env_value(server_config.get('host'), 'host')
-    user = _resolve_env_value(
-        server_config.get('username', server_config.get('user')),
-        'username'
-    )
-    password = _resolve_env_value(server_config.get('password'), 'password')
-    port = int(_resolve_env_value(server_config.get('port', 1433), 'port'))
+    host = _resolve_env_value(server_config.get("host"), "host")
+    user = _resolve_env_value(server_config.get("username", server_config.get("user")), "username")
+    password = _resolve_env_value(server_config.get("password"), "password")
+    port = int(_resolve_env_value(server_config.get("port", 1433), "port"))
 
-    return create_mssql_connection(
-        host=host,
-        port=port,
-        database=database,
-        user=user,
-        password=password
-    )
+    return create_mssql_connection(host=host, port=port, database=database, user=user, password=password)
 
 
-def get_postgres_connection(server_config: ServerConfig, database: str = 'postgres') -> PgConnection:
+def get_postgres_connection(server_config: ServerConfig, database: str = "postgres") -> PgConnection:
     """Get PostgreSQL connection from server config.
 
     Returns:
@@ -368,13 +333,10 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
 
     pg = ensure_psycopg2()
 
-    host = _resolve_env_value(server_config.get('host'), 'host')
-    user = _resolve_env_value(
-        server_config.get('username', server_config.get('user')),
-        'username'
-    )
-    password = _resolve_env_value(server_config.get('password'), 'password')
-    port = int(_resolve_env_value(server_config.get('port', 5432), 'port'))
+    host = _resolve_env_value(server_config.get("host"), "host")
+    user = _resolve_env_value(server_config.get("username", server_config.get("user")), "username")
+    password = _resolve_env_value(server_config.get("password"), "password")
+    port = int(_resolve_env_value(server_config.get("port", 5432), "port"))
 
     try:
         return pg.connect(
@@ -389,15 +351,9 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
         error_msg = str(e).lower()
 
         fallback_target = _resolve_local_postgres_compose_target(host, port)
-        if fallback_target and (
-            "could not translate host name" in error_msg
-            or "name or service not known" in error_msg
-        ):
+        if fallback_target and ("could not translate host name" in error_msg or "name or service not known" in error_msg):
             fallback_host, fallback_port = fallback_target
-            print_info(
-                "Detected local docker-compose PostgreSQL service host "
-                + f"'{host}'. Retrying via {fallback_host}:{fallback_port}."
-            )
+            print_info("Detected local docker-compose PostgreSQL service host " + f"'{host}'. Retrying via {fallback_host}:{fallback_port}.")
             try:
                 return pg.connect(
                     host=fallback_host,
@@ -425,7 +381,7 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                     "  • You have network connectivity (try: ping the host)\n"
                     "  • DNS is working (try: nslookup or dig the hostname)\n"
                     "  • If using VPN, ensure it's connected"
-                )
+                ),
             ) from e
 
         # Connection refused (server not running or wrong port)
@@ -440,7 +396,7 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                     f"  • Port {port} is correct\n"
                     "  • Firewall allows connections to this port\n"
                     "  • Server is configured to accept remote connections (pg_hba.conf)"
-                )
+                ),
             ) from e
 
         # Connection timeout
@@ -454,7 +410,7 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                     "  • The server is reachable (try: telnet or nc to host:port)\n"
                     "  • Network/firewall isn't blocking the connection\n"
                     "  • Server isn't overloaded"
-                )
+                ),
             ) from e
 
         # Authentication failure
@@ -469,7 +425,7 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                     "  • Password is correct\n"
                     "  • User has permission to connect to the database\n"
                     "  • Check pg_hba.conf authentication method"
-                )
+                ),
             ) from e
 
         # Database doesn't exist
@@ -478,7 +434,7 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                 f"Database '{database}' does not exist on {host}:{port}",
                 host=host,
                 port=port,
-                hint=f"Check that database '{database}' exists on the server"
+                hint=f"Check that database '{database}' exists on the server",
             ) from e
 
         # SSL required
@@ -487,20 +443,11 @@ def get_postgres_connection(server_config: ServerConfig, database: str = 'postgr
                 f"SSL connection issue with {host}:{port}",
                 host=host,
                 port=port,
-                hint=(
-                    "Check that:\n"
-                    "  • Server SSL configuration is correct\n"
-                    "  • Client SSL settings match server requirements"
-                )
+                hint=("Check that:\n  • Server SSL configuration is correct\n  • Client SSL settings match server requirements"),
             ) from e
 
         # Generic operational error
-        raise PostgresConnectionError(
-            f"Failed to connect to PostgreSQL at {host}:{port}",
-            host=host,
-            port=port,
-            hint=f"Original error: {e}"
-        ) from e
+        raise PostgresConnectionError(f"Failed to connect to PostgreSQL at {host}:{port}", host=host, port=port, hint=f"Original error: {e}") from e
 
 
 def list_mssql_databases(
@@ -570,11 +517,7 @@ def list_mssql_databases(
                 WHERE TABLE_TYPE = 'BASE TABLE'
                 ORDER BY TABLE_SCHEMA, TABLE_NAME
             """)
-            all_table_rows = [
-                (str(r[0]), str(r[1]))
-                for r in cursor.fetchall()
-                if isinstance(r[0], str) and isinstance(r[1], str)
-            ]
+            all_table_rows = [(str(r[0]), str(r[1])) for r in cursor.fetchall() if isinstance(r[0], str) and isinstance(r[1], str)]
             all_schemas = sorted({schema_name for schema_name, _ in all_table_rows})
 
             # Filter schemas based on provided exclude patterns
@@ -607,21 +550,23 @@ def list_mssql_databases(
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
 
-            databases.append({
-                'name': db_name,
-                'server': server_name,  # Tag with server name for multi-server
-                'service': identifiers['service'] or db_name,
-                'environment': identifiers['env'],
-                'customer': identifiers['customer'],
-                'schemas': schemas if schemas else ['dbo'],
-                'table_count': table_count
-            })
+            databases.append(
+                {
+                    "name": db_name,
+                    "server": server_name,  # Tag with server name for multi-server
+                    "service": identifiers["service"] or db_name,
+                    "environment": identifiers["env"],
+                    "customer": identifiers["customer"],
+                    "schemas": schemas if schemas else ["dbo"],
+                    "table_count": table_count,
+                }
+            )
         except Exception as e:
             print_warning(f"Could not inspect database {db_name}: {e}")
             continue
 
     if ignored_count > 0:
-        patterns_text = ', '.join(ignore_patterns)
+        patterns_text = ", ".join(ignore_patterns)
         print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
 
     if excluded_count > 0:
@@ -629,7 +574,7 @@ def list_mssql_databases(
 
     if ignored_schema_count > 0:
         schema_patterns = schema_exclude_patterns or []
-        patterns_text = ', '.join(schema_patterns)
+        patterns_text = ", ".join(schema_patterns)
         print_info(
             "📊 Ignored "
             + f"{ignored_schema_count} schema(s) from "
@@ -639,7 +584,7 @@ def list_mssql_databases(
 
     if ignored_table_count > 0:
         table_patterns = table_exclude_patterns or []
-        patterns_text = ', '.join(table_patterns)
+        patterns_text = ", ".join(table_patterns)
         print_info(
             "📋 Ignored "
             + f"{ignored_table_count} table(s) from "
@@ -708,7 +653,7 @@ def list_postgres_databases(  # noqa: PLR0915
         filtered_db_names.append(db_name)
 
     if ignored_count > 0:
-        patterns_text = ', '.join(ignore_patterns)
+        patterns_text = ", ".join(ignore_patterns)
         print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
 
     if excluded_count > 0:
@@ -751,11 +696,7 @@ def list_postgres_databases(  # noqa: PLR0915
                 AND table_schema NOT LIKE 'pg_toast_temp_%'
                 AND table_type = 'BASE TABLE'
             """)
-            all_table_rows = [
-                (str(row[0]), str(row[1]))
-                for row in db_cursor.fetchall()
-                if isinstance(row[0], str) and isinstance(row[1], str)
-            ]
+            all_table_rows = [(str(row[0]), str(row[1])) for row in db_cursor.fetchall() if isinstance(row[0], str) and isinstance(row[1], str)]
             table_patterns = table_exclude_patterns or []
             table_include = table_include_patterns or []
             table_count = 0
@@ -778,15 +719,17 @@ def list_postgres_databases(  # noqa: PLR0915
             # Extract identifiers using configured pattern (per-server or global)
             identifiers = extract_identifiers(db_name, server_group_config, server_name)
 
-            databases.append({
-                'name': db_name,
-                'server': server_name,  # Tag with server name for multi-server
-                'service': identifiers['service'] or db_name,
-                'environment': identifiers['env'],
-                'customer': identifiers['customer'],
-                'schemas': schemas,
-                'table_count': table_count
-            })
+            databases.append(
+                {
+                    "name": db_name,
+                    "server": server_name,  # Tag with server name for multi-server
+                    "service": identifiers["service"] or db_name,
+                    "environment": identifiers["env"],
+                    "customer": identifiers["customer"],
+                    "schemas": schemas,
+                    "table_count": table_count,
+                }
+            )
 
             db_conn.close()
         except Exception as e:
@@ -794,7 +737,7 @@ def list_postgres_databases(  # noqa: PLR0915
 
     if ignored_schema_count > 0:
         schema_patterns = schema_exclude_patterns or []
-        patterns_text = ', '.join(schema_patterns)
+        patterns_text = ", ".join(schema_patterns)
         print_info(
             "📊 Ignored "
             + f"{ignored_schema_count} schema(s) from "
@@ -804,7 +747,7 @@ def list_postgres_databases(  # noqa: PLR0915
 
     if ignored_table_count > 0:
         table_patterns = table_exclude_patterns or []
-        patterns_text = ', '.join(table_patterns)
+        patterns_text = ", ".join(table_patterns)
         print_info(
             "📋 Ignored "
             + f"{ignored_table_count} table(s) from "

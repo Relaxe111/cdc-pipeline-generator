@@ -200,15 +200,17 @@ cdc-pipeline-generator/
 
 See `_docs/getting-started/` for setup instructions, `_docs/architecture/` for design decisions, and `_docs/cli/` for the full CLI command reference.
 
-Once inside (`docker compose exec dev fish`), you have:
+The CDC CLI runs directly on the host. Install once and use `cdc` from any directory.
 
-- ✅ `cdc` command available
+- ✅ `cdc` command available everywhere on your host
 - ✅ Access to source and target databases
-- ✅ Fish shell with auto-completions
-- ✅ Git configured (via volume mount)
-- ✅ SSH keys available (via volume mount)
+- ✅ Fish shell with auto-completions (reload with `cdc reload-cdc-autocompletions`)
+- ✅ Git and SSH keys available
 
-All your project files are mounted at `/workspace`, so changes are reflected immediately.
+Optionally, a dev container is available if you prefer an isolated environment:
+```bash
+docker compose exec dev fish
+```
 
 ---
 
@@ -222,8 +224,8 @@ After running `cdc scaffold`, your project will have:
 
 ```
 my-cdc-project/
-├── docker-compose.yml           # Dev container + database services
-├── Dockerfile.dev               # Container image definition
+├── docker-compose.yml           # Optional infrastructure (databases, streaming)
+├── Dockerfile.dev               # Optional dev container image
 ├── .env.example                 # Environment variables template
 ├── .env                         # Your credentials (git-ignored)
 ├── .gitignore                   # Git ignore rules

@@ -49,7 +49,7 @@ no file system side effects outside `tmp_path`. Fast — typically < 1s.
 **Run with:** `cdc test --cli`
 
 Test full CLI command flows through a real **fish** shell subprocess — the
-same way a user types commands in the dev container terminal.  Each test
+same way a user types commands in the terminal.  Each test
 gets an isolated temporary directory (`isolated_project` fixture) — no
 pollution between tests or the real workspace.
 

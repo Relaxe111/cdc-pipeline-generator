@@ -61,10 +61,10 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
     return f"""# =============================================================================
 # Docker Compose: Infrastructure for {server_group_name.title()} CDC Pipeline
 # =============================================================================
-# This setup provides infrastructure services for CDC replication.
+# This is an OPTIONAL setup providing local infrastructure for CDC replication.
+# The CDC CLI runs directly on the host; Docker is only for database services.
 #
 # Services:
-# - Dev Container (Python development environment with Fish shell)
 # - PostgreSQL (target database for CDC with tds_fdw installed)
 # - Redpanda (Kafka-compatible streaming platform)
 # - Bento Source (Source DB CDC → Redpanda)
@@ -77,17 +77,19 @@ def get_docker_compose_template(server_group_name: str, pattern: str) -> str:
 #   By default, we connect to remote source servers
 #
 # Usage:
-# Usage:
-#   docker compose up -d                          # Start dev container only
-#   docker compose exec dev fish                  # Enter dev container
 #   cdc setup-local --enable-local-sink           # Start PostgreSQL (target)
 #   cdc setup-local --enable-local-source         # Start MSSQL (source)
 #   cdc setup-local --enable-local-sink --enable-local-source  # Start both
+#
+# Or use raw docker compose with profiles:
+#   docker compose --profile local-sink up -d
 # =============================================================================
 
 services:
   # ===========================================================================
-  # Dev Container - Python Development Environment (Standalone)
+  # Dev Container - Python Development Shell (OPTIONAL)
+  # Only needed if you prefer an isolated container environment.
+  # The CDC CLI runs natively on the host by default.
   # ===========================================================================
   dev:
     image: asmacarma/cdc-pipeline-generator:latest
@@ -105,8 +107,8 @@ services:
     command: fish
     networks:
       - cdc-network
-    # No depends_on - dev container is standalone
-    # Use 'cdc setup-local' to start databases on demand
+    # The dev container is standalone and optional.
+    # Use 'cdc setup-local' to start databases on demand.
     entrypoint: ""
 
   # ===========================================================================
@@ -484,10 +486,12 @@ CDC (Change Data Capture) pipeline for {server_group_name} using Bento.
 ## Development
 
 All development scripts and logic live in `cdc-pipeline-generator`.
+The CDC CLI is installed directly on the host. Edit code in the generator
+repo and run `cdc` commands from your implementation directory.
 
 ```bash
 cd ../cdc-pipeline-generator
-docker compose exec dev fish
+# Edit code, then run cdc from the implementation directory
 ```
 
 ## Monitoring

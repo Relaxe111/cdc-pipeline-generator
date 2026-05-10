@@ -12,5 +12,6 @@ cdc msc | flags: --add-sink-table, --from, --map-column	1
 cdc scaffold debugproj | flags: --extraction-pattern, --pattern, --source-type	1
 cdc scaffold debugproj2 | flags: --extraction-pattern, --pattern, --source-type	1
 cdc scaffold | flags: --help	1
+cdc setup-local | flags: --help	1
 cdc test | flags: --all	1
 cdc test | flags: --help	1

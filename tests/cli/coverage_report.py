@@ -10,7 +10,7 @@ Commands and their descriptions are **auto-discovered** from
 the special-command dispatch, so adding a new ``cdc`` subcommand is
 automatically reflected here — no manual list maintenance needed.
 
-Usage (from the dev container):
+Usage:
 
     python tests/cli/coverage_report.py          # summary
     python tests/cli/coverage_report.py -v       # show every test name
@@ -528,11 +528,7 @@ def _collect_tests_from_file(filepath: Path) -> list[str]:
             for item in node.body:
                 if isinstance(item, _func_types) and item.name.startswith("test_"):
                     tests.append(f"{node.name}::{item.name}")
-        elif (
-            isinstance(node, _func_types)
-            and node.name.startswith("test_")
-            and not _is_inside_class(tree, node)
-        ):
+        elif isinstance(node, _func_types) and node.name.startswith("test_") and not _is_inside_class(tree, node):
             tests.append(node.name)
 
     return tests
@@ -649,13 +645,18 @@ def _build_command_tree() -> list[_TreeNode]:
         if isinstance(cmd_obj, _click.Group):
             children = [
                 _TreeNode(
-                    display_name=sub, command_key=f"{cmd_name}-{sub}",
+                    display_name=sub,
+                    command_key=f"{cmd_name}-{sub}",
                 )
                 for sub, _ in _list_click_subcommands(cmd_name)
             ]
-            groups.append(_TreeNode(
-                display_name=cmd_name, command_key=None, children=children,
-            ))
+            groups.append(
+                _TreeNode(
+                    display_name=cmd_name,
+                    command_key=None,
+                    children=children,
+                )
+            )
         elif cmd_name in _SPECIAL_LIBRARY_COMMANDS:
             specials.append(
                 _TreeNode(display_name=cmd_name, command_key=cmd_name),
@@ -727,9 +728,7 @@ class CoverageReport:
             tests = _collect_tests_from_file(py_file)
             for test in tests:
                 command = file_override or _classify_cli_test(test, file_stem)
-                self.cli_tests.setdefault(command, []).append(
-                    f"{py_file.name}::{test}"
-                )
+                self.cli_tests.setdefault(command, []).append(f"{py_file.name}::{test}")
 
     def _collect_unit_tests(self) -> None:
         """Collect unit tests from tests/."""
@@ -745,9 +744,7 @@ class CoverageReport:
             if commands:
                 for test in tests:
                     for command in commands:
-                        self.unit_by_command.setdefault(command, []).append(
-                            f"{module_label}::{test}"
-                        )
+                        self.unit_by_command.setdefault(command, []).append(f"{module_label}::{test}")
 
     # -----------------------------------------------------------------------
     # Output
@@ -759,28 +756,14 @@ class CoverageReport:
         total_unit = sum(len(v) for v in self.unit_tests.values())
         # Only count commands that have a target or tests (skip meta-commands)
         lib_commands = [
-            cmd for cmd, _, is_lib in KNOWN_COMMANDS
-            if is_lib and (
-                cmd in self.command_targets
-                or cmd in self.cli_tests
-                or cmd in self.unit_by_command
-            )
+            cmd
+            for cmd, _, is_lib in KNOWN_COMMANDS
+            if is_lib and (cmd in self.command_targets or cmd in self.cli_tests or cmd in self.unit_by_command)
         ]
         covered_e2e = [cmd for cmd in lib_commands if cmd in self.cli_tests]
-        covered_lib = [
-            cmd for cmd in lib_commands
-            if cmd in self.cli_tests or cmd in self.unit_by_command
-        ]
-        lib_pct = (
-            round(len(covered_lib) / len(lib_commands) * 100)
-            if lib_commands
-            else 0
-        )
-        e2e_pct = (
-            round(len(covered_e2e) / len(lib_commands) * 100)
-            if lib_commands
-            else 0
-        )
+        covered_lib = [cmd for cmd in lib_commands if cmd in self.cli_tests or cmd in self.unit_by_command]
+        lib_pct = round(len(covered_lib) / len(lib_commands) * 100) if lib_commands else 0
+        e2e_pct = round(len(covered_e2e) / len(lib_commands) * 100) if lib_commands else 0
         return _ReportStats(
             total=total_cli + total_unit,
             total_cli=total_cli,
@@ -808,11 +791,7 @@ class CoverageReport:
         print(f"{c.DIM}{'=' * 80}{c.RESET}")
         print(f"  {c.BOLD}{c.CYAN}🧪 CDC Pipeline Generator — Test Coverage Report{c.RESET}")
         print(f"{c.DIM}{'=' * 80}{c.RESET}")
-        print(
-            f"\n  📊 Total tests: {c.BOLD}{s.total}{c.RESET}"
-            f"  (CLI e2e: {c.CYAN}{s.total_cli}{c.RESET},"
-            f" Unit: {c.CYAN}{s.total_unit}{c.RESET})"
-        )
+        print(f"\n  📊 Total tests: {c.BOLD}{s.total}{c.RESET}  (CLI e2e: {c.CYAN}{s.total_cli}{c.RESET}, Unit: {c.CYAN}{s.total_unit}{c.RESET})")
         total_lib = len(s.lib_commands)
         lib_color = c.GREEN if s.lib_pct >= 80 else c.YELLOW if s.lib_pct >= 50 else c.RED
         e2e_color = c.GREEN if s.e2e_pct >= 80 else c.YELLOW if s.e2e_pct >= 50 else c.RED
@@ -862,25 +841,26 @@ class CoverageReport:
 
             if node.children:
                 # Parent: aggregate children stats
-                e2e = sum(
-                    len(self.cli_tests.get(ch.command_key or "", []))
-                    for ch in node.children
-                )
-                unit = sum(
-                    len(self.unit_by_command.get(ch.command_key or "", []))
-                    for ch in node.children
-                )
+                e2e = sum(len(self.cli_tests.get(ch.command_key or "", [])) for ch in node.children)
+                unit = sum(len(self.unit_by_command.get(ch.command_key or "", [])) for ch in node.children)
                 target = sum(
                     self.command_targets.get(
-                        ch.command_key or "", (0, 0, 0),
+                        ch.command_key or "",
+                        (0, 0, 0),
                     )[2]
                     for ch in node.children
                 )
-                rows.append(_TreeRow(
-                    prefix=connector, name=node.display_name,
-                    command_key=None, e2e=e2e, unit=unit,
-                    target=target, is_leaf=False,
-                ))
+                rows.append(
+                    _TreeRow(
+                        prefix=connector,
+                        name=node.display_name,
+                        command_key=None,
+                        e2e=e2e,
+                        unit=unit,
+                        target=target,
+                        is_leaf=False,
+                    )
+                )
 
                 continuation = "    " if is_last else "│   "
                 for j, child in enumerate(node.children):
@@ -892,34 +872,50 @@ class CoverageReport:
                     )
                     cu = len(
                         self.unit_by_command.get(
-                            child.command_key or "", [],
+                            child.command_key or "",
+                            [],
                         ),
                     )
                     ct = self.command_targets.get(
-                        child.command_key or "", (0, 0, 0),
+                        child.command_key or "",
+                        (0, 0, 0),
                     )[2]
-                    rows.append(_TreeRow(
-                        prefix=prefix, name=child.display_name,
-                        command_key=child.command_key, e2e=ce,
-                        unit=cu, target=ct, is_leaf=True,
-                    ))
+                    rows.append(
+                        _TreeRow(
+                            prefix=prefix,
+                            name=child.display_name,
+                            command_key=child.command_key,
+                            e2e=ce,
+                            unit=cu,
+                            target=ct,
+                            is_leaf=True,
+                        )
+                    )
             else:
                 e2e = len(
                     self.cli_tests.get(node.command_key or "", []),
                 )
                 unit = len(
                     self.unit_by_command.get(
-                        node.command_key or "", [],
+                        node.command_key or "",
+                        [],
                     ),
                 )
                 target = self.command_targets.get(
-                    node.command_key or "", (0, 0, 0),
+                    node.command_key or "",
+                    (0, 0, 0),
                 )[2]
-                rows.append(_TreeRow(
-                    prefix=connector, name=node.display_name,
-                    command_key=node.command_key, e2e=e2e,
-                    unit=unit, target=target, is_leaf=True,
-                ))
+                rows.append(
+                    _TreeRow(
+                        prefix=connector,
+                        name=node.display_name,
+                        command_key=node.command_key,
+                        e2e=e2e,
+                        unit=unit,
+                        target=target,
+                        is_leaf=True,
+                    )
+                )
 
         # Column width from max visible tree+name width ----------------
         name_widths = [len(r.prefix) + len(r.name) for r in rows]
@@ -929,16 +925,8 @@ class CoverageReport:
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(f"  {c.BOLD}🔧 TESTS BY CDC COMMAND{c.RESET}")
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
-        print(
-            f"     {c.BOLD}{'cdc':<{name_col}}{c.RESET}"
-            f"  {c.DIM}{'E2E':>5} {'Unit':>6}"
-            f" {'Total':>6} {'Target':>7}  {'Progress':<9}{c.RESET}"
-        )
-        print(
-            f"     {c.DIM}{'─' * name_col}"
-            f"  {'─' * 5} {'─' * 6}"
-            f" {'─' * 6} {'─' * 7}  {'─' * 9}{c.RESET}"
-        )
+        print(f"     {c.BOLD}{'cdc':<{name_col}}{c.RESET}  {c.DIM}{'E2E':>5} {'Unit':>6} {'Total':>6} {'Target':>7}  {'Progress':<9}{c.RESET}")
+        print(f"     {c.DIM}{'─' * name_col}  {'─' * 5} {'─' * 6} {'─' * 6} {'─' * 7}  {'─' * 9}{c.RESET}")
 
         # Command rows -------------------------------------------------
         for row in rows:
@@ -950,30 +938,17 @@ class CoverageReport:
 
             if row.target > 0:
                 pct = min(round(total / row.target * 100), 100)
-                pct_clr = (
-                    c.GREEN if pct >= 80
-                    else c.YELLOW if pct >= 50
-                    else c.RED
-                )
+                pct_clr = c.GREEN if pct >= 80 else c.YELLOW if pct >= 50 else c.RED
                 icon = "✅" if pct >= 80 else "🔶" if pct >= 50 else "❌"
                 pct_text = f"{pct}%"
                 pad = 5 - len(pct_text)
-                progress = (
-                    f"{' ' * pad}{pct_clr}{pct_text}{c.RESET} {icon}"
-                )
+                progress = f"{' ' * pad}{pct_clr}{pct_text}{c.RESET} {icon}"
             elif total > 0:
                 progress = f"    {c.GREEN}✅{c.RESET}"
             else:
                 progress = f"    {c.DIM}—{c.RESET}"
 
-            print(
-                f"     {padded}"
-                f"  {row.e2e:>5}"
-                f" {row.unit:>6}"
-                f" {total_clr}{total:>6}{c.RESET}"
-                f" {target_str:>7}"
-                f"  {progress}"
-            )
+            print(f"     {padded}  {row.e2e:>5} {row.unit:>6} {total_clr}{total:>6}{c.RESET} {target_str:>7}  {progress}")
 
             if verbose and row.command_key:
                 tests = self.cli_tests.get(row.command_key, [])
@@ -992,26 +967,13 @@ class CoverageReport:
         )
 
         print()
-        print(
-            f"  {c.DIM}{'Local/Script Commands':<{command_col_width}}"
-            f" {'Tests':>6}  {'Status':<10}{c.RESET}"
-        )
-        print(
-            f"  {c.DIM}{'─' * command_col_width}"
-            f" {'─' * 6}  {'─' * 10}{c.RESET}"
-        )
+        print(f"  {c.DIM}{'Local/Script Commands':<{command_col_width}} {'Tests':>6}  {'Status':<10}{c.RESET}")
+        print(f"  {c.DIM}{'─' * command_col_width} {'─' * 6}  {'─' * 10}{c.RESET}")
         for cmd in local_commands:
             tests = self.cli_tests.get(cmd, [])
             count = len(tests)
-            status = (
-                f"{c.GREEN}✅ {count} tests{c.RESET}"
-                if count
-                else f"{c.RED}❌ 0 tests{c.RESET}"
-            )
-            print(
-                f"  {'cdc ' + cmd:<{command_col_width}}"
-                f" {count:>6}  {status}"
-            )
+            status = f"{c.GREEN}✅ {count} tests{c.RESET}" if count else f"{c.RED}❌ 0 tests{c.RESET}"
+            print(f"  {'cdc ' + cmd:<{command_col_width}} {count:>6}  {status}")
 
     def _print_unit_section(self, verbose: bool) -> None:
         """Print unit tests grouped by module."""
@@ -1024,14 +986,8 @@ class CoverageReport:
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
         print(f"  {c.BOLD}🧩 UNIT TESTS (by module){c.RESET}")
         print(f"{c.DIM}{'-' * 80}{c.RESET}")
-        print(
-            f"  {c.DIM}{'Module':<{module_col_width}} {'Tests':>6}"
-            f"  {'Command':<22}{c.RESET}"
-        )
-        print(
-            f"  {c.DIM}{'─' * module_col_width}"
-            f" {'─' * 6}  {'─' * 22}{c.RESET}"
-        )
+        print(f"  {c.DIM}{'Module':<{module_col_width}} {'Tests':>6}  {'Command':<22}{c.RESET}")
+        print(f"  {c.DIM}{'─' * module_col_width} {'─' * 6}  {'─' * 22}{c.RESET}")
 
         for module, tests in sorted(self.unit_tests.items()):
             mapped_commands = _classify_unit_module_commands(module)
@@ -1047,10 +1003,7 @@ class CoverageReport:
         """Build a colored progress bar string."""
         c = Colors
         bar_color = c.GREEN if pct >= 80 else c.YELLOW if pct >= 50 else c.RED
-        bar = (
-            f"{bar_color}{'█' * filled}{c.RESET}"
-            f"{c.DIM}{'░' * (total - filled)}{c.RESET}"
-        )
+        bar = f"{bar_color}{'█' * filled}{c.RESET}{c.DIM}{'░' * (total - filled)}{c.RESET}"
         pct_color = bar_color
         return f"[{bar}] {pct_color}{pct}%{c.RESET}"
 
@@ -1068,56 +1021,35 @@ class CoverageReport:
         filled = round(s.lib_pct / 100 * bar_width)
         bar = self._color_bar(filled, bar_width, s.lib_pct)
         print(f"\n  📦 Commands covered:  {bar}")
-        print(
-            f"     ✅ {c.GREEN}"
-            f"{', '.join(s.covered_lib) or '(none)'}{c.RESET}"
-        )
+        print(f"     ✅ {c.GREEN}{', '.join(s.covered_lib) or '(none)'}{c.RESET}")
 
         # E2E only coverage
         e2e_filled = round(s.e2e_pct / 100 * bar_width)
         e2e_bar = self._color_bar(e2e_filled, bar_width, s.e2e_pct)
         print(f"  🔗 E2E only:          {e2e_bar}")
-        print(
-            f"     ✅ {c.GREEN}"
-            f"{', '.join(s.covered_e2e) or '(none)'}{c.RESET}"
-        )
+        print(f"     ✅ {c.GREEN}{', '.join(s.covered_e2e) or '(none)'}{c.RESET}")
 
         # Test progress vs target
-        total_target = sum(
-            t for _, _, t in self.command_targets.values()
-        )
+        total_target = sum(t for _, _, t in self.command_targets.values())
         if total_target > 0:
             target_pct = min(
-                round(s.total / total_target * 100), 100,
+                round(s.total / total_target * 100),
+                100,
             )
             target_filled = round(target_pct / 100 * bar_width)
             target_bar = self._color_bar(
-                target_filled, bar_width, target_pct,
+                target_filled,
+                bar_width,
+                target_pct,
             )
-            pct_color = (
-                c.GREEN if target_pct >= 80
-                else c.YELLOW if target_pct >= 50
-                else c.RED
-            )
-            print(
-                f"  🎯 Test progress:     {target_bar}"
-                f" {pct_color}({s.total}/{total_target}){c.RESET}"
-            )
+            pct_color = c.GREEN if target_pct >= 80 else c.YELLOW if target_pct >= 50 else c.RED
+            print(f"  🎯 Test progress:     {target_bar} {pct_color}({s.total}/{total_target}){c.RESET}")
 
-        uncovered = [
-            cmd for cmd in s.lib_commands if cmd not in s.covered_lib
-        ]
+        uncovered = [cmd for cmd in s.lib_commands if cmd not in s.covered_lib]
         if uncovered:
-            print(
-                f"     ❌ {c.RED}"
-                f"{', '.join(uncovered)}{c.RESET}"
-            )
+            print(f"     ❌ {c.RED}{', '.join(uncovered)}{c.RESET}")
 
-        print(
-            f"\n  🏁 Total:  {c.BOLD}{s.total}{c.RESET} tests"
-            f" ({c.CYAN}{s.total_cli}{c.RESET} CLI e2e"
-            f" + {c.CYAN}{s.total_unit}{c.RESET} unit)"
-        )
+        print(f"\n  🏁 Total:  {c.BOLD}{s.total}{c.RESET} tests ({c.CYAN}{s.total_cli}{c.RESET} CLI e2e + {c.CYAN}{s.total_unit}{c.RESET} unit)")
         print()
         print(f"{c.DIM}{'=' * 80}{c.RESET}")
         print()
@@ -1126,47 +1058,33 @@ class CoverageReport:
         """Return JSON representation of the report."""
         lib_commands = [c for c, _, is_lib in KNOWN_COMMANDS if is_lib]
         covered_e2e = [c for c in lib_commands if c in self.cli_tests]
-        covered_any = [
-            c for c in lib_commands
-            if c in self.cli_tests or c in self.unit_by_command
-        ]
+        covered_any = [c for c in lib_commands if c in self.cli_tests or c in self.unit_by_command]
 
         return json.dumps(
             {
-                "total_tests": sum(len(v) for v in self.cli_tests.values())
-                + sum(len(v) for v in self.unit_tests.values()),
-                "cli_e2e_tests": sum(
-                    len(v) for v in self.cli_tests.values()
-                ),
-                "unit_tests": sum(
-                    len(v) for v in self.unit_tests.values()
-                ),
+                "total_tests": sum(len(v) for v in self.cli_tests.values()) + sum(len(v) for v in self.unit_tests.values()),
+                "cli_e2e_tests": sum(len(v) for v in self.cli_tests.values()),
+                "unit_tests": sum(len(v) for v in self.unit_tests.values()),
                 "library_commands_total": len(lib_commands),
                 "library_commands_covered": len(covered_any),
                 "library_commands_e2e_covered": len(covered_e2e),
-                "library_coverage_pct": round(
-                    len(covered_any) / len(lib_commands) * 100
-                )
-                if lib_commands
-                else 0,
+                "library_coverage_pct": round(len(covered_any) / len(lib_commands) * 100) if lib_commands else 0,
                 "by_command": {
                     cmd: {
-                        "e2e_count": len(
-                            self.cli_tests.get(cmd, [])
-                        ),
-                        "unit_count": len(
-                            self.unit_by_command.get(cmd, [])
-                        ),
-                        "total": len(self.cli_tests.get(cmd, []))
-                        + len(self.unit_by_command.get(cmd, [])),
+                        "e2e_count": len(self.cli_tests.get(cmd, [])),
+                        "unit_count": len(self.unit_by_command.get(cmd, [])),
+                        "total": len(self.cli_tests.get(cmd, [])) + len(self.unit_by_command.get(cmd, [])),
                         "target": self.command_targets.get(
-                            cmd, (0, 0, 0),
+                            cmd,
+                            (0, 0, 0),
                         )[2],
                         "source_functions": self.command_targets.get(
-                            cmd, (0, 0, 0),
+                            cmd,
+                            (0, 0, 0),
                         )[0],
                         "source_branches": self.command_targets.get(
-                            cmd, (0, 0, 0),
+                            cmd,
+                            (0, 0, 0),
                         )[1],
                         "e2e_tests": self.cli_tests.get(cmd, []),
                     }
@@ -1197,7 +1115,8 @@ def main() -> int:
         description="CDC CLI test coverage report",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Show every test name",
     )

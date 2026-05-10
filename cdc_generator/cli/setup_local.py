@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Setup local development environment with on-demand database services.
+Setup local development infrastructure with on-demand database services.
 
-This command manages Docker Compose services for local development,
-allowing you to start PostgreSQL (sink) and/or MSSQL (source) databases
-only when needed.
+This is an OPTIONAL command for managing Docker Compose infrastructure
+when you need local databases for testing. The CDC CLI itself runs directly
+on the host and does not require Docker.
 
 Usage:
     # Start PostgreSQL (target/sink database)
@@ -19,8 +19,7 @@ Usage:
     # Start all infrastructure (postgres, mssql, redpanda, console, adminer)
     cdc setup-local --full
 
-The dev container always starts by default with `docker compose up -d`.
-This command is for starting additional infrastructure services.
+Docker is used only for infrastructure databases; the CDC CLI runs natively.
 """
 
 import argparse
@@ -44,10 +43,7 @@ def get_project_root() -> Path:
         if (current / "docker-compose.yml").exists():
             return current
         current = current.parent
-    raise FileNotFoundError(
-        "Could not find docker-compose.yml. " +
-        "Run this command from within a CDC pipeline project directory."
-    )
+    raise FileNotFoundError("Could not find docker-compose.yml. " + "Run this command from within a CDC pipeline project directory.")
 
 
 def run_docker_compose(args: list[str]) -> int:
@@ -84,8 +80,7 @@ Examples:
   cdc setup-local --full
       Start all infrastructure (postgres, mssql, redpanda, console, adminer)
 
-Services:
-  - Dev container: Always started with 'docker compose up -d'
+Services (optional, using Docker Compose for infrastructure):
   - PostgreSQL (sink): Started with --enable-local-sink
   - MSSQL (source): Started with --enable-local-source
   - Redpanda + Console: Started with --enable-streaming
@@ -138,12 +133,11 @@ Services:
 
     # Handle --down flag
     if args.down:
-        print_info("Stopping all infrastructure services (dev container keeps running)...")
+        print_info("Stopping all infrastructure services...")
         profiles_to_stop = ["local-sink", "local-source", "streaming", "full"]
         for profile in profiles_to_stop:
             run_docker_compose(["--profile", profile, "down"])
         print_success("✓ Infrastructure services stopped")
-        print_info("Dev container is still running. Enter with: docker compose exec dev fish")
         return 0
 
     # Determine which profiles to start
@@ -204,7 +198,6 @@ Services:
                 print_info("  • Redpanda Console - http://localhost:8080")
 
         print_info("\nNext steps:")
-        print_info("  • Enter dev container: docker compose exec dev fish")
         print_info("  • Update server group: cdc manage-source-groups --update")
         print_info("  • Check status: docker compose ps")
     else:

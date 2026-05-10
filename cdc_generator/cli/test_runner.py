@@ -38,7 +38,7 @@ def _find_project_root() -> Path:
     Raises:
         SystemExit: If project root cannot be found.
     """
-    # In dev container, /workspace is always the generator root
+    # Detect generator root from current working directory or environment
     workspace = Path("/workspace")
     if workspace.is_dir() and (workspace / "pyproject.toml").exists():
         return workspace
@@ -82,10 +82,7 @@ def _build_pytest_args(
 
     # Show skip reasons in all-tests mode unless user already controls
     # pytest report chars (e.g. -rA, -rx, --reportchars=...).
-    has_report_chars = any(
-        arg.startswith("-r") or arg.startswith("--reportchars")
-        for arg in pytest_passthrough
-    )
+    has_report_chars = any(arg.startswith("-r") or arg.startswith("--reportchars") for arg in pytest_passthrough)
     if run_all and not has_report_chars:
         pytest_passthrough.append("-rs")
 
@@ -103,7 +100,9 @@ def _build_pytest_args(
             pytest_passthrough.extend(["-m", f"not {_MARKER_CLI}"])
 
     return [
-        sys.executable, "-m", "pytest",
+        sys.executable,
+        "-m",
+        "pytest",
         *test_dirs,
         *pytest_passthrough,
     ]

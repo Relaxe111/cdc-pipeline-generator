@@ -2,25 +2,30 @@
 
 ## ⚙️ Development Environment
 
-**This generator is the main dev environment:**
+**The CDC CLI runs directly on the host.** Install it once and use `cdc` from any
+implementation directory. Docker is optional and only needed for local database
+infrastructure.
 
-**Dev container location:** This project (`cdc-pipeline-generator/`)  
-**Mounted implementations:** `/implementations/adopus/`, `/implementations/asma/`  
-**Network access:** Host mode - access to implementation infrastructure
-
-### To enter dev container:
+### Host-first setup:
 ```bash
-cd ~/carasent/cdc-pipeline-generator
-docker compose exec dev fish
+cd ~/carasent/asma-modules/_tools/cdc_cli
+pip install -e .
 ```
 
-### Inside container:
+The `cdc` command is now available everywhere on your host.
+
+### Optional: Dev container (isolated environment):
+```bash
+cd ~/carasent/asma-modules/_tools/cdc_cli
+docker compose exec dev fish
+```
+Inside the container:
 - `/workspace/` - This generator (editable)
 - `/implementations/adopus/` - Adopus implementation (mounted rw)
 - `/implementations/asma/` - Asma implementation (mounted rw)
 
 ### Edit and test workflow:
-1. Edit generator code: `/workspace/cdc_generator/...`
+1. Edit generator code in `_tools/cdc_cli/cdc_generator/...`
 2. Test against adopus: `cd /implementations/adopus && cdc generate`
 3. Verify output in `pipelines/generated/`
 
@@ -68,7 +73,7 @@ cdc reload-cdc-autocompletions
 
 **⚠️ IMPORTANT: When modifying Fish completions:**
 - Edit: `cdc_generator/templates/init/cdc.fish`
-- Reload: `cdc reload-cdc-autocompletions` (in dev container)
+- Reload: `cdc reload-cdc-autocompletions`
 - The reload command copies updated completions to system directory and reloads them
 - Test with `cdc <subcommand> <TAB>` to verify completions work
 

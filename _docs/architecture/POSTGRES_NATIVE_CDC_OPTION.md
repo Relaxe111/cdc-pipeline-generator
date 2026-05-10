@@ -490,7 +490,7 @@ For rollout:
 
 ### Verified Nonprod State
 
-Verified on 2026-03-26 from the generator dev container using the configured nonprod PostgreSQL credentials in `.env`:
+Verified on 2026-03-26 using the configured nonprod PostgreSQL credentials in `.env`:
 
 - server version is `17.9`
 - `wal_level` is currently `replica`, not `logical`

@@ -4,7 +4,7 @@
 >
 > **Scope:** All test files in `cdc-pipeline-generator/tests/`
 >
-> **Test runner:** `cdc test --all --cli` inside dev container (~78s)
+> **Test runner:** `cdc test --all --cli` (~78s)
 
 ---
 
@@ -163,7 +163,7 @@ tests/                              # 61 unit-test files
 
 **Test execution:**
 
-- `cdc test --all --cli` → 1,358 tests, ~78s (run inside dev container)
+- `cdc test --all --cli` → 1,358 tests, ~78s
 
 ---
 

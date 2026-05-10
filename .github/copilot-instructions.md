@@ -42,7 +42,7 @@
 | [Coding Guidelines](.github/copilot-instructions-coding-guidelines.md) | Code style, naming, organization, file size limits |
 | [Type Safety Rules](.github/copilot-instructions-type-safety.md) | Fixing type errors, adding type hints |
 | [Architecture](.github/copilot-instructions-architecture.md) | Understanding patterns, service structure |
-| [Development Workflow](.github/copilot-instructions-dev-workflow.md) | Dev container, testing, common tasks |
+| [Development Workflow](.github/copilot-instructions-dev-workflow.md) | Dev workflow, testing, common tasks |
 | [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (legacy runtime → Bento), decision gates, phased rollout |
 | [Bloblang Runtime Docs](_docs/bento-bloblang/README.md) | Pipeline templates, Bloblang syntax |
 | [Decision Navigation (ADR)](.github/decisions/README.md) | Entry point for past architectural decisions; load targeted ADRs only |

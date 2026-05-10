@@ -41,7 +41,7 @@ Before code changes, read the router and only the detailed guidance needed for t
 - `.github/copilot-instructions-coding-guidelines.md` for Python style, YAML handling, typing, and file-size rules
 - `.github/copilot-instructions-type-safety.md` when fixing typing, mypy, pyright, or YAML structure issues
 - `.github/copilot-instructions-architecture.md` when changing pattern behavior, generator boundaries, or cross-module design
-- `.github/copilot-instructions-dev-workflow.md` for test commands, dev container workflow, and CLI usage
+- `.github/copilot-instructions-dev-workflow.md` for test commands, development workflow, and CLI usage
 - `.github/decisions/README.md` plus the single relevant ADR when changing architecture or CLI policy
 - `_docs/architecture/POSTGRES_NATIVE_CDC_OPTION.md` and `_docs/architecture/TDS_FDW_IMPLEMENTATION_GUIDE.md` for native PostgreSQL CDC and FDW work
 
@@ -70,7 +70,7 @@ Before code changes, read the router and only the detailed guidance needed for t
 - Keep command names, options, help text, and errors consistent across `manage-service`, `manage-pipelines`, source groups, sink groups, schema validation, and generation commands.
 - Prefer clear, actionable CLI errors over stack traces for user mistakes.
 - Preserve deterministic output where tests or scripts depend on it.
-- When modifying Fish completions, edit `cdc_generator/templates/init/cdc.fish`, then reload with `cdc reload-cdc-autocompletions` in the dev container and test tab completion.
+- When modifying Fish completions, edit `cdc_generator/templates/init/cdc.fish`, then reload with `cdc reload-cdc-autocompletions` and test tab completion.
 
 ### Generator Architecture
 

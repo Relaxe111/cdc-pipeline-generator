@@ -1,7 +1,7 @@
 """End-to-end tests for ``cdc scaffold`` command.
 
 Tests the full scaffold flow through a real **fish** shell, exactly as
-a user would type in the dev container terminal.
+a user would type in the terminal.
 
 Coverage matrix
 ---------------
@@ -35,26 +35,36 @@ pytestmark = pytest.mark.cli
 
 
 def _scaffold_db_per_tenant_mssql(
-    run_cdc: RunCdc, name: str = "testproj",
+    run_cdc: RunCdc,
+    name: str = "testproj",
 ) -> subprocess.CompletedProcess[str]:
     """Run a standard db-per-tenant + mssql scaffold."""
     return run_cdc(
-        "scaffold", name,
-        "--pattern", "db-per-tenant",
-        "--source-type", "mssql",
-        "--extraction-pattern", f"^{name}_(?P<customer>[^_]+)$",
+        "scaffold",
+        name,
+        "--pattern",
+        "db-per-tenant",
+        "--source-type",
+        "mssql",
+        "--extraction-pattern",
+        f"^{name}_(?P<customer>[^_]+)$",
     )
 
 
 def _scaffold_db_shared_postgres(
-    run_cdc: RunCdc, name: str = "sharedproj",
+    run_cdc: RunCdc,
+    name: str = "sharedproj",
 ) -> subprocess.CompletedProcess[str]:
     """Run a standard db-shared + postgres scaffold."""
     return run_cdc(
-        "scaffold", name,
-        "--pattern", "db-shared",
-        "--source-type", "postgres",
-        "--extraction-pattern", "",
+        "scaffold",
+        name,
+        "--pattern",
+        "db-shared",
+        "--source-type",
+        "postgres",
+        "--extraction-pattern",
+        "",
         "--environment-aware",
     )
 
@@ -143,9 +153,7 @@ class TestScaffoldDbPerTenantMssql:
         """Full scaffold creates all directories and files."""
         result = _scaffold_db_per_tenant_mssql(run_cdc, "testproject")
 
-        assert result.returncode == 0, (
-            f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         _assert_directories_exist(isolated_project, EXPECTED_DIRECTORIES)
         _assert_files_exist(isolated_project, EXPECTED_FILES)
 
@@ -173,14 +181,16 @@ class TestScaffoldDbPerTenantPostgres:
     ) -> None:
         """db-per-tenant + postgres creates all directories and files."""
         result = run_cdc(
-            "scaffold", "pgmulti",
-            "--pattern", "db-per-tenant",
-            "--source-type", "postgres",
-            "--extraction-pattern", "^pgmulti_(?P<customer>[^_]+)$",
+            "scaffold",
+            "pgmulti",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "^pgmulti_(?P<customer>[^_]+)$",
         )
-        assert result.returncode == 0, (
-            f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         _assert_directories_exist(isolated_project, EXPECTED_DIRECTORIES)
         _assert_files_exist(isolated_project, EXPECTED_FILES)
 
@@ -191,10 +201,14 @@ class TestScaffoldDbPerTenantPostgres:
     ) -> None:
         """.env.example includes POSTGRES_SOURCE_* environment variables."""
         run_cdc(
-            "scaffold", "pgmulti",
-            "--pattern", "db-per-tenant",
-            "--source-type", "postgres",
-            "--extraction-pattern", "^pgmulti_(?P<customer>[^_]+)$",
+            "scaffold",
+            "pgmulti",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "^pgmulti_(?P<customer>[^_]+)$",
         )
         content = _read_file(isolated_project, ".env.example")
         assert "POSTGRES_SOURCE_HOST" in content
@@ -209,10 +223,14 @@ class TestScaffoldDbPerTenantPostgres:
     ) -> None:
         """source-groups.yaml has type: postgres for db-per-tenant + postgres."""
         run_cdc(
-            "scaffold", "pgmulti",
-            "--pattern", "db-per-tenant",
-            "--source-type", "postgres",
-            "--extraction-pattern", "^pgmulti_(?P<customer>[^_]+)$",
+            "scaffold",
+            "pgmulti",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "^pgmulti_(?P<customer>[^_]+)$",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "pattern: db-per-tenant" in content
@@ -229,9 +247,7 @@ class TestScaffoldDbSharedPostgres:
     ) -> None:
         """Full scaffold creates all directories and files."""
         result = _scaffold_db_shared_postgres(run_cdc, "sharedproj")
-        assert result.returncode == 0, (
-            f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         _assert_directories_exist(isolated_project, EXPECTED_DIRECTORIES)
         _assert_files_exist(isolated_project, EXPECTED_FILES)
 
@@ -270,15 +286,17 @@ class TestScaffoldDbSharedMssql:
     ) -> None:
         """db-shared + mssql creates all directories and files."""
         result = run_cdc(
-            "scaffold", "mssqlshared",
-            "--pattern", "db-shared",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
+            "scaffold",
+            "mssqlshared",
+            "--pattern",
+            "db-shared",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
             "--environment-aware",
         )
-        assert result.returncode == 0, (
-            f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Scaffold failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         _assert_directories_exist(isolated_project, EXPECTED_DIRECTORIES)
         _assert_files_exist(isolated_project, EXPECTED_FILES)
 
@@ -289,10 +307,14 @@ class TestScaffoldDbSharedMssql:
     ) -> None:
         """.env.example includes MSSQL_SOURCE_* variables for db-shared + mssql."""
         run_cdc(
-            "scaffold", "mssqlshared",
-            "--pattern", "db-shared",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
+            "scaffold",
+            "mssqlshared",
+            "--pattern",
+            "db-shared",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
             "--environment-aware",
         )
         content = _read_file(isolated_project, ".env.example")
@@ -306,10 +328,14 @@ class TestScaffoldDbSharedMssql:
     ) -> None:
         """source-groups.yaml has type: mssql for db-shared + mssql."""
         run_cdc(
-            "scaffold", "mssqlshared",
-            "--pattern", "db-shared",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
+            "scaffold",
+            "mssqlshared",
+            "--pattern",
+            "db-shared",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
             "--environment-aware",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
@@ -333,10 +359,14 @@ class TestScaffoldSourceGroupsContent:
     ) -> None:
         """Non-empty extraction pattern regex is written to source-groups.yaml."""
         run_cdc(
-            "scaffold", "regexproj",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^regexproj_(?P<customer>[^_]+)$",
+            "scaffold",
+            "regexproj",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^regexproj_(?P<customer>[^_]+)$",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "extraction_pattern:" in content
@@ -448,11 +478,16 @@ class TestScaffoldSourceGroupsContent:
     ) -> None:
         """fdw scaffolds should not persist redpanda-only broker fields."""
         run_cdc(
-            "scaffold", "fdwclean",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^fdwclean_(?P<customer>[^_]+)$",
-            "--topology", "fdw",
+            "scaffold",
+            "fdwclean",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^fdwclean_(?P<customer>[^_]+)$",
+            "--topology",
+            "fdw",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "topology: fdw" in content
@@ -475,11 +510,16 @@ class TestScaffoldBrokerTopology:
     ) -> None:
         """--broker-topology per-server writes per-server bootstrap in source-groups.yaml."""
         run_cdc(
-            "scaffold", "brokeralias",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^brokeralias_(?P<customer>[^_]+)$",
-            "--broker-topology", "per-server",
+            "scaffold",
+            "brokeralias",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^brokeralias_(?P<customer>[^_]+)$",
+            "--broker-topology",
+            "per-server",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "broker_topology: per-server" in content
@@ -492,11 +532,16 @@ class TestScaffoldBrokerTopology:
     ) -> None:
         """--broker-topology per-server generates per-server entries in .env.example."""
         run_cdc(
-            "scaffold", "persvr2",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^persvr2_(?P<customer>[^_]+)$",
-            "--broker-topology", "per-server",
+            "scaffold",
+            "persvr2",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^persvr2_(?P<customer>[^_]+)$",
+            "--broker-topology",
+            "per-server",
         )
         content = _read_file(isolated_project, ".env.example")
         assert "per-server" in content.lower() or "KAFKA_BOOTSTRAP_SERVERS_DEFAULT" in content
@@ -508,11 +553,16 @@ class TestScaffoldBrokerTopology:
     ) -> None:
         """--broker-topology shared (explicit) writes shared bootstrap to source-groups.yaml."""
         run_cdc(
-            "scaffold", "sharedkafka",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^sk_(?P<customer>[^_]+)$",
-            "--broker-topology", "shared",
+            "scaffold",
+            "sharedkafka",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^sk_(?P<customer>[^_]+)$",
+            "--broker-topology",
+            "shared",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "broker_topology: shared" in content
@@ -524,12 +574,18 @@ class TestScaffoldBrokerTopology:
     ) -> None:
         """broker-topology should be rejected when scaffold topology is not redpanda."""
         result = run_cdc(
-            "scaffold", "fdwbrokerbad",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^fdwbrokerbad_(?P<customer>[^_]+)$",
-            "--topology", "fdw",
-            "--broker-topology", "per-server",
+            "scaffold",
+            "fdwbrokerbad",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^fdwbrokerbad_(?P<customer>[^_]+)$",
+            "--topology",
+            "fdw",
+            "--broker-topology",
+            "per-server",
         )
         assert result.returncode != 0
 
@@ -549,11 +605,16 @@ class TestScaffoldTopology:
     ) -> None:
         """--topology fdw writes the explicit topology for MSSQL projects."""
         run_cdc(
-            "scaffold", "fdwproj",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^fdwproj_(?P<customer>[^_]+)$",
-            "--topology", "fdw",
+            "scaffold",
+            "fdwproj",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^fdwproj_(?P<customer>[^_]+)$",
+            "--topology",
+            "fdw",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "topology: fdw" in content
@@ -566,11 +627,16 @@ class TestScaffoldTopology:
     ) -> None:
         """fdw scaffolds should not emit Redpanda env settings."""
         run_cdc(
-            "scaffold", "fdwenv",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^fdwenv_(?P<customer>[^_]+)$",
-            "--topology", "fdw",
+            "scaffold",
+            "fdwenv",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^fdwenv_(?P<customer>[^_]+)$",
+            "--topology",
+            "fdw",
         )
         content = _read_file(isolated_project, ".env.example")
         assert "KAFKA_BOOTSTRAP_SERVERS" not in content
@@ -583,12 +649,17 @@ class TestScaffoldTopology:
     ) -> None:
         """--topology pg_native writes the explicit topology for PostgreSQL projects."""
         run_cdc(
-            "scaffold", "pgnativeproj",
-            "--pattern", "db-shared",
-            "--source-type", "postgres",
-            "--extraction-pattern", "",
+            "scaffold",
+            "pgnativeproj",
+            "--pattern",
+            "db-shared",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "",
             "--environment-aware",
-            "--topology", "pg_native",
+            "--topology",
+            "pg_native",
         )
         content = _read_file(isolated_project, "source-groups.yaml")
         assert "topology: pg_native" in content
@@ -599,11 +670,16 @@ class TestScaffoldTopology:
     ) -> None:
         """Unsupported topology/source-type combinations should fail fast."""
         result = run_cdc(
-            "scaffold", "badtopology",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
-            "--topology", "pg_native",
+            "scaffold",
+            "badtopology",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
+            "--topology",
+            "pg_native",
         )
         assert result.returncode != 0
 
@@ -806,9 +882,12 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold <name> --source-type postgres (missing --pattern) exits with error."""
         result = run_cdc(
-            "scaffold", "testproj",
-            "--source-type", "postgres",
-            "--extraction-pattern", "",
+            "scaffold",
+            "testproj",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "",
         )
         assert result.returncode != 0
 
@@ -818,9 +897,12 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold <name> --pattern db-shared (missing --source-type) exits with error."""
         result = run_cdc(
-            "scaffold", "testproj",
-            "--pattern", "db-shared",
-            "--extraction-pattern", "",
+            "scaffold",
+            "testproj",
+            "--pattern",
+            "db-shared",
+            "--extraction-pattern",
+            "",
             "--environment-aware",
         )
         assert result.returncode != 0
@@ -831,9 +913,12 @@ class TestScaffoldErrors:
     ) -> None:
         """Missing --extraction-pattern exits with error."""
         result = run_cdc(
-            "scaffold", "testproj",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
+            "scaffold",
+            "testproj",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
         )
         assert result.returncode != 0
 
@@ -843,10 +928,14 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold --pattern db-shared without --environment-aware exits with error."""
         result = run_cdc(
-            "scaffold", "noenvaware",
-            "--pattern", "db-shared",
-            "--source-type", "postgres",
-            "--extraction-pattern", "",
+            "scaffold",
+            "noenvaware",
+            "--pattern",
+            "db-shared",
+            "--source-type",
+            "postgres",
+            "--extraction-pattern",
+            "",
         )
         assert result.returncode != 0
         combined = result.stdout + result.stderr
@@ -858,18 +947,26 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold <name> run twice rejects the second call."""
         first = run_cdc(
-            "scaffold", "duptest",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^dup_(?P<customer>[^_]+)$",
+            "scaffold",
+            "duptest",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^dup_(?P<customer>[^_]+)$",
         )
         assert first.returncode == 0
 
         second = run_cdc(
-            "scaffold", "duptest",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "^dup_(?P<customer>[^_]+)$",
+            "scaffold",
+            "duptest",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "^dup_(?P<customer>[^_]+)$",
         )
         assert second.returncode != 0, "Duplicate scaffold should fail"
 
@@ -879,10 +976,14 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold --pattern db-unknown (invalid choice) exits with error."""
         result = run_cdc(
-            "scaffold", "badpat",
-            "--pattern", "db-unknown",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
+            "scaffold",
+            "badpat",
+            "--pattern",
+            "db-unknown",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
         )
         assert result.returncode != 0
 
@@ -892,10 +993,14 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold --source-type oracle (invalid choice) exits with error."""
         result = run_cdc(
-            "scaffold", "badsrc",
-            "--pattern", "db-per-tenant",
-            "--source-type", "oracle",
-            "--extraction-pattern", "",
+            "scaffold",
+            "badsrc",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "oracle",
+            "--extraction-pattern",
+            "",
         )
         assert result.returncode != 0
 
@@ -905,11 +1010,16 @@ class TestScaffoldErrors:
     ) -> None:
         """cdc scaffold --broker-topology invalid (invalid choice) exits with error."""
         result = run_cdc(
-            "scaffold", "badbroker",
-            "--pattern", "db-per-tenant",
-            "--source-type", "mssql",
-            "--extraction-pattern", "",
-            "--broker-topology", "invalid",
+            "scaffold",
+            "badbroker",
+            "--pattern",
+            "db-per-tenant",
+            "--source-type",
+            "mssql",
+            "--extraction-pattern",
+            "",
+            "--broker-topology",
+            "invalid",
         )
         assert result.returncode != 0
 
@@ -930,9 +1040,7 @@ class TestScaffoldUpdate:
         _scaffold_db_per_tenant_mssql(run_cdc, "updatetest")
 
         result = run_cdc("scaffold", "--update")
-        assert result.returncode == 0, (
-            f"Update failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Update failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
 
     def test_cdc_scaffold_update_creates_missing_directories(
         self,
@@ -944,6 +1052,7 @@ class TestScaffoldUpdate:
 
         # Delete a generated directory
         import shutil
+
         docs_dir = isolated_project / "_docs"
         if docs_dir.exists():
             shutil.rmtree(docs_dir)
@@ -1042,12 +1151,7 @@ class TestScaffoldUpdate:
         """--update recreates _docs/architecture/DESTRUCTIVE_CHANGES.md when missing."""
         _scaffold_db_per_tenant_mssql(run_cdc, "upddestructivedocs")
 
-        docs_file = (
-            isolated_project
-            / "_docs"
-            / "architecture"
-            / "DESTRUCTIVE_CHANGES.md"
-        )
+        docs_file = isolated_project / "_docs" / "architecture" / "DESTRUCTIVE_CHANGES.md"
         docs_file.unlink(missing_ok=True)
         assert not docs_file.exists()
 

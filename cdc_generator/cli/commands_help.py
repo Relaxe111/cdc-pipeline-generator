@@ -68,4 +68,4 @@ def print_help(
     print("  test                 - Run tests (--cli for e2e, --all for everything)")
     print("  test-coverage        - Show test coverage report by cdc command (-v for details)")
 
-    print("\n💡 Tip: Run commands from implementation directory or dev container")
+    print("\n💡 Tip: Run commands directly on the host from the generator or implementation directory")
