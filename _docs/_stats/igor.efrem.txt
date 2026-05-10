@@ -2,7 +2,7 @@ cdc manage-services config directory	78
 cdc manage-services config directory | flags: --al	78
 cdc test | flags: --all, --cli	33
 cdc test-coverage	6
-cdc manage-source-groups | flags: --help	2
+cdc manage-source-groups | flags: --help	4
 cdc fdw	1
 cdc fdw plan	1
 cdc fdw | flags: --help	1

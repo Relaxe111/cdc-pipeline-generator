@@ -99,12 +99,22 @@ class SmartCommand(click.Command):
         # Determine which context flags are active (group keys only)
         active_contexts = self._get_active_contexts(ctx)
 
-        # All active params including always-visible (for prerequisites)
-        all_active = self._get_all_active_params(ctx)
-
         # If no context group flags are active, show entry-point options
         if not active_contexts:
-            filtered = self._filter_to_entry_points(all_completions, all_active)
+            filtered = self._filter_to_entry_points(all_completions, set())
+
+            # When no options are matched (e.g. user tabs without typing '--'),
+            # inject entry-point options so the user can discover available flags.
+            if not filtered and not incomplete.startswith("-"):
+                for entry_name in sorted(self.smart_groups.keys()):
+                    opt_str = f"--{entry_name.replace('_', '-')}"
+                    if opt_str.startswith(incomplete):
+                        filtered.append(CompletionItem(opt_str))
+                for entry_name in sorted(self.smart_always):
+                    opt_str = f"--{entry_name.replace('_', '-')}"
+                    if opt_str.startswith(incomplete):
+                        filtered.append(CompletionItem(opt_str))
+
             return self._inject_legacy_completions(filtered, ctx, incomplete)
 
         # Build the set of allowed option names based on active contexts
@@ -305,11 +315,7 @@ class SmartCommand(click.Command):
         # Remove entry-points whose prerequisites are not met
         if self.smart_requires:
             active = all_active or set()
-            entry_points = {
-                ep for ep in entry_points
-                if not self.smart_requires.get(ep)
-                or self.smart_requires[ep].issubset(active)
-            }
+            entry_points = {ep for ep in entry_points if not self.smart_requires.get(ep) or self.smart_requires[ep].issubset(active)}
 
         return [c for c in completions if self._is_allowed(c.value, entry_points)]
 
@@ -356,9 +362,14 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "validate_sinks": set(),
     # ── Sink qualifier (--sink narrows to sink actions) ────────
     "sink": {
-        "add_sink_table", "remove_sink_table", "sink_table",
-        "update_schema", "add_custom_sink_table", "modify_custom_table",
-        "from", "from_table",
+        "add_sink_table",
+        "remove_sink_table",
+        "sink_table",
+        "update_schema",
+        "add_custom_sink_table",
+        "modify_custom_table",
+        "from",
+        "from_table",
     },
     # ── Fanout qualifier (--all enables all-sinks add-table flow) ─────────
     "all_flag": {
@@ -371,10 +382,20 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     },
     # ── Add sink table (requires --sink) ───────────────────────
     "add_sink_table": {
-        "sink", "from", "from_table", "target", "target_exists",
-        "target_schema", "sink_schema", "replicate_structure",
-        "map_column", "include_sink_columns", "all", "add_column_template",
-        "add_transform", "accept_column",
+        "sink",
+        "from",
+        "from_table",
+        "target",
+        "target_exists",
+        "target_schema",
+        "sink_schema",
+        "replicate_structure",
+        "map_column",
+        "include_sink_columns",
+        "all",
+        "add_column_template",
+        "add_transform",
+        "accept_column",
     },
     # ── Remove sink table ──────────────────────────────────────
     "remove_sink_table": {"sink"},
@@ -382,14 +403,25 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
     "update_schema": {"sink", "sink_table"},
     # ── Sink table operations (--sink-table as context) ────────
     "sink_table": {
-        "sink", "map_column", "add_column_template",
-        "remove_column_template", "list_column_templates",
-        "add_transform", "remove_transform", "list_transforms",
-        "column_name", "value", "skip_validation",
+        "sink",
+        "map_column",
+        "add_column_template",
+        "remove_column_template",
+        "list_column_templates",
+        "add_transform",
+        "remove_transform",
+        "list_transforms",
+        "column_name",
+        "value",
+        "skip_validation",
     },
     # ── Column templates ───────────────────────────────────────
     "add_column_template": {
-        "sink", "sink_table", "column_name", "value", "skip_validation",
+        "sink",
+        "sink_table",
+        "column_name",
+        "value",
+        "skip_validation",
     },
     "remove_column_template": {"sink", "sink_table"},
     "list_column_templates": {"sink", "sink_table"},
@@ -410,7 +442,10 @@ MANAGE_SERVICE_GROUPS: dict[str, set[str]] = {
 
 # Options always shown for manage-services config
 MANAGE_SERVICE_ALWAYS: set[str] = {
-    "service", "service_positional", "server", "all",
+    "service",
+    "service_positional",
+    "server",
+    "all",
 }
 
 # Hierarchical prerequisites for manage-services config.
@@ -467,14 +502,20 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "add_env_mapping": set(),
     "list_env_mappings": set(),
     "add_server": {
-        "source_type", "host", "port", "user", "password",
+        "source_type",
+        "host",
+        "port",
+        "user",
+        "password",
     },
     "list_servers": set(),
     "remove_server": set(),
     "set_topology": set(),
     "set_broker_topology": set(),
     "add_extraction_pattern": {
-        "env", "strip_suffixes", "description",
+        "env",
+        "strip_suffixes",
+        "description",
     },
     "set_extraction_pattern": set(),
     "list_extraction_patterns": set(),
@@ -484,12 +525,17 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "introspect_types": {"server"},
     "db_definitions": {"server"},
     "pattern": {
-        "source_type", "host", "port", "user", "password",
-        "extraction_pattern", "environment_aware",
+        "source_type",
+        "host",
+        "port",
+        "user",
+        "password",
+        "extraction_pattern",
+        "environment_aware",
     },
 }
 
-MANAGE_SOURCE_GROUPS_ALWAYS: set[str] = set()
+MANAGE_SOURCE_GROUPS_ALWAYS: set[str] = {"help"}
 
 MANAGE_SOURCE_GROUPS_REQUIRES: dict[str, set[str]] = {}
 
@@ -497,13 +543,23 @@ MANAGE_SOURCE_GROUPS_REQUIRES: dict[str, set[str]] = {}
 # manage-sink-groups: context flag → sub-options
 MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "create": {
-        "source_group", "type", "pattern", "environment_aware",
-        "no_environment_aware", "for_source_group",
+        "source_group",
+        "type",
+        "pattern",
+        "environment_aware",
+        "no_environment_aware",
+        "for_source_group",
     },
     "add_new_sink_group": {
-        "type", "pattern", "environment_aware",
-        "no_environment_aware", "for_source_group",
-        "host", "port", "user", "password",
+        "type",
+        "pattern",
+        "environment_aware",
+        "no_environment_aware",
+        "for_source_group",
+        "host",
+        "port",
+        "user",
+        "password",
     },
     "list_flag": set(),
     "info": set(),
@@ -517,31 +573,58 @@ MANAGE_SINK_GROUPS_GROUPS: dict[str, set[str]] = {
     "add_to_table_excludes": {"sink_group"},
     "list_table_excludes": {"sink_group"},
     "add_source_custom_key": {
-        "sink_group", "custom_key_value", "custom_key_exec_type",
+        "sink_group",
+        "custom_key_value",
+        "custom_key_exec_type",
     },
     "sink_group": {
-        "add_server", "remove_server", "server",
+        "add_server",
+        "remove_server",
+        "server",
         "list_server_extraction_patterns",
-        "add_to_ignore_list", "add_to_schema_excludes", "add_source_custom_key",
-        "add_to_table_excludes", "list_table_excludes",
-        "host", "port", "user", "password", "extraction_patterns",
-        "env", "strip_patterns", "env_mapping", "description",
-        "custom_key_value", "custom_key_exec_type",
+        "add_to_ignore_list",
+        "add_to_schema_excludes",
+        "add_source_custom_key",
+        "add_to_table_excludes",
+        "list_table_excludes",
+        "host",
+        "port",
+        "user",
+        "password",
+        "extraction_patterns",
+        "env",
+        "strip_patterns",
+        "env_mapping",
+        "description",
+        "custom_key_value",
+        "custom_key_exec_type",
     },
     "add_server": {
-        "sink_group", "host", "port", "user", "password",
-        "extraction_patterns", "env", "strip_patterns", "env_mapping", "description",
+        "sink_group",
+        "host",
+        "port",
+        "user",
+        "password",
+        "extraction_patterns",
+        "env",
+        "strip_patterns",
+        "env_mapping",
+        "description",
     },
     "server": {
-        "sink_group", "extraction_patterns", "env", "strip_patterns",
-        "env_mapping", "description",
+        "sink_group",
+        "extraction_patterns",
+        "env",
+        "strip_patterns",
+        "env_mapping",
+        "description",
     },
     "list_server_extraction_patterns": {"sink_group", "server"},
     "remove_server": {"sink_group"},
     "remove": set(),
 }
 
-MANAGE_SINK_GROUPS_ALWAYS: set[str] = set()
+MANAGE_SINK_GROUPS_ALWAYS: set[str] = {"help"}
 
 MANAGE_SINK_GROUPS_REQUIRES: dict[str, set[str]] = {}
 

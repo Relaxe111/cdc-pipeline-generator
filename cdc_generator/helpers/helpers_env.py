@@ -4,6 +4,7 @@ Used by both source-group and sink-group CLI handlers when adding servers.
 Generates consistent env variable placeholder names and appends them to .env.
 """
 
+import os
 from pathlib import Path
 
 from cdc_generator.helpers.helpers_logging import (
@@ -12,6 +13,58 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 from cdc_generator.helpers.service_config import get_project_root
+
+
+# ============================================================================
+# .env Loading (startup)
+# ============================================================================
+
+_MIN_QUOTED_VALUE_LENGTH = 2
+
+
+def _strip_env_value(value: str) -> str:
+    """Strip surrounding single or double quotes from an env value."""
+    if (
+        len(value) >= _MIN_QUOTED_VALUE_LENGTH
+        and value[0] == value[-1]
+        and value[0] in {'"', "'"}
+    ):
+        return value[1:-1]
+    return value
+
+
+def load_project_dotenv() -> int:
+    """Load .env from the project root into os.environ.
+
+    Scans upwards from the current working directory (via get_project_root)
+    and reads ``.env``.  Existing environment variables are never overwritten
+    (``os.environ.setdefault`` semantics).  Comments, blank lines, and lines
+    without ``=`` are skipped.  Surrounding single/double quotes are stripped.
+
+    Called once at CLI startup so that every sub-command sees the same
+    resolved environment.
+
+    Returns:
+        Number of new variables loaded into os.environ.
+    """
+    project_root = get_project_root()
+    env_path = project_root / ".env"
+    if not env_path.exists():
+        return 0
+
+    loaded = 0
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if key not in os.environ:
+            os.environ[key] = _strip_env_value(value.strip())
+            loaded += 1
+
+    return loaded
+
 
 # ============================================================================
 # Env Variable Name Generation

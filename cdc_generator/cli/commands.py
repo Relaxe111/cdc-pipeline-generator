@@ -538,6 +538,12 @@ def main() -> int:
     """Main CLI entry point."""
     import os
 
+    # Load .env from the project root into os.environ so all sub-commands
+    # resolve ${PLACEHOLDER} references consistently.
+    from cdc_generator.helpers.helpers_env import load_project_dotenv
+
+    load_project_dotenv()
+
     # Let Click handle shell completion protocol before anything else.
     # When _CDC_COMPLETE is set, Click outputs completion data and exits.
     if os.environ.get("_CDC_COMPLETE"):
