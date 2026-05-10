@@ -1,117 +1,95 @@
 # CDC Pipeline Generator
 
-[![Docker Hub](https://img.shields.io/docker/v/asmacarma/cdc-pipeline-generator?label=docker&logo=docker)](https://hub.docker.com/r/asmacarma/cdc-pipeline-generator)
+**Generate pipeline configurations for Change Data Capture (CDC) workflows.**
 
-**Generate Bento pipeline configurations for Change Data Capture (CDC) workflows.**
+A CLI-first tool that reads YAML service definitions and produces streaming pipeline configurations, SQL migrations, and deployment artifacts. Supports **db-per-tenant** and **db-shared** multi-tenancy patterns with configurable data transport backends.
 
-A CLI-first tool for managing CDC pipelines with automatic Docker dev container setup, supporting both **db-per-tenant** (one database per customer) and **db-shared** (single database, multi-tenant) patterns.
+---
 
-## ✨ Features
+## Architecture
 
-- 🚀 **Zero-dependency setup**: Only Docker required
-- 🐳 **Docker-first**: Run from Docker Hub image - no local installation needed
-- 🔄 **Multi-tenant patterns**: Support for db-per-tenant and db-shared architectures
-- 📝 **Template-based generation**: Jinja2 templates for flexible pipeline configuration
-- ✅ **CLI-first philosophy**: All operations via `cdc` commands, no manual YAML editing
-- 🛠️ **Database integration**: Auto-updates docker-compose.yml with database services
-- 🔖 **Automated releases**: Semantic versioning with conventional commits
+The generator sits at the centre of a CDC pipeline — it reads source database schemas, produces sink table definitions and pipeline configurations, and renders the runtime artifacts consumed by the streaming layer.
 
-## 📦 Installation
+### Data Transport Options
 
-**Only Docker required - zero dependencies!**
+CDC data can be moved from source to sink through one of two paths:
 
-Supports **Intel (x86_64)** and **Apple Silicon (ARM64)** platforms.
+| Path | Transport | Typical Use |
+|------|-----------|-------------|
+| **Streaming** | Redpanda / Kafka | High-throughput, low-latency CDC with exactly-once semantics |
+| **FDW** | PostgreSQL Foreign Data Wrappers | Direct MSSQL→PG pull without an external message broker |
+
+#### Streaming (Redpanda / Kafka)
+
+Source change events are captured, streamed through a message broker, and consumed by sink processors that write to the target PostgreSQL database.
+
+```text
+MSSQL → CDC capture → Redpanda/Kafka → Bento sink → PostgreSQL
+```
+
+#### FDW (Foreign Data Wrapper)
+
+The generator can produce configurations that use PostgreSQL Foreign Data Wrappers (`tds_fdw`) to pull data directly from MSSQL into staging tables, followed by merge procedures that apply changes to the target tables.
+
+```text
+MSSQL ← tds_fdw ← PostgreSQL (staging → merge → target)
+```
+
+#### Native PostgreSQL-to-PostgreSQL
+
+For PostgreSQL source databases, native logical replication or polling-based CDC can be used without an external broker.
+
+```text
+PostgreSQL → native CDC polling → PostgreSQL target
+```
+
+All three paths are configuration-driven — the generator produces the correct pipeline YAML, SQL migrations, and runtime helpers based on the chosen transport and source database type.
+
+---
+
+## Installation
+
+### Option A: Docker (zero host dependencies)
 
 ```bash
-# Pull latest version
 docker pull asmacarma/cdc-pipeline-generator:latest
-
-# Verify platform support
-docker image inspect asmacarma/cdc-pipeline-generator:latest | grep Architecture
 ```
 
-## 🔄 Updating
+### Option B: Host install via pip
 
 ```bash
-# Pull latest version
-docker pull asmacarma/cdc-pipeline-generator:latest
+# Editable install for active development
+pip install -e .
+
+# Or install directly from the repository
+pip install .
 ```
 
-## 🚀 Quick Start (Docker Compose Workflow)
+After host install, the `cdc` command is available on your shell PATH.
 
-> **⚠️ CLI-First Philosophy**: All configuration is managed through `cdc` commands. **Never edit YAML files manually.** The CLI is the sole interface for configuration management.
+---
 
-### 1. Create Docker Compose File
+## Quick Start
 
-Create a `docker-compose.yml` in your project directory:
-
-```yaml
-services:
-  dev:
-    image: asmacarma/cdc-pipeline-generator:latest
-    volumes:
-      - .:/workspace
-    working_dir: /workspace
-    stdin_open: true
-    tty: true
-    entrypoint: ["/bin/bash", "-c"]
-    command: ["fish"]
-
-# When you run 'cdc scaffold', database services (mssql/postgres) will be
-# automatically inserted below, while this dev service remains unchanged.
-
-# Version pinning options:
-# - :latest - Always pulls newest version (auto-updates on docker compose pull)
-# - :0      - Pins to major version 0.x.x (stable, gets minor/patch updates)
-# - :0.2    - Pins to minor version 0.2.x (only patch updates)
-# - :0.2.4  - Pins to exact version (no updates)
-```
-
-**Version strategy:**
-- Development: Use `:latest` for newest features
-- Production: Use `:0` to auto-update within major version
-- Critical systems: Use exact version like `:0.2.4`
-
-**⚠️ Important:** This docker-compose.yml will be **automatically updated** when you run `cdc scaffold`. New database services will be inserted while preserving the `dev` service.
-
-### 2. Initialize Project and Start Dev Container
+### 1. Create a project and initialize
 
 ```bash
-# Create project directory
-mkdir my-cdc-project
-cd my-cdc-project
-
-# Copy the docker-compose.yml from above, then initialize:
-docker compose run --rm dev init
-# ✅ Creates project structure, Dockerfile.dev, pipeline templates, directories
-
-# Start the dev container
-docker compose up -d
-
-# Enter the dev container shell
-docker compose exec dev fish
-# 🐚 You are now inside the container with full cdc CLI and Fish completions
+mkdir my-cdc-project && cd my-cdc-project
+cdc init
 ```
 
-**Inside the dev container**, you'll see a Fish shell prompt with:
-- ✅ `cdc` command available with tab completion
-- ✅ All dependencies pre-installed
-- ✅ Your project directory mounted at `/workspace`
+This creates the project structure: `source-groups.yaml`, `services/`, `pipelines/`, directories.
 
-### 3. Scaffold Server Group (Inside Dev Container)
+### 2. Scaffold a server group
 
-**Now working inside the container shell**, run the scaffold command:
-
-```fish
-# 🐚 Inside dev container
-
-# For db-per-tenant pattern (one database per customer)
+```bash
+# db-per-tenant (one database per customer)
 cdc scaffold my-group \
   --pattern db-per-tenant \
   --source-type mssql \
   --extraction-pattern "^myapp_(?P<customer>[^_]+)$"
 
-# For db-shared pattern (multi-tenant, single database)
+# db-shared (single database, multi-tenant)
 cdc scaffold my-group \
   --pattern db-shared \
   --source-type postgres \
@@ -119,385 +97,108 @@ cdc scaffold my-group \
   --environment-aware
 ```
 
-**Required flags explained:**
-
-| Flag | Values | Description |
-|------|--------|-------------|
-| `--pattern` | `db-per-tenant` or `db-shared` | Choose your multi-tenancy model |
-| `--source-type` | `postgres` or `mssql` | Source database type |
-| `--extraction-pattern` | Regex string | Pattern to extract identifiers from DB names |
-| `--environment-aware` | (flag, no value) | **Required for db-shared only** - enables env grouping |
-
-**Pattern-specific requirements:**
-
-For `--pattern db-per-tenant`:
-- Regex must have named group: `(?P<customer>...)`
-- Example: `"^myapp_(?P<customer>[^_]+)$"` matches `myapp_customer1`
-
-For `--pattern db-shared`:
-- Regex must have named groups: `(?P<service>...)` and `(?P<env>...)`
-- Must include `--environment-aware` flag
-- Example: `"^myapp_(?P<service>users)_(?P<env>dev|stage|prod)$"`
-
-**Fish shell autocomplete** (inside dev container):
-- Type `cdc scaffold my-group --pattern ` + TAB → shows `db-per-tenant` and `db-shared`
-- Type `cdc scaffold my-group --source-type ` + TAB → shows `postgres` and `mssql`
-
-**What gets created:**
-- ✅ `source-groups.yaml` with your configuration
-- ✅ **Updates `docker-compose.yml`** - inserts database services (mssql/postgres) after `dev` service
-- ✅ Directory structure: `services/`, `pipelines/`, `generated/`
-- ✅ Connection credentials use env vars: `${POSTGRES_SOURCE_HOST}`, etc.
-
-**Docker Compose update example:**
-After scaffold, your docker-compose.yml will have new services added:
-```yaml
-services:
-  dev:  # ← Your original service (preserved)
-    image: asmacarma/cdc-pipeline-generator:latest
-    # ... unchanged ...
-  
-  mssql:  # ← Added by scaffold
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD}
-  
-  postgres-target:  # ← Added by scaffold
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_TARGET_PASSWORD}
-```
-
-### 4. Configure Environment Variables
+### 3. Configure services and tables
 
 ```bash
-# Copy example and edit with your credentials
-cp .env.example .env
-nano .env  # or use your preferred editor
+# Create a service
+cdc manage-services config --create-service my-service
+
+# Add source tables
+cdc manage-services config --service my-service --add-source-table dbo.Users --primary-key id
+cdc manage-services config --service my-service --add-source-table dbo.Orders --primary-key order_id
+
+# Inspect and save source schemas
+cdc manage-services config --service my-service --inspect --all --save
 ```
 
-Example `.env`:
-```bash
-# Source Database (MSSQL)
-MSSQL_HOST=mssql
-MSSQL_PORT=1433
-MSSQL_USER=sa
-MSSQL_PASSWORD=YourPassword123!
-
-# Target Database (PostgreSQL)
-POSTGRES_TARGET_HOST=postgres-target
-POSTGRES_TARGET_PORT=5432
-POSTGRES_TARGET_USER=postgres
-POSTGRES_TARGET_PASSWORD=postgres
-POSTGRES_TARGET_DB=cdc_target
-```
-
-### 5. Start All Services
+### 4. Manage schemas and migrations
 
 ```bash
-# Exit container temporarily
-exit
+# Generate DDL migrations for the sink database
+cdc manage-migrations generate
 
-# Start databases and dev container
-docker compose up -d
+# Review changes
+cdc manage-migrations diff
 
-# Re-enter dev container
-docker compose exec dev fish
+# Apply migrations
+cdc manage-migrations apply
 ```
 
-### 6. Create Service and Add Tables
+### 5. Generate pipeline configurations
 
 ```bash
-# Create service
-cdc manage-service --create my-service
-
-# Add tables to track
-cdc manage-service --service my-service --add-table Users --primary-key id
-cdc manage-service --service my-service --add-table Orders --primary-key order_id
-
-# Inspect available tables (optional)
-cdc manage-service --service my-service --inspect --schema dbo
-```
-
-### 7. Generate CDC Pipelines
-
-```bash
-# Generate pipelines for development environment
-cdc generate-pipelines --service my-service --environment dev
-
-# Check generated files
-ls pipelines/generated/
-ls generated/schemas/
-```
-
-### 8. Deploy Pipelines
-
-Generated pipeline files in `pipelines/generated/` are ready to deploy to your Bento infrastructure.
-
----
-
-## 📋 Complete Command Reference
-
-### Project Initialization
-
-```bash
-docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest init
-```
-
-### Scaffolding (New in 0.2.x)
-
-```bash
-docker run --rm -v $PWD:/workspace -w /workspace asmacarma/cdc-pipeline-generator:latest scaffold <name> \
-  --pattern <db-per-tenant|db-shared> \
-  --source-type <postgres|mssql> \
-  --extraction-pattern "<regex>" \
-  [--environment-aware]
-
-# Required for db-per-tenant:
-#   --pattern db-per-tenant
-#   --source-type postgres|mssql
-#   --extraction-pattern with 'customer' named group
-
-# Required for db-shared:
-#   --pattern db-shared
-#   --source-type postgres|mssql
-#   --extraction-pattern with 'service' and 'env' named groups
-#   --environment-aware (mandatory flag)
-
-# Optional connection overrides:
-#   --host <host>         # Default: ${POSTGRES_SOURCE_HOST} or ${MSSQL_SOURCE_HOST}
-#   --port <port>         # Default: ${POSTGRES_SOURCE_PORT} or ${MSSQL_SOURCE_PORT}
-#   --user <user>         # Default: ${POSTGRES_SOURCE_USER} or ${MSSQL_SOURCE_USER}
-#   --password <password> # Default: ${POSTGRES_SOURCE_PASSWORD} or ${MSSQL_SOURCE_PASSWORD}
-
-# Example patterns:
-# - db-per-tenant: "^adopus_(?P<customer>[^_]+)$"
-# - db-shared: "^asma_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$"
-# - Empty pattern "" for simple fallback matching
-```
-
-### Service Management
-
-```bash
-# Top-level shortcut alias
-#   manage-services  -> ms
-# So these are equivalent:
-#   cdc manage-services config ...
-#   cdc ms config ...
-
-# Create service
-cdc ms config --create-service <name>
-
-# List services
-cdc ms config --list-services
-
-# Add source table
-cdc ms config --service <name> --add-source-table <schema.table> --primary-key <column>
-
-# Remove tables
-cdc ms config --service <name> --remove-table <schema.table>
-
-# List configured source tables
-cdc ms config --service <name> --list-source-tables
-
-# Inspect source schema (read-only)
-cdc ms config --service <name> --inspect --schema <schema-name>
-cdc ms config --service <name> --inspect --all
-
-# Inspect + save source table schemas
-cdc ms config --service <name> --inspect --schema <schema-name> --save
-cdc ms config --service <name> --inspect --all --save
-```
-
-### Sink Inspection & Save Flow
-
-```bash
-# Step 1: list sinks configured on a service
-cdc ms config --service <source_service> --list-sinks
-
-# Step 2: inspect one sink (read-only)
-cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --schema <schema>
-cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --all
-
-# Step 3: inspect + save one sink
-cdc ms config --service <source_service> --inspect-sink <sink_group.target_service> --all --save
-
-# Step 4: inspect + save all configured sinks for a service
-cdc ms config --service <source_service> --inspect-sink --all --save
-```
-
-### Sink Shortcut Flag Aliases
-
-```bash
-# Aliases added to simplify sink flows:
-#   --sink-inspect  -> --inspect-sink
-#   --sink-all      -> --all
-#   --sink-save     -> --save
-
-# Example (equivalent to --inspect-sink ... --all --save)
-cdc ms config --service directory --sink-inspect sink_asma.calendar --sink-all --sink-save
-```
-
-### Where schemas are saved
-
-```bash
-# Source inspect --save writes table YAML files under:
-service-schemas/<service>/<schema>/<table>.yaml
-
-# Sink inspect --save writes under target service path:
-service-schemas/<target_service>/<schema>/<table>.yaml
-```
-
-### Pipeline Generation
-
-```bash
-# Generate all pipelines
-cdc generate-pipelines --service <name> --environment <dev|stage|prod>
-
-# Generate with snapshot
-cdc generate-pipelines --service <name> --environment dev --snapshot
-```
-
-# Show server group info
-cdc manage-source-groups --info
-
-# List all server groups
-cdc manage-source-groups --list
-```
-
-### Pipeline Generation
-
-```bash
-# Generate for specific service
-cdc generate --service <name> --environment <dev|stage|prod>
+# Generate for a single service
+cdc generate --service my-service --environment dev
 
 # Generate for all services
-cdc generate --all --environment <env>
-```
-
-### Validation
-
-```bash
-# Validate all configurations
-cdc validate
+cdc generate --all --environment dev
 ```
 
 ---
 
-### db-per-tenant (One database per customer)
+## Multi-Tenancy Patterns
 
-**Use case:** Each customer has a dedicated source database.
+### db-per-tenant
 
-**Example:** AdOpus system with 26 customer databases.
+Each customer has a dedicated source database. The generator creates one source+sink pipeline per customer database.
 
-**Pipeline generation:** Creates one source + sink pipeline per customer.
-
-See: [`examples/db-per-tenant/`](examples/db-per-tenant/)
-
-### db-shared (Single database, multi-tenant)
-
-**Use case:** All customers share one database, differentiated by `customer_id`.
-
-**Example:** ASMA directory service with customer isolation via schema/column.
-
-**Pipeline generation:** Creates one source + sink pipeline for all customers.
-
-See: [`examples/db-shared/`](examples/db-shared/)
-
----
-
-## 🏗️ Architecture Patterns
-
-Detailed architecture and migration docs:
-
-- [`_docs/architecture/STREAMING_ALTERNATIVES.md`](_docs/architecture/STREAMING_ALTERNATIVES.md)
-- [`_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md`](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md)
-
-### db-per-tenant (One database per customer)
-
-**Use case:** Each customer has a dedicated source database.
-
-**Example:** SaaS application with isolated customer databases (customer_a_prod, customer_b_prod, etc.)
-
-**Pipeline generation:** Creates one source + sink pipeline per customer database.
-
-**Setup:**
-```bash
-cdc manage-source-groups --create my-group \
-  --pattern db-per-tenant \
-  --source-type mssql \
-  --extraction-pattern '(?P<customer_id>\w+)_(?P<env>\w+)'
+```
+Extraction pattern: ^myapp_(?P<customer>[^_]+)$
+Matches: myapp_customer_a, myapp_customer_b
 ```
 
-### db-shared (Single database, multi-tenant)
+### db-shared
 
-**Use case:** All customers share one database, differentiated by `customer_id` column or schema.
+All customers share a single database, differentiated by a column (e.g. `customer_id`) or schema. Requires `--environment-aware`.
 
-**Example:** Multi-tenant application with customer isolation via tenant_id field
-
-**Pipeline generation:** Creates one source + sink pipeline for all customers, with customer filtering.
-
-**Setup:**
-```bash
-cdc manage-source-groups --create my-group \
-  --pattern db-shared \
-  --source-type postgresql \
-  --extraction-pattern '(?P<customer_id>\w+)' \
-  --environment-aware
+```
+Extraction pattern: ^myapp_(?P<service>[^_]+)_(?P<env>(dev|stage|prod))$
+Matches: myapp_users_dev, myapp_users_prod
 ```
 
 ---
 
-## 🐳 Docker Container Workflow
+## Command Reference
 
-```
+| Command | Description |
+| ------- | ----------- |
+| `cdc init` | Initialize a new CDC project |
+| `cdc scaffold <name>` | Scaffold a server group with database services |
+| `cdc manage-services config` | Create, list, inspect services and tables |
+| `cdc manage-services config --inspect-sink` | Inspect and save target sink schemas |
+| `cdc manage-migrations generate` | Generate PostgreSQL DDL migrations |
+| `cdc manage-migrations diff` | Show pending schema changes |
+| `cdc manage-migrations apply` | Apply migrations to target database |
+| `cdc generate` | Generate pipeline YAML configurations |
+| `cdc manage-source-groups` | Manage source database groups |
+| `cdc manage-sink-groups` | Manage sink/target groups |
+| `cdc validate` | Validate all configurations |
+
+---
+
+## Project Structure
+
+```text
 cdc-pipeline-generator/
 ├── cdc_generator/           # Core library
-│   ├── core/               # Pipeline generation logic
-│   ├── helpers/            # Utility functions
-│   ├── validators/         # Configuration validation
-│   └── cli/                # Command-line interface
-└── examples/               # Reference implementations
-    ├── db-per-tenant/     # Multi-database pattern
-    └── db-shared/         # Single-database pattern
+│   ├── cli/                # Click command groups
+│   ├── core/               # Pipeline generation, migration engine
+│   ├── helpers/            # Database, FDW, MSSQL utilities
+│   ├── service-schemas/    # YAML schema definitions and type adapters
+│   ├── templates/          # Jinja2 pipeline templates
+│   └── validators/         # Configuration and schema validation
+├── tests/                   # Test suite
+├── _docs/                   # Architecture, getting started, CLI reference
+├── examples/                # db-per-tenant and db-shared reference implementations
+├── setup.py / pyproject.toml  # Package metadata
+└── Dockerfile               # Docker runtime image
 ```
 
 ---
 
-## 🐳 Docker Container Workflow
+## Development
 
-The recommended way to use this tool is inside the auto-generated dev container:
-
-### Why Use the Container?
-
-✅ **Isolated environment** - No conflicts with host Python/packages  
-✅ **All dependencies pre-installed** - Python 3.11, Fish shell, database clients  
-✅ **Database services included** - MSSQL/PostgreSQL auto-configured  
-✅ **Consistent across team** - Same environment for everyone  
-
-### Container Commands
-
-```bash
-# Start all services (databases + dev container)
-docker compose up -d
-
-# Enter dev container
-docker compose exec dev fish
-
-# Stop all services
-docker compose down
-
-# Rebuild container (after updating generator version)
-docker compose up -d --build
-
-# View logs
-docker compose logs -f dev
-docker compose logs -f mssql
-docker compose logs -f postgres-target
-```
-
-### Working Inside Container
+See `_docs/getting-started/` for setup instructions, `_docs/architecture/` for design decisions, and `_docs/cli/` for the full CLI command reference.
 
 Once inside (`docker compose exec dev fish`), you have:
 
