@@ -11,17 +11,16 @@ from .data_structures import (
     GenerationResult,
     ManualMigrationHints,
     MigrationColumn,
+    RuntimeMode,
 )
 
 _DDL_COL_PATTERN = re.compile(
-    r'^\s+"(?P<name>[^"]+)"\s+'
-    + r'(?P<type>(?:double\s+precision|character\s+varying|[a-zA-Z][\w]*)(?:\([^)]*\))?)'
-    + r'(?:\s+(?P<rest>[^,]*))?',
+    r'^\s+"(?P<name>[^"]+)"\s+' + r"(?P<type>(?:double\s+precision|character\s+varying|[a-zA-Z][\w]*)(?:\([^)]*\))?)" + r"(?:\s+(?P<rest>[^,]*))?",
     re.MULTILINE,
 )
 
 _DDL_PK_PATTERN = re.compile(
-    r'PRIMARY\s+KEY\s*\((?P<cols>[^)]+)\)',
+    r"PRIMARY\s+KEY\s*\((?P<cols>[^)]+)\)",
     re.IGNORECASE,
 )
 
@@ -88,11 +87,7 @@ def _build_hint_sql_suggestions(
     expected_columns: list[MigrationColumn],
     hints: ManualMigrationHints,
 ) -> list[str]:
-    if (
-        not hints.renames
-        and not hints.type_casts
-        and not hints.pre_not_null_sql
-    ):
+    if not hints.renames and not hints.type_casts and not hints.pre_not_null_sql:
         return []
 
     table_qualified = f'"{target_schema}"."{table_name}"'
@@ -100,26 +95,19 @@ def _build_hint_sql_suggestions(
     hint_sql: list[str] = []
 
     for from_name, to_name in hints.renames:
-        hint_sql.append(
-            f'ALTER TABLE {table_qualified} RENAME COLUMN "{from_name}" TO "{to_name}";'
-        )
+        hint_sql.append(f'ALTER TABLE {table_qualified} RENAME COLUMN "{from_name}" TO "{to_name}";')
 
     for column_name, using_expr in sorted(hints.type_casts.items()):
         expected = expected_by_name.get(column_name)
         target_type = expected.type if expected is not None else "/* TODO: target type */"
         rendered_column = expected.name if expected is not None else column_name
-        hint_sql.append(
-            f'ALTER TABLE {table_qualified} ALTER COLUMN "{rendered_column}" TYPE {target_type} '
-            + f"USING {using_expr};"
-        )
+        hint_sql.append(f'ALTER TABLE {table_qualified} ALTER COLUMN "{rendered_column}" TYPE {target_type} ' + f"USING {using_expr};")
 
     for column_name, pre_sql in sorted(hints.pre_not_null_sql.items()):
         expected = expected_by_name.get(column_name)
         rendered_column = expected.name if expected is not None else column_name
         hint_sql.append(pre_sql)
-        hint_sql.append(
-            f'ALTER TABLE {table_qualified} ALTER COLUMN "{rendered_column}" SET NOT NULL;'
-        )
+        hint_sql.append(f'ALTER TABLE {table_qualified} ALTER COLUMN "{rendered_column}" SET NOT NULL;')
 
     return hint_sql
 
@@ -128,7 +116,7 @@ def _parse_existing_table_signature(
     sql_content: str,
 ) -> tuple[dict[str, ExistingColumnDef], set[str]] | None:
     create_match = re.search(
-        r'CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+[^(]+\(\s*\n(.*?)\n\)',
+        r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+[^(]+\(\s*\n(.*?)\n\)",
         sql_content,
         re.DOTALL | re.IGNORECASE,
     )
@@ -190,36 +178,24 @@ def detect_destructive_changes(
         if expected_col is None:
             removed_columns.append(existing_col.name)
             destructive_messages.append(f"COLUMN_REMOVED: {existing_col.name}")
-            suggested_sql.append(
-                f'ALTER TABLE {table_qualified} DROP COLUMN IF EXISTS "{existing_col.name}";'
-            )
+            suggested_sql.append(f'ALTER TABLE {table_qualified} DROP COLUMN IF EXISTS "{existing_col.name}";')
             continue
 
         existing_type = _normalize_type_for_compare(existing_col.type)
         expected_type = _normalize_type_for_compare(expected_col.type)
         if existing_type != expected_type:
-            destructive_messages.append(
-                "COLUMN_TYPE_CHANGED: "
-                + f"{existing_col.name} ({existing_col.type} -> {expected_col.type})"
-            )
+            destructive_messages.append("COLUMN_TYPE_CHANGED: " + f"{existing_col.name} ({existing_col.type} -> {expected_col.type})")
             suggested_sql.append(
                 f'ALTER TABLE {table_qualified} ALTER COLUMN "{existing_col.name}" '
                 + f"TYPE {expected_col.type} USING /* TODO: safe cast expression */;"
             )
 
         if existing_col.nullable != expected_col.nullable:
-            destructive_messages.append(
-                "COLUMN_NULLABILITY_CHANGED: "
-                + f"{existing_col.name} ({existing_col.nullable} -> {expected_col.nullable})"
-            )
+            destructive_messages.append("COLUMN_NULLABILITY_CHANGED: " + f"{existing_col.name} ({existing_col.nullable} -> {expected_col.nullable})")
             if expected_col.nullable:
-                suggested_sql.append(
-                    f'ALTER TABLE {table_qualified} ALTER COLUMN "{existing_col.name}" DROP NOT NULL;'
-                )
+                suggested_sql.append(f'ALTER TABLE {table_qualified} ALTER COLUMN "{existing_col.name}" DROP NOT NULL;')
             else:
-                suggested_sql.append(
-                    f'ALTER TABLE {table_qualified} ALTER COLUMN "{existing_col.name}" SET NOT NULL;'
-                )
+                suggested_sql.append(f'ALTER TABLE {table_qualified} ALTER COLUMN "{existing_col.name}" SET NOT NULL;')
 
     for col_name, expected_col in expected_by_name.items():
         if col_name not in existing_columns:
@@ -230,22 +206,14 @@ def detect_destructive_changes(
         new_pk = ", ".join(sorted(expected_pk)) or "<none>"
         destructive_messages.append(f"PRIMARY_KEY_CHANGED: ({old_pk} -> {new_pk})")
         expected_pk_sql = ", ".join(f'"{name}"' for name in sorted(expected_pk))
-        suggested_sql.append(
-            f'ALTER TABLE {table_qualified} DROP CONSTRAINT IF EXISTS "{table_name}_pkey";'
-        )
+        suggested_sql.append(f'ALTER TABLE {table_qualified} DROP CONSTRAINT IF EXISTS "{table_name}_pkey";')
         if expected_pk_sql:
-            suggested_sql.append(
-                f'ALTER TABLE {table_qualified} ADD PRIMARY KEY ({expected_pk_sql});'
-            )
+            suggested_sql.append(f"ALTER TABLE {table_qualified} ADD PRIMARY KEY ({expected_pk_sql});")
 
     if len(removed_columns) == 1 and len(added_columns) == 1:
-        destructive_messages.append(
-            "POSSIBLE_RENAME_HINT: "
-            + f"{removed_columns[0]} -> {added_columns[0]} (verify manually)"
-        )
+        destructive_messages.append("POSSIBLE_RENAME_HINT: " + f"{removed_columns[0]} -> {added_columns[0]} (verify manually)")
         suggested_sql.append(
-            "-- Possible rename candidate:\n"
-            + f'-- ALTER TABLE {table_qualified} RENAME COLUMN "{removed_columns[0]}" TO "{added_columns[0]}";'
+            "-- Possible rename candidate:\n" + f'-- ALTER TABLE {table_qualified} RENAME COLUMN "{removed_columns[0]}" TO "{added_columns[0]}";'
         )
 
     hint_sql = _build_hint_sql_suggestions(
@@ -288,10 +256,7 @@ def write_manual_required_file(
 
     manual_path = _manual_required_file_path(output_dir, table_name)
     if manual_path.exists():
-        result.warnings.append(
-            "Manual migration already exists for "
-            + f"{sink_name}.{table_name}: {manual_path.relative_to(output_dir)}"
-        )
+        result.warnings.append("Manual migration already exists for " + f"{sink_name}.{table_name}: {manual_path.relative_to(output_dir)}")
         return
 
     manual_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,10 +284,23 @@ def write_manual_required_file(
 
     manual_path.write_text(content, encoding="utf-8")
     result.files_written += 1
-    result.warnings.append(
-        "Manual migration required for "
-        + f"{sink_name}.{table_name}: {manual_path.relative_to(output_dir)}"
-    )
+    result.warnings.append("Manual migration required for " + f"{sink_name}.{table_name}: {manual_path.relative_to(output_dir)}")
+
+
+def remove_manual_required_file(output_dir: Path, table_name: str) -> None:
+    """Remove stale manual-required artifacts for tables that no longer need them."""
+    manual_dir = output_dir / "02-manual" / table_name
+    manual_path = manual_dir / "MANUAL_REQUIRED.sql"
+    if not manual_path.exists():
+        return
+
+    manual_path.unlink()
+    if manual_dir.exists() and not any(manual_dir.iterdir()):
+        manual_dir.rmdir()
+
+    manual_root = output_dir / "02-manual"
+    if manual_root.exists() and not any(manual_root.iterdir()):
+        manual_root.rmdir()
 
 
 def detect_removed_tables_for_manual_files(
@@ -331,6 +309,7 @@ def detect_removed_tables_for_manual_files(
     sink_name: str,
     sink_tables: dict[str, dict[str, Any]],
     result: GenerationResult,
+    runtime_mode: RuntimeMode = "brokered",
 ) -> None:
     """Create manual-required files for tables removed from sink config."""
     tables_dir = output_dir / "01-tables"
@@ -339,9 +318,11 @@ def detect_removed_tables_for_manual_files(
 
     expected_table_names: set[str] = set()
     for sink_key, sink_cfg in sink_tables.items():
-        if bool(sink_cfg.get("target_exists", False)):
+        if runtime_mode != "native" and bool(sink_cfg.get("target_exists", False)):
             continue
-        expected_table_names.add(sink_key.split(".", 1)[-1].casefold())
+        table_name = sink_key.split(".", 1)[-1]
+        expected_table_names.add(table_name.casefold())
+        remove_manual_required_file(output_dir, table_name)
 
     existing_table_names: set[str] = set()
     existing_name_by_casefold: dict[str, str] = {}

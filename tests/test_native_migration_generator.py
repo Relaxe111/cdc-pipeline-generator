@@ -30,6 +30,28 @@ _SERVICE_CONFIG: dict[str, object] = {
     },
 }
 
+_EXISTING_TARGET_SERVICE_CONFIG: dict[str, object] = {
+    "service": "native_test",
+    "source": {
+        "tables": {
+            "dbo.Actor": {},
+        },
+    },
+    "sinks": {
+        "sink_test.db": {
+            "tables": {
+                "adopus.Actor": {
+                    "from": "dbo.Actor",
+                    "target_exists": True,
+                    "column_templates": [
+                        {"template": "customer_id", "name": "customer_id"},
+                    ],
+                },
+            },
+        },
+    },
+}
+
 
 def _write_native_project(tmp_path: Path) -> Path:
     (tmp_path / "source-groups.yaml").write_text(
@@ -155,9 +177,7 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     # Phase C: Bootstrap defaults to 'pending', not 'completed'
     assert "COALESCE(bootstrap." in native_infra_sql
     compact = native_infra_sql.replace(" ", "").replace("\n", "")
-    assert "bootstrap_status\",'pending')" in compact, (
-        "Bootstrap status must default to 'pending', not implicitly 'completed'"
-    )
+    assert "bootstrap_status\",'pending')" in compact, "Bootstrap status must default to 'pending', not implicitly 'completed'"
     # Phase C: No more unsafe implicit completed bootstrap from enabled registration
     assert 'WHEN reg."enabled" OR policy."enabled" THEN \'completed\'' not in native_infra_sql, (
         "Enabled registration must not imply completed bootstrap"
@@ -171,9 +191,14 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert '"unsafe_stalled_bootstrap"' in native_infra_sql
 
     # Phase E: claim_due_native_cdc_work uses policy.max_rows_per_pull as primary source
-    assert 'policy."max_rows_per_pull"' in compact, (
-        "Claim must use policy.max_rows_per_pull, not only hardcoded tier presets"
+    assert 'policy."max_rows_per_pull"' in compact, "Claim must use policy.max_rows_per_pull, not only hardcoded tier presets"
+    claim_start = native_infra_sql.index(
+        'CREATE OR REPLACE FUNCTION "cdc_management"."claim_due_native_cdc_work"',
     )
+    claim_end = native_infra_sql.index("$$;\n", claim_start)
+    claim_sql = native_infra_sql[claim_start:claim_end]
+    assert '"jitter_millis" integer' in claim_sql
+    assert '"max_backoff_seconds" integer' in claim_sql
 
     # Phase D: sp_merge_<table> checkpoint update is inside merge procedure (not pull)
     assert 'UPDATE "cdc_management"."native_cdc_checkpoint"' in staging_sql
@@ -182,6 +207,88 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     ckpt_line_idx = staging_sql.index('UPDATE "cdc_management"."native_cdc_checkpoint"')
     merge_line_idx = staging_sql.index("ON CONFLICT")
     assert ckpt_line_idx > merge_line_idx, "Checkpoint advancement must occur after merge/apply, not before"
+
+
+def test_generate_native_runtime_keeps_existing_target_tables_and_cleans_stale_legacy_sql(
+    tmp_path: Path,
+) -> None:
+    """Native mode should still generate per-table SQL for target_exists tables."""
+    schema_base = _write_native_project(tmp_path)
+    output_dir = tmp_path / "migrations"
+    stale_legacy_sql = output_dir / "sink_test.db" / "00-infrastructure" / "02-cdc-management.sql"
+    stale_legacy_sql.parent.mkdir(parents=True, exist_ok=True)
+    stale_legacy_sql.write_text("-- stale legacy file\n", encoding="utf-8")
+
+    with (
+        patch(
+            "cdc_generator.core.migration_generator.get_project_root",
+            return_value=tmp_path,
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.load_service_config",
+            return_value=_EXISTING_TARGET_SERVICE_CONFIG,
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
+            return_value=[schema_base],
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
+            side_effect=_inject_customer_id_column,
+        ),
+    ):
+        result = generate_migrations(
+            "native_test",
+            output_dir=output_dir,
+            topology="fdw",
+        )
+
+    stale_manual_sql = output_dir / "sink_test.db" / "02-manual" / "Actor" / "MANUAL_REQUIRED.sql"
+    stale_manual_sql.parent.mkdir(parents=True, exist_ok=True)
+    stale_manual_sql.write_text("-- stale manual file\n", encoding="utf-8")
+
+    with (
+        patch(
+            "cdc_generator.core.migration_generator.get_project_root",
+            return_value=tmp_path,
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.load_service_config",
+            return_value=_EXISTING_TARGET_SERVICE_CONFIG,
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
+            return_value=[schema_base],
+        ),
+        patch(
+            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
+            side_effect=_inject_customer_id_column,
+        ),
+    ):
+        second_result = generate_migrations(
+            "native_test",
+            output_dir=output_dir,
+            topology="fdw",
+        )
+
+    assert result.errors == []
+    assert second_result.errors == []
+
+    sink_dir = output_dir / "sink_test.db"
+    manifest_text = (sink_dir / "manifest.yaml").read_text(encoding="utf-8")
+    final_table_sql = (sink_dir / "01-tables" / "Actor.sql").read_text(
+        encoding="utf-8",
+    )
+    staging_sql = (sink_dir / "01-tables" / "Actor-staging.sql").read_text(
+        encoding="utf-8",
+    )
+
+    assert "table_count: 1" in manifest_text
+    assert not (sink_dir / "00-infrastructure" / "02-cdc-management.sql").exists()
+    assert not (sink_dir / "02-manual" / "Actor" / "MANUAL_REQUIRED.sql").exists()
+    assert 'CREATE TABLE IF NOT EXISTS "adopus"."Actor"' in final_table_sql
+    assert 'CREATE OR REPLACE FUNCTION "adopus"."pull_actor_batch"' in staging_sql
+    assert 'CREATE OR REPLACE PROCEDURE "adopus"."sp_merge_actor"' in staging_sql
 
 
 def test_generate_native_runtime_renders_resolve_policy_dynamic(
@@ -275,9 +382,5 @@ def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:
         )
 
     assert len(result.errors) == 2
-    assert any("customer_id column template" in err for err in result.errors), (
-        "Must require customer_id column template"
-    )
-    assert any("produced zero tables" in err for err in result.errors), (
-        "Must report zero tables when all tables fail validation"
-    )
+    assert any("customer_id column template" in err for err in result.errors), "Must require customer_id column template"
+    assert any("produced zero tables" in err for err in result.errors), "Must report zero tables when all tables fail validation"

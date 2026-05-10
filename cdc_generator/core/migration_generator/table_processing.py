@@ -55,7 +55,7 @@ def process_table(
     target_exists = bool(sink_cfg.get("target_exists", False))
     replicate_structure = bool(sink_cfg.get("replicate_structure", False))
 
-    if target_exists and not replicate_structure:
+    if runtime_mode != "native" and target_exists and not replicate_structure:
         return None
 
     table_def = table_defs.get(from_ref)
@@ -71,13 +71,12 @@ def process_table(
 
     source_cfg = get_source_table_config(service_config, from_ref)
     ignore_raw = source_cfg.get("ignore_columns")
-    ignore_cols = (
-        [str(c) for c in cast(list[object], ignore_raw)]
-        if isinstance(ignore_raw, list) else None
-    )
+    ignore_cols = [str(c) for c in cast(list[object], ignore_raw)] if isinstance(ignore_raw, list) else None
 
     columns, primary_keys = build_columns_from_table_def(
-        table_def, ignore_cols, type_mapper,
+        table_def,
+        ignore_cols,
+        type_mapper,
     )
 
     columns = add_column_template_columns(columns, cast(dict[str, object], sink_cfg))
@@ -91,10 +90,7 @@ def process_table(
         return None
 
     if runtime_mode == "native":
-        customer_id_present = any(
-            column.name.casefold() == "customer_id"
-            for column in columns
-        )
+        customer_id_present = any(column.name.casefold() == "customer_id" for column in columns)
         if not customer_id_present:
             result.errors.append(
                 f"Table {sink_key}: native runtime requires a customer_id column template",
@@ -131,9 +127,5 @@ def process_table(
 
 def _prepend_customer_id(primary_keys: list[str]) -> list[str]:
     """Ensure customer_id leads the composite PK in native runtime mode."""
-    deduped_primary_keys = [
-        primary_key
-        for primary_key in primary_keys
-        if primary_key.casefold() != "customer_id"
-    ]
+    deduped_primary_keys = [primary_key for primary_key in primary_keys if primary_key.casefold() != "customer_id"]
     return ["customer_id", *deduped_primary_keys]

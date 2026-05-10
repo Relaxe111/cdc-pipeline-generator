@@ -1046,7 +1046,9 @@ RETURNS TABLE(
     "current_poll_interval_seconds" integer,
     "max_rows_per_pull" integer,
     "lease_seconds" integer,
-    "poll_priority" integer
+    "poll_priority" integer,
+    "jitter_millis" integer,
+    "max_backoff_seconds" integer
 )
 LANGUAGE plpgsql
 AS $$
@@ -1144,7 +1146,24 @@ BEGIN
                 ELSE 120
             END
         ) AS "lease_seconds",
-        COALESCE(policy."poll_priority", 100) AS "poll_priority"
+        COALESCE(policy."poll_priority", 100) AS "poll_priority",
+        COALESCE(
+            policy."jitter_millis",
+            CASE resolved."effective_schedule_profile"
+                WHEN 'hot' THEN 0
+                WHEN 'cool' THEN 1000
+                WHEN 'cold' THEN 5000
+                ELSE 250
+            END
+        ) AS "jitter_millis",
+        COALESCE(
+            policy."max_backoff_seconds",
+            CASE resolved."effective_schedule_profile"
+                WHEN 'hot' THEN 60
+                WHEN 'cold' THEN 900
+                ELSE 300
+            END
+        ) AS "max_backoff_seconds"
     FROM claimed
     JOIN "cdc_management"."source_table_registration" reg
         ON reg."source_instance_key" = claimed."source_instance_key"

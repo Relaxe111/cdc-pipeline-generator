@@ -471,6 +471,7 @@ def _generate_for_sink(
         sink_name=ctx.sink_target.sink_name,
         sink_tables=sink_tables,
         result=result,
+        runtime_mode=ctx.runtime_mode,
     )
 
     tables_generated: list[str] = []
