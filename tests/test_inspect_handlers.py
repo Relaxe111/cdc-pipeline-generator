@@ -28,15 +28,7 @@ from cdc_generator.validators.manage_service.db_inspector_common import (
 def service_yaml(project_dir: Path) -> Path:
     """Service YAML with tables and a sink for inspect tests."""
     sf = project_dir / "services" / "proxy.yaml"
-    sf.write_text(
-        "proxy:\n"
-        "  source:\n"
-        "    tables:\n"
-        "      public.queries: {}\n"
-        "  sinks:\n"
-        "    sink_asma.chat:\n"
-        "      tables: {}\n"
-    )
+    sf.write_text("proxy:\n  source:\n    tables:\n      public.queries: {}\n  sinks:\n    sink_asma.chat:\n      tables: {}\n")
     return sf
 
 
@@ -64,7 +56,8 @@ class TestResolveInspectDbType:
     """Tests for _resolve_inspect_db_type."""
 
     def test_resolves_postgres(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Finds postgres type from source-groups.yaml."""
         db_type, sg, _ = _resolve_inspect_db_type("proxy")
@@ -72,14 +65,16 @@ class TestResolveInspectDbType:
         assert sg == "asma"
 
     def test_returns_none_unknown_service(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns None for unknown service."""
         db_type, _sg, _ = _resolve_inspect_db_type("nonexistent")
         assert db_type is None
 
     def test_resolves_db_per_tenant_by_group_key(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """db-per-tenant service may resolve via server-group key, not source key."""
         (project_dir / "source-groups.yaml").write_text(
@@ -105,7 +100,8 @@ class TestServiceDbConfigDbPerTenant:
     """Regression tests for db-per-tenant service DB config resolution."""
 
     def test_resolves_validation_database_from_customer_source_entry(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Service-level config should match source entry by validation_database."""
         (project_dir / "source-groups.yaml").write_text(
@@ -128,11 +124,43 @@ class TestServiceDbConfigDbPerTenant:
             "        database: AdOpusTest\n"
         )
         (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n  source:\n    validation_database: AdOpusTest\n    tables:\n      dbo.Actor: {}\n"
+        )
+
+        config = get_service_db_config("adopus")
+
+        assert config is not None
+        assert config["env_config"]["database_name"] == "AdOpusTest"
+        mssql_cfg = config["env_config"]["mssql"]
+        assert mssql_cfg["host"] == "localhost"
+        assert mssql_cfg["port"] == 1433
+
+    def test_resolves_validation_database_when_env_key_is_nondefault(
+        self,
+        project_dir: Path,
+    ) -> None:
+        """Service DB config falls back to the env that actually holds validation_database."""
+        (project_dir / "source-groups.yaml").write_text(
             "adopus:\n"
-            "  source:\n"
-            "    validation_database: AdOpusTest\n"
-            "    tables:\n"
-            "      dbo.Actor: {}\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  servers:\n"
+            "    nonprod:\n"
+            "      host: localhost\n"
+            "      port: 1433\n"
+            "      user: sa\n"
+            "      password: secret\n"
+            "  sources:\n"
+            "    avansas:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      nonprod:\n"
+            "        server: nonprod\n"
+            "        database: AdOpusTest\n"
+        )
+        (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n  source:\n    validation_database: AdOpusTest\n    tables:\n      dbo.Actor: {}\n"
         )
 
         config = get_service_db_config("adopus")
@@ -153,7 +181,8 @@ class TestHandleInspectErrors:
     """Tests for handle_inspect error conditions."""
 
     def test_requires_all_or_schema(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 1 when neither --all nor --schema provided."""
         args = _ns(inspect=True)
@@ -161,7 +190,8 @@ class TestHandleInspectErrors:
         assert result == 1
 
     def test_disallowed_schema_returns_1(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 1 when requested schema not in allowed list."""
         args = _ns(inspect=True, schema="dbo")
@@ -169,7 +199,8 @@ class TestHandleInspectErrors:
         assert result == 1
 
     def test_unknown_service_returns_1(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 1 for unknown service (no DB type)."""
         args = _ns(service="nonexistent", inspect=True, all=True)
@@ -186,7 +217,9 @@ class TestHandleInspectSinkErrors:
     """Tests for handle_inspect_sink error conditions."""
 
     def test_requires_all_or_schema(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 1 when neither --all nor --schema provided."""
         args = _ns(inspect_sink="sink_asma.chat")
@@ -194,7 +227,9 @@ class TestHandleInspectSinkErrors:
         assert result == 1
 
     def test_invalid_sink_key_returns_1(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 1 when sink key not found."""
         args = _ns(
@@ -205,7 +240,9 @@ class TestHandleInspectSinkErrors:
         assert result == 1
 
     def test_all_sinks_mode_requires_all_flag(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """--inspect-sink without key requires --all to inspect all sinks."""
         args = _ns(inspect_sink="__all_sinks__", all=False)
@@ -222,7 +259,8 @@ class TestHandleInspectHappyPath:
     """Success-path tests for handle_inspect."""
 
     def test_inspect_all_success(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 0 and filters tables to allowed schemas for --all."""
         args = _ns(inspect=True, all=True)
@@ -249,7 +287,8 @@ class TestHandleInspectHappyPath:
         inspect_mock.assert_called_once_with("proxy", "nonprod")
 
     def test_inspect_save_calls_schema_saver(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """--save calls save_detailed_schema with filtered tables."""
         args = _ns(inspect=True, all=True, save=True)
@@ -266,13 +305,16 @@ class TestHandleInspectHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
-            return_value=tables,
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
-            return_value=True,
-        ) as save_mock:
+        with (
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
+                return_value=tables,
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
+                return_value=True,
+            ) as save_mock,
+        ):
             result = handle_inspect(args)
 
         assert result == 0
@@ -288,7 +330,8 @@ class TestHandleInspectHappyPath:
         assert save_args[4] == "postgres"
 
     def test_inspect_save_applies_tracked_table_filter(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """--save filters tables by tracked-table whitelist before writing _schemas."""
         args = _ns(inspect=True, all=True, save=True)
@@ -305,16 +348,20 @@ class TestHandleInspectHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
-            return_value=tables,
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect.filter_tables_by_tracked",
-            return_value=[tables[0]],
-        ) as filter_mock, patch(
-            "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
-            return_value=True,
-        ) as save_mock:
+        with (
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
+                return_value=tables,
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.filter_tables_by_tracked",
+                return_value=[tables[0]],
+            ) as filter_mock,
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
+                return_value=True,
+            ) as save_mock,
+        ):
             result = handle_inspect(args)
 
         assert result == 0
@@ -322,12 +369,69 @@ class TestHandleInspectHappyPath:
         save_args = save_mock.call_args.args
         assert save_args[3] == [tables[0]]
 
+    def test_inspect_save_applies_table_exclude_patterns(
+        self,
+        project_dir: Path,
+    ) -> None:
+        """--save excludes tables matching source-group table_exclude_patterns."""
+        (project_dir / "source-groups.yaml").write_text(
+            "proxy:\n"
+            "  pattern: db-shared\n"
+            "  type: postgres\n"
+            "  table_exclude_patterns:\n"
+            "    - log\n"
+            "  sources:\n"
+            "    proxy:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      nonprod:\n"
+            "        server: default\n"
+            "        database: proxy_db\n"
+        )
+
+        args = _ns(inspect=True, all=True, save=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "queries",
+                "COLUMN_COUNT": 5,
+            },
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "audit_log",
+                "COLUMN_COUNT": 2,
+            },
+            {
+                "TABLE_SCHEMA": "public",
+                "TABLE_NAME": "LogActor",
+                "COLUMN_COUNT": 4,
+            },
+        ]
+
+        with (
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.inspect_postgres_schema",
+                return_value=tables,
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect.save_detailed_schema",
+                return_value=True,
+            ) as save_mock,
+        ):
+            result = handle_inspect(args)
+
+        assert result == 0
+        saved_tables = save_mock.call_args.args[3]
+        assert saved_tables == [tables[0]]
+
 
 class TestHandleInspectSinkHappyPath:
     """Success-path tests for handle_inspect_sink."""
 
     def test_inspect_sink_all_success(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 0 and filters sink tables to allowed schemas."""
         args = _ns(inspect_sink="sink_asma.chat", all=True)
@@ -344,22 +448,29 @@ class TestHandleInspectSinkHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
-        ) as inspect_mock:
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ) as inspect_mock,
+        ):
             result = handle_inspect_sink(args)
 
         assert result == 0
         inspect_mock.assert_called_once_with(
-            "proxy", "sink_asma.chat", "nonprod",
+            "proxy",
+            "sink_asma.chat",
+            "nonprod",
         )
 
     def test_inspect_sink_save_calls_schema_saver(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """--save on --inspect-sink calls save_sink_schema."""
         args = _ns(inspect_sink="sink_asma.chat", all=True, save=True)
@@ -376,16 +487,20 @@ class TestHandleInspectSinkHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.save_sink_schema",
-            return_value=True,
-        ) as save_mock:
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.save_sink_schema",
+                return_value=True,
+            ) as save_mock,
+        ):
             result = handle_inspect_sink(args)
 
         assert result == 0
@@ -401,7 +516,9 @@ class TestHandleInspectSinkHappyPath:
         assert saved_tables[0]["TABLE_SCHEMA"] == "public"
 
     def test_inspect_sink_save_applies_tracked_table_filter(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Sink --save filters tables by tracked-table whitelist before saving."""
         args = _ns(inspect_sink="sink_asma.chat", all=True, save=True)
@@ -418,19 +535,24 @@ class TestHandleInspectSinkHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.filter_tables_by_tracked",
-            return_value=[tables[0]],
-        ) as filter_mock, patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.save_sink_schema",
-            return_value=True,
-        ) as save_mock:
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.filter_tables_by_tracked",
+                return_value=[tables[0]],
+            ) as filter_mock,
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.save_sink_schema",
+                return_value=True,
+            ) as save_mock,
+        ):
             result = handle_inspect_sink(args)
 
         assert result == 0
@@ -439,7 +561,9 @@ class TestHandleInspectSinkHappyPath:
         assert save_args[4] == [tables[0]]
 
     def test_inspect_all_sinks_success(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """--inspect-sink --all inspects each configured sink."""
         args = _ns(inspect_sink="__all_sinks__", all=True)
@@ -451,13 +575,16 @@ class TestHandleInspectSinkHappyPath:
             },
         ]
 
-        with patch(
-            "cdc_generator.cli.service_handlers_inspect_sink._get_available_sinks",
-            return_value=["sink_asma.activities", "sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
-        ) as inspect_mock:
+        with (
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink._get_available_sinks",
+                return_value=["sink_asma.activities", "sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ) as inspect_mock,
+        ):
             result = handle_inspect_sink(args)
 
         assert result == 0
@@ -473,36 +600,25 @@ class TestHandleInspectUnsupportedDb:
     """Tests for unsupported db_type and edge cases."""
 
     def test_unsupported_db_type_returns_1(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 1 for unsupported database type."""
         # Override source-groups with an unsupported type
         (project_dir / "source-groups.yaml").write_text(
-            "asma:\n"
-            "  pattern: db-shared\n"
-            "  type: oracle\n"
-            "  sources:\n"
-            "    proxy:\n"
-            "      schemas:\n"
-            "        - public\n"
+            "asma:\n  pattern: db-shared\n  type: oracle\n  sources:\n    proxy:\n      schemas:\n        - public\n"
         )
         args = _ns(inspect=True, all=True)
         result = handle_inspect(args)
         assert result == 1
 
     def test_mssql_inspect_path(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """MSSQL inspect dispatches to inspect_mssql_schema."""
         (project_dir / "source-groups.yaml").write_text(
-            "asma:\n"
-            "  pattern: db-per-tenant\n"
-            "  type: mssql\n"
-            "  database_ref: proxy\n"
-            "  sources:\n"
-            "    proxy:\n"
-            "      schemas:\n"
-            "        - dbo\n"
+            "asma:\n  pattern: db-per-tenant\n  type: mssql\n  database_ref: proxy\n  sources:\n    proxy:\n      schemas:\n        - dbo\n"
         )
         tables: list[dict[str, object]] = [
             {
@@ -521,7 +637,8 @@ class TestHandleInspectUnsupportedDb:
         mssql_mock.assert_called_once_with("proxy", "nonprod")
 
     def test_no_tables_after_filter_returns_1(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """Returns 1 when all tables are filtered out by schema."""
         tables: list[dict[str, object]] = [
@@ -540,7 +657,8 @@ class TestHandleInspectUnsupportedDb:
         assert result == 1
 
     def test_db_per_tenant_database_ref_as_database_name(
-        self, project_dir: Path,
+        self,
+        project_dir: Path,
     ) -> None:
         """db-per-tenant inspect resolves schemas when database_ref is DB name."""
         (project_dir / "source-groups.yaml").write_text(
@@ -558,11 +676,48 @@ class TestHandleInspectUnsupportedDb:
             "        database: AdOpusTest\n"
         )
         (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n  source:\n    validation_database: AdOpusTest\n    tables:\n      dbo.Actor: {}\n"
+        )
+
+        args = _ns(service="adopus", inspect=True, all=True)
+        tables: list[dict[str, object]] = [
+            {
+                "TABLE_SCHEMA": "dbo",
+                "TABLE_NAME": "Actor",
+                "COLUMN_COUNT": 10,
+            },
+        ]
+
+        with patch(
+            "cdc_generator.cli.service_handlers_inspect.inspect_mssql_schema",
+            return_value=tables,
+        ) as mssql_mock:
+            result = handle_inspect(args)
+
+        assert result == 0
+        mssql_mock.assert_called_once_with("adopus", "nonprod")
+
+    def test_db_per_tenant_database_ref_found_outside_validation_env(
+        self,
+        project_dir: Path,
+    ) -> None:
+        """db-per-tenant inspect falls back to any env when validation_env is stale."""
+        (project_dir / "source-groups.yaml").write_text(
             "adopus:\n"
-            "  source:\n"
-            "    validation_database: AdOpusTest\n"
-            "    tables:\n"
-            "      dbo.Actor: {}\n"
+            "  pattern: db-per-tenant\n"
+            "  type: mssql\n"
+            "  validation_env: default\n"
+            "  database_ref: AdOpusTest\n"
+            "  sources:\n"
+            "    avansas:\n"
+            "      schemas:\n"
+            "        - dbo\n"
+            "      nonprod:\n"
+            "        server: nonprod\n"
+            "        database: AdOpusTest\n"
+        )
+        (project_dir / "services" / "adopus.yaml").write_text(
+            "adopus:\n  source:\n    validation_database: AdOpusTest\n    tables:\n      dbo.Actor: {}\n"
         )
 
         args = _ns(service="adopus", inspect=True, all=True)
@@ -588,7 +743,9 @@ class TestHandleInspectSinkSchemaNotAllowed:
     """Test for --schema not in allowed schemas for inspect-sink."""
 
     def test_disallowed_schema_returns_1(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 1 when requested schema not in allowed list."""
         tables: list[dict[str, object]] = [
@@ -602,18 +759,23 @@ class TestHandleInspectSinkSchemaNotAllowed:
             inspect_sink="sink_asma.chat",
             schema="private",
         )
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ),
         ):
             result = handle_inspect_sink(args)
         assert result == 1
 
     def test_no_tables_after_filter_returns_1(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 1 when all sink tables are filtered out by schema."""
         tables: list[dict[str, object]] = [
@@ -624,27 +786,35 @@ class TestHandleInspectSinkSchemaNotAllowed:
             },
         ]
         args = _ns(inspect_sink="sink_asma.chat", all=True)
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=(tables, "postgres", ["public"]),
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=(tables, "postgres", ["public"]),
+            ),
         ):
             result = handle_inspect_sink(args)
         assert result == 1
 
     def test_inspect_sink_returns_1_when_connection_fails(
-        self, project_dir: Path, service_yaml: Path,
+        self,
+        project_dir: Path,
+        service_yaml: Path,
     ) -> None:
         """Returns 1 when inspect_sink_schema returns None."""
         args = _ns(inspect_sink="sink_asma.chat", all=True)
-        with patch(
-            "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
-            return_value=["sink_asma.chat"],
-        ), patch(
-            "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
-            return_value=None,
+        with (
+            patch(
+                "cdc_generator.validators.manage_service.db_inspector_common.get_available_sinks",
+                return_value=["sink_asma.chat"],
+            ),
+            patch(
+                "cdc_generator.cli.service_handlers_inspect_sink.inspect_sink_schema",
+                return_value=None,
+            ),
         ):
             result = handle_inspect_sink(args)
         assert result == 1

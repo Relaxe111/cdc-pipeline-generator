@@ -24,6 +24,7 @@ _ENV_WARNING_STATE = {"printed": False}
 
 class ValidationEnvMissingError(Exception):
     """Raised when validation_env is not set in server group configuration."""
+
     pass
 
 
@@ -40,7 +41,7 @@ def expand_env_vars(value: str | int | None) -> str | int | None:
         return value
 
     # Replace ${VAR} with $VAR for os.path.expandvars
-    value = value.replace('${', '$').replace('}', '')
+    value = value.replace("${", "$").replace("}", "")
     expanded = os.path.expandvars(value)
 
     # Check if expansion actually happened (variable was set)
@@ -63,16 +64,9 @@ def _print_env_var_warnings_once() -> None:
 
     _ENV_WARNING_STATE["printed"] = True
     missing = ", ".join(sorted(_MISSING_ENV_VARS))
-    print_warning(
-        "⚠️ Environment variables not set: " + missing
-    )
-    print_warning(
-        "   - Using literal values from config"
-    )
-    print_warning(
-        "   - 💡 In Docker, ensure variables are in .env and restart the "
-        + "container."
-    )
+    print_warning("⚠️ Environment variables not set: " + missing)
+    print_warning("   - Using literal values from config")
+    print_warning("   - 💡 In Docker, ensure variables are in .env and restart the " + "container.")
 
     keywords = [
         "MSSQL",
@@ -84,25 +78,15 @@ def _print_env_var_warnings_once() -> None:
         "USER",
         "PASSWORD",
     ]
-    relevant_vars = {
-        k: v
-        for k, v in os.environ.items()
-        if any(keyword in k.upper() for keyword in keywords)
-    }
+    relevant_vars = {k: v for k, v in os.environ.items() if any(keyword in k.upper() for keyword in keywords)}
 
     if relevant_vars:
         print_warning("\n   Available database-related environment variables:")
         for k, v in sorted(relevant_vars.items()):
-            display_value = (
-                "***"
-                if "PASSWORD" in k.upper() or "PASS" in k.upper()
-                else v
-            )
+            display_value = "***" if "PASSWORD" in k.upper() or "PASS" in k.upper() else v
             print_warning(f"     - {k}={display_value}")
     else:
-        print_warning(
-            "\n   No database-related environment variables found in the container."
-        )
+        print_warning("\n   No database-related environment variables found in the container.")
 
 
 def get_service_db_config(
@@ -134,45 +118,34 @@ def get_service_db_config(
 
         # Get validation database from service config
         source_raw = config.get("source")
-        source = (
-            cast(dict[str, Any], source_raw)
-            if isinstance(source_raw, dict)
-            else {}
-        )
+        source = cast(dict[str, Any], source_raw) if isinstance(source_raw, dict) else {}
         validation_database = source.get("validation_database")
         if not validation_database:
-            print_error(
-                "No validation_database found in service config for "
-                + f"'{service}'"
-            )
+            print_error("No validation_database found in service config for " + f"'{service}'")
             return None
 
         # Get validation_env from server group (REQUIRED at server group level)
         validation_env = server_group.get("validation_env")
         if not validation_env:
-            raise ValidationEnvMissingError(
-                f"validation_env not set for server group '{server_group_name}'"
-            )
+            raise ValidationEnvMissingError(f"validation_env not set for server group '{server_group_name}'")
 
         # Find source entry in source-groups.yaml sources.
         sources_raw = server_group.get("sources", {})
-        sources = (
-            cast(dict[str, Any], sources_raw)
-            if isinstance(sources_raw, dict)
-            else {}
-        )
+        sources = cast(dict[str, Any], sources_raw) if isinstance(sources_raw, dict) else {}
 
         # db-per-tenant: service name is server-group key, while sources are
         # customer entries. Resolve by matching validation database in validation_env.
         # db-shared: service is usually a direct source key.
         service_sources: dict[str, Any] = {}
         source_label = service
+        resolved_env_name = str(validation_env)
 
         direct_source = sources.get(service)
         if isinstance(direct_source, dict):
             service_sources = cast(dict[str, Any], direct_source)
         else:
             matched_source_name = ""
+            matched_env_name = ""
             for source_name, source_data in sources.items():
                 if not isinstance(source_data, dict):
                     continue
@@ -183,16 +156,35 @@ def get_service_db_config(
                 env_dict = cast(dict[str, Any], env_data)
                 if env_dict.get("database") == validation_database:
                     matched_source_name = str(source_name)
+                    matched_env_name = str(validation_env)
                     service_sources = source_dict
                     break
 
+            if not matched_source_name:
+                for source_name, source_data in sources.items():
+                    if not isinstance(source_data, dict):
+                        continue
+                    source_dict = cast(dict[str, Any], source_data)
+                    for env_name, env_data in source_dict.items():
+                        if env_name == "schemas" or not isinstance(env_data, dict):
+                            continue
+                        env_dict = cast(dict[str, Any], env_data)
+                        if env_dict.get("database") == validation_database:
+                            matched_source_name = str(source_name)
+                            matched_env_name = str(env_name)
+                            service_sources = source_dict
+                            break
+                    if matched_source_name:
+                        break
+
             if matched_source_name:
                 source_label = matched_source_name
+                resolved_env_name = matched_env_name or resolved_env_name
 
         # Use validation_env to find the specific environment
         env_config_found: dict[str, Any] | None = None
-        if validation_env in service_sources:
-            env_data_dict = cast(dict[str, Any], service_sources[validation_env])
+        if resolved_env_name in service_sources:
+            env_data_dict = cast(dict[str, Any], service_sources[resolved_env_name])
             db_in_env = env_data_dict.get("database")
 
             # Verify that validation_database matches the database in validation_env
@@ -200,7 +192,7 @@ def get_service_db_config(
                 available_envs = [k for k in service_sources if k != "schemas"]
                 print_error(
                     f"❌ Mismatch: validation_database '{validation_database}' does not match \n"
-                    + f"   database '{db_in_env}' in environment '{validation_env}'\n"
+                    + f"   database '{db_in_env}' in environment '{resolved_env_name}'\n"
                     + "\n"
                     + f"   Available environments in source-groups.yaml for source '{source_label}':\n"
                 )
@@ -267,10 +259,7 @@ def get_service_db_config(
                 e_data = cast(dict[str, Any], service_sources[e])
                 e_db = e_data.get("database", "?")
                 print_error(f"     - {e}: {e_db}")
-            print_error(
-                "\n"
-                + f"   Update validation_env in services/{service}.yaml to one of the above.\n"
-            )
+            print_error("\n" + f"   Update validation_env in services/{service}.yaml to one of the above.\n")
             return None
 
         if not env_config_found:
@@ -296,7 +285,6 @@ def get_service_db_config(
         return None
 
 
-
 def get_connection_params(
     db_config: dict[str, Any],
     db_type: str,
@@ -318,33 +306,16 @@ def get_connection_params(
 
         port_val = expand_env_vars(mssql.get("port", "1433"))
         return {
-            "host": str(
-                expand_env_vars(mssql.get("host", "localhost"))
-                or "localhost"
-            ),
-            "port": (
-                int(port_val)
-                if port_val and str(port_val).isdigit()
-                else 1433
-            ),
-            "user": str(
-                expand_env_vars(mssql.get("user", "sa"))
-                or "sa"
-            ),
-            "password": str(
-                expand_env_vars(mssql.get("password", ""))
-                or ""
-            ),
+            "host": str(expand_env_vars(mssql.get("host", "localhost")) or "localhost"),
+            "port": (int(port_val) if port_val and str(port_val).isdigit() else 1433),
+            "user": str(expand_env_vars(mssql.get("user", "sa")) or "sa"),
+            "password": str(expand_env_vars(mssql.get("password", "")) or ""),
             "database": database,
         }
 
     if db_type == "postgres":
         postgres = env_config.get("postgres", {})
-        database = (
-            postgres.get("name")
-            or postgres.get("database")
-            or env_config.get("database_name")
-        )
+        database = postgres.get("name") or postgres.get("database") or env_config.get("database_name")
 
         # Try to get explicit connection params first
         host = postgres.get("host")
@@ -480,9 +451,7 @@ def _resolve_sink_server_env(
 
     # Fallback: first server
     first_key = next(iter(servers))
-    print_info(
-        f"No server for env '{env}', using '{first_key}'"
-    )
+    print_info(f"No server for env '{env}', using '{first_key}'")
     return cast(dict[str, Any], servers[first_key])
 
 
@@ -509,11 +478,7 @@ def _resolve_sink_database_name(
 
     # Primary lookup: sink-groups.yaml (authoritative for sink targets)
     sink_sources_raw = sink_group_config.get("sources")
-    sink_sources = (
-        cast(dict[str, Any], sink_sources_raw)
-        if isinstance(sink_sources_raw, dict)
-        else {}
-    )
+    sink_sources = cast(dict[str, Any], sink_sources_raw) if isinstance(sink_sources_raw, dict) else {}
     service_source_raw = sink_sources.get(target_service)
     if isinstance(service_source_raw, dict):
         service_source = cast(dict[str, Any], service_source_raw)
@@ -531,18 +496,13 @@ def _resolve_sink_database_name(
 
         source_group = source_groups.get(source_group_name)
         if not source_group:
-            print_error(
-                f"Source group '{source_group_name}' not found in source-groups.yaml"
-            )
+            print_error(f"Source group '{source_group_name}' not found in source-groups.yaml")
             return None
 
         sources = source_group.get("sources", {})
         service_source_raw = sources.get(target_service)
         if not isinstance(service_source_raw, dict):
-            print_error(
-                f"Service '{target_service}' not found in "
-                + f"sink group sources or source group '{source_group_name}' sources"
-            )
+            print_error(f"Service '{target_service}' not found in " + f"sink group sources or source group '{source_group_name}' sources")
             return None
 
         service_source = cast(dict[str, Any], service_source_raw)
@@ -561,9 +521,7 @@ def _resolve_sink_database_name(
             if db:
                 return str(db)
 
-    print_error(
-        f"No database found for service '{target_service}' in env '{env}'"
-    )
+    print_error(f"No database found for service '{target_service}' in env '{env}'")
     return None
 
 
@@ -597,10 +555,7 @@ def _resolve_source_ref_server(
     servers = group.get("servers", {})
     server_config = servers.get(server_name)
     if not server_config:
-        print_error(
-            f"Server '{server_name}' not found "
-            + f"in source group '{group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found " + f"in source group '{group_name}'")
         return None
 
     return cast(dict[str, Any], dict(server_config))
@@ -626,7 +581,8 @@ def get_sink_db_config(
         or None if not found
     """
     resolved = _resolve_sink_group_and_key(
-        service, sink_key,
+        service,
+        sink_key,
     )
     if not resolved:
         return None
@@ -635,8 +591,11 @@ def get_sink_db_config(
     db_type = str(sink_group.get("type", "postgres"))
 
     result = _build_sink_connection(
-        sink_group_name, target_service,
-        sink_group, db_type, env,
+        sink_group_name,
+        target_service,
+        sink_group,
+        db_type,
+        env,
     )
     _print_env_var_warnings_once()
     return result
@@ -658,23 +617,15 @@ def _resolve_sink_group_and_key(
     # Validate sink key exists in service config
     available = get_available_sinks(service)
     if sink_key not in available:
-        print_error(
-            f"Sink '{sink_key}' not found in service '{service}'"
-        )
+        print_error(f"Sink '{sink_key}' not found in service '{service}'")
         if available:
-            print_info(
-                "Available sinks: "
-                + ", ".join(available)
-            )
+            print_info("Available sinks: " + ", ".join(available))
         return None
 
     # Parse sink key
     parsed = _parse_sink_key(sink_key)
     if not parsed:
-        print_error(
-            f"Invalid sink key '{sink_key}'. "
-            + "Expected format: sink_group.target_service"
-        )
+        print_error(f"Invalid sink key '{sink_key}'. " + "Expected format: sink_group.target_service")
         return None
 
     sink_group_name, target_service = parsed
@@ -686,18 +637,12 @@ def _resolve_sink_group_and_key(
 
     sink_group = sink_groups.get(sink_group_name)
     if not sink_group:
-        print_error(
-            f"Sink group '{sink_group_name}' not found in sink-groups.yaml"
-        )
+        print_error(f"Sink group '{sink_group_name}' not found in sink-groups.yaml")
         return None
 
     # If sink group inherits but has no explicit source_group,
     # infer from sink group name (e.g., "sink_asma" → "asma")
-    if (
-        not sink_group.get("source_group")
-        and sink_group.get("inherits")
-        and sink_group_name.startswith("sink_")
-    ):
+    if not sink_group.get("source_group") and sink_group.get("inherits") and sink_group_name.startswith("sink_"):
         sink_group["source_group"] = sink_group_name[5:]
 
     return sink_group_name, target_service, sink_group
@@ -725,10 +670,7 @@ def _build_sink_connection(
     # Resolve server connection
     server_config = _resolve_sink_server_env(sink_group, env)
     if not server_config:
-        print_error(
-            "No server found in sink group "
-            + f"'{sink_group_name}' for env '{env}'"
-        )
+        print_error("No server found in sink group " + f"'{sink_group_name}' for env '{env}'")
         return None
 
     # Handle source_ref servers (inherited from source group)
@@ -738,10 +680,7 @@ def _build_sink_connection(
         # If source_ref is a bare server name (e.g., "default"),
         # prepend the source group name from the sink group config
         if "/" not in source_ref:
-            source_group_name = (
-                sink_group.get("source_group")
-                or (sink_group_name[5:] if sink_group_name.startswith("sink_") else None)
-            )
+            source_group_name = sink_group.get("source_group") or (sink_group_name[5:] if sink_group_name.startswith("sink_") else None)
             if source_group_name:
                 source_ref = f"{source_group_name}/{source_ref}"
 
@@ -756,34 +695,27 @@ def _build_sink_connection(
 
     # Resolve database name
     database = _resolve_sink_database_name(
-        sink_group, target_service, env,
+        sink_group,
+        target_service,
+        env,
     )
     if not database:
         return None
 
     # Resolve schemas from source-groups.yaml
     schemas = _resolve_sink_schemas(
-        sink_group, target_service,
+        sink_group,
+        target_service,
     )
 
     # Build connection config
-    host = str(
-        expand_env_vars(server_config.get("host"))
-        or "localhost"
-    )
+    host = str(expand_env_vars(server_config.get("host")) or "localhost")
     port_val = expand_env_vars(
         server_config.get("port"),
     )
-    port = (
-        int(port_val)
-        if port_val and str(port_val).isdigit()
-        else 5432
-        if db_type == "postgres"
-        else 1433
-    )
+    port = int(port_val) if port_val and str(port_val).isdigit() else 5432 if db_type == "postgres" else 1433
     user_val = expand_env_vars(
-        server_config.get("user")
-        or server_config.get("username"),
+        server_config.get("user") or server_config.get("username"),
     )
     user = str(user_val or "postgres")
     password_val = expand_env_vars(
@@ -827,11 +759,7 @@ def _resolve_sink_schemas(
         List of allowed schema names
     """
     sink_sources_raw = sink_group_config.get("sources")
-    sink_sources = (
-        cast(dict[str, Any], sink_sources_raw)
-        if isinstance(sink_sources_raw, dict)
-        else {}
-    )
+    sink_sources = cast(dict[str, Any], sink_sources_raw) if isinstance(sink_sources_raw, dict) else {}
     service_source_raw = sink_sources.get(target_service)
     if isinstance(service_source_raw, dict):
         schemas_raw = cast(dict[str, Any], service_source_raw).get("schemas", [])

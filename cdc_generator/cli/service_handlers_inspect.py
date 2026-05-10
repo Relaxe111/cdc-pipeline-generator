@@ -1,6 +1,7 @@
 """Source database inspection handlers for manage-services config."""
 
 import argparse
+from typing import cast
 
 from cdc_generator.helpers.helpers_logging import (
     Colors,
@@ -13,6 +14,10 @@ from cdc_generator.helpers.helpers_logging import (
 from cdc_generator.validators.manage_server_group.config import (
     get_server_group_for_service,
     load_server_groups,
+)
+from cdc_generator.validators.manage_server_group.filters import (
+    should_exclude_table,
+    should_include_table,
 )
 from cdc_generator.validators.manage_server_group.types import (
     ServerGroupConfig,
@@ -37,6 +42,55 @@ from cdc_generator.validators.manage_service.schema_saver import (
 _VALIDATION_ENV_MISSING_EXIT_CODE = 2
 
 
+def _get_table_patterns(
+    server_group_data: ServerGroupConfig | None,
+    key: str,
+) -> list[str]:
+    """Return normalized table pattern list from server-group config."""
+    if not server_group_data:
+        return []
+
+    raw_patterns = server_group_data.get(key)
+    if not isinstance(raw_patterns, list):
+        return []
+
+    pattern_values = cast(list[object], raw_patterns)
+    return [pattern.strip() for pattern in pattern_values if isinstance(pattern, str) and pattern.strip()]
+
+
+def _filter_tables_by_server_group_patterns(
+    tables: list[dict[str, object]],
+    server_group: str | None,
+    server_group_data: ServerGroupConfig | None,
+) -> list[dict[str, object]]:
+    """Apply source-group table include/exclude patterns to inspected tables."""
+    include_patterns = _get_table_patterns(
+        server_group_data,
+        "table_include_patterns",
+    )
+    exclude_patterns = _get_table_patterns(
+        server_group_data,
+        "table_exclude_patterns",
+    )
+
+    if not include_patterns and not exclude_patterns:
+        return tables
+
+    filtered_tables = [
+        table
+        for table in tables
+        if isinstance(table.get("TABLE_NAME"), str)
+        and should_include_table(str(table.get("TABLE_NAME")), include_patterns)
+        and not should_exclude_table(str(table.get("TABLE_NAME")), exclude_patterns)
+    ]
+
+    if len(filtered_tables) != len(tables):
+        group_label = server_group or "unknown"
+        print_info("Table pattern filter applied for server group " + f"'{group_label}': kept {len(filtered_tables)}/{len(tables)} table(s)")
+
+    return filtered_tables
+
+
 def _resolve_inspect_db_type(
     service: str,
 ) -> tuple[str | None, str | None, ServerGroupFile]:
@@ -52,7 +106,8 @@ def _resolve_inspect_db_type(
     try:
         server_groups_data = load_server_groups()
         server_group = get_server_group_for_service(
-            service, server_groups_data,
+            service,
+            server_groups_data,
         )
 
         if server_group and server_group in server_groups_data:
@@ -81,12 +136,16 @@ def _get_allowed_schemas(
 
     if pattern == "db-per-tenant":
         return _schemas_for_per_tenant(
-            sg_data, sources, server_group,
+            sg_data,
+            sources,
+            server_group,
         )
 
     if pattern == "db-shared":
         return _schemas_for_shared(
-            service, sources, server_group,
+            service,
+            sources,
+            server_group,
         )
 
     return []
@@ -100,10 +159,7 @@ def _schemas_for_per_tenant(
     """Get schemas for db-per-tenant pattern."""
     database_ref = sg_data.get("database_ref")
     if not database_ref:
-        print_error(
-            "No database_ref defined for "
-            + f"server group '{server_group}'"
-        )
+        print_error("No database_ref defined for " + f"server group '{server_group}'")
         return 1
 
     # 1) Preferred: database_ref is a direct source key
@@ -121,10 +177,18 @@ def _schemas_for_per_tenant(
         if env_database == database_ref:
             return source_config.get("schemas", [])
 
-    print_error(
-        f"Reference database '{database_ref}' not found "
-        + f"in sources for server group '{server_group}'"
-    )
+    # 3) Final fallback: database_ref is a database name under any env.
+    # This keeps inspect working when validation_env is stale or the
+    # db-per-tenant routes now live under server-specific env keys.
+    for source_config in sources.values():
+        for env_name, env_data in source_config.items():
+            if env_name == "schemas" or not isinstance(env_data, dict):
+                continue
+            env_database = env_data.get("database")
+            if env_database == database_ref:
+                return source_config.get("schemas", [])
+
+    print_error(f"Reference database '{database_ref}' not found " + f"in sources for server group '{server_group}'")
     return 1
 
 
@@ -137,10 +201,7 @@ def _schemas_for_shared(
     if service in sources:
         source_config = sources[service]
         return source_config.get("schemas", [])
-    print_error(
-        f"Service '{service}' not found in sources "
-        + f"for server group '{server_group}'"
-    )
+    print_error(f"Service '{service}' not found in sources " + f"for server group '{server_group}'")
     return 1
 
 
@@ -235,32 +296,24 @@ def _inspect_single_service(args: argparse.Namespace) -> int:
         1 on general failure
         2 on missing validation_env (special case for consolidated error)
     """
-    db_type, server_group, server_groups_data = (
-        _resolve_inspect_db_type(args.service)
-    )
+    db_type, server_group, server_groups_data = _resolve_inspect_db_type(args.service)
 
     if not db_type:
-        print_error(
-            "Could not determine database type "
-            + f"for service '{args.service}'"
-        )
-        print_error(
-            "Service must be defined in source-groups.yaml sources"
-        )
+        print_error("Could not determine database type " + f"for service '{args.service}'")
+        print_error("Service must be defined in source-groups.yaml sources")
         return 1
 
     if not args.all and not args.schema:
-        print_error(
-            "Error: --inspect requires either "
-            + "--all (for all schemas) or --schema <name>"
-        )
+        print_error("Error: --inspect requires either " + "--all (for all schemas) or --schema <name>")
         return 1
 
     # Get allowed schemas
     allowed_schemas: list[str] = []
     if server_group:
         result = _get_allowed_schemas(
-            args.service, server_group, server_groups_data,
+            args.service,
+            server_group,
+            server_groups_data,
         )
         if isinstance(result, int):
             return result
@@ -269,26 +322,22 @@ def _inspect_single_service(args: argparse.Namespace) -> int:
     schema: str | None = args.schema
 
     if schema and schema not in allowed_schemas:
-        print_error(
-            f"Schema '{schema}' not allowed "
-            + f"for service '{args.service}'"
-        )
-        print_error(
-            f"Allowed schemas: {', '.join(allowed_schemas)}"
-        )
+        print_error(f"Schema '{schema}' not allowed " + f"for service '{args.service}'")
+        print_error(f"Allowed schemas: {', '.join(allowed_schemas)}")
         return 1
 
-    schema_msg = (
-        f"schemas: {', '.join(allowed_schemas)}"
-        if args.all
-        else f"schema: {schema}"
-    )
-    print_header(
-        f"Inspecting {db_type.upper()} schema "
-        + f"for {args.service} ({schema_msg})"
-    )
+    schema_msg = f"schemas: {', '.join(allowed_schemas)}" if args.all else f"schema: {schema}"
+    print_header(f"Inspecting {db_type.upper()} schema " + f"for {args.service} ({schema_msg})")
 
-    return _run_inspection(args, db_type, allowed_schemas, schema)
+    server_group_data = server_groups_data.get(server_group) if server_group and server_group in server_groups_data else None
+    return _run_inspection(
+        args,
+        db_type,
+        allowed_schemas,
+        schema,
+        server_group,
+        server_group_data,
+    )
 
 
 def _run_inspection(
@@ -296,6 +345,8 @@ def _run_inspection(
     db_type: str,
     allowed_schemas: list[str],
     schema: str | None,
+    server_group: str | None,
+    server_group_data: ServerGroupConfig | None,
 ) -> int:
     """Execute the inspection and print results.
 
@@ -317,25 +368,19 @@ def _run_inspection(
         return _VALIDATION_ENV_MISSING_EXIT_CODE
 
     if tables:
-        tables = [
-            t for t in tables
-            if t["TABLE_SCHEMA"] in allowed_schemas
-        ] if args.all else [
-            t for t in tables
-            if t["TABLE_SCHEMA"] == schema
-        ]
+        tables = [t for t in tables if t["TABLE_SCHEMA"] in allowed_schemas] if args.all else [t for t in tables if t["TABLE_SCHEMA"] == schema]
+        tables = _filter_tables_by_server_group_patterns(
+            tables,
+            server_group,
+            server_group_data,
+        )
 
         if not tables:
             if args.all:
                 schemas_str = ", ".join(allowed_schemas)
-                print_warning(
-                    "No tables found in allowed schemas: "
-                    + schemas_str
-                )
+                print_warning("No tables found in allowed schemas: " + schemas_str)
             else:
-                print_warning(
-                    f"No tables found in schema '{schema}'"
-                )
+                print_warning(f"No tables found in schema '{schema}'")
             return 1
 
         if args.save:
@@ -345,9 +390,7 @@ def _run_inspection(
 
             tables = filter_tables_by_tracked(args.service, tables)
             if not tables:
-                print_warning(
-                    "No tables matched tracked whitelist for save"
-                )
+                print_warning("No tables matched tracked whitelist for save")
                 return 1
 
             ok = save_detailed_schema(
@@ -364,13 +407,9 @@ def _run_inspection(
         for table in tables:
             tbl_schema = table["TABLE_SCHEMA"]
             if tbl_schema != current_schema:
-                print(
-                    f"\n{Colors.CYAN}[{tbl_schema}]{Colors.RESET}"
-                )
+                print(f"\n{Colors.CYAN}[{tbl_schema}]{Colors.RESET}")
                 current_schema = tbl_schema
             col_count = table["COLUMN_COUNT"]
-            print(
-                f"  {table['TABLE_NAME']} ({col_count} columns)"
-            )
+            print(f"  {table['TABLE_NAME']} ({col_count} columns)")
 
     return 0 if tables else 1
