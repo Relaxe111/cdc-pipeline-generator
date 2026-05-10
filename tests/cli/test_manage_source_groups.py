@@ -88,7 +88,8 @@ _MULTI_SERVER_SOURCE_GROUPS = (
 
 
 def _write_source_groups(
-    root: Path, content: str = _MINIMAL_SOURCE_GROUPS,
+    root: Path,
+    content: str = _MINIMAL_SOURCE_GROUPS,
 ) -> None:
     """Write source-groups.yaml into the project root."""
     (root / "source-groups.yaml").write_text(content)
@@ -108,7 +109,9 @@ class TestCliNoAction:
     """CLI e2e: error paths and missing flags."""
 
     def test_no_flags_shows_error(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups")
@@ -116,7 +119,9 @@ class TestCliNoAction:
         assert "No action specified" in result.stdout + result.stderr
 
     def test_no_source_groups_file_info(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         """--info without source-groups.yaml → error."""
         result = run_cdc("manage-source-groups", "--info")
@@ -124,7 +129,9 @@ class TestCliNoAction:
         assert "not found" in result.stdout + result.stderr
 
     def test_no_source_groups_file_list_servers(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         """--list-servers without source-groups.yaml → error."""
         result = run_cdc("manage-source-groups", "--list-servers")
@@ -141,7 +148,9 @@ class TestCliInfo:
     """CLI e2e: --info flag."""
 
     def test_info_shows_group_details(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--info")
@@ -152,13 +161,116 @@ class TestCliInfo:
         assert "postgres" in output
 
     def test_info_shows_sources(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
         result = run_cdc("manage-source-groups", "--info")
         assert result.returncode == 0
         assert "directory" in result.stdout
         assert "directory_db" in result.stdout
+
+
+class TestCliSetTargetSinkEnv:
+    """CLI e2e: --set-target-sink-env flag."""
+
+    def test_set_target_sink_env_rejects_unknown_sink_env(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
+        (isolated_project / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+        )
+        result = run_cdc(
+            "manage-source-groups",
+            "--set-target-sink-env",
+            "directory",
+            "nonprod",
+            "stage",
+        )
+        assert result.returncode == 1
+        assert "does not exist in sink-groups envs" in result.stdout + result.stderr
+
+    def test_set_target_sink_env_accepts_known_sink_env(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
+        (isolated_project / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+            "      prod:\n"
+            "        server: prod\n"
+            "        database: directory_prod\n"
+        )
+        result = run_cdc(
+            "manage-source-groups",
+            "--set-target-sink-env",
+            "directory",
+            "nonprod",
+            "dev",
+        )
+        assert result.returncode == 0
+        assert "target_sink_env 'dev'" in result.stdout
+        yaml_content = _read_source_groups(isolated_project)
+        assert "target_sink_env: dev" in yaml_content
+
+    def test_set_target_sink_env_completion_suggests_source_names(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
+        result = run_cdc_completion("cdc manage-source-groups --set-target-sink-env dir")
+        assert "directory" in result.stdout
+
+    def test_set_target_sink_env_completion_suggests_source_envs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
+        result = run_cdc_completion("cdc manage-source-groups --set-target-sink-env directory non")
+        assert "nonprod" in result.stdout
+
+    def test_set_target_sink_env_completion_suggests_sink_envs(
+        self,
+        run_cdc_completion: RunCdcCompletion,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
+        (isolated_project / "sink-groups.yaml").write_text(
+            "sink_asma:\n"
+            "  sources:\n"
+            "    directory:\n"
+            "      schemas:\n"
+            "        - public\n"
+            "      dev:\n"
+            "        server: default\n"
+            "        database: directory_dev\n"
+            "      stage:\n"
+            "        server: default\n"
+            "        database: directory_stage\n"
+        )
+        result = run_cdc_completion("cdc manage-source-groups --set-target-sink-env directory nonprod d")
+        assert "dev" in result.stdout
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -170,7 +282,9 @@ class TestCliListServers:
     """CLI e2e: --list-servers flag."""
 
     def test_list_single_server(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--list-servers")
@@ -178,7 +292,9 @@ class TestCliListServers:
         assert "default" in result.stdout
 
     def test_list_multiple_servers(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project, _MULTI_SERVER_SOURCE_GROUPS)
         result = run_cdc("manage-source-groups", "--list-servers")
@@ -197,11 +313,15 @@ class TestCliAddServer:
     """CLI e2e: --add-server flag."""
 
     def test_add_server(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--add-server", "reporting",
+            "manage-source-groups",
+            "--add-server",
+            "reporting",
         )
         assert result.returncode == 0
         assert "reporting" in result.stdout
@@ -209,7 +329,9 @@ class TestCliAddServer:
         assert "reporting" in yaml_content
 
     def test_add_server_appears_in_list(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         run_cdc("manage-source-groups", "--add-server", "warehouse")
@@ -220,7 +342,9 @@ class TestCliAddServer:
         assert "warehouse" in output
 
     def test_add_duplicate_server_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         run_cdc("manage-source-groups", "--add-server", "staging")
@@ -228,7 +352,9 @@ class TestCliAddServer:
         assert result.returncode == 1
 
     def test_add_server_named_default_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--add-server", "default")
@@ -239,11 +365,15 @@ class TestCliRemoveServer:
     """CLI e2e: --remove-server flag."""
 
     def test_remove_server(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project, _MULTI_SERVER_SOURCE_GROUPS)
         result = run_cdc(
-            "manage-source-groups", "--remove-server", "analytics",
+            "manage-source-groups",
+            "--remove-server",
+            "analytics",
         )
         assert result.returncode == 0
         assert "analytics" in result.stdout
@@ -251,21 +381,29 @@ class TestCliRemoveServer:
         assert "analytics" not in yaml_content
 
     def test_remove_default_server_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--remove-server", "default",
+            "manage-source-groups",
+            "--remove-server",
+            "default",
         )
         assert result.returncode == 1
         assert "Cannot remove" in result.stdout + result.stderr
 
     def test_remove_nonexistent_server_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--remove-server", "ghost",
+            "manage-source-groups",
+            "--remove-server",
+            "ghost",
         )
         assert result.returncode == 1
 
@@ -279,41 +417,56 @@ class TestCliSetBrokerTopology:
     """CLI e2e: --set-broker-topology flag."""
 
     def test_change_to_per_server(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--set-broker-topology", "per-server",
+            "manage-source-groups",
+            "--set-broker-topology",
+            "per-server",
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
         assert "per-server" in yaml_content
 
     def test_change_to_shared(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         # Start with per-server, switch to shared
         content = _MINIMAL_SOURCE_GROUPS.replace(
-            "broker_topology: shared", "broker_topology: per-server",
+            "broker_topology: shared",
+            "broker_topology: per-server",
         )
         _write_source_groups(isolated_project, content)
         result = run_cdc(
-            "manage-source-groups", "--set-broker-topology", "shared",
+            "manage-source-groups",
+            "--set-broker-topology",
+            "shared",
         )
         assert result.returncode == 0
 
     def test_same_topology_noop(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--set-broker-topology", "shared",
+            "manage-source-groups",
+            "--set-broker-topology",
+            "shared",
         )
         assert result.returncode == 0
         assert "already" in result.stdout.lower()
 
     def test_rejected_for_non_redpanda_topology(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         content = _MINIMAL_SOURCE_GROUPS.replace(
             "broker_topology: shared\n",
@@ -328,7 +481,9 @@ class TestCliSetBrokerTopology:
         )
         _write_source_groups(isolated_project, content)
         result = run_cdc(
-            "manage-source-groups", "--set-broker-topology", "shared",
+            "manage-source-groups",
+            "--set-broker-topology",
+            "shared",
         )
         assert result.returncode == 1
 
@@ -337,11 +492,15 @@ class TestCliSetTopologyCleanup:
     """CLI e2e: topology changes should prune irrelevant broker config."""
 
     def test_switch_to_pg_native_removes_broker_fields(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--set-topology", "pg_native",
+            "manage-source-groups",
+            "--set-topology",
+            "pg_native",
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
@@ -359,7 +518,9 @@ class TestCliIgnorePatterns:
     """CLI e2e: database exclude pattern management."""
 
     def test_list_empty_patterns(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--list-ignore-patterns")
@@ -367,22 +528,29 @@ class TestCliIgnorePatterns:
         assert "No database exclude patterns" in result.stdout
 
     def test_add_and_list_pattern(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         add_result = run_cdc(
-            "manage-source-groups", "--add-to-ignore-list", "test_%",
+            "manage-source-groups",
+            "--add-to-ignore-list",
+            "test_%",
         )
         assert add_result.returncode == 0
         assert "test_%" in add_result.stdout
 
     def test_add_comma_separated_patterns(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-ignore-list", "backup_%,staging_%",
+            "--add-to-ignore-list",
+            "backup_%,staging_%",
         )
         assert result.returncode == 0
         output = result.stdout
@@ -399,7 +567,9 @@ class TestCliSchemaExcludes:
     """CLI e2e: schema exclude pattern management."""
 
     def test_list_empty_schema_excludes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--list-schema-excludes")
@@ -407,23 +577,29 @@ class TestCliSchemaExcludes:
         assert "No schema exclude patterns" in result.stdout
 
     def test_add_schema_exclude(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-schema-excludes", "information_schema",
+            "--add-to-schema-excludes",
+            "information_schema",
         )
         assert result.returncode == 0
         assert "information_schema" in result.stdout
 
     def test_add_comma_separated_schema_excludes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-schema-excludes", "sys,pg_catalog",
+            "--add-to-schema-excludes",
+            "sys,pg_catalog",
         )
         assert result.returncode == 0
         output = result.stdout
@@ -435,7 +611,9 @@ class TestCliTableExcludes:
     """CLI e2e: table exclude pattern management."""
 
     def test_list_empty_table_excludes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--list-table-excludes")
@@ -443,23 +621,29 @@ class TestCliTableExcludes:
         assert "No table exclude patterns" in result.stdout
 
     def test_add_table_exclude(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-table-excludes", "tmp",
+            "--add-to-table-excludes",
+            "tmp",
         )
         assert result.returncode == 0
         assert "tmp" in result.stdout
 
     def test_add_comma_separated_table_excludes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-table-excludes", "tmp,^zz_.*",
+            "--add-to-table-excludes",
+            "tmp,^zz_.*",
         )
         assert result.returncode == 0
         output = result.stdout
@@ -471,7 +655,9 @@ class TestCliTableIncludes:
     """CLI e2e: table include pattern management."""
 
     def test_list_empty_table_includes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--list-table-includes")
@@ -479,23 +665,29 @@ class TestCliTableIncludes:
         assert "No table include patterns" in result.stdout
 
     def test_add_table_include(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-table-includes", "^core_",
+            "--add-to-table-includes",
+            "^core_",
         )
         assert result.returncode == 0
         assert "^core_" in result.stdout
 
     def test_add_comma_separated_table_includes(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--add-to-table-includes", "^core_,customer",
+            "--add-to-table-includes",
+            "^core_,customer",
         )
         assert result.returncode == 0
         output = result.stdout
@@ -551,36 +743,48 @@ class TestCliSetExtractionPattern:
     """CLI e2e: --set-extraction-pattern flag."""
 
     def test_set_extraction_pattern(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         pattern = r"^(?P<service>\w+)_(?P<env>\w+)$"
         result = run_cdc(
             "manage-source-groups",
-            "--set-extraction-pattern", "default", pattern,
+            "--set-extraction-pattern",
+            "default",
+            pattern,
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
         assert "extraction_pattern" in yaml_content
 
     def test_set_invalid_regex_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--set-extraction-pattern", "default", "[invalid",
+            "--set-extraction-pattern",
+            "default",
+            "[invalid",
         )
         assert result.returncode == 1
         assert "Invalid regex" in result.stdout + result.stderr
 
     def test_set_on_nonexistent_server_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
             "manage-source-groups",
-            "--set-extraction-pattern", "ghost", "^test$",
+            "--set-extraction-pattern",
+            "ghost",
+            "^test$",
         )
         assert result.returncode == 1
 
@@ -594,107 +798,142 @@ class TestCliExtractionPatterns:
     """CLI e2e: ordered extraction pattern management."""
 
     def test_add_extraction_pattern(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         pattern = r"^(?P<service>\w+)_db$"
         result = run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default", pattern,
+            "--add-extraction-pattern",
+            "default",
+            pattern,
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
         assert "extraction_patterns" in yaml_content
 
     def test_add_extraction_pattern_with_env(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         pattern = r"^(?P<service>\w+)_prod$"
         result = run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default", pattern,
-            "--env", "production",
+            "--add-extraction-pattern",
+            "default",
+            pattern,
+            "--env",
+            "production",
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
         assert "production" in yaml_content
 
     def test_add_extraction_pattern_with_strip(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         pattern = r"^(?P<service>\w+)_db_prod$"
         result = run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default", pattern,
-            "--env", "prod",
-            "--strip-patterns", "_db$",
+            "--add-extraction-pattern",
+            "default",
+            pattern,
+            "--env",
+            "prod",
+            "--strip-patterns",
+            "_db$",
         )
         assert result.returncode == 0
         yaml_content = _read_source_groups(isolated_project)
         assert "_db$" in yaml_content
 
     def test_list_extraction_patterns_empty(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc(
-            "manage-source-groups", "--list-extraction-patterns",
+            "manage-source-groups",
+            "--list-extraction-patterns",
         )
         assert result.returncode == 0
 
     def test_list_extraction_patterns_after_add(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         pattern = r"^(?P<service>\w+)$"
         run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default", pattern,
-            "--description", "Simple service name",
+            "--add-extraction-pattern",
+            "default",
+            pattern,
+            "--description",
+            "Simple service name",
         )
         result = run_cdc(
-            "manage-source-groups", "--list-extraction-patterns",
+            "manage-source-groups",
+            "--list-extraction-patterns",
         )
         assert result.returncode == 0
         assert "Simple service name" in result.stdout
 
     def test_remove_extraction_pattern(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         # Add two patterns
         run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default",
+            "--add-extraction-pattern",
+            "default",
             r"^(?P<service>\w+)_prod$",
         )
         run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default",
+            "--add-extraction-pattern",
+            "default",
             r"^(?P<service>\w+)_dev$",
         )
         # Remove the first one (index 0)
         result = run_cdc(
             "manage-source-groups",
-            "--remove-extraction-pattern", "default", "0",
+            "--remove-extraction-pattern",
+            "default",
+            "0",
         )
         assert result.returncode == 0
         assert "Removed" in result.stdout
 
     def test_remove_invalid_index_fails(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         run_cdc(
             "manage-source-groups",
-            "--add-extraction-pattern", "default",
+            "--add-extraction-pattern",
+            "default",
             r"^(?P<service>\w+)$",
         )
         result = run_cdc(
             "manage-source-groups",
-            "--remove-extraction-pattern", "default", "99",
+            "--remove-extraction-pattern",
+            "default",
+            "99",
         )
         assert result.returncode == 1
 
@@ -708,7 +947,9 @@ class TestCliViewServices:
     """CLI e2e: --view-services flag."""
 
     def test_view_services_with_sources(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project, _SOURCE_GROUPS_WITH_SOURCES)
         result = run_cdc("manage-source-groups", "--view-services")
@@ -717,7 +958,9 @@ class TestCliViewServices:
         assert "directory" in output
 
     def test_view_services_no_sources(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
         result = run_cdc("manage-source-groups", "--view-services")
@@ -736,7 +979,8 @@ class TestCliCompletions:
     """CLI e2e: fish autocompletions for manage-source-groups."""
 
     def test_flag_completion(
-        self, run_cdc_completion: RunCdcCompletion,
+        self,
+        run_cdc_completion: RunCdcCompletion,
     ) -> None:
         result = run_cdc_completion("cdc manage-source-groups --")
         assert result.returncode == 0
@@ -749,7 +993,9 @@ class TestCliDbDefinitions:
     """CLI e2e: --db-definitions guard rails."""
 
     def test_db_definitions_unknown_server_fails_before_connection(
-        self, run_cdc: RunCdc, isolated_project: Path,
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
     ) -> None:
         _write_source_groups(isolated_project)
 

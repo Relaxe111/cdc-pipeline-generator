@@ -14,7 +14,6 @@ from cdc_generator.helpers.helpers_logging import (
 )
 from cdc_generator.helpers.service_config import get_project_root
 
-
 # ============================================================================
 # .env Loading (startup)
 # ============================================================================

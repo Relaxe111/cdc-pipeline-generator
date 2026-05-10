@@ -113,17 +113,51 @@ if TYPE_CHECKING:
     import click
 
 __all__ = [
-    "complete_available_envs", "complete_available_services",
-    "complete_available_sink_keys", "complete_available_validation_databases",
-    "complete_column_templates", "complete_custom_table_column_spec",
-    "complete_existing_services", "complete_migration_envs",
-    "complete_non_inherited_sink_group_names", "complete_pg_types",
-    "complete_schema_services", "complete_server_group_names",
-    "complete_server_names", "complete_sink_group_names",
+    "complete_available_envs",
+    "complete_available_services",
+    "complete_available_sink_keys",
+    "complete_available_validation_databases",
+    "complete_column_templates",
+    "complete_custom_table_column_spec",
+    "complete_existing_services",
+    "complete_migration_envs",
+    "complete_non_inherited_sink_group_names",
+    "complete_pg_types",
+    "complete_schema_services",
+    "complete_server_group_names",
+    "complete_server_names",
+    "complete_sink_group_names",
     "complete_transform_rules",
 ]
 
 _MAP_COLUMN_MAX_SUGGESTIONS = 40
+
+
+def _get_last_option_values_from_args(
+    ctx: click.Context,
+    option_name: str,
+    max_values: int,
+) -> list[str]:
+    """Return the parsed values following the last occurrence of an option token."""
+    args_list = list(ctx.args)
+    last_index = -1
+    for index, token in enumerate(args_list):
+        if token == option_name:
+            last_index = index
+
+    if last_index == -1:
+        return []
+
+    values: list[str] = []
+    next_index = last_index + 1
+    while next_index < len(args_list) and len(values) < max_values:
+        value = args_list[next_index]
+        if not value or value.startswith("-"):
+            break
+        values.append(value)
+        next_index += 1
+
+    return values
 
 
 def _get_selected_map_column_targets(ctx: click.Context) -> set[str]:
@@ -315,6 +349,48 @@ def complete_target_sink_env(
         return []
 
     return _filter(sorted(env_keys), incomplete)
+
+
+def complete_set_target_sink_env(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete SOURCE, SOURCE_ENV, then TARGET_SINK_ENV for source-group routing."""
+    parsed_values = _get_last_option_values_from_args(
+        ctx,
+        "--set-target-sink-env",
+        3,
+    )
+
+    if len(parsed_values) == 0:
+        from cdc_generator.helpers.autocompletions.server_groups import (
+            list_source_names_from_server_group,
+        )
+
+        return _filter(
+            _safe_call(list_source_names_from_server_group),
+            incomplete,
+        )
+
+    if len(parsed_values) == 1:
+        from cdc_generator.helpers.autocompletions.server_groups import (
+            list_source_envs_from_server_group,
+        )
+
+        return _filter(
+            _safe_call(list_source_envs_from_server_group, parsed_values[0]),
+            incomplete,
+        )
+
+    from cdc_generator.helpers.autocompletions.server_groups import (
+        list_sink_target_envs_from_sink_groups,
+    )
+
+    return _filter(
+        _safe_call(list_sink_target_envs_from_sink_groups),
+        incomplete,
+    )
 
 
 def complete_schemas(

@@ -145,6 +145,11 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, se
     2. extraction_pattern (per-server, single pattern) - backward compat
     3. Fallback logic (parse db_name heuristically)
 
+    Priority order for db-per-tenant pattern:
+    1. source_name_map[database_name] override
+    2. extraction_pattern
+    3. Fallback to raw database name
+
     Args:
         db_name: Database name to parse
         server_group_config: Server group configuration with extraction patterns
@@ -184,6 +189,19 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, se
 
     # For db-per-tenant: use extraction_pattern for customer extraction
     elif pattern_type == "db-per-tenant":
+        source_name_map_raw = server_group_config.get("source_name_map", {})
+        if isinstance(source_name_map_raw, dict):
+            override_raw = source_name_map_raw.get(db_name)
+            if isinstance(override_raw, str):
+                override = override_raw.strip()
+                if override:
+                    return {
+                        "customer": override,
+                        "service": server_group_config.get("name", ""),
+                        "env": "",
+                        "suffix": "",
+                    }
+
         extraction_pattern = server_config.get("extraction_pattern", "")
         if not extraction_pattern:
             extraction_pattern = server_group_config.get("extraction_pattern", "")

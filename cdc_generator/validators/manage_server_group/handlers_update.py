@@ -178,6 +178,110 @@ def _get_entry_list(entry: dict[str, object], key: str) -> list[str]:
     return []
 
 
+def _get_existing_route_metadata(
+    server_group: ServerGroupConfig,
+) -> dict[tuple[str, str], dict[str, object]]:
+    """Collect per-route metadata that must survive source-group refreshes."""
+    route_metadata: dict[tuple[str, str], dict[str, object]] = {}
+    existing_sources_raw = server_group.get("sources", {})
+    if not isinstance(existing_sources_raw, dict):
+        return route_metadata
+
+    existing_sources = cast(dict[str, object], existing_sources_raw)
+    for source_name_raw, source_config_raw in existing_sources.items():
+        source_name = str(source_name_raw)
+        if not isinstance(source_config_raw, dict):
+            continue
+
+        source_config = cast(dict[str, object], source_config_raw)
+        for env_name_raw, env_cfg_raw in source_config.items():
+            env_name = str(env_name_raw)
+            if env_name == "schemas" or not isinstance(env_cfg_raw, dict):
+                continue
+
+            env_cfg = cast(dict[str, object], env_cfg_raw)
+            metadata: dict[str, object] = {}
+
+            target_sink_env = _get_entry_str(env_cfg, "target_sink_env", "")
+            if target_sink_env:
+                metadata["target_sink_env"] = target_sink_env
+
+            source_custom_values: dict[str, str | None] = {}
+            for key, value in env_cfg.items():
+                if key in {"server", "database", "table_count", "target_sink_env"}:
+                    continue
+                if value is None:
+                    source_custom_values[key] = None
+                elif isinstance(value, str):
+                    source_custom_values[key] = value.strip() or None
+
+            if source_custom_values:
+                metadata["source_custom_values"] = source_custom_values
+
+            if metadata:
+                route_metadata[(source_name, env_name)] = metadata
+
+            database_name = _get_entry_str(env_cfg, "database", "")
+            if metadata and database_name:
+                route_metadata[(database_name, env_name)] = metadata
+
+    return route_metadata
+
+
+def _apply_route_metadata_to_database(
+    database: DatabaseInfo,
+    route_metadata: dict[tuple[str, str], dict[str, object]],
+) -> None:
+    """Merge preserved route metadata into a discovered or preserved database row."""
+    route_key = (
+        str(database.get("service", database["name"])),
+        str(database.get("environment", "default")),
+    )
+    metadata = route_metadata.get(route_key)
+    if metadata is None:
+        database_route_key = (
+            str(database.get("name", "")),
+            str(database.get("environment", "default")),
+        )
+        metadata = route_metadata.get(database_route_key)
+    if not metadata:
+        return
+
+    target_sink_env = metadata.get("target_sink_env")
+    if isinstance(target_sink_env, str) and target_sink_env.strip():
+        database["target_sink_env"] = target_sink_env.strip()
+
+    source_custom_values_raw = metadata.get("source_custom_values")
+    if not isinstance(source_custom_values_raw, dict):
+        return
+
+    merged_custom_values: dict[str, str | None] = {}
+    existing_custom_values = database.get("source_custom_values")
+    if isinstance(existing_custom_values, dict):
+        for key_raw, value_raw in existing_custom_values.items():
+            key = str(key_raw).strip()
+            if not key:
+                continue
+            if value_raw is None:
+                merged_custom_values[key] = None
+                continue
+            value = str(value_raw).strip()
+            merged_custom_values[key] = value if value else None
+
+    for key_raw, value_raw in source_custom_values_raw.items():
+        key = str(key_raw).strip()
+        if not key or key in merged_custom_values:
+            continue
+        if value_raw is None:
+            merged_custom_values[key] = None
+            continue
+        value = str(value_raw).strip()
+        merged_custom_values[key] = value if value else None
+
+    if merged_custom_values:
+        database["source_custom_values"] = merged_custom_values
+
+
 def _merge_with_existing_sources(
     server_group: ServerGroupConfig, scanned_databases: list[DatabaseInfo], updated_servers: set[str]
 ) -> list[DatabaseInfo]:
@@ -197,6 +301,7 @@ def _merge_with_existing_sources(
         >>> # Returns all databases, with prod updated and default preserved
     """
     merged_databases: list[DatabaseInfo] = []
+    route_metadata = _get_existing_route_metadata(server_group)
 
     # Get existing sources from configuration
     existing_sources = server_group.get("sources", {})
@@ -211,6 +316,7 @@ def _merge_with_existing_sources(
         service = db.get("service", db["name"])
         env = db.get("environment", "default")
         scanned_keys.add((service, env))
+        _apply_route_metadata_to_database(db, route_metadata)
 
     # Add scanned databases first (these are the updates)
     merged_databases.extend(scanned_databases)
@@ -245,6 +351,7 @@ def _merge_with_existing_sources(
                     "table_count": _get_entry_int(env_entry, "table_count", 0),
                     "schemas": schemas,
                 }
+                _apply_route_metadata_to_database(preserved_db, route_metadata)
                 merged_databases.append(preserved_db)
 
     return merged_databases

@@ -501,6 +501,7 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "list_table_excludes": set(),
     "add_env_mapping": set(),
     "list_env_mappings": set(),
+    "set_target_sink_env": set(),
     "add_server": {
         "source_type",
         "host",

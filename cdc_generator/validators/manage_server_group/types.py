@@ -50,6 +50,8 @@ adopus:
   topology: redpanda
   broker_topology: shared           # Redpanda only
   extraction_pattern: '^AdOpus(?P<customer>.+)$'
+  source_name_map:                  # Optional per-database source/customer override
+    AdOpusTest: avansas
   database_ref: AdOpusTest          # Reference database for schema discovery
 
   servers:
@@ -83,7 +85,7 @@ adopus:
         table_count: 200
 ```
 """
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 from cdc_generator.helpers.topology_runtime import Topology
 
@@ -247,6 +249,7 @@ class ServerGroupConfig(TypedDict, total=False):
     # Filtering and extraction
     include_pattern: str                    # Regex to filter databases
     extraction_pattern: str                 # DEPRECATED: use servers.{name}.extraction_pattern
+    source_name_map: dict[str, str]         # Optional db name -> source/customer override
     database_ref: str                       # Reference DB for schema discovery (db-per-tenant)
     validation_env: str                     # Validation environment used for inspect/validation
     envs: list[str]                         # Discovered available environments
@@ -281,6 +284,8 @@ class DatabaseInfo(TypedDict):
     customer: str       # For db-per-tenant: customer name
     schemas: list[str]
     table_count: int
+    target_sink_env: NotRequired[str]
+    source_custom_values: NotRequired[dict[str, str | None]]
 
 
 class ExtractedIdentifiers(TypedDict):

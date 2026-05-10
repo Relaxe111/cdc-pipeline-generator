@@ -1,6 +1,7 @@
 """CLI handlers for configuration management (exclude patterns, env mappings)."""
 
 from argparse import Namespace
+from typing import Any, cast
 
 from cdc_generator.helpers.helpers_logging import (
     print_error,
@@ -9,6 +10,7 @@ from cdc_generator.helpers.helpers_logging import (
     print_warning,
 )
 
+from .common import load_config_and_get_server_group
 from .config import (
     load_database_exclude_patterns,
     load_env_mappings,
@@ -21,6 +23,7 @@ from .config import (
     save_table_include_patterns,
     save_table_exclude_patterns,
 )
+from .yaml_io import write_server_group_yaml
 
 
 def handle_add_ignore_pattern(args: Namespace) -> int:
@@ -46,7 +49,7 @@ def handle_add_ignore_pattern(args: Namespace) -> int:
     patterns = load_database_exclude_patterns()
 
     # Support comma-separated patterns
-    input_patterns = [p.strip() for p in args.add_to_ignore_list.split(',')]
+    input_patterns = [p.strip() for p in args.add_to_ignore_list.split(",")]
 
     added: list[str] = []
     skipped: list[str] = []
@@ -103,7 +106,7 @@ def handle_add_schema_exclude(args: Namespace) -> int:
     patterns = load_schema_exclude_patterns()
 
     # Support comma-separated patterns
-    input_patterns = [p.strip() for p in args.add_to_schema_excludes.split(',')]
+    input_patterns = [p.strip() for p in args.add_to_schema_excludes.split(",")]
 
     added: list[str] = []
     skipped: list[str] = []
@@ -147,7 +150,7 @@ def handle_add_table_exclude(args: Namespace) -> int:
         return 1
 
     patterns = load_table_exclude_patterns()
-    input_patterns = [p.strip() for p in args.add_to_table_excludes.split(',')]
+    input_patterns = [p.strip() for p in args.add_to_table_excludes.split(",")]
 
     added: list[str] = []
     skipped: list[str] = []
@@ -190,7 +193,7 @@ def handle_add_table_include(args: Namespace) -> int:
         return 1
 
     patterns = load_table_include_patterns()
-    input_patterns = [p.strip() for p in args.add_to_table_includes.split(',')]
+    input_patterns = [p.strip() for p in args.add_to_table_includes.split(",")]
 
     added: list[str] = []
     skipped: list[str] = []
@@ -247,20 +250,20 @@ def parse_env_mapping(mapping_str: str) -> dict[str, str]:
     env_mappings: dict[str, str] = {}
     errors: list[str] = []
 
-    for idx, pair_raw in enumerate(mapping_str.split(','), 1):
+    for idx, pair_raw in enumerate(mapping_str.split(","), 1):
         pair = pair_raw.strip()
         if not pair:
             continue
 
-        if ':' not in pair:
+        if ":" not in pair:
             errors.append(f"Mapping #{idx} '{pair}': missing colon (expected format 'from:to')")
             continue
 
-        if pair.count(':') > 1:
+        if pair.count(":") > 1:
             errors.append(f"Mapping #{idx} '{pair}': multiple colons found (use format 'from:to')")
             continue
 
-        from_env, to_env = pair.split(':', 1)
+        from_env, to_env = pair.split(":", 1)
         from_env = from_env.strip()
         to_env = to_env.strip()
 
@@ -347,4 +350,82 @@ def handle_add_env_mapping(args: Namespace) -> int:
     for from_env, to_env in sorted(mappings.items()):
         print_info(f"  {from_env} → {to_env}")
 
+    return 0
+
+
+def _find_source_entry(
+    sources: dict[str, Any],
+    source_name: str,
+) -> tuple[str, dict[str, Any]] | None:
+    """Find a source entry by exact or case-insensitive key."""
+    source_entry_raw = sources.get(source_name)
+    if isinstance(source_entry_raw, dict):
+        return source_name, cast(dict[str, Any], source_entry_raw)
+
+    normalized_source_name = source_name.casefold()
+    for current_name_raw, current_entry_raw in sources.items():
+        current_name = str(current_name_raw)
+        if current_name.casefold() == normalized_source_name and isinstance(current_entry_raw, dict):
+            return current_name, cast(dict[str, Any], current_entry_raw)
+
+    return None
+
+
+def handle_set_target_sink_env(args: Namespace) -> int:
+    """Set target sink routing for one source route in source-groups.yaml."""
+    raw_value = getattr(args, "set_target_sink_env", None)
+    if not isinstance(raw_value, (list, tuple)) or len(raw_value) != 3:
+        print_error("--set-target-sink-env requires SOURCE SOURCE_ENV TARGET_SINK_ENV")
+        return 1
+
+    source_name_raw, source_env_raw, target_sink_env_raw = raw_value
+    source_name = str(source_name_raw).strip()
+    source_env = str(source_env_raw).strip()
+    target_sink_env = str(target_sink_env_raw).strip()
+
+    if not source_name or not source_env or not target_sink_env:
+        print_error("SOURCE, SOURCE_ENV, and TARGET_SINK_ENV must all be non-empty")
+        return 1
+
+    from cdc_generator.core.sink_env_routing import get_all_sink_target_env_keys
+    from cdc_generator.helpers.service_config import get_project_root
+
+    available_sink_envs, warning_message = get_all_sink_target_env_keys(get_project_root())
+    if available_sink_envs is None:
+        print_error("Cannot validate target sink environment: " + (warning_message or "sink topology unavailable"))
+        return 1
+
+    if target_sink_env not in available_sink_envs:
+        print_error(f"target_sink_env '{target_sink_env}' does not exist in sink-groups envs")
+        print_info("Available sink envs: " + ", ".join(sorted(available_sink_envs)))
+        return 1
+
+    config, server_group, server_group_name = load_config_and_get_server_group()
+    if config is None or server_group is None or server_group_name is None:
+        return 1
+
+    sources_raw = server_group.get("sources")
+    if not isinstance(sources_raw, dict):
+        print_error("Server group has no sources configured")
+        return 1
+
+    source_match = _find_source_entry(cast(dict[str, Any], sources_raw), source_name)
+    if source_match is None:
+        print_error(f"Source '{source_name}' not found in server group '{server_group_name}'")
+        return 1
+
+    matched_source_name, source_entry = source_match
+    env_cfg_raw = source_entry.get(source_env)
+    if not isinstance(env_cfg_raw, dict):
+        available_envs = sorted(key for key, value in source_entry.items() if key != "schemas" and isinstance(value, dict))
+        print_error(f"Source route '{matched_source_name}.{source_env}' not found in server group '{server_group_name}'")
+        if available_envs:
+            print_info("Available source envs: " + ", ".join(available_envs))
+        return 1
+
+    env_cfg = cast(dict[str, Any], env_cfg_raw)
+    env_cfg["target_sink_env"] = target_sink_env
+    write_server_group_yaml(server_group_name, server_group)
+
+    print_success(f"✓ Set target_sink_env '{target_sink_env}' for source route " + f"'{matched_source_name}.{source_env}'")
     return 0

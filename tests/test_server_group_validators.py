@@ -40,6 +40,7 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "list_ignore_patterns": False,
         "add_to_schema_excludes": None,
         "add_source_custom_key": None,
+        "set_target_sink_env": None,
         "custom_key_value": None,
         "custom_key_exec_type": "sql",
         "list_schema_excludes": False,
@@ -85,9 +86,7 @@ class TestFlagValidator:
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is False
-        assert result.message and (
-            "Cannot" in result.message or "multiple" in result.message.lower()
-        )
+        assert result.message and ("Cannot" in result.message or "multiple" in result.message.lower())
 
     def test_update_with_all_and_specific_server_returns_error(self) -> None:
         """--update <name> with --all → error (conflicting server specification)."""
@@ -95,9 +94,7 @@ class TestFlagValidator:
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is False
-        assert result.message and (
-            "all" in result.message.lower() or "specific" in result.message.lower()
-        )
+        assert result.message and ("all" in result.message.lower() or "specific" in result.message.lower())
 
     def test_update_default_with_all_ok(self) -> None:
         """--update (defaults to 'default') with --all is valid."""
@@ -137,9 +134,7 @@ class TestFlagValidator:
         result = validator.validate(args)
         assert result.valid is False
         assert "Invalid topology" in result.message
-        assert result.suggestion and (
-            "shared" in result.suggestion or "per-server" in result.suggestion
-        )
+        assert result.suggestion and ("shared" in result.suggestion or "per-server" in result.suggestion)
 
     def test_set_broker_topology_valid_shared(self) -> None:
         """--set-broker-topology shared → ok."""
@@ -356,9 +351,7 @@ class TestParseEnvMapping:
         output = capsys.readouterr().out
         assert "empty" in output.lower()
 
-    def test_partial_valid_mappings_returns_valid_only(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_partial_valid_mappings_returns_valid_only(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Mix of valid and invalid → returns only valid mappings."""
         result = parse_env_mapping("dev:nonprod,invalid,prod:prod")
         assert result == {"dev": "nonprod", "prod": "prod"}

@@ -7,10 +7,8 @@ name = "cdc-pipeline-generator"
 version = "0.48.4"
 description = "CDC pipeline configuration generator for Redpanda Connect"
 readme = "README.md"
-license = {text = "MIT"}
-authors = [
-    {name = "Igor Efrem", email = "igor@carasent.com"}
-]
+license = { text = "MIT" }
+authors = [{ name = "Igor Efrem", email = "igor@carasent.com" }]
 requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -20,25 +18,14 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = [
-    "pyyaml>=6.0",
-    "ruamel.yaml>=0.17",
-    "jinja2>=3.1",
-    "click>=8.1",
-]
+dependencies = ["pyyaml>=6.0", "ruamel.yaml>=0.17", "jinja2>=3.1", "click>=8.1"]
 
 [project.optional-dependencies]
 # Database connectivity - heavy dependencies for DB inspection
-database = [
-    "pymssql>=2.2",
-    "psycopg2-binary>=2.9",
-]
+database = ["pymssql>=2.2", "psycopg2-binary>=2.9"]
 
 # Full installation - everything needed for development/production
-full = [
-    "pymssql>=2.2",
-    "psycopg2-binary>=2.9",
-]
+full = ["pymssql>=2.2", "psycopg2-binary>=2.9"]
 
 # Development tools
 dev = [
@@ -46,6 +33,7 @@ dev = [
     "black>=23.0",
     "ruff>=0.1",
     "mypy>=1.0",
+    "types-click>=7.1",
 ]
 
 [project.urls]
@@ -76,30 +64,30 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
-    "W",      # pycodestyle warnings
-    "F",      # pyflakes
-    "I",      # isort
-    "N",      # pep8-naming
-    "UP",     # pyupgrade
-    "ANN",    # flake8-annotations
-    "ASYNC",  # flake8-async
-    "B",      # flake8-bugbear
-    "A",      # flake8-builtins
-    "C4",     # flake8-comprehensions
-    "ISC",    # flake8-implicit-str-concat
-    "RET",    # flake8-return
-    "SIM",    # flake8-simplify
-    "ARG",    # flake8-unused-arguments
-    "PTH",    # flake8-use-pathlib
-    "PL",     # pylint
-    "RUF",    # ruff-specific rules
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "ANN",   # flake8-annotations
+    "ASYNC", # flake8-async
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "C4",    # flake8-comprehensions
+    "ISC",   # flake8-implicit-str-concat
+    "RET",   # flake8-return
+    "SIM",   # flake8-simplify
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib
+    "PL",    # pylint
+    "RUF",   # ruff-specific rules
 ]
 
 ignore = [
     "ISC003",  # allow explicit + concatenation (we prefer it over implicit)
-    "PLC0415",  # allow imports inside functions (lazy loading)
-    "W293",  # allow blank line at end of file (some files have trailing comments)
+    "PLC0415", # allow imports inside functions (lazy loading)
+    "W293",    # allow blank line at end of file (some files have trailing comments)
 ]
 
 [tool.ruff.lint.pylint]
@@ -115,13 +103,14 @@ max-statements = 65
 # CLI dispatch functions are inherently complex
 "cdc_generator/cli/source_group.py" = ["PLR0911", "PLR0912", "PLR0915"]
 # Service creator has complex branching for pattern handling
-"cdc_generator/validators/manage_service/service_creator.py" = ["PLR0912", "PLR0915"]
+"cdc_generator/validators/manage_service/service_creator.py" = [
+    "PLR0912",
+    "PLR0915",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "cli: End-to-end CLI tests (run with cdc test --cli)",
-]
+markers = ["cli: End-to-end CLI tests (run with cdc test --cli)"]
 
 [tool.mypy]
 python_version = "3.11"

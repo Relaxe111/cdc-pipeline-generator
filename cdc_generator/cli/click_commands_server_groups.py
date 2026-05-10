@@ -11,6 +11,7 @@ from cdc_generator.cli.completions import (
     complete_non_inherited_sink_group_names,
     complete_server_group_names,
     complete_server_names,
+    complete_set_target_sink_env,
     complete_sink_group_context_aware,
     complete_sink_group_names,
     complete_sink_group_servers,
@@ -60,6 +61,9 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 @click.option("--list-table-excludes", is_flag=True, help="List current table exclude patterns")
 @click.option("--add-env-mapping", help="Add env mapping 'from:to'")
 @click.option("--list-env-mappings", is_flag=True, help="List current environment mappings")
+@click.option(
+    "--set-target-sink-env", nargs=3, shell_complete=complete_set_target_sink_env, help="Set target sink env: SOURCE SOURCE_ENV TARGET_SINK_ENV"
+)
 @click.option("--add-server", help="Add new server configuration")
 @click.option("--list-servers", is_flag=True, help="List all configured servers")
 @click.option("--remove-server", help="Remove a server configuration")

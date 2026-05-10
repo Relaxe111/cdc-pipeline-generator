@@ -25,7 +25,7 @@ def list_servers_from_server_group() -> list[str]:
         >>> list_servers_from_server_group()
         ['default', 'prod']
     """
-    server_group_file = find_file_upward('source-groups.yaml')
+    server_group_file = find_file_upward("source-groups.yaml")
     if not server_group_file:
         return []
 
@@ -35,9 +35,9 @@ def list_servers_from_server_group() -> list[str]:
             return []
 
         for group_data in config.values():
-            if isinstance(group_data, dict) and 'pattern' in group_data:
+            if isinstance(group_data, dict) and "pattern" in group_data:
                 group_dict = cast(dict[str, Any], group_data)
-                servers_obj = group_dict.get('servers', {})
+                servers_obj = group_dict.get("servers", {})
 
                 if isinstance(servers_obj, dict):
                     servers_dict = cast(dict[str, Any], servers_obj)
@@ -62,7 +62,7 @@ def list_server_group_names() -> list[str]:
         >>> list_server_group_names()
         ['asma', 'adopus']
     """
-    server_group_file = find_file_upward('source-groups.yaml')
+    server_group_file = find_file_upward("source-groups.yaml")
     if not server_group_file:
         return []
 
@@ -74,10 +74,118 @@ def list_server_group_names() -> list[str]:
         # Find all top-level keys that have 'pattern' field (server groups)
         groups: list[str] = []
         for key, value in config.items():
-            if isinstance(value, dict) and 'pattern' in value:
+            if isinstance(value, dict) and "pattern" in value:
                 groups.append(key)
 
         return sorted(groups)
+
+    except Exception:
+        return []
+
+
+def list_source_names_from_server_group() -> list[str]:
+    """List source names defined in the current source group."""
+    server_group_file = find_file_upward("source-groups.yaml")
+    if not server_group_file:
+        return []
+
+    try:
+        config = load_yaml_file(server_group_file)
+        if not config or not isinstance(config, dict):
+            return []
+
+        for group_data in config.values():
+            if not isinstance(group_data, dict) or "pattern" not in group_data:
+                continue
+
+            group_dict = cast(dict[str, Any], group_data)
+            sources_obj = group_dict.get("sources", {})
+            if not isinstance(sources_obj, dict):
+                return []
+
+            return sorted(str(source_name) for source_name in sources_obj.keys())
+
+        return []
+
+    except Exception:
+        return []
+
+
+def list_source_envs_from_server_group(source_name: str) -> list[str]:
+    """List environment keys for one source entry in source-groups.yaml."""
+    normalized_source_name = source_name.strip().casefold()
+    if not normalized_source_name:
+        return []
+
+    server_group_file = find_file_upward("source-groups.yaml")
+    if not server_group_file:
+        return []
+
+    try:
+        config = load_yaml_file(server_group_file)
+        if not config or not isinstance(config, dict):
+            return []
+
+        for group_data in config.values():
+            if not isinstance(group_data, dict) or "pattern" not in group_data:
+                continue
+
+            group_dict = cast(dict[str, Any], group_data)
+            sources_obj = group_dict.get("sources", {})
+            if not isinstance(sources_obj, dict):
+                return []
+
+            sources_dict = cast(dict[str, Any], sources_obj)
+            for current_source_name_raw, source_entry_raw in sources_dict.items():
+                current_source_name = str(current_source_name_raw)
+                if current_source_name.casefold() != normalized_source_name:
+                    continue
+                if not isinstance(source_entry_raw, dict):
+                    return []
+
+                source_entry = cast(dict[str, Any], source_entry_raw)
+                env_keys = [str(key) for key, value in source_entry.items() if key != "schemas" and isinstance(value, dict)]
+                return sorted(env_keys)
+
+        return []
+
+    except Exception:
+        return []
+
+
+def list_sink_target_envs_from_sink_groups() -> list[str]:
+    """List the union of sink environment keys from sink-groups.yaml."""
+    sink_file = find_file_upward("sink-groups.yaml")
+    if not sink_file:
+        return []
+
+    try:
+        config = load_yaml_file(sink_file)
+        if not config or not isinstance(config, dict):
+            return []
+
+        env_keys: set[str] = set()
+        for sink_group_raw in config.values():
+            if not isinstance(sink_group_raw, dict):
+                continue
+
+            sink_group = cast(dict[str, Any], sink_group_raw)
+            sources_obj = sink_group.get("sources", {})
+            if not isinstance(sources_obj, dict):
+                continue
+
+            sources_dict = cast(dict[str, Any], sources_obj)
+            for source_raw in sources_dict.values():
+                if not isinstance(source_raw, dict):
+                    continue
+
+                source_entry = cast(dict[str, Any], source_raw)
+                for key, value in source_entry.items():
+                    if key == "schemas" or not isinstance(value, dict):
+                        continue
+                    env_keys.add(str(key))
+
+        return sorted(env_keys)
 
     except Exception:
         return []
@@ -95,7 +203,7 @@ def list_sink_group_names() -> list[str]:
         >>> list_sink_group_names()
         ['sink_asma', 'sink_test']
     """
-    sink_file = find_file_upward('sink-groups.yaml')
+    sink_file = find_file_upward("sink-groups.yaml")
     if not sink_file:
         return []
 
@@ -130,7 +238,7 @@ def list_non_inherited_sink_group_names() -> list[str]:
         >>> list_non_inherited_sink_group_names()
         ['sink_standalone']
     """
-    sink_file = find_file_upward('sink-groups.yaml')
+    sink_file = find_file_upward("sink-groups.yaml")
     if not sink_file:
         return []
 
@@ -139,11 +247,7 @@ def list_non_inherited_sink_group_names() -> list[str]:
         if not config or not isinstance(config, dict):
             return []
 
-        return sorted(
-            name
-            for name, group in config.items()
-            if isinstance(group, dict) and not group.get("inherits", False)
-        )
+        return sorted(name for name, group in config.items() if isinstance(group, dict) and not group.get("inherits", False))
 
     except Exception:
         return []
@@ -171,7 +275,7 @@ def list_servers_for_sink_group(sink_group_name: str) -> list[str]:
         >>> list_servers_for_sink_group('sink_asma')
         ['default', 'prod']
     """
-    sink_file = find_file_upward('sink-groups.yaml')
+    sink_file = find_file_upward("sink-groups.yaml")
     if not sink_file:
         return []
 
@@ -212,7 +316,7 @@ def list_databases_from_server_group() -> list[str]:
         >>> list_databases_from_server_group()
         ['adopus_calendar_dev', 'adopus_chat_prod']
     """
-    server_group_file = find_file_upward('source-groups.yaml')
+    server_group_file = find_file_upward("source-groups.yaml")
     if not server_group_file:
         return []
 
@@ -224,21 +328,21 @@ def list_databases_from_server_group() -> list[str]:
         databases: set[str] = set()
 
         # Extract from server_group structure
-        server_group = config.get('server_group', {})
+        server_group = config.get("server_group", {})
         if isinstance(server_group, dict):
             server_group_dict = cast(dict[str, Any], server_group)
             for group_data in server_group_dict.values():
                 if isinstance(group_data, dict):
                     group_dict = cast(dict[str, Any], group_data)
                     # Get databases list
-                    dbs = group_dict.get('databases', [])
+                    dbs = group_dict.get("databases", [])
                     if isinstance(dbs, list):
                         for db in dbs:
                             if isinstance(db, str):
                                 databases.add(db)
                             elif isinstance(db, dict):
                                 db_dict = cast(dict[str, Any], db)
-                                db_name = db_dict.get('name')
+                                db_name = db_dict.get("name")
                                 if db_name:
                                     databases.add(str(db_name))
 

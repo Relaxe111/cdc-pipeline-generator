@@ -15,9 +15,17 @@
         "port": { "type": ["string", "integer"] },
         "user": { "type": "string" },
         "password": { "type": "string" },
+        "extraction_pattern": {
+          "type": "string",
+          "description": "Deprecated single extraction pattern; prefer extraction_patterns"
+        },
         "kafka_bootstrap_servers": {
           "type": "string",
           "description": "Redpanda-only broker bootstrap setting; omit for fdw and pg_native topologies"
+        },
+        "environments": {
+          "type": "array",
+          "items": { "type": "string" }
         },
         "extraction_patterns": {
           "type": "array",
@@ -58,7 +66,9 @@
     },
     "sourceEnv": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      },
       "properties": {
         "server": { "type": "string" },
         "database": { "type": "string" },
@@ -107,6 +117,11 @@
         "environment_aware": { "type": "boolean" },
         "validation_env": { "type": "string" },
         "extraction_pattern": { "type": "string" },
+        "source_name_map": {
+          "type": "object",
+          "description": "Optional database name to source/customer name overrides for db-per-tenant groups",
+          "additionalProperties": { "type": "string" }
+        },
         "database_ref": { "type": "string" },
         "include_pattern": { "type": "string" },
         "database_exclude_patterns": {
@@ -124,6 +139,10 @@
         "table_exclude_patterns": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "env_mappings": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
         },
         "envs": {
           "type": "array",

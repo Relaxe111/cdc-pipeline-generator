@@ -151,6 +151,12 @@ def validate_server_group_structure(group_data: object, name: str) -> None:
     if not isinstance(group_data['sources'], dict):
         raise ValueError(f"Server group '{name}' field 'sources' must be a dict")
 
+    source_name_map = group_data.get('source_name_map')
+    if source_name_map is not None and not isinstance(source_name_map, dict):
+        raise ValueError(
+            f"Server group '{name}' field 'source_name_map' must be a dict"
+        )
+
 
 def get_single_server_group(config: ServerGroupFile) -> ServerGroupConfig | None:
     """Get the single server group from configuration.

@@ -358,14 +358,14 @@ def run_generator_spec(
     """Run a generator-backed command from a command spec."""
 
     if paths["generator"] is None:
-        cmd = ["python3", "-m", cmd_info["module"], *extra_args]
+        cmd = [sys.executable, "-m", cmd_info["module"], *extra_args]
     else:
         script_path = Path(str(paths["generator"])) / cmd_info["script"]
         if not script_path.exists():
             print(f"❌ Error: Generator script not found: {script_path}")
             print("   Make sure cdc-pipeline-generator is properly set up.")
             return 1
-        cmd = ["python3", str(script_path), *extra_args]
+        cmd = [sys.executable, str(script_path), *extra_args]
 
     try:
         return _run_subprocess(cmd, cwd=workspace_root)

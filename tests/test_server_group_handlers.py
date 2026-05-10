@@ -16,6 +16,7 @@ import pytest
 # Fixtures
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.fixture
 def mock_server_group() -> dict[str, Any]:
     """Realistic multi-server source group configuration for a single group."""
@@ -69,6 +70,7 @@ def _ns(**kwargs: Any) -> Namespace:
         "set_broker_topology": None,
         "add_to_ignore_list": None,
         "add_to_schema_excludes": None,
+        "set_target_sink_env": None,
         "set_extraction_pattern": None,
         "add_extraction_pattern": None,
         "list_extraction_patterns": False,
@@ -92,6 +94,7 @@ def _ns(**kwargs: Any) -> Namespace:
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_add_server
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHandleAddServer:
     """Tests for handle_add_server() handler."""
@@ -170,6 +173,7 @@ class TestHandleAddServer:
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_remove_server
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHandleRemoveServer:
     """Tests for handle_remove_server() handler."""
@@ -259,6 +263,7 @@ class TestHandleRemoveServer:
 # handle_list_servers
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestHandleListServers:
     """Tests for handle_list_servers() handler."""
 
@@ -308,6 +313,7 @@ class TestHandleListServers:
 # ═══════════════════════════════════════════════════════════════════════════
 # handle_set_topology
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestHandleSetTopology:
     """Tests for handle_set_topology() handler."""
@@ -359,10 +365,74 @@ class TestHandleSetTopology:
 # Quick smoke tests for other handlers (full coverage in integration tests)
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestOtherHandlers:
     """Smoke tests for remaining handler functions (basic invocation checks)."""
 
     pass  # Import smoke test removed — imports already tested by other tests in this file
+
+
+class TestHandleSetTargetSinkEnv:
+    """Tests for handle_set_target_sink_env() handler."""
+
+    @patch("cdc_generator.validators.manage_server_group.handlers_config.write_server_group_yaml")
+    @patch("cdc_generator.validators.manage_server_group.handlers_config.load_config_and_get_server_group")
+    def test_set_target_sink_env_succeeds(
+        self,
+        mock_load: Mock,
+        mock_write: Mock,
+        mock_server_group: dict[str, Any],
+    ) -> None:
+        """Setting target sink routing updates the selected source env."""
+        from cdc_generator.validators.manage_server_group.handlers_config import handle_set_target_sink_env
+
+        mock_load.return_value = ({"mygroup": mock_server_group}, mock_server_group, "mygroup")
+        args = _ns(set_target_sink_env=["mydb", "dev", "stage"])
+
+        result = handle_set_target_sink_env(args)
+
+        assert result == 0
+        assert mock_server_group["sources"]["mydb"]["dev"]["target_sink_env"] == "stage"
+        assert mock_write.called
+
+
+class TestMergeWithExistingSources:
+    """Regression tests for preserving source route metadata during updates."""
+
+    def test_merge_preserves_route_metadata_for_rescanned_routes(self) -> None:
+        """Rescanned routes keep target_sink_env and custom route keys from YAML."""
+        from cdc_generator.validators.manage_server_group.handlers_update import _merge_with_existing_sources
+
+        server_group = {
+            "sources": {
+                "mydb": {
+                    "schemas": ["public"],
+                    "dev": {
+                        "server": "default",
+                        "database": "mydb_dev",
+                        "table_count": 3,
+                        "customer_id": "cust-001",
+                        "target_sink_env": "stage",
+                    },
+                },
+            },
+        }
+        scanned_databases = [
+            {
+                "name": "mydb_dev",
+                "service": "mydb",
+                "environment": "dev",
+                "server": "default",
+                "customer": "mydb",
+                "table_count": 5,
+                "schemas": ["public"],
+            },
+        ]
+
+        merged = _merge_with_existing_sources(server_group, scanned_databases, {"default"})
+
+        assert merged[0]["target_sink_env"] == "stage"
+        assert merged[0]["source_custom_values"]["customer_id"] == "cust-001"
 
 
 class TestHandleSetBrokerTopology:

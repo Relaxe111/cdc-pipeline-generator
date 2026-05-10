@@ -67,6 +67,7 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_ignore_pattern,
     handle_add_schema_exclude,
     handle_add_server,
+    handle_set_target_sink_env,
     handle_add_table_exclude,
     handle_add_table_include,
     handle_info,
@@ -109,11 +110,9 @@ def main() -> int:
     # Note: .env loading handled by implementations, not generator library
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Manage the source/service-groups.yaml file for your implementation."
-        ),
+        description=("Manage the source/service-groups.yaml file for your implementation."),
         prog="cdc manage-source-groups",  # Use the alias in help messages
-        formatter_class=argparse.RawTextHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     # Primary actions
@@ -122,10 +121,7 @@ def main() -> int:
         nargs="?",
         const="default",
         metavar="SERVER",
-        help=(
-            "Update the source group by inspecting the source database. "
-            "Optionally provide a server name (default: 'default')."
-        ),
+        help=("Update the source group by inspecting the source database. Optionally provide a server name (default: 'default')."),
     )
     parser.add_argument(
         "--all",
@@ -146,40 +142,24 @@ def main() -> int:
     # Exclude patterns management
     parser.add_argument(
         "--add-to-ignore-list",
-        help=(
-            "Add a pattern to the database exclude list "
-            "(persisted in source-groups.yaml)."
-        ),
+        help=("Add a pattern to the database exclude list (persisted in source-groups.yaml)."),
     )
-    parser.add_argument("--list-ignore-patterns", action="store_true",
-                       help="List current database exclude patterns.")
+    parser.add_argument("--list-ignore-patterns", action="store_true", help="List current database exclude patterns.")
     parser.add_argument(
         "--add-to-schema-excludes",
-        help=(
-            "Add a pattern to the schema exclude list "
-            "(persisted in source-groups.yaml)."
-        ),
+        help=("Add a pattern to the schema exclude list (persisted in source-groups.yaml)."),
     )
-    parser.add_argument("--list-schema-excludes", action="store_true",
-                       help="List current schema exclude patterns.")
+    parser.add_argument("--list-schema-excludes", action="store_true", help="List current schema exclude patterns.")
     parser.add_argument(
         "--add-to-table-includes",
-        help=(
-            "Add a pattern to the table include list "
-            "(persisted in source-groups.yaml)."
-        ),
+        help=("Add a pattern to the table include list (persisted in source-groups.yaml)."),
     )
-    parser.add_argument("--list-table-includes", action="store_true",
-                       help="List current table include patterns.")
+    parser.add_argument("--list-table-includes", action="store_true", help="List current table include patterns.")
     parser.add_argument(
         "--add-to-table-excludes",
-        help=(
-            "Add a pattern to the table exclude list "
-            "(persisted in source-groups.yaml)."
-        ),
+        help=("Add a pattern to the table exclude list (persisted in source-groups.yaml)."),
     )
-    parser.add_argument("--list-table-excludes", action="store_true",
-                       help="List current table exclude patterns.")
+    parser.add_argument("--list-table-excludes", action="store_true", help="List current table exclude patterns.")
     parser.add_argument(
         "--add-source-custom-key",
         metavar="KEY",
@@ -198,18 +178,16 @@ def main() -> int:
     )
 
     # Multi-server management
-    parser.add_argument("--add-server", metavar="NAME",
-                       help="Add a new server configuration (e.g., 'analytics', 'reporting'). " +
-                            "Use with --source-type, --host, --port, --user, --password.")
-    parser.add_argument("--list-servers", action="store_true",
-                       help="List all configured servers in the source group.")
+    parser.add_argument(
+        "--add-server",
+        metavar="NAME",
+        help="Add a new server configuration (e.g., 'analytics', 'reporting'). " + "Use with --source-type, --host, --port, --user, --password.",
+    )
+    parser.add_argument("--list-servers", action="store_true", help="List all configured servers in the source group.")
     parser.add_argument(
         "--remove-server",
         metavar="NAME",
-        help=(
-            "Remove a server configuration. "
-            "Cannot remove 'default' or servers with services."
-        ),
+        help=("Remove a server configuration. Cannot remove 'default' or servers with services."),
     )
     parser.add_argument(
         "--set-topology",
@@ -224,10 +202,7 @@ def main() -> int:
         "--set-broker-topology",
         dest="set_broker_topology",
         choices=["shared", "per-server"],
-        help=(
-            "Change the broker topology. 'shared' = same broker for all servers, "
-            + "'per-server' = isolated broker bootstrap per server."
-        ),
+        help=("Change the broker topology. 'shared' = same broker for all servers, " + "'per-server' = isolated broker bootstrap per server."),
     )
 
     # Validation environment management
@@ -235,6 +210,12 @@ def main() -> int:
         "--set-validation-env",
         metavar="ENV",
         help="Set the validation environment for the source group (e.g., 'dev', 'nonprod').",
+    )
+    parser.add_argument(
+        "--set-target-sink-env",
+        nargs=3,
+        metavar=("SOURCE", "SOURCE_ENV", "TARGET_SINK_ENV"),
+        help=("Set target sink routing for one source route. " + "Example: --set-target-sink-env AVProd default dev"),
     )
     parser.add_argument(
         "--list-envs",
@@ -278,73 +259,62 @@ def main() -> int:
     parser.add_argument(
         "--env",
         type=str,
-        help=(
-            "Fixed environment name for "
-            "--add-extraction-pattern "
-            "(overrides captured (?P<env>) group)."
-        ),
+        help=("Fixed environment name for --add-extraction-pattern (overrides captured (?P<env>) group)."),
     )
     parser.add_argument(
         "--strip-patterns",
         type=str,
-        help=(
-            "Comma-separated regex patterns to remove "
-            "from service name (e.g., '_db' for anywhere, "
-            "'_db$' for suffix only)."
-        ),
+        help=("Comma-separated regex patterns to remove from service name (e.g., '_db' for anywhere, '_db$' for suffix only)."),
     )
     parser.add_argument(
         "--env-mapping",
         type=str,
-        help=(
-            "Environment mapping in format 'from:to' "
-            "(e.g., 'prod_adcuris:prod-adcuris'). "
-            "Can be specified multiple times."
-        ),
-        action='append',
+        help=("Environment mapping in format 'from:to' (e.g., 'prod_adcuris:prod-adcuris'). Can be specified multiple times."),
+        action="append",
     )
-    parser.add_argument("--description", type=str,
-                       help="Human-readable description for --add-extraction-pattern.")
-    parser.add_argument("--list-extraction-patterns", nargs='?', const='', metavar="SERVER",
-                       help="List extraction patterns for all servers or a specific server.")
-    parser.add_argument("--remove-extraction-pattern", nargs=2, metavar=("SERVER", "INDEX"),
-                       help="Remove an extraction pattern by index. " +
-                            "Use --list-extraction-patterns to see indices. " +
-                            "Example: --remove-extraction-pattern prod 0")
+    parser.add_argument("--description", type=str, help="Human-readable description for --add-extraction-pattern.")
+    parser.add_argument(
+        "--list-extraction-patterns", nargs="?", const="", metavar="SERVER", help="List extraction patterns for all servers or a specific server."
+    )
+    parser.add_argument(
+        "--remove-extraction-pattern",
+        nargs=2,
+        metavar=("SERVER", "INDEX"),
+        help="Remove an extraction pattern by index. "
+        + "Use --list-extraction-patterns to see indices. "
+        + "Example: --remove-extraction-pattern prod 0",
+    )
 
     # Type introspection
-    parser.add_argument("--introspect-types", action="store_true",
-                       help="Introspect column types from the source database server " +
-                            "and generate/update type definition files. " +
-                            "Use --server to pick a specific server " +
-                            "(default: first available).")
+    parser.add_argument(
+        "--introspect-types",
+        action="store_true",
+        help="Introspect column types from the source database server "
+        + "and generate/update type definition files. "
+        + "Use --server to pick a specific server "
+        + "(default: first available).",
+    )
     parser.add_argument(
         "--db-definitions",
         action="store_true",
-        help=(
-            "Generate services/_schemas/_definitions/{pgsql|mssql}.yaml once "
-            "from source database server metadata."
-        ),
+        help=("Generate services/_schemas/_definitions/{pgsql|mssql}.yaml once from source database server metadata."),
     )
-    parser.add_argument("--server", metavar="NAME",
-                       help="Server to use for --introspect-types/--db-definitions " +
-                            "(default: first available).")
+    parser.add_argument("--server", metavar="NAME", help="Server to use for --introspect-types/--db-definitions " + "(default: first available).")
 
     args = parser.parse_args()
 
     # Validate flag combinations (Python-based validation)
     validation_result = validate_manage_server_group_flags(args)
 
-    if validation_result.level == 'error':
+    if validation_result.level == "error":
         print_error(validation_result.message or "Invalid flag combination")
         if validation_result.suggestion:
             print(validation_result.suggestion)
         return 1
 
-    if validation_result.level == 'warning':
+    if validation_result.level == "warning":
         print(validation_result.message or "")
         print()  # Blank line before proceeding
-
 
     # Handle list schema exclude patterns
     if args.list_schema_excludes:
@@ -365,10 +335,7 @@ def main() -> int:
         patterns = load_database_exclude_patterns()
         print_header("Database Exclude Patterns")
         if patterns:
-            print_info(
-                "Databases with names containing these patterns "
-                + "will be excluded during '--update':"
-            )
+            print_info("Databases with names containing these patterns " + "will be excluded during '--update':")
             for pattern in patterns:
                 print_info(f"  • {pattern}")
         else:
@@ -381,10 +348,7 @@ def main() -> int:
         patterns = load_table_include_patterns()
         print_header("Table Include Patterns")
         if patterns:
-            print_info(
-                "Only tables with names matching these patterns "
-                + "will be included during '--update' and autocomplete cache generation:"
-            )
+            print_info("Only tables with names matching these patterns " + "will be included during '--update' and autocomplete cache generation:")
             for pattern in patterns:
                 print_info(f"  • {pattern}")
             print_info("\nIf a table matches both include and exclude patterns, exclude wins.")
@@ -398,10 +362,7 @@ def main() -> int:
         patterns = load_table_exclude_patterns()
         print_header("Table Exclude Patterns")
         if patterns:
-            print_info(
-                "Tables with names matching these patterns "
-                + "will be excluded during '--update' and autocomplete cache generation:"
-            )
+            print_info("Tables with names matching these patterns " + "will be excluded during '--update' and autocomplete cache generation:")
             for pattern in patterns:
                 print_info(f"  • {pattern}")
         else:
@@ -426,6 +387,9 @@ def main() -> int:
 
     if args.add_source_custom_key:
         return _handle_add_source_custom_key(args)
+
+    if args.set_target_sink_env:
+        return handle_set_target_sink_env(args)
 
     # Handle multi-server management
     if args.add_server:
@@ -473,6 +437,7 @@ def main() -> int:
             get_single_server_group,
             load_server_groups,
         )
+
         try:
             config = load_server_groups()
             server_group = get_single_server_group(config)
@@ -482,41 +447,33 @@ def main() -> int:
                 return 1
 
             # Check for 'sources' key (new structure) or fallback to 'services' (legacy)
-            sources = server_group.get('sources', server_group.get('services', {}))
+            sources = server_group.get("sources", server_group.get("services", {}))
 
             if sources:
                 print_header("Environment-Grouped Sources")
                 for source_name, source_data in sorted(sources.items()):
                     # Type is already dict from YAML structure
                     src = cast(ConfigDict, source_data)
-                    schemas_raw = src.get('schemas', [])
+                    schemas_raw = src.get("schemas", [])
                     # Runtime validation: schemas must be a list of strings
-                    schemas = (
-                        [str(s) for s in schemas_raw]
-                        if isinstance(schemas_raw, list)
-                        else []
-                    )
+                    schemas = [str(s) for s in schemas_raw] if isinstance(schemas_raw, list) else []
                     print_info(f"\n📦 Source: {source_name}")
                     print_info(f"   Schemas (shared): {', '.join(schemas)}")
 
                     # Display each environment with server reference
                     for key, value in sorted(src.items()):
-                        if key == 'schemas':
+                        if key == "schemas":
                             continue  # Already displayed
-                        if isinstance(value, dict) and 'database' in value:
+                        if isinstance(value, dict) and "database" in value:
                             env = key
                             env_data = value  # Type is already Dict[str, ConfigValue]
                             # Extract with defaults and explicit type conversion
-                            server_raw = env_data.get('server', 'default')
-                            database_raw = env_data.get('database', '')
-                            table_count_raw = env_data.get('table_count', 0)
+                            server_raw = env_data.get("server", "default")
+                            database_raw = env_data.get("database", "")
+                            table_count_raw = env_data.get("table_count", 0)
                             server = str(server_raw)
                             database = str(database_raw)
-                            table_count = (
-                                int(table_count_raw)
-                                if isinstance(table_count_raw, (int, str))
-                                else 0
-                            )
+                            table_count = int(table_count_raw) if isinstance(table_count_raw, (int, str)) else 0
                             print_info(f"   🌍 {env}:")
                             print_info(f"       Server: {server}")
                             print_info(f"       Database: {database}")
@@ -528,7 +485,6 @@ def main() -> int:
         except Exception as e:
             print_error(f"Failed to view services: {e}")
             return 1
-
 
     # Handle set validation env
     if args.set_validation_env:
@@ -555,4 +511,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

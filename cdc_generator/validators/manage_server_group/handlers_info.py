@@ -54,6 +54,7 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
     servers = sg_config.get('servers', {})
     sources = sg_config.get('sources', {})
     database_ref = sg_config.get('database_ref')
+    source_name_map = sg_config.get('source_name_map', {})
     db_exclude = sg_config.get('database_exclude_patterns', [])
     schema_exclude = sg_config.get('schema_exclude_patterns', [])
     table_include = sg_config.get('table_include_patterns', [])
@@ -86,6 +87,8 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
         print(f"    {Colors.YELLOW}Description:{Colors.RESET}     {description}")
     if database_ref:
         print(f"    {Colors.YELLOW}Database Ref:{Colors.RESET}    {database_ref}")
+    if isinstance(source_name_map, dict) and source_name_map:
+        print(f"    {Colors.YELLOW}Source Name Map:{Colors.RESET} {len(source_name_map)} override(s)")
     if include_pattern:
         print(f"    {Colors.YELLOW}Include Pattern:{Colors.RESET} {include_pattern}")
     print(f"    {Colors.YELLOW}Environment Aware:{Colors.RESET} {environment_aware}")
@@ -129,6 +132,11 @@ def handle_info(args: Namespace) -> int:  # noqa: ARG001, PLR0915
             print(f"        {Colors.DIM}Tables:{Colors.RESET}")
             for p in table_exclude:
                 print(f"            • {p}")
+
+    if isinstance(source_name_map, dict) and source_name_map:
+        print(f"\n    {Colors.BLUE}📝 Source Name Overrides:{Colors.RESET}")
+        for database_name, source_name in sorted(source_name_map.items()):
+            print(f"        {Colors.GREEN}▶{Colors.RESET} {database_name} → {source_name}")
 
     # Sources (unified structure for both patterns)
     sources_dict = cast(dict[str, Any], sources)
