@@ -72,12 +72,15 @@ from cdc_generator.validators.manage_server_group import (
     handle_add_table_include,
     handle_info,
     handle_list_envs,
+    handle_list_source_name_map,
     handle_list_extraction_patterns,
     handle_list_servers,
+    handle_remove_source_name_map,
     handle_remove_extraction_pattern,
     handle_remove_server,
     handle_set_broker_topology,
     handle_set_extraction_pattern,
+    handle_set_source_name_map,
     handle_set_topology,
     handle_set_validation_env,
     handle_update,
@@ -216,6 +219,22 @@ def main() -> int:
         nargs=3,
         metavar=("SOURCE", "SOURCE_ENV", "TARGET_SINK_ENV"),
         help=("Set target sink routing for one source route. " + "Example: --set-target-sink-env AVProd default dev"),
+    )
+    parser.add_argument(
+        "--set-source-name-map",
+        nargs=2,
+        metavar=("DATABASE", "SOURCE_NAME"),
+        help=("Set a db-per-tenant source_name_map override. " + "If present, the mapped source name wins over extraction_pattern during --update."),
+    )
+    parser.add_argument(
+        "--remove-source-name-map",
+        metavar="DATABASE",
+        help="Remove a db-per-tenant source_name_map override by database name.",
+    )
+    parser.add_argument(
+        "--list-source-name-map",
+        action="store_true",
+        help="List configured db-per-tenant source_name_map overrides.",
     )
     parser.add_argument(
         "--list-envs",
@@ -390,6 +409,15 @@ def main() -> int:
 
     if args.set_target_sink_env:
         return handle_set_target_sink_env(args)
+
+    if args.set_source_name_map:
+        return handle_set_source_name_map(args)
+
+    if args.remove_source_name_map:
+        return handle_remove_source_name_map(args)
+
+    if args.list_source_name_map:
+        return handle_list_source_name_map(args)
 
     # Handle multi-server management
     if args.add_server:

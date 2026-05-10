@@ -61,6 +61,9 @@ class ManageServerGroupFlagValidator:
             "add_env_mapping",
             "list_env_mappings",
             "set_target_sink_env",
+            "set_source_name_map",
+            "remove_source_name_map",
+            "list_source_name_map",
         }
     )
 
@@ -74,6 +77,7 @@ class ManageServerGroupFlagValidator:
             "list_table_includes",
             "list_table_excludes",
             "list_env_mappings",
+            "list_source_name_map",
         }
     )
 

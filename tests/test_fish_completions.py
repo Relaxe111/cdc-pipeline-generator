@@ -404,6 +404,17 @@ class TestManageSourceGroupsOptions:
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
+    def test_has_source_name_map_options(self) -> None:
+        """source_name_map options must be declared."""
+        cmds = _get_typed_commands()
+        opts = _get_command_option_names(cmds["manage-source-groups"])
+        for opt in [
+            "--set-source-name-map",
+            "--remove-source-name-map",
+            "--list-source-name-map",
+        ]:
+            assert opt in opts, f"Missing option: {opt}"
+
     def test_has_table_exclude_options(self) -> None:
         """Table exclude options must be declared."""
         cmds = _get_typed_commands()

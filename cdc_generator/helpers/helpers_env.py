@@ -1,7 +1,8 @@
-"""Shared helpers for environment variable generation and .env file management.
+"""Shared helpers for environment variable generation and project env file management.
 
 Used by both source-group and sink-group CLI handlers when adding servers.
-Generates consistent env variable placeholder names and appends them to .env.
+Generates consistent env variable placeholder names and keeps .env and
+.env.example aligned.
 """
 
 import os
@@ -180,7 +181,7 @@ def _read_existing_env_vars(env_path: Path) -> set[str]:
     if not env_path.exists():
         return existing
 
-    for line in env_path.read_text().splitlines():
+    for line in env_path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
@@ -191,13 +192,92 @@ def _read_existing_env_vars(env_path: Path) -> set[str]:
     return existing
 
 
+def _managed_env_paths() -> tuple[Path, Path]:
+    """Return the project env files kept in sync by CLI mutations."""
+    project_root = get_project_root()
+    return project_root / ".env", project_root / ".env.example"
+
+
+def _append_env_vars_to_file(
+    env_path: Path,
+    placeholders: dict[str, str],
+    section_label: str,
+) -> set[str]:
+    """Append missing env variables to a single env-like file."""
+    existing = _read_existing_env_vars(env_path)
+
+    added_vars: list[str] = []
+    for placeholder in placeholders.values():
+        var_name = _strip_env_syntax(placeholder)
+        if var_name not in existing:
+            added_vars.append(var_name)
+
+    if not added_vars:
+        return set()
+
+    section_block = f"\n# {section_label}\n"
+    section_block += "\n".join(f"{var_name}=" for var_name in added_vars) + "\n"
+
+    with env_path.open("a", encoding="utf-8") as file_handle:
+        file_handle.write(section_block)
+
+    return set(added_vars)
+
+
+def _remove_env_vars_from_file(
+    env_path: Path,
+    var_names: set[str],
+) -> set[str]:
+    """Remove variables and orphaned section headers from a single env-like file."""
+    if not env_path.exists():
+        return set()
+
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    filtered: list[str] = []
+    removed_vars: set[str] = set()
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in var_names:
+                removed_vars.add(key)
+                continue
+        filtered.append(line)
+
+    if not removed_vars:
+        return set()
+
+    cleaned: list[str] = []
+    for index, line in enumerate(filtered):
+        stripped = line.strip()
+        if stripped.startswith("# ") and not stripped.startswith("# ="):
+            next_content = ""
+            for next_index in range(index + 1, len(filtered)):
+                if filtered[next_index].strip():
+                    next_content = filtered[next_index].strip()
+                    break
+            if next_content and not next_content.startswith("#"):
+                cleaned.append(line)
+                continue
+            if "Server:" in stripped or "server:" in stripped:
+                continue
+        cleaned.append(line)
+
+    while cleaned and not cleaned[-1].strip():
+        cleaned.pop()
+
+    env_path.write_text("\n".join(cleaned) + "\n", encoding="utf-8")
+    return removed_vars
+
+
 def append_env_vars_to_dotenv(
     placeholders: dict[str, str],
     section_label: str,
 ) -> int:
-    """Append env variable placeholders to .env file.
+    """Append env variable placeholders to project env files.
 
-    Only adds variables that don't already exist in the file.
+    Only adds variables that don't already exist in each file.
     Creates the file if it doesn't exist.
 
     Args:
@@ -206,56 +286,42 @@ def append_env_vars_to_dotenv(
             (e.g., 'Source Server: nonprod (postgres)')
 
     Returns:
-        Number of new variables added
+        Number of unique variables added across managed env files
     """
-    env_path = get_project_root() / ".env"
+    added_vars: set[str] = set()
+    for env_path in _managed_env_paths():
+        added_vars.update(
+            _append_env_vars_to_file(env_path, placeholders, section_label),
+        )
 
-    existing = _read_existing_env_vars(env_path)
-
-    # Collect only new variables
-    new_lines: list[str] = []
-    for _field, placeholder in placeholders.items():
-        var_name = _strip_env_syntax(placeholder)
-        if var_name not in existing:
-            new_lines.append(f"{var_name}=")
-
-    if not new_lines:
-        return 0
-
-    # Build the section block
-    section_block = f"\n# {section_label}\n"
-    section_block += "\n".join(new_lines) + "\n"
-
-    # Append to .env (create if needed)
-    with env_path.open("a") as f:
-        f.write(section_block)
-
-    return len(new_lines)
+    return len(added_vars)
 
 
 def print_env_update_summary(
     count: int,
     placeholders: dict[str, str],
 ) -> None:
-    """Print summary of .env file update.
+    """Print summary of project env file updates.
 
     Args:
         count: Number of new variables added
         placeholders: All placeholders (for display when nothing new)
     """
     if count > 0:
-        print_success(f"Added {count} env variable(s) to .env")
+        print_success(
+            f"Added {count} env variable(s) to .env / .env.example",
+        )
         for _field, placeholder in placeholders.items():
             var_name = _strip_env_syntax(placeholder)
             print_info(f"  {var_name}=")
     else:
-        print_warning("All env variables already exist in .env")
+        print_warning("All env variables already exist in .env / .env.example")
 
 
 def remove_env_vars_from_dotenv(
     placeholders: dict[str, str],
 ) -> int:
-    """Remove env variables and their section comment from .env file.
+    """Remove env variables and orphaned section comments from project env files.
 
     Removes lines matching the variable names and any preceding comment
     line that becomes orphaned (no variables left after it).
@@ -264,76 +330,35 @@ def remove_env_vars_from_dotenv(
         placeholders: Dict of field->placeholder (e.g., {'host': '${PG_HOST}'})
 
     Returns:
-        Number of variables removed
+        Number of unique variables removed across managed env files
     """
-    env_path = get_project_root() / ".env"
-    if not env_path.exists():
-        return 0
-
     var_names = {
         _strip_env_syntax(p) for p in placeholders.values()
     }
 
-    lines = env_path.read_text().splitlines()
-    filtered: list[str] = []
-    removed = 0
+    removed_vars: set[str] = set()
+    for env_path in _managed_env_paths():
+        removed_vars.update(_remove_env_vars_from_file(env_path, var_names))
 
-    for line in lines:
-        stripped = line.strip()
-        # Check if this line is a variable assignment we want to remove
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            key = stripped.split("=", 1)[0].strip()
-            if key in var_names:
-                removed += 1
-                continue
-        filtered.append(line)
-
-    if removed == 0:
-        return 0
-
-    # Clean up orphaned section comments (comment followed by blank/EOF)
-    cleaned: list[str] = []
-    for i, line in enumerate(filtered):
-        stripped = line.strip()
-        if stripped.startswith("# ") and not stripped.startswith("# ="):
-            # Check if next non-empty line is another comment or end of file
-            next_content = ""
-            for j in range(i + 1, len(filtered)):
-                if filtered[j].strip():
-                    next_content = filtered[j].strip()
-                    break
-            # Keep if next content is a variable, drop if it's another
-            # section comment, empty, or EOF
-            if next_content and not next_content.startswith("#"):
-                cleaned.append(line)
-                continue
-            # Check if this looks like a section label (e.g. "# Sink Server:")
-            if "Server:" in stripped or "server:" in stripped:
-                continue  # Drop orphaned section header
-        cleaned.append(line)
-
-    # Remove trailing blank lines
-    while cleaned and not cleaned[-1].strip():
-        cleaned.pop()
-
-    env_path.write_text("\n".join(cleaned) + "\n")
-    return removed
+    return len(removed_vars)
 
 
 def print_env_removal_summary(
     count: int,
     placeholders: dict[str, str],
 ) -> None:
-    """Print summary of .env variable removal.
+    """Print summary of project env variable removal.
 
     Args:
         count: Number of variables removed
         placeholders: All placeholders (for display)
     """
     if count > 0:
-        print_success(f"Removed {count} env variable(s) from .env")
+        print_success(
+            f"Removed {count} env variable(s) from .env / .env.example",
+        )
         for _field, placeholder in placeholders.items():
             var_name = _strip_env_syntax(placeholder)
             print_info(f"  {var_name}")
     else:
-        print_info("No matching env variables found in .env")
+        print_info("No matching env variables found in .env / .env.example")

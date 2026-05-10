@@ -40,6 +40,9 @@ def _ns(**kwargs: object) -> argparse.Namespace:
         "list_ignore_patterns": False,
         "add_to_schema_excludes": None,
         "add_source_custom_key": None,
+        "set_source_name_map": None,
+        "remove_source_name_map": None,
+        "list_source_name_map": False,
         "set_target_sink_env": None,
         "custom_key_value": None,
         "custom_key_exec_type": "sql",
@@ -182,6 +185,20 @@ class TestFlagValidator:
             custom_key_value="SELECT 1",
             custom_key_exec_type="sql",
         )
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is True
+
+    def test_set_source_name_map_is_valid(self) -> None:
+        """--set-source-name-map with database and source name should be valid."""
+        args = _ns(set_source_name_map=("AdOpusTest", "avansas"))
+        validator = ManageServerGroupFlagValidator()
+        result = validator.validate(args)
+        assert result.valid is True
+
+    def test_list_source_name_map_is_valid(self) -> None:
+        """--list-source-name-map should be treated as a read-only action."""
+        args = _ns(list_source_name_map=True)
         validator = ManageServerGroupFlagValidator()
         result = validator.validate(args)
         assert result.valid is True

@@ -8,6 +8,7 @@ import click
 
 from cdc_generator.cli.completions import (
     complete_available_envs,
+    complete_available_validation_databases,
     complete_non_inherited_sink_group_names,
     complete_server_group_names,
     complete_server_names,
@@ -64,6 +65,17 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 @click.option(
     "--set-target-sink-env", nargs=3, shell_complete=complete_set_target_sink_env, help="Set target sink env: SOURCE SOURCE_ENV TARGET_SINK_ENV"
 )
+@click.option(
+    "--set-source-name-map",
+    nargs=2,
+    help="Set source_name_map override: DATABASE SOURCE_NAME",
+)
+@click.option(
+    "--remove-source-name-map",
+    shell_complete=complete_available_validation_databases,
+    help="Remove source_name_map override by database name",
+)
+@click.option("--list-source-name-map", is_flag=True, help="List configured source_name_map overrides")
 @click.option("--add-server", help="Add new server configuration")
 @click.option("--list-servers", is_flag=True, help="List all configured servers")
 @click.option("--remove-server", help="Remove a server configuration")

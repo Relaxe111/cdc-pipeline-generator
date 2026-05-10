@@ -22,6 +22,11 @@ from .handlers_group import (
 from .handlers_info import (
     handle_info,
 )
+from .handlers_source_name_map import (
+    handle_list_source_name_map,
+    handle_remove_source_name_map,
+    handle_set_source_name_map,
+)
 from .handlers_server import (
     default_connection_placeholders,
     handle_add_extraction_pattern,
@@ -51,10 +56,13 @@ __all__ = [
     "handle_add_server",
     "handle_add_table_exclude",
     "handle_info",
+    "handle_list_source_name_map",
     "handle_list_extraction_patterns",
     "handle_list_servers",
+    "handle_remove_source_name_map",
     "handle_remove_extraction_pattern",
     "handle_remove_server",
+    "handle_set_source_name_map",
     "handle_set_extraction_pattern",
     "handle_set_broker_topology",
     "handle_set_topology",

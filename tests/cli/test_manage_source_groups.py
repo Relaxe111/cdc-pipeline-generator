@@ -86,6 +86,26 @@ _MULTI_SERVER_SOURCE_GROUPS = (
     "  sources: {}\n"
 )
 
+_DB_PER_TENANT_SOURCE_GROUPS = (
+    "fdw:\n"
+    "  pattern: db-per-tenant\n"
+    "  type: mssql\n"
+    "  servers:\n"
+    "    default:\n"
+    "      host: ${MSSQL_SOURCE_HOST}\n"
+    "      port: ${MSSQL_SOURCE_PORT}\n"
+    "      user: ${MSSQL_SOURCE_USER}\n"
+    "      password: ${MSSQL_SOURCE_PASSWORD}\n"
+    "  sources:\n"
+    "    Test:\n"
+    "      schemas:\n"
+    "        - dbo\n"
+    "      default:\n"
+    "        server: default\n"
+    "        database: AdOpusTest\n"
+    "        table_count: 5\n"
+)
+
 
 def _write_source_groups(
     root: Path,
@@ -732,6 +752,73 @@ class TestCliSourceCustomKeys:
         )
         assert result.returncode == 1
         assert "custom-key-value" in (result.stdout + result.stderr)
+
+
+class TestCliSourceNameMap:
+    """CLI e2e: source_name_map management."""
+
+    def test_set_source_name_map_persists_in_yaml(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project, _DB_PER_TENANT_SOURCE_GROUPS)
+        result = run_cdc(
+            "manage-source-groups",
+            "--set-source-name-map",
+            "AdOpusTest",
+            "avansas",
+        )
+        assert result.returncode == 0
+        yaml_content = _read_source_groups(isolated_project)
+        assert "source_name_map" in yaml_content
+        assert "AdOpusTest: avansas" in yaml_content
+
+    def test_list_source_name_map_shows_entries(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(
+            isolated_project,
+            _DB_PER_TENANT_SOURCE_GROUPS + "  source_name_map:\n" + "    AdOpusTest: avansas\n",
+        )
+        result = run_cdc("manage-source-groups", "--list-source-name-map")
+        assert result.returncode == 0
+        assert "AdOpusTest -> avansas" in result.stdout
+
+    def test_remove_source_name_map_deletes_entry(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(
+            isolated_project,
+            _DB_PER_TENANT_SOURCE_GROUPS + "  source_name_map:\n" + "    AdOpusTest: avansas\n",
+        )
+        result = run_cdc(
+            "manage-source-groups",
+            "--remove-source-name-map",
+            "AdOpusTest",
+        )
+        assert result.returncode == 0
+        yaml_content = _read_source_groups(isolated_project)
+        assert "AdOpusTest: avansas" not in yaml_content
+
+    def test_source_name_map_requires_db_per_tenant(
+        self,
+        run_cdc: RunCdc,
+        isolated_project: Path,
+    ) -> None:
+        _write_source_groups(isolated_project)
+        result = run_cdc(
+            "manage-source-groups",
+            "--set-source-name-map",
+            "directory_db",
+            "directory",
+        )
+        assert result.returncode == 1
+        assert "db-per-tenant" in (result.stdout + result.stderr)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

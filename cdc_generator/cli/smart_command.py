@@ -98,10 +98,11 @@ class SmartCommand(click.Command):
 
         # Determine which context flags are active (group keys only)
         active_contexts = self._get_active_contexts(ctx)
+        all_active = self._get_all_active_params(ctx)
 
         # If no context group flags are active, show entry-point options
         if not active_contexts:
-            filtered = self._filter_to_entry_points(all_completions, set())
+            filtered = self._filter_to_entry_points(all_completions, all_active)
 
             # When no options are matched (e.g. user tabs without typing '--'),
             # inject entry-point options so the user can discover available flags.
@@ -502,6 +503,9 @@ MANAGE_SOURCE_GROUPS_GROUPS: dict[str, set[str]] = {
     "add_env_mapping": set(),
     "list_env_mappings": set(),
     "set_target_sink_env": set(),
+    "set_source_name_map": set(),
+    "remove_source_name_map": set(),
+    "list_source_name_map": set(),
     "add_server": {
         "source_type",
         "host",
