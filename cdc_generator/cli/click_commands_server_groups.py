@@ -12,6 +12,7 @@ from cdc_generator.cli.completions import (
     complete_non_inherited_sink_group_names,
     complete_server_group_names,
     complete_server_names,
+    complete_set_source_name_map,
     complete_set_target_sink_env,
     complete_sink_group_context_aware,
     complete_sink_group_names,
@@ -68,6 +69,7 @@ _PASSTHROUGH_CTX: dict[str, object] = {
 @click.option(
     "--set-source-name-map",
     nargs=2,
+    shell_complete=complete_set_source_name_map,
     help="Set source_name_map override: DATABASE SOURCE_NAME",
 )
 @click.option(

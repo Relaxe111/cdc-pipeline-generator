@@ -37,21 +37,35 @@ def list_databases_from_server_group() -> list[str]:
         if not config:
             return []
 
-        databases: list[str] = []
-        server_group = config.get('server_group', {})
+        databases: set[str] = set()
 
-        # Iterate through all server groups (should be only one in implementations)
-        for group_data in server_group.values():
-            if isinstance(group_data, dict):
-                db_list = group_data.get('databases', [])
-                if isinstance(db_list, list):
-                    for db in db_list:
-                        if isinstance(db, dict):
-                            db_name = db.get('name')
-                            if db_name:
-                                databases.append(str(db_name))
+        for group_data in config.values():
+            if not isinstance(group_data, dict) or "pattern" not in group_data:
+                continue
 
-        return sorted(set(databases))
+            sources = group_data.get("sources", {})
+            if isinstance(sources, dict):
+                for source_data in sources.values():
+                    if not isinstance(source_data, dict):
+                        continue
+                    for env_name, env_data in source_data.items():
+                        if env_name == "schemas" or not isinstance(env_data, dict):
+                            continue
+                        db_name = env_data.get("database")
+                        if isinstance(db_name, str) and db_name.strip():
+                            databases.add(db_name.strip())
+
+            db_list = group_data.get("databases", [])
+            if isinstance(db_list, list):
+                for db in db_list:
+                    if isinstance(db, str) and db.strip():
+                        databases.add(db.strip())
+                    elif isinstance(db, dict):
+                        db_name = db.get("name")
+                        if isinstance(db_name, str) and db_name.strip():
+                            databases.add(db_name.strip())
+
+        return sorted(databases)
 
     except Exception:
         # Silently fail for completions - don't break the shell
@@ -60,7 +74,7 @@ def list_databases_from_server_group() -> list[str]:
 
 def main() -> None:
     """CLI entry point for shell completions."""
-    if len(sys.argv) > 1 and sys.argv[1] == '--list-databases':
+    if len(sys.argv) > 1 and sys.argv[1] == "--list-databases":
         databases = list_databases_from_server_group()
         for db in databases:
             print(db)

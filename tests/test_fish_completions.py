@@ -1096,6 +1096,18 @@ class TestSmartCompletion:
         opts = self._complete("cdc manage-source-groups --update default -")
         assert "--all" in opts
 
+    def test_set_source_name_map_first_value_suggests_databases(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "cdc_generator.helpers.autocompletions.server_groups.list_databases_from_server_group",
+            return_value=["AdOpusAVProd", "AdOpusFretexDev"],
+        ):
+            opts = self._complete("cdc manage-source-groups --set-source-name-map ")
+
+        assert "AdOpusAVProd" in opts
+        assert "AdOpusFretexDev" in opts
+
     # -- manage-sink-groups ---------------------------------------------------
 
     def test_sink_groups_entry_points(self) -> None:

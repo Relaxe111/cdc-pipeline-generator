@@ -45,10 +45,7 @@ except ImportError:
 # Public helpers
 # ---------------------------------------------------------------------------
 
-_INSTALL_HINT = (
-    "pymssql is not installed. Install it with: pip install pymssql\n"
-    "Note: pymssql requires FreeTDS. On macOS: brew install freetds"
-)
+_INSTALL_HINT = "pymssql is not installed. Install it with: pip install pymssql\nNote: pymssql requires FreeTDS. On macOS: brew install freetds"
 
 
 class MSSQLNotAvailableError(Exception):
@@ -75,6 +72,8 @@ def create_mssql_connection(
     database: str,
     user: str,
     password: str,
+    connect_timeout: int = 10,
+    query_timeout: int = 30,
 ) -> MSSQLConnection:
     """Create a pymssql connection with proper typing.
 
@@ -84,6 +83,8 @@ def create_mssql_connection(
         database: Database name.
         user: Username.
         password: Password.
+        connect_timeout: Login timeout in seconds.
+        query_timeout: Query timeout in seconds.
 
     Returns:
         A typed pymssql connection object.
@@ -92,12 +93,15 @@ def create_mssql_connection(
         MSSQLNotAvailableError: If pymssql is not installed.
     """
     mod = ensure_pymssql()
+    initial_database = database.strip() or "master"
     return mod.connect(
         server=host,
         port=port,
-        database=database,
+        database=initial_database,
         user=user,
         password=password,
+        login_timeout=connect_timeout,
+        timeout=query_timeout,
     )
 
 

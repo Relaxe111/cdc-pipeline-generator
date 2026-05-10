@@ -16,6 +16,7 @@ from cdc_generator.validators.manage_server_group.db_inspector import (
     PostgresConnectionError,
     extract_identifiers,
     get_postgres_connection,
+    list_mssql_databases,
 )
 from cdc_generator.validators.manage_server_group.handlers_update import (
     _merge_with_existing_sources,
@@ -388,6 +389,184 @@ class TestPostgresConnectionFallback:
         assert connect_calls[0]["port"] == 5432
         assert connect_calls[1]["host"] == "localhost"
         assert connect_calls[1]["port"] == 55432
+
+
+class TestMssqlInspectionConnectionDatabase:
+    """Tests for MSSQL inspection connection database selection."""
+
+    def test_uses_database_ref_for_initial_mssql_connection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """db-per-tenant inspection should connect via database_ref when present."""
+        connection_calls: list[tuple[dict[str, Any], str]] = []
+
+        class FakeCursor:
+            def __init__(self) -> None:
+                self._fetchall_calls = 0
+
+            def execute(self, query: str, args: object | None = None) -> None:
+                _ = query
+                _ = args
+
+            def fetchall(self) -> list[tuple[object, ...]]:
+                self._fetchall_calls += 1
+                if self._fetchall_calls == 1:
+                    return [("AdOpusTest",)]
+                return [("dbo", "Actor")]
+
+        class FakeConnection:
+            def cursor(self, *, as_dict: bool = False) -> FakeCursor:
+                _ = as_dict
+                return FakeCursor()
+
+            def close(self) -> None:
+                return None
+
+        def fake_get_mssql_connection(server_config: dict[str, Any], database: str = "") -> FakeConnection:
+            connection_calls.append((server_config, database))
+            return FakeConnection()
+
+        monkeypatch.setattr(
+            "cdc_generator.validators.manage_server_group.db_inspector.get_mssql_connection",
+            fake_get_mssql_connection,
+        )
+
+        databases = list_mssql_databases(
+            {"host": "localhost", "port": 1433, "user": "sa", "password": "secret"},
+            {
+                "name": "fdw",
+                "pattern": "db-per-tenant",
+                "type": "mssql",
+                "database_ref": "AdOpusTest",
+                "validation_env": "default",
+                "sources": {
+                    "avansas": {
+                        "schemas": ["dbo"],
+                        "default": {
+                            "server": "default",
+                            "database": "AdOpusTest",
+                        },
+                    },
+                },
+            },
+        )
+
+        assert connection_calls == [({"host": "localhost", "port": 1433, "user": "sa", "password": "secret"}, "AdOpusTest")]
+        assert len(databases) == 1
+
+    def test_falls_back_to_master_when_database_ref_missing(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """MSSQL inspection should use master when no database_ref is configured."""
+        connection_calls: list[tuple[dict[str, Any], str]] = []
+
+        class FakeCursor:
+            def __init__(self) -> None:
+                self._fetchall_calls = 0
+
+            def execute(self, query: str, args: object | None = None) -> None:
+                _ = query
+                _ = args
+
+            def fetchall(self) -> list[tuple[object, ...]]:
+                self._fetchall_calls += 1
+                if self._fetchall_calls == 1:
+                    return [("CustomerDb",)]
+                return [("dbo", "Actor")]
+
+        class FakeConnection:
+            def cursor(self, *, as_dict: bool = False) -> FakeCursor:
+                _ = as_dict
+                return FakeCursor()
+
+            def close(self) -> None:
+                return None
+
+        def fake_get_mssql_connection(server_config: dict[str, Any], database: str = "") -> FakeConnection:
+            connection_calls.append((server_config, database))
+            return FakeConnection()
+
+        monkeypatch.setattr(
+            "cdc_generator.validators.manage_server_group.db_inspector.get_mssql_connection",
+            fake_get_mssql_connection,
+        )
+
+        databases = list_mssql_databases(
+            {"host": "localhost", "port": 1433, "user": "sa", "password": "secret"},
+            {
+                "name": "fdw",
+                "pattern": "db-per-tenant",
+                "type": "mssql",
+                "sources": {},
+            },
+        )
+
+        assert connection_calls == [({"host": "localhost", "port": 1433, "user": "sa", "password": "secret"}, "master")]
+        assert len(databases) == 1
+
+    def test_falls_back_to_master_when_database_ref_belongs_to_other_server(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Inspection should not reuse a reference DB that belongs to another server."""
+        connection_calls: list[tuple[dict[str, Any], str]] = []
+
+        class FakeCursor:
+            def __init__(self) -> None:
+                self._fetchall_calls = 0
+
+            def execute(self, query: str, args: object | None = None) -> None:
+                _ = query
+                _ = args
+
+            def fetchall(self) -> list[tuple[object, ...]]:
+                self._fetchall_calls += 1
+                if self._fetchall_calls == 1:
+                    return [("CustomerDb",)]
+                return [("dbo", "Actor")]
+
+        class FakeConnection:
+            def cursor(self, *, as_dict: bool = False) -> FakeCursor:
+                _ = as_dict
+                return FakeCursor()
+
+            def close(self) -> None:
+                return None
+
+        def fake_get_mssql_connection(server_config: dict[str, Any], database: str = "") -> FakeConnection:
+            connection_calls.append((server_config, database))
+            return FakeConnection()
+
+        monkeypatch.setattr(
+            "cdc_generator.validators.manage_server_group.db_inspector.get_mssql_connection",
+            fake_get_mssql_connection,
+        )
+
+        databases = list_mssql_databases(
+            {"host": "localhost", "port": 1433, "user": "sa", "password": "secret"},
+            {
+                "name": "fdw",
+                "pattern": "db-per-tenant",
+                "type": "mssql",
+                "database_ref": "AdOpusTest",
+                "validation_env": "default",
+                "sources": {
+                    "avansas": {
+                        "schemas": ["dbo"],
+                        "default": {
+                            "server": "nonprod",
+                            "database": "AdOpusTest",
+                        },
+                    },
+                },
+            },
+            server_name="prod",
+        )
+
+        assert connection_calls == [({"host": "localhost", "port": 1433, "user": "sa", "password": "secret"}, "master")]
+        assert len(databases) == 1
 
     @patch("cdc_generator.validators.manage_server_group.handlers_update.load_server_groups")
     @patch("cdc_generator.validators.manage_server_group.handlers_update.get_single_server_group")

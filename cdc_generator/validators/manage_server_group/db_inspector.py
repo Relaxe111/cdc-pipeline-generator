@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -323,8 +324,13 @@ def _resolve_env_value(value: str | int | None, field_name: str) -> str:
 def get_mssql_connection(
     server_config: ServerConfig,
     database: str = "",
+    hard_timeout: int = 15,
 ) -> MSSQLConnection:
     """Get MSSQL connection from server config.
+
+    Uses a thread-based hard timeout because FreeTDS login_timeout does not
+    reliably interrupt blocking TDS handshakes on macOS when the TCP port is
+    open but the server is slow to respond.
 
     Returns:
         pymssql connection object with type-safe interface.
@@ -337,7 +343,88 @@ def get_mssql_connection(
     password = _resolve_env_value(server_config.get("password"), "password")
     port = int(_resolve_env_value(server_config.get("port", 1433), "port"))
 
-    return create_mssql_connection(host=host, port=port, database=database, user=user, password=password)
+    result: list[MSSQLConnection | None] = [None]
+    exc: list[BaseException | None] = [None]
+
+    def _connect() -> None:
+        try:
+            result[0] = create_mssql_connection(host=host, port=port, database=database, user=user, password=password)
+        except BaseException as e:  # noqa: BLE001
+            exc[0] = e
+
+    thread = threading.Thread(target=_connect, daemon=True)
+    thread.start()
+    thread.join(timeout=hard_timeout)
+
+    if thread.is_alive():
+        raise TimeoutError(
+            f"MSSQL connection to {host}:{port} timed out after {hard_timeout}s "
+            f"(FreeTDS login_timeout did not fire — server accepted TCP but did not complete TDS handshake)"
+        )
+    if exc[0] is not None:
+        raise exc[0]
+    conn = result[0]
+    if conn is None:
+        raise RuntimeError(f"MSSQL connection to {host}:{port} returned no connection object")
+    return conn
+
+
+def _get_mssql_inspection_database(server_group_config: ServerGroupConfig, server_name: str) -> str:
+    """Return the initial database to use for MSSQL server inspection.
+
+    db-per-tenant groups may require a known tenant database for the initial
+    login handshake, but only when that database belongs to the server being
+    inspected. Fall back to ``master`` so inspection never passes an empty or
+    cross-server database name to the client.
+    """
+    validation_env_raw = server_group_config.get("validation_env")
+    validation_env = validation_env_raw if isinstance(validation_env_raw, str) and validation_env_raw.strip() else "default"
+    sources_obj = server_group_config.get("sources", {})
+    if not isinstance(sources_obj, dict):
+        return "master"
+
+    sources = cast(dict[str, object], sources_obj)
+    database_ref = server_group_config.get("database_ref")
+    if isinstance(database_ref, str) and database_ref.strip():
+        database_ref_str = database_ref.strip()
+        source_config_obj = sources.get(database_ref_str)
+        if isinstance(source_config_obj, dict):
+            source_config = cast(dict[str, object], source_config_obj)
+            env_entry_obj = source_config.get(validation_env)
+            if isinstance(env_entry_obj, dict):
+                env_entry = cast(dict[str, object], env_entry_obj)
+                env_server = env_entry.get("server", "default")
+                env_database = env_entry.get("database")
+                if env_server == server_name and isinstance(env_database, str) and env_database.strip():
+                    return env_database.strip()
+
+        for source_config_obj in sources.values():
+            if not isinstance(source_config_obj, dict):
+                continue
+            source_config = cast(dict[str, object], source_config_obj)
+            env_entry_obj = source_config.get(validation_env)
+            if not isinstance(env_entry_obj, dict):
+                continue
+            env_entry = cast(dict[str, object], env_entry_obj)
+            env_server = env_entry.get("server", "default")
+            env_database = env_entry.get("database")
+            if env_server == server_name and env_database == database_ref_str:
+                return database_ref_str
+
+    for source_config_obj in sources.values():
+        if not isinstance(source_config_obj, dict):
+            continue
+        source_config = cast(dict[str, object], source_config_obj)
+        env_entry_obj = source_config.get(validation_env)
+        if not isinstance(env_entry_obj, dict):
+            continue
+        env_entry = cast(dict[str, object], env_entry_obj)
+        env_server = env_entry.get("server", "default")
+        env_database = env_entry.get("database")
+        if env_server == server_name and isinstance(env_database, str) and env_database.strip():
+            return env_database.strip()
+
+    return "master"
 
 
 def get_postgres_connection(server_config: ServerConfig, database: str = "postgres") -> PgConnection:
@@ -495,7 +582,8 @@ def list_mssql_databases(
     # Use provided patterns or empty lists
     ignore_patterns = database_exclude_patterns or []
 
-    conn = get_mssql_connection(server_config)
+    inspection_database = _get_mssql_inspection_database(server_group_config, server_name)
+    conn = get_mssql_connection(server_config, database=inspection_database)
     cursor = conn.cursor()
 
     cursor.execute("""

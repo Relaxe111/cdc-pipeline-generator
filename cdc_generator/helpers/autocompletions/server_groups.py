@@ -303,14 +303,18 @@ def list_databases_from_server_group() -> list[str]:
     Returns:
         List of database names.
 
-    Expected YAML structure:
-        server_group_name:
-          databases:
-            - name: db1
-            - name: db2
-          # OR legacy format:
-            - db1
-            - db2
+        Expected YAML structure:
+                server_group_name:
+                    sources:
+                        SourceA:
+                            default:
+                                database: db1
+                            prod:
+                                database: db2
+                    # Legacy fallback:
+                    databases:
+                        - name: db1
+                        - name: db2
 
     Example:
         >>> list_databases_from_server_group()
@@ -327,24 +331,36 @@ def list_databases_from_server_group() -> list[str]:
 
         databases: set[str] = set()
 
-        # Extract from server_group structure
-        server_group = config.get("server_group", {})
-        if isinstance(server_group, dict):
-            server_group_dict = cast(dict[str, Any], server_group)
-            for group_data in server_group_dict.values():
-                if isinstance(group_data, dict):
-                    group_dict = cast(dict[str, Any], group_data)
-                    # Get databases list
-                    dbs = group_dict.get("databases", [])
-                    if isinstance(dbs, list):
-                        for db in dbs:
-                            if isinstance(db, str):
-                                databases.add(db)
-                            elif isinstance(db, dict):
-                                db_dict = cast(dict[str, Any], db)
-                                db_name = db_dict.get("name")
-                                if db_name:
-                                    databases.add(str(db_name))
+        for group_data in config.values():
+            if not isinstance(group_data, dict) or "pattern" not in group_data:
+                continue
+
+            group_dict = cast(dict[str, Any], group_data)
+            sources_obj = group_dict.get("sources", {})
+            if isinstance(sources_obj, dict):
+                sources_dict = cast(dict[str, Any], sources_obj)
+                for source_data in sources_dict.values():
+                    if not isinstance(source_data, dict):
+                        continue
+                    source_dict = cast(dict[str, Any], source_data)
+                    for env_name, env_data in source_dict.items():
+                        if env_name == "schemas" or not isinstance(env_data, dict):
+                            continue
+                        env_dict = cast(dict[str, Any], env_data)
+                        database_name = env_dict.get("database")
+                        if isinstance(database_name, str) and database_name.strip():
+                            databases.add(database_name.strip())
+
+            dbs = group_dict.get("databases", [])
+            if isinstance(dbs, list):
+                for db in dbs:
+                    if isinstance(db, str) and db.strip():
+                        databases.add(db.strip())
+                    elif isinstance(db, dict):
+                        db_dict = cast(dict[str, Any], db)
+                        db_name = db_dict.get("name")
+                        if isinstance(db_name, str) and db_name.strip():
+                            databases.add(db_name.strip())
 
         return sorted(databases)
 

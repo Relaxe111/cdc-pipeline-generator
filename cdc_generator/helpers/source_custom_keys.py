@@ -138,6 +138,7 @@ def _run_sql_mssql(
     )
 
     with get_mssql_connection(server_config, database=database_name) as conn, conn.cursor() as cursor:
+        cursor.execute("SET LOCK_TIMEOUT 5000")  # fail fast if table is locked
         cursor.execute(sql_query)
         row = cursor.fetchone()
     return _normalize_row_value(row)

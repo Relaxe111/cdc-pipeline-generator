@@ -66,6 +66,8 @@ class MSSQLModule(Protocol):
         database: str,
         user: str,
         password: str,
+        login_timeout: int = 10,
+        timeout: int = 30,
     ) -> MSSQLConnection:
         """Create a new MSSQL connection."""
         ...

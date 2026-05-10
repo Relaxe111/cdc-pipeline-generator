@@ -126,6 +126,7 @@ __all__ = [
     "complete_schema_services",
     "complete_server_group_names",
     "complete_server_names",
+    "complete_set_source_name_map",
     "complete_sink_group_names",
     "complete_transform_rules",
 ]
@@ -358,6 +359,33 @@ def complete_target_sink_env(
         return []
 
     return _filter(sorted(env_keys), incomplete)
+
+
+def complete_set_source_name_map(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete the first ``--set-source-name-map`` value from database names."""
+    parsed_values = _get_multi_param_values(ctx, "set_source_name_map")
+    if not parsed_values:
+        parsed_values = _get_last_option_values_from_args(
+            ctx,
+            "--set-source-name-map",
+            2,
+        )
+
+    if len(parsed_values) > 0:
+        return []
+
+    from cdc_generator.helpers.autocompletions.server_groups import (
+        list_databases_from_server_group,
+    )
+
+    return _filter(
+        _safe_call(list_databases_from_server_group),
+        incomplete,
+    )
 
 
 def complete_set_target_sink_env(
