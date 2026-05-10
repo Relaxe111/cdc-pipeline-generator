@@ -139,11 +139,20 @@ def _get_last_option_values_from_args(
     max_values: int,
 ) -> list[str]:
     """Return the parsed values following the last occurrence of an option token."""
-    args_list = list(ctx.args)
+    args_list: list[str] = []
+    search_ctx: click.Context | None = ctx
     last_index = -1
-    for index, token in enumerate(args_list):
-        if token == option_name:
-            last_index = index
+    while search_ctx is not None:
+        candidate_args = [str(token) for token in search_ctx.args]
+        for index, token in enumerate(candidate_args):
+            if token == option_name:
+                args_list = candidate_args
+                last_index = index
+
+        if last_index != -1:
+            break
+
+        search_ctx = search_ctx.parent
 
     if last_index == -1:
         return []
@@ -357,11 +366,13 @@ def complete_set_target_sink_env(
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete SOURCE, SOURCE_ENV, then TARGET_SINK_ENV for source-group routing."""
-    parsed_values = _get_last_option_values_from_args(
-        ctx,
-        "--set-target-sink-env",
-        3,
-    )
+    parsed_values = _get_multi_param_values(ctx, "set_target_sink_env")
+    if not parsed_values:
+        parsed_values = _get_last_option_values_from_args(
+            ctx,
+            "--set-target-sink-env",
+            3,
+        )
 
     if len(parsed_values) == 0:
         from cdc_generator.helpers.autocompletions.server_groups import (
