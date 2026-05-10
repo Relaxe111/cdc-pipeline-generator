@@ -76,13 +76,14 @@ def build_db_per_tenant_structure(databases: list[dict[str, Any]]) -> dict[str, 
         databases: List of database info dictionaries
 
     Returns:
-        Dictionary mapping source name -> {schemas, default}
+        Dictionary mapping source name -> {schemas, environments}
     """
     source_data: dict[str, dict[str, Any]] = {}
 
     for db in databases:
         customer = db.get("customer", db["name"])
         server_name = db.get("server", "default")
+        env = db.get("environment") or "default"
         env_entry: dict[str, Any] = {"server": server_name, "database": db["name"], "table_count": db.get("table_count", 0)}
         _apply_route_metadata(env_entry, db)
         custom_values = db.get("source_custom_values")
@@ -98,11 +99,15 @@ def build_db_per_tenant_structure(databases: list[dict[str, Any]]) -> dict[str, 
                 env_entry[key] = value if value else None
 
         if customer not in source_data:
-            source_data[customer] = {"schemas": set(db.get("schemas", [])), "default": env_entry}
-        else:
-            # Merge schemas
-            for schema in db.get("schemas", []):
-                source_data[customer]["schemas"].add(schema)
+            source_data[customer] = {
+                "schemas": set(db.get("schemas", [])),
+                "environments": {env: env_entry},
+            }
+            continue
+
+        for schema in db.get("schemas", []):
+            source_data[customer]["schemas"].add(schema)
+        source_data[customer]["environments"][env] = env_entry
 
     return source_data
 
@@ -128,7 +133,8 @@ def convert_to_yaml_structure(source_data: dict[str, dict[str, Any]], pattern: s
             for env, env_data in sorted(data["environments"].items()):
                 sources[source_name][env] = env_data
         else:
-            # db-per-tenant: single 'default' environment
-            sources[source_name]["default"] = data["default"]
+            # db-per-tenant: one entry per discovered server/environment
+            for env, env_data in sorted(data["environments"].items()):
+                sources[source_name][env] = env_data
 
     return sources

@@ -13,6 +13,7 @@ from cdc_generator.validators.flag_validator import ManageServerGroupFlagValidat
 from cdc_generator.validators.manage_server_group.filters import (
     should_exclude_schema,
     should_exclude_table,
+    should_include_database_patterns,
     should_ignore_database,
 )
 from cdc_generator.validators.manage_server_group.handlers_config import (
@@ -394,6 +395,12 @@ class TestExcludePatternMatching:
 
     def test_table_exclude_regex_matches(self) -> None:
         assert should_exclude_table("zz_internal", [r"^zz_.*"]) is True
+
+    def test_database_include_plain_word_matches_contains(self) -> None:
+        assert should_include_database_patterns("directory_stage", ["directory"]) is True
+
+    def test_database_include_requires_one_match(self) -> None:
+        assert should_include_database_patterns("auth_dev", ["directory"]) is False
 
 
 # ═══════════════════════════════════════════════════════════════════════════

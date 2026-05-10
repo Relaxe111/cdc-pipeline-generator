@@ -41,10 +41,7 @@ def _run_inspection(
     servers = resolved.get("servers", {})
     server_name = args.server or next(iter(servers), "default")
     if server_name not in servers:
-        print_error(
-            f"Server '{server_name}' not found" +
-            f" in sink group '{sink_group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found" + f" in sink group '{sink_group_name}'")
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
@@ -63,9 +60,7 @@ def _run_inspection(
         )
     except ValueError as e:
         print_error(str(e))
-        print_info(
-            "Only 'postgres' and 'mssql' sink types support inspection."
-        )
+        print_info("Only 'postgres' and 'mssql' sink types support inspection.")
         return 1
     except ImportError as e:
         print_error(f"Database driver not installed: {e}")
@@ -90,9 +85,7 @@ def _print_inspection_results(databases: list[dict[str, Any]]) -> None:
         print(f"    Tables:      {db['table_count']}")
         print()
 
-    print_info(
-        "Persisted discovered databases into sink-group sources."
-    )
+    print_info("Persisted discovered databases into sink-group sources.")
 
 
 def _fetch_databases(
@@ -117,18 +110,11 @@ def _fetch_databases(
             server_config=server_config,  # type: ignore[arg-type]
             server_group_config=resolved,  # type: ignore[arg-type]
             include_pattern=args.include_pattern,
-            database_exclude_patterns=resolved.get(
-                "database_exclude_patterns"
-            ),
-            schema_exclude_patterns=resolved.get(
-                "schema_exclude_patterns"
-            ),
-            table_include_patterns=resolved.get(
-                "table_include_patterns"
-            ),
-            table_exclude_patterns=resolved.get(
-                "table_exclude_patterns"
-            ),
+            database_include_patterns=resolved.get("database_include_patterns"),
+            database_exclude_patterns=resolved.get("database_exclude_patterns"),
+            schema_exclude_patterns=resolved.get("schema_exclude_patterns"),
+            table_include_patterns=resolved.get("table_include_patterns"),
+            table_exclude_patterns=resolved.get("table_exclude_patterns"),
             server_name=server_name,
         )
     if sink_type == "postgres":
@@ -136,23 +122,14 @@ def _fetch_databases(
             server_config=server_config,  # type: ignore[arg-type]
             server_group_config=resolved,  # type: ignore[arg-type]
             include_pattern=args.include_pattern,
-            database_exclude_patterns=resolved.get(
-                "database_exclude_patterns"
-            ),
-            schema_exclude_patterns=resolved.get(
-                "schema_exclude_patterns"
-            ),
-            table_include_patterns=resolved.get(
-                "table_include_patterns"
-            ),
-            table_exclude_patterns=resolved.get(
-                "table_exclude_patterns"
-            ),
+            database_include_patterns=resolved.get("database_include_patterns"),
+            database_exclude_patterns=resolved.get("database_exclude_patterns"),
+            schema_exclude_patterns=resolved.get("schema_exclude_patterns"),
+            table_include_patterns=resolved.get("table_include_patterns"),
+            table_exclude_patterns=resolved.get("table_exclude_patterns"),
             server_name=server_name,
         )
-    raise ValueError(
-        f"Inspection not supported for sink type: {sink_type}"
-    )
+    raise ValueError(f"Inspection not supported for sink type: {sink_type}")
 
 
 def handle_inspect_command(args: argparse.Namespace) -> int:
@@ -175,18 +152,12 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
     servers = resolved.get("servers", {})
     server_name = args.server or next(iter(servers), "default")
     if server_name not in servers:
-        print_error(
-            f"Server '{server_name}' not found"
-            + f" in sink group '{sink_group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found" + f" in sink group '{sink_group_name}'")
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
     server_config = servers[server_name]
-    print_header(
-        f"Inspecting Sink Server: {server_name}"
-        + f" ({resolved.get('type', 'postgres')})"
-    )
+    print_header(f"Inspecting Sink Server: {server_name}" + f" ({resolved.get('type', 'postgres')})")
 
     try:
         databases = _fetch_databases(
@@ -198,9 +169,7 @@ def handle_inspect_command(args: argparse.Namespace) -> int:
         )
     except ValueError as e:
         print_error(str(e))
-        print_info(
-            "Only 'postgres' and 'mssql' sink types support inspection."
-        )
+        print_info("Only 'postgres' and 'mssql' sink types support inspection.")
         return 1
     except ImportError as e:
         print_error(f"Database driver not installed: {e}")
@@ -232,9 +201,7 @@ def _persist_inspection_results(
     server_config: object,
 ) -> int:
     """Render inspect output and persist discovered sink sources."""
-    source_custom_keys = normalize_source_custom_keys(
-        sink_group.get("source_custom_keys", {})
-    )
+    source_custom_keys = normalize_source_custom_keys(sink_group.get("source_custom_keys", {}))
     if source_custom_keys:
         execute_source_custom_keys(
             databases,

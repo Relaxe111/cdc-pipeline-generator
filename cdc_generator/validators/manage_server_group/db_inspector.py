@@ -22,6 +22,7 @@ from cdc_generator.helpers.psycopg2_loader import (
 from cdc_generator.helpers.service_config import get_project_root
 
 from .filters import (
+    should_include_database_patterns,
     should_exclude_schema,
     should_exclude_table,
     should_include_table,
@@ -167,6 +168,7 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, se
     pattern_type = server_group_config.get("pattern")
     servers = server_group_config.get("servers", {})
     server_config = servers.get(server_name, {})
+    env_key = server_name or "default"
 
     # For db-shared: try ordered extraction patterns first (NEW)
     if pattern_type == "db-shared":
@@ -199,7 +201,7 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, se
                     return {
                         "customer": override,
                         "service": server_group_config.get("name", ""),
-                        "env": "",
+                        "env": env_key,
                         "suffix": "",
                     }
 
@@ -211,12 +213,22 @@ def extract_identifiers(db_name: str, server_group_config: ServerGroupConfig, se
             match = re.match(extraction_pattern, db_name)
             if match:
                 groups = match.groupdict()
-                return {"customer": groups.get("customer", db_name), "service": server_group_config.get("name", ""), "env": "", "suffix": ""}
+                return {
+                    "customer": groups.get("customer", db_name),
+                    "service": server_group_config.get("name", ""),
+                    "env": env_key,
+                    "suffix": "",
+                }
 
     # Fallback logic when no pattern or pattern doesn't match
     if pattern_type == "db-per-tenant":
         # Use database name as customer
-        return {"customer": db_name, "service": server_group_config.get("name", ""), "env": "", "suffix": ""}
+        return {
+            "customer": db_name,
+            "service": server_group_config.get("name", ""),
+            "env": env_key,
+            "suffix": "",
+        }
 
     if pattern_type == "db-shared":
         # Fallback: no pattern matched
@@ -559,6 +571,7 @@ def list_mssql_databases(
     server_config: ServerConfig,
     server_group_config: ServerGroupConfig,
     include_pattern: str | None = None,
+    database_include_patterns: list[str] | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
     table_include_patterns: list[str] | None = None,
@@ -571,6 +584,7 @@ def list_mssql_databases(
         server_config: Server connection configuration
         server_group_config: Full server group configuration for extraction patterns
         include_pattern: Regex pattern to include only matching databases
+        database_include_patterns: Patterns to include databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
         table_include_patterns: Patterns to include tables
@@ -596,6 +610,7 @@ def list_mssql_databases(
 
     databases: list[DatabaseInfo] = []
     ignored_count = 0
+    include_filtered_count = 0
     excluded_count = 0
     ignored_schema_count = 0
     databases_with_ignored_schemas = 0
@@ -607,6 +622,10 @@ def list_mssql_databases(
         # Check if database should be ignored
         if should_ignore_database(db_name, ignore_patterns):
             ignored_count += 1
+            continue
+
+        if not should_include_database_patterns(db_name, database_include_patterns):
+            include_filtered_count += 1
             continue
 
         # Check if database matches include pattern
@@ -675,6 +694,12 @@ def list_mssql_databases(
         patterns_text = ", ".join(ignore_patterns)
         print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
 
+    if include_filtered_count > 0:
+        include_patterns_text = ", ".join(database_include_patterns or [])
+        print_info(
+            "✅ Included only databases matching patterns: " + f"\033[32m{include_patterns_text}\033[0m" + f" (filtered out {include_filtered_count})"
+        )
+
     if excluded_count > 0:
         print_info(f"⊘ Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")
 
@@ -706,6 +731,7 @@ def list_postgres_databases(  # noqa: PLR0915
     server_config: ServerConfig,
     server_group_config: ServerGroupConfig,
     include_pattern: str | None = None,
+    database_include_patterns: list[str] | None = None,
     database_exclude_patterns: list[str] | None = None,
     schema_exclude_patterns: list[str] | None = None,
     table_include_patterns: list[str] | None = None,
@@ -718,6 +744,7 @@ def list_postgres_databases(  # noqa: PLR0915
         server_config: Server connection configuration
         server_group_config: Full server group configuration for extraction patterns
         include_pattern: Regex pattern to include only matching databases
+        database_include_patterns: Patterns to include databases
         database_exclude_patterns: Patterns to exclude databases
         schema_exclude_patterns: Patterns to exclude schemas
         table_include_patterns: Patterns to include tables
@@ -746,10 +773,15 @@ def list_postgres_databases(  # noqa: PLR0915
     # Filter out ignored databases and check include pattern
     filtered_db_names: list[str] = []
     ignored_count = 0
+    include_filtered_count = 0
     excluded_count = 0
     for db_name in db_names:
         if should_ignore_database(db_name, ignore_patterns):
             ignored_count += 1
+            continue
+
+        if not should_include_database_patterns(db_name, database_include_patterns):
+            include_filtered_count += 1
             continue
 
         if not should_include_database(db_name, include_pattern):
@@ -761,6 +793,12 @@ def list_postgres_databases(  # noqa: PLR0915
     if ignored_count > 0:
         patterns_text = ", ".join(ignore_patterns)
         print_info(f"🚫 Ignored {ignored_count} database(s) matching patterns: \033[31m{patterns_text}\033[0m")
+
+    if include_filtered_count > 0:
+        include_patterns_text = ", ".join(database_include_patterns or [])
+        print_info(
+            "✅ Included only databases matching patterns: " + f"\033[32m{include_patterns_text}\033[0m" + f" (filtered out {include_filtered_count})"
+        )
 
     if excluded_count > 0:
         print_info(f"⊘ Excluded {excluded_count} database(s) not matching include pattern: {include_pattern}")

@@ -18,6 +18,10 @@ from cdc_generator.validators.manage_server_group.db_inspector import (
     get_postgres_connection,
     list_mssql_databases,
 )
+from cdc_generator.validators.manage_server_group.yaml_builder import (
+    build_db_per_tenant_structure,
+    convert_to_yaml_structure,
+)
 from cdc_generator.validators.manage_server_group.handlers_update import (
     _merge_with_existing_sources,
     _apply_updates,
@@ -301,6 +305,21 @@ class TestDbPerTenantSourceNameOverrides:
         assert result["customer"] == "avansas"
         assert result["service"] == "fdw"
 
+    def test_extract_identifiers_uses_server_name_as_environment(self) -> None:
+        """db-per-tenant discoveries should keep server-specific env keys."""
+        server_group = {
+            "name": "fdw",
+            "pattern": "db-per-tenant",
+            "extraction_pattern": r"^AdOpus(?P<customer>.+)$",
+            "servers": {"nonprod": {}, "prod": {}},
+            "sources": {},
+        }
+
+        result = extract_identifiers("AdOpusBrukerforum", server_group, "nonprod")
+
+        assert result["customer"] == "Brukerforum"
+        assert result["env"] == "nonprod"
+
     def test_merge_preserves_route_metadata_when_source_name_changes(self) -> None:
         """Renaming a source via source_name_map should not drop route metadata."""
         server_group = {
@@ -332,6 +351,36 @@ class TestDbPerTenantSourceNameOverrides:
         merged = _merge_with_existing_sources(server_group, scanned_databases, {"default"})
 
         assert merged[0]["target_sink_env"] == "prod"
+
+    def test_db_per_tenant_builder_keeps_distinct_env_entries_per_customer(self) -> None:
+        """The same customer on multiple servers should serialize under multiple env keys."""
+        source_data = build_db_per_tenant_structure(
+            [
+                {
+                    "name": "AdOpusBrukerforum",
+                    "customer": "Brukerforum",
+                    "environment": "nonprod",
+                    "server": "nonprod",
+                    "schemas": ["dbo"],
+                    "table_count": 93,
+                },
+                {
+                    "name": "AdOpusBrukerforum",
+                    "customer": "Brukerforum",
+                    "environment": "prod",
+                    "server": "prod",
+                    "schemas": ["dbo"],
+                    "table_count": 94,
+                },
+            ]
+        )
+
+        sources = convert_to_yaml_structure(source_data, "db-per-tenant")
+
+        assert "nonprod" in sources["Brukerforum"]
+        assert "prod" in sources["Brukerforum"]
+        assert sources["Brukerforum"]["nonprod"]["server"] == "nonprod"
+        assert sources["Brukerforum"]["prod"]["server"] == "prod"
 
 
 class TestPostgresConnectionFallback:

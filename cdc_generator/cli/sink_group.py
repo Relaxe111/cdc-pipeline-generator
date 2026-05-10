@@ -28,11 +28,13 @@ from cdc_generator.cli.sink_group_parser import (
 )
 from cdc_generator.cli.sink_group_patterns import (
     handle_add_source_custom_key_command,
+    handle_add_to_include_list_command,
     handle_add_to_ignore_list_command,
     handle_add_to_schema_excludes_command,
     handle_add_to_table_excludes_command,
     handle_list_table_excludes_command,
     handle_remove_sink_group_command,
+    handle_set_include_list_command,
 )
 from cdc_generator.cli.sink_group_server_ops import (
     handle_add_server_command,
@@ -57,6 +59,7 @@ __all__ = [
     "handle_add_new_sink_group",
     "handle_add_server_command",
     "handle_add_source_custom_key_command",
+    "handle_add_to_include_list_command",
     "handle_add_to_ignore_list_command",
     "handle_add_to_schema_excludes_command",
     "handle_add_to_table_excludes_command",
@@ -70,6 +73,7 @@ __all__ = [
     "handle_list_table_excludes_command",
     "handle_remove_server_command",
     "handle_remove_sink_group_command",
+    "handle_set_include_list_command",
     "handle_update_command",
     "handle_update_server_extraction_patterns_command",
     "handle_validate_command",
@@ -82,11 +86,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if (
-        isinstance(args.update, str)
-        and args.update not in {"", "__AUTO__"}
-        and not args.sink_group
-    ):
+    if isinstance(args.update, str) and args.update not in {"", "__AUTO__"} and not args.sink_group:
         args.sink_group = args.update
 
     # Route to appropriate handler
@@ -103,6 +103,14 @@ def main() -> int:
         "add_to_ignore_list": (
             args.add_to_ignore_list,
             lambda: handle_add_to_ignore_list_command(args),
+        ),
+        "add_to_include_list": (
+            args.add_to_include_list,
+            lambda: handle_add_to_include_list_command(args),
+        ),
+        "set_include_list": (
+            args.set_include_list,
+            lambda: handle_set_include_list_command(args),
         ),
         "add_to_schema_excludes": (
             args.add_to_schema_excludes,
@@ -123,12 +131,7 @@ def main() -> int:
         "add_server": (args.add_server, lambda: handle_add_server_command(args)),
         "update_server_extraction_patterns": (
             bool(
-                args.server
-                and args.sink_group
-                and args.extraction_patterns
-                and not args.inspect
-                and not args.add_server
-                and not args.remove_server
+                args.server and args.sink_group and args.extraction_patterns and not args.inspect and not args.add_server and not args.remove_server
             ),
             lambda: handle_update_server_extraction_patterns_command(args),
         ),

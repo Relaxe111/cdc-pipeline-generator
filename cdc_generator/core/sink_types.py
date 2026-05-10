@@ -137,6 +137,7 @@ class SinkGroupStandalone(TypedDict, total=False):
     environment_aware: bool  # inherited from source group
     description: str
     # Discovery/filtering patterns (same as source groups)
+    database_include_patterns: list[str]  # regex or plain-word patterns to include databases
     database_exclude_patterns: list[str]  # regex patterns for excluding databases
     schema_exclude_patterns: list[str]  # regex patterns for excluding schemas
     table_include_patterns: list[str]  # regex patterns for including tables
@@ -194,6 +195,7 @@ class ResolvedSinkGroup(TypedDict, total=False):
     topology_kind: str
     runtime_engine: str
     description: str
+    database_include_patterns: list[str]
     database_exclude_patterns: list[str]
     schema_exclude_patterns: list[str]
     table_include_patterns: list[str]

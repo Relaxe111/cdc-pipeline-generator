@@ -155,6 +155,8 @@ def manage_source_groups_cmd(_ctx: click.Context, help: bool = False, **_kwargs:
 @click.option("--introspect-types", is_flag=True, help="Introspect column types from database server")
 @click.option("--db-definitions", is_flag=True, help="Generate services/_schemas/_definitions type file once")
 @click.option("--validate", is_flag=True, help="Validate sink group configuration")
+@click.option("--add-to-include-list", help="Add pattern to database include list")
+@click.option("--set-include-list", help="Replace database include list")
 @click.option("--add-to-ignore-list", help="Add pattern to database exclude list")
 @click.option("--add-to-schema-excludes", help="Add pattern to schema exclude list")
 @click.option("--add-to-table-excludes", help="Add pattern to table exclude list")

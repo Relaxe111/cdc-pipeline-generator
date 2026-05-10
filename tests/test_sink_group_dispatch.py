@@ -21,7 +21,8 @@ class TestMainDispatch:
     @patch("cdc_generator.cli.sink_group.handle_add_new_sink_group")
     @patch("sys.argv", ["cdc", "--add-new-sink-group", "analytics"])
     def test_add_new_sink_group_dispatches_to_handler(
-        self, mock_handler: Mock,
+        self,
+        mock_handler: Mock,
     ) -> None:
         from cdc_generator.cli.sink_group import main
 
@@ -59,6 +60,36 @@ class TestMainDispatch:
     @patch("cdc_generator.cli.sink_group.handle_validate_command")
     @patch("sys.argv", ["cdc", "--validate"])
     def test_validate_dispatches_to_handler(self, mock_handler: Mock) -> None:
+        from cdc_generator.cli.sink_group import main
+
+        mock_handler.return_value = 0
+
+        result = main()
+
+        assert result == 0
+        assert mock_handler.called
+
+    @patch("cdc_generator.cli.sink_group.handle_add_to_include_list_command")
+    @patch("sys.argv", ["cdc", "--add-to-include-list", "directory"])
+    def test_add_to_include_list_dispatches_to_handler(
+        self,
+        mock_handler: Mock,
+    ) -> None:
+        from cdc_generator.cli.sink_group import main
+
+        mock_handler.return_value = 0
+
+        result = main()
+
+        assert result == 0
+        assert mock_handler.called
+
+    @patch("cdc_generator.cli.sink_group.handle_set_include_list_command")
+    @patch("sys.argv", ["cdc", "--set-include-list", "^directory_(dev|stage|test)$"])
+    def test_set_include_list_dispatches_to_handler(
+        self,
+        mock_handler: Mock,
+    ) -> None:
         from cdc_generator.cli.sink_group import main
 
         mock_handler.return_value = 0
@@ -117,7 +148,8 @@ class TestDispatchBehavior:
     @patch("cdc_generator.cli.sink_group.SinkGroupArgumentParser.print_help")
     @patch("sys.argv", ["cdc"])
     def test_no_flags_prints_help_and_returns_zero(
-        self, mock_print_help: Mock,
+        self,
+        mock_print_help: Mock,
     ) -> None:
         from cdc_generator.cli.sink_group import main
 
@@ -129,7 +161,8 @@ class TestDispatchBehavior:
     @patch("cdc_generator.cli.sink_group.handle_validate_command")
     @patch("sys.argv", ["cdc", "--validate"])
     def test_nonzero_from_handler_is_propagated(
-        self, mock_handler: Mock,
+        self,
+        mock_handler: Mock,
     ) -> None:
         from cdc_generator.cli.sink_group import main
 

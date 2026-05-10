@@ -81,6 +81,10 @@
         },
         "environment_aware": { "type": "boolean" },
         "description": { "type": "string" },
+        "database_include_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "database_exclude_patterns": {
           "type": "array",
           "items": { "type": "string" }

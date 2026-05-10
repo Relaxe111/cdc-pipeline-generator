@@ -9,8 +9,10 @@ import pytest
 
 from cdc_generator.cli.sink_group import (
     handle_add_server_command,
+    handle_add_to_include_list_command,
     handle_remove_server_command,
     handle_remove_sink_group_command,
+    handle_set_include_list_command,
     handle_update_command,
     handle_update_server_extraction_patterns_command,
 )
@@ -75,6 +77,7 @@ def _ns(**kwargs: Any) -> Namespace:
         "env_mapping": None,
         "description": None,
         "remove": None,
+        "add_to_include_list": None,
     }
     defaults.update(kwargs)
     return Namespace(**defaults)
@@ -190,9 +193,7 @@ class TestMergeServerSourcesUpdate:
         assert chat["dev"]["database"] == "chat_dev_new"
         assert chat["schemas"] == ["public", "logs", "monitoring"]
 
-        directory = merged["directory"]
-        assert "dev" not in directory
-        assert directory["schemas"] == ["public"]
+        assert "directory" not in merged
 
         notification = merged["notification"]
         assert notification["dev"]["database"] == "notification_dev"
@@ -229,6 +230,61 @@ class TestMergeServerSourcesUpdate:
         directory = merged["directory"]
         assert directory["schemas"] == ["public"]
         assert directory["local-server"]["table_count"] == 0
+
+    def test_removes_excluded_or_missing_service_when_no_envs_remain(self) -> None:
+        existing_sources: dict[str, Any] = {
+            "adpraksis": {
+                "schemas": ["public"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "adpraksis_db_dev",
+                    "table_count": 12,
+                },
+            },
+        }
+
+        merged = _merge_server_sources_update(
+            existing_sources,
+            {},
+            "nonprod",
+        )
+
+        assert "adpraksis" not in merged
+
+    def test_removes_stale_flat_source_name_when_service_is_reclassified(self) -> None:
+        existing_sources: dict[str, Any] = {
+            "auth_dev": {
+                "schemas": ["public"],
+                "nonprod": {
+                    "server": "nonprod",
+                    "database": "auth_dev",
+                    "table_count": 23,
+                    "target_sink_env": "prod",
+                },
+            },
+        }
+
+        updated_sources: dict[str, Any] = {
+            "auth": {
+                "schemas": ["public"],
+                "dev": {
+                    "server": "nonprod",
+                    "database": "auth_dev",
+                    "table_count": 24,
+                },
+            },
+        }
+
+        merged = _merge_server_sources_update(
+            existing_sources,
+            updated_sources,
+            "nonprod",
+        )
+
+        assert "auth_dev" not in merged
+        assert merged["auth"]["dev"]["database"] == "auth_dev"
+        assert merged["auth"]["dev"]["table_count"] == 24
+        assert merged["auth"]["dev"]["target_sink_env"] == "prod"
 
 
 class TestHandleUpdateCommandMerge:
@@ -369,7 +425,8 @@ class TestBuildServerConfig:
     """Tests for ``_build_server_config``."""
 
     def test_build_server_config_with_explicit_values(
-        self, standalone_sink_group: dict[str, Any],
+        self,
+        standalone_sink_group: dict[str, Any],
     ) -> None:
         args = _ns(
             sink_group="sink_analytics",
@@ -388,7 +445,8 @@ class TestBuildServerConfig:
         assert config["password"] == "report_secret"
 
     def test_build_server_config_uses_env_placeholders(
-        self, standalone_sink_group: dict[str, Any],
+        self,
+        standalone_sink_group: dict[str, Any],
     ) -> None:
         args = _ns(sink_group="sink_asma", add_server="nonprod")
 
@@ -398,7 +456,8 @@ class TestBuildServerConfig:
         assert str(config["port"]).startswith("${POSTGRES_SINK_PORT_ASMA_NONPROD")
 
     def test_build_server_config_structured_extraction_patterns(
-        self, standalone_sink_group: dict[str, Any],
+        self,
+        standalone_sink_group: dict[str, Any],
     ) -> None:
         args = _ns(
             sink_group="sink_asma",
@@ -462,7 +521,8 @@ class TestLoadSinkGroupForServerOp:
         mock_load.return_value = {"sink_other": {"servers": {}}}
 
         result = load_sink_group_for_server_op(
-            _ns(sink_group="sink_analytics"), "--add-server",
+            _ns(sink_group="sink_analytics"),
+            "--add-server",
         )
 
         assert result == 1
@@ -476,7 +536,8 @@ class TestLoadSinkGroupForServerOp:
         mock_load.return_value = {"sink_analytics": sink_group}
 
         result = load_sink_group_for_server_op(
-            _ns(sink_group="sink_analytics"), "--add-server",
+            _ns(sink_group="sink_analytics"),
+            "--add-server",
         )
 
         assert isinstance(result, tuple)
@@ -577,6 +638,62 @@ class TestHandleAddServerCommand:
         assert mock_save.called
         assert mock_append_env.called
         assert mock_env_summary.called
+
+
+class TestHandleAddToIncludeListCommand:
+    """Tests for ``handle_add_to_include_list_command``."""
+
+    @patch("cdc_generator.cli.sink_group_patterns.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_patterns.resolve_sink_group_for_pattern_update")
+    def test_updates_database_include_patterns(
+        self,
+        mock_resolve: Mock,
+        mock_save: Mock,
+        standalone_sink_group: dict[str, Any],
+    ) -> None:
+        mock_resolve.return_value = (
+            {"sink_analytics": standalone_sink_group},
+            "sink_analytics",
+            standalone_sink_group,
+            Path("/tmp/sink-groups.yaml"),
+        )
+
+        result = handle_add_to_include_list_command(
+            _ns(add_to_include_list="directory_dev,directory_stage"),
+        )
+
+        assert result == 0
+        assert standalone_sink_group["database_include_patterns"] == [
+            "directory_dev",
+            "directory_stage",
+        ]
+        assert mock_save.called
+
+    @patch("cdc_generator.cli.sink_group_patterns.save_sink_groups")
+    @patch("cdc_generator.cli.sink_group_patterns.resolve_sink_group_for_pattern_update")
+    def test_replaces_database_include_patterns(
+        self,
+        mock_resolve: Mock,
+        mock_save: Mock,
+        standalone_sink_group: dict[str, Any],
+    ) -> None:
+        standalone_sink_group["database_include_patterns"] = ["old"]
+        mock_resolve.return_value = (
+            {"sink_analytics": standalone_sink_group},
+            "sink_analytics",
+            standalone_sink_group,
+            Path("/tmp/sink-groups.yaml"),
+        )
+
+        result = handle_set_include_list_command(
+            _ns(set_include_list="^directory_(dev|stage|test)$"),
+        )
+
+        assert result == 0
+        assert standalone_sink_group["database_include_patterns"] == [
+            "^directory_(dev|stage|test)$",
+        ]
+        assert mock_save.called
 
 
 class TestHandleRemoveServerCommand:
@@ -825,7 +942,9 @@ class TestHandleRemoveSinkGroupCommand:
 
     @patch("cdc_generator.cli.sink_group_patterns.load_sink_groups")
     def test_remove_inherited_group_fails(
-        self, mock_load: Mock, inherited_sink_group: dict[str, Any],
+        self,
+        mock_load: Mock,
+        inherited_sink_group: dict[str, Any],
     ) -> None:
         mock_load.return_value = {"sink_asma": inherited_sink_group}
 

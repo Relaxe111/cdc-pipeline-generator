@@ -15,45 +15,27 @@ from cdc_generator.helpers.helpers_logging import (
 _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--add-server": (
         "Server name to add",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --add-server nonprod"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --add-server nonprod"),
     ),
     "--remove-server": (
         "Server name to remove",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --remove-server nonprod"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --remove-server nonprod"),
     ),
     "--sink-group": (
         "Sink group to operate on",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --add-server nonprod"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --add-server nonprod"),
     ),
     "--server": (
         "Existing server name in sink group",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --server default --extraction-patterns '^AdOpus(?P<customer>.+)$'"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --server default --extraction-patterns '^AdOpus(?P<customer>.+)$'"),
     ),
     "--list-server-extraction-patterns": (
         "List extraction patterns for sink-group servers",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --list-server-extraction-patterns default"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --list-server-extraction-patterns default"),
     ),
     "--add-new-sink-group": (
         "Name for the new sink group (auto-prefixed with 'sink_')",
-        (
-            "cdc manage-sink-groups --add-new-sink-group analytics"
-            " --pattern db-shared"
-        ),
+        ("cdc manage-sink-groups --add-new-sink-group analytics --pattern db-shared"),
     ),
     "--source-group": (
         "Source group name to inherit from",
@@ -65,24 +47,15 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     ),
     "--introspect-types": (
         "Requires --sink-group to identify the database engine",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --introspect-types"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --introspect-types"),
     ),
     "--db-definitions": (
         "Requires --sink-group to identify sink DB engine",
-        (
-            "cdc manage-sink-groups --sink-group sink_asma"
-            " --db-definitions"
-        ),
+        ("cdc manage-sink-groups --sink-group sink_asma --db-definitions"),
     ),
     "--update": (
         "Inspect sink databases and update sources",
-        (
-            "cdc manage-sink-groups --update --sink-group sink_asma"
-            " --server default"
-        ),
+        ("cdc manage-sink-groups --update --sink-group sink_asma --server default"),
     ),
     "--remove": (
         "Sink group name to remove",
@@ -91,6 +64,14 @@ _FLAG_HINTS: dict[str, tuple[str, str]] = {
     "--add-to-ignore-list": (
         "Add database exclude pattern(s) to sink group",
         "cdc manage-sink-groups --add-to-ignore-list temp_%",
+    ),
+    "--add-to-include-list": (
+        "Add database include pattern(s) to sink group",
+        "cdc manage-sink-groups --add-to-include-list directory_",
+    ),
+    "--set-include-list": (
+        "Replace database include pattern(s) on sink group",
+        "cdc manage-sink-groups --set-include-list '^directory_(dev|stage|test)$'",
     ),
     "--add-to-schema-excludes": (
         "Add schema exclude pattern(s) to sink group",
@@ -130,11 +111,7 @@ class SinkGroupArgumentParser(argparse.ArgumentParser):
 
 def build_parser() -> SinkGroupArgumentParser:
     """Build and return the argparse parser for manage-sink-groups."""
-    header = (
-        f"{Colors.CYAN}{Colors.BOLD}"
-        "Manage sink server group configuration (sink-groups.yaml)"
-        f"{Colors.RESET}"
-    )
+    header = f"{Colors.CYAN}{Colors.BOLD}Manage sink server group configuration (sink-groups.yaml){Colors.RESET}"
     description = f"""{header}
 
 {Colors.DIM}This command helps manage sink destinations for CDC pipelines.
@@ -189,10 +166,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--source-group",
         metavar="NAME",
-        help=(
-            f"{Colors.BLUE}Source group to inherit from"
-            f" (for inherited sink groups){Colors.RESET}"
-        ),
+        help=(f"{Colors.BLUE}Source group to inherit from (for inherited sink groups){Colors.RESET}"),
     )
     parser.add_argument(
         "--add-new-sink-group",
@@ -225,36 +199,24 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         "--database-exclude-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Regex patterns for excluding"
-            f" databases (space-separated){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Regex patterns for excluding databases (space-separated){Colors.RESET}"),
     )
     parser.add_argument(
         "--schema-exclude-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Regex patterns for excluding"
-            f" schemas (space-separated){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Regex patterns for excluding schemas (space-separated){Colors.RESET}"),
     )
     parser.add_argument(
         "--table-exclude-patterns",
         nargs="+",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Regex patterns for excluding"
-            f" tables (space-separated){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Regex patterns for excluding tables (space-separated){Colors.RESET}"),
     )
     parser.add_argument(
         "--for-source-group",
         metavar="NAME",
-        help=(
-            f"{Colors.CYAN}📡 Source group this standalone sink consumes from"
-            f" (recommended to set explicitly){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}📡 Source group this standalone sink consumes from (recommended to set explicitly){Colors.RESET}"),
     )
 
     # List/Info actions
@@ -266,38 +228,26 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--info",
         metavar="NAME",
-        help=(
-            f"{Colors.BLUE}(i) Show detailed information"
-            f" about a sink group{Colors.RESET}"
-        ),
+        help=(f"{Colors.BLUE}(i) Show detailed information about a sink group{Colors.RESET}"),
     )
 
     # Inspection actions (standalone sink groups only)
     parser.add_argument(
         "--inspect",
         action="store_true",
-        help=(
-            f"{Colors.CYAN}Inspect databases on sink server"
-            f" (standalone sink groups only){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Inspect databases on sink server (standalone sink groups only){Colors.RESET}"),
     )
     parser.add_argument(
         "--update",
         nargs="?",
         const="__AUTO__",
         metavar="SINK_GROUP",
-        help=(
-            f"{Colors.CYAN}Inspect sink server and update sink-group sources"
-            f" (optionally pass sink group name){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Inspect sink server and update sink-group sources (optionally pass sink group name){Colors.RESET}"),
     )
     parser.add_argument(
         "--server",
         metavar="NAME",
-        help=(
-            f"{Colors.BLUE}🖥️  Server name to inspect"
-            f" or update with --extraction-patterns (default inspect/update: 'default'){Colors.RESET}"
-        ),
+        help=(f"{Colors.BLUE}🖥️  Server name to inspect or update with --extraction-patterns (default inspect/update: 'default'){Colors.RESET}"),
     )
     parser.add_argument(
         "--include-pattern",
@@ -309,10 +259,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--introspect-types",
         action="store_true",
-        help=(
-            f"{Colors.CYAN}🔍 Introspect column types from"
-            f" database server (requires --sink-group){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}🔍 Introspect column types from database server (requires --sink-group){Colors.RESET}"),
     )
     parser.add_argument(
         "--db-definitions",
@@ -332,69 +279,55 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--add-to-ignore-list",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Add pattern(s) to database_exclude_patterns"
-            f" (comma-separated supported){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Add pattern(s) to database_exclude_patterns (comma-separated supported){Colors.RESET}"),
+    )
+    parser.add_argument(
+        "--add-to-include-list",
+        metavar="PATTERN",
+        help=(f"{Colors.GREEN}Add pattern(s) to database_include_patterns (comma-separated supported){Colors.RESET}"),
+    )
+    parser.add_argument(
+        "--set-include-list",
+        metavar="PATTERN",
+        help=(f"{Colors.GREEN}Replace database_include_patterns (comma-separated supported){Colors.RESET}"),
     )
     parser.add_argument(
         "--add-to-schema-excludes",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Add pattern(s) to schema_exclude_patterns"
-            f" (comma-separated supported){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Add pattern(s) to schema_exclude_patterns (comma-separated supported){Colors.RESET}"),
     )
     parser.add_argument(
         "--add-to-table-excludes",
         metavar="PATTERN",
-        help=(
-            f"{Colors.YELLOW}Add pattern(s) to table_exclude_patterns"
-            f" (comma-separated supported){Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Add pattern(s) to table_exclude_patterns (comma-separated supported){Colors.RESET}"),
     )
     parser.add_argument(
         "--list-table-excludes",
         action="store_true",
-        help=(
-            f"{Colors.YELLOW}List table_exclude_patterns"
-            f" for sink group{Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}List table_exclude_patterns for sink group{Colors.RESET}"),
     )
     parser.add_argument(
         "--add-source-custom-key",
         metavar="KEY",
-        help=(
-            f"{Colors.YELLOW}Add/update source custom key resolved during --update"
-            f"{Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Add/update source custom key resolved during --update{Colors.RESET}"),
     )
     parser.add_argument(
         "--custom-key-value",
         metavar="SQL",
-        help=(
-            f"{Colors.YELLOW}SQL expression/query used to resolve custom key value"
-            f"{Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}SQL expression/query used to resolve custom key value{Colors.RESET}"),
     )
     parser.add_argument(
         "--custom-key-exec-type",
         choices=["sql"],
         default="sql",
-        help=(
-            f"{Colors.YELLOW}Execution type for custom key (currently: sql)"
-            f"{Colors.RESET}"
-        ),
+        help=(f"{Colors.YELLOW}Execution type for custom key (currently: sql){Colors.RESET}"),
     )
 
     # Server management
     parser.add_argument(
         "--sink-group",
         metavar="NAME",
-        help=(
-            f"{Colors.CYAN}Sink group to operate on"
-            f" (for --add-server, --remove-server, --server updates){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Sink group to operate on (for --add-server, --remove-server, --server updates){Colors.RESET}"),
     )
     parser.add_argument(
         "--add-server",
@@ -404,10 +337,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--remove-server",
         metavar="NAME",
-        help=(
-            f"{Colors.RED}Remove a server from a sink group"
-            f" (requires --sink-group){Colors.RESET}"
-        ),
+        help=(f"{Colors.RED}Remove a server from a sink group (requires --sink-group){Colors.RESET}"),
     )
     parser.add_argument(
         "--host",
@@ -442,27 +372,18 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
     parser.add_argument(
         "--env",
         type=str,
-        help=(
-            f"{Colors.CYAN}Fixed environment for extraction patterns"
-            f" (overrides captured (?P<env>) group){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Fixed environment for extraction patterns (overrides captured (?P<env>) group){Colors.RESET}"),
     )
     parser.add_argument(
         "--strip-patterns",
         type=str,
-        help=(
-            f"{Colors.CYAN}Comma-separated regex patterns to remove from"
-            f" extracted service name (e.g., '_db,_legacy$'){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Comma-separated regex patterns to remove from extracted service name (e.g., '_db,_legacy$'){Colors.RESET}"),
     )
     parser.add_argument(
         "--env-mapping",
         type=str,
         action="append",
-        help=(
-            f"{Colors.CYAN}Environment mapping in format from:to"
-            f" (can be repeated){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}Environment mapping in format from:to (can be repeated){Colors.RESET}"),
     )
     parser.add_argument(
         "--description",
@@ -474,10 +395,7 @@ or be standalone (analytics warehouse, webhooks, etc.).{Colors.RESET}
         nargs="?",
         const="",
         metavar="SERVER",
-        help=(
-            f"{Colors.CYAN}List extraction patterns for sink-group servers"
-            f" (optionally filter by server){Colors.RESET}"
-        ),
+        help=(f"{Colors.CYAN}List extraction patterns for sink-group servers (optionally filter by server){Colors.RESET}"),
     )
 
     # Sink group management

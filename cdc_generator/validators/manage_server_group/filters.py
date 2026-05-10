@@ -30,6 +30,17 @@ def should_ignore_database(db_name: str, ignore_patterns: list[str]) -> bool:
     return any(_matches_pattern(db_name, pattern) for pattern in ignore_patterns)
 
 
+def should_include_database_patterns(
+    db_name: str,
+    include_patterns: list[str] | None,
+) -> bool:
+    """Check if database name matches any configured include pattern."""
+    if not include_patterns:
+        return True
+
+    return any(_matches_pattern(db_name, pattern) for pattern in include_patterns)
+
+
 def should_include_database(db_name: str, include_pattern: str | None) -> bool:
     """Check if database name matches include pattern (glob-style wildcard)."""
     if not include_pattern:
@@ -74,14 +85,14 @@ def infer_service_name(database_name: str) -> str:
         directory_dev -> directory
     """
     # Remove common environment suffixes
-    for suffix in ['_dev', '_prod', '_test', '_staging']:
+    for suffix in ["_dev", "_prod", "_test", "_staging"]:
         if database_name.endswith(suffix):
-            database_name = database_name[:-len(suffix)]
+            database_name = database_name[: -len(suffix)]
             break
 
     # Handle {service}_db_ pattern
-    if '_db_' in database_name:
-        parts = database_name.split('_db_')
+    if "_db_" in database_name:
+        parts = database_name.split("_db_")
         if len(parts) >= _DB_PARTS_MIN_LEN and parts[1]:
             return parts[1].lower()
         # Otherwise use the first part

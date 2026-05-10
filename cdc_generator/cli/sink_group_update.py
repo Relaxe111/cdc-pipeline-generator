@@ -112,10 +112,15 @@ def _merge_server_sources_update(
          coverage by unioning schema lists. Otherwise replace schemas with the
          newly inspected set so removed schemas do not linger.
     """
+    previous_entries = _collect_server_entries_by_database(
+        existing_sources_raw,
+        server_name,
+    )
     merged = _copy_existing_sources_without_server(
         existing_sources_raw,
         server_name,
     )
+    updated_database_names: set[str] = set()
 
     for service_name_raw, source_raw in updated_sources.items():
         service_name = str(service_name_raw).strip()
@@ -126,8 +131,7 @@ def _merge_server_sources_update(
         target_source = cast(dict[str, Any], merged.setdefault(service_name, {}))
 
         has_other_server_entries = any(
-            env_name_raw != "schemas" and isinstance(env_cfg_raw, dict)
-            for env_name_raw, env_cfg_raw in target_source.items()
+            env_name_raw != "schemas" and isinstance(env_cfg_raw, dict) for env_name_raw, env_cfg_raw in target_source.items()
         )
         if has_other_server_entries:
             merged_schemas = _merge_schema_lists(
@@ -147,9 +151,72 @@ def _merge_server_sources_update(
         for env_name_raw, env_cfg_raw in incoming_source.items():
             if env_name_raw == "schemas" or not isinstance(env_cfg_raw, dict):
                 continue
-            target_source[str(env_name_raw)] = dict(cast(dict[str, Any], env_cfg_raw))
+            env_name = str(env_name_raw)
+            incoming_env_cfg = dict(cast(dict[str, Any], env_cfg_raw))
+            database_name = str(incoming_env_cfg.get("database", "")).strip()
+            if database_name:
+                updated_database_names.add(database_name)
+
+            preserved_env_cfg = previous_entries.get(database_name)
+            if preserved_env_cfg:
+                merged_env_cfg = dict(preserved_env_cfg)
+                merged_env_cfg.update(incoming_env_cfg)
+                target_source[env_name] = merged_env_cfg
+            else:
+                target_source[env_name] = incoming_env_cfg
+
+    _remove_stale_schema_only_sources(merged, updated_database_names)
 
     return merged
+
+
+def _collect_server_entries_by_database(
+    existing_sources_raw: object,
+    server_name: str,
+) -> dict[str, dict[str, Any]]:
+    """Collect existing env entries for one server keyed by database name."""
+    collected: dict[str, dict[str, Any]] = {}
+    if not isinstance(existing_sources_raw, dict):
+        return collected
+
+    for source_raw in cast(dict[str, object], existing_sources_raw).values():
+        if not isinstance(source_raw, dict):
+            continue
+        source_map = cast(dict[str, Any], source_raw)
+        for env_name_raw, env_cfg_raw in source_map.items():
+            if env_name_raw == "schemas" or not isinstance(env_cfg_raw, dict):
+                continue
+            env_cfg = dict(cast(dict[str, Any], env_cfg_raw))
+            if str(env_cfg.get("server", "")).strip() != server_name:
+                continue
+            database_name = str(env_cfg.get("database", "")).strip()
+            if not database_name:
+                continue
+            collected[database_name] = env_cfg
+
+    return collected
+
+
+def _remove_stale_schema_only_sources(
+    merged_sources: dict[str, Any],
+    updated_database_names: set[str],
+) -> None:
+    """Drop source entries that no longer point at any environment-specific database."""
+
+    stale_service_names: list[str] = []
+    for service_name, source_raw in merged_sources.items():
+        if not isinstance(source_raw, dict):
+            continue
+        source_map = cast(dict[str, Any], source_raw)
+        has_env_entries = any(env_name_raw != "schemas" and isinstance(env_cfg_raw, dict) for env_name_raw, env_cfg_raw in source_map.items())
+        should_remove = not has_env_entries
+        if not should_remove and updated_database_names and service_name in updated_database_names:
+            should_remove = True
+        if should_remove:
+            stale_service_names.append(service_name)
+
+    for stale_service_name in stale_service_names:
+        merged_sources.pop(stale_service_name, None)
 
 
 def _merge_schema_lists(primary_raw: object, secondary_raw: object) -> list[str]:
@@ -218,10 +285,7 @@ def handle_update_command(args: argparse.Namespace) -> int:
 
     server_name = args.server or next(iter(servers))
     if server_name not in servers:
-        print_error(
-            f"Server '{server_name}' not found"
-            + f" in sink group '{sink_group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found" + f" in sink group '{sink_group_name}'")
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
@@ -250,9 +314,7 @@ def handle_update_command(args: argparse.Namespace) -> int:
         print_error(f"Failed to inspect databases for update: {e}")
         return 1
 
-    source_custom_keys = normalize_source_custom_keys(
-        sink_group.get("source_custom_keys", {})
-    )
+    source_custom_keys = normalize_source_custom_keys(sink_group.get("source_custom_keys", {}))
     if source_custom_keys:
         execute_source_custom_keys(
             databases,
@@ -282,9 +344,7 @@ def handle_update_command(args: argparse.Namespace) -> int:
         schema_exclude_patterns=cast(list[str], resolved.get("schema_exclude_patterns", [])),
     )
 
-    print_success(
-        f"Updated '{sink_group_name}' sources from {len(databases)} discovered database(s)"
-    )
+    print_success(f"Updated '{sink_group_name}' sources from {len(databases)} discovered database(s)")
     print_info(f"Services updated: {len(updated_sources)}")
     return 0
 
@@ -321,28 +381,20 @@ def handle_introspect_types_command(args: argparse.Namespace) -> int:
 
     server_name = args.server or next(iter(servers))
     if server_name not in servers:
-        print_error(
-            f"Server '{server_name}' not found"
-            + f" in sink group '{sink_group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found" + f" in sink group '{sink_group_name}'")
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
     server_config = servers[server_name]
     engine = str(resolved.get("type", "postgres"))
 
-    print_header(
-        f"Introspecting {engine.upper()} types from"
-        + f" server '{server_name}'"
-    )
+    print_header(f"Introspecting {engine.upper()} types from" + f" server '{server_name}'")
 
     # Build connection params from server config
     conn_params: dict[str, Any] = {
         "host": server_config.get("host", ""),
         "port": server_config.get("port", ""),
-        "user": server_config.get(
-            "username", server_config.get("user", "")
-        ),
+        "user": server_config.get("username", server_config.get("user", "")),
         "password": server_config.get("password", ""),
     }
 
@@ -382,42 +434,29 @@ def handle_db_definitions_command(args: argparse.Namespace) -> int:
 
     server_name = args.server or next(iter(servers))
     if server_name not in servers:
-        print_error(
-            f"Server '{server_name}' not found"
-            + f" in sink group '{sink_group_name}'"
-        )
+        print_error(f"Server '{server_name}' not found" + f" in sink group '{sink_group_name}'")
         print_info(f"Available servers: {list(servers.keys())}")
         return 1
 
     server_config = servers[server_name]
     db_type = str(resolved.get("type", "postgres"))
     if db_type not in {"postgres", "mssql"}:
-        print_error(
-            f"Unsupported sink type '{db_type}' for --db-definitions"
-        )
+        print_error(f"Unsupported sink type '{db_type}' for --db-definitions")
         print_info("Supported sink types: postgres, mssql")
         return 1
 
-    print_header(
-        "Generating DB definitions from sink "
-        + f"{db_type.upper()} server '{server_name}'"
-    )
+    print_header("Generating DB definitions from sink " + f"{db_type.upper()} server '{server_name}'")
 
     conn_params: dict[str, Any] = {
         "host": server_config.get("host", ""),
         "port": server_config.get("port", ""),
-        "user": server_config.get(
-            "username", server_config.get("user", "")
-        ),
+        "user": server_config.get("username", server_config.get("user", "")),
         "password": server_config.get("password", ""),
     }
 
     success = generate_type_definitions(
         db_type,
         conn_params,
-        source_label=(
-            "manage-sink-groups --db-definitions"
-            + f" ({sink_group_name}:{server_name})"
-        ),
+        source_label=("manage-sink-groups --db-definitions" + f" ({sink_group_name}:{server_name})"),
     )
     return 0 if success else 1
