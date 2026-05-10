@@ -169,7 +169,6 @@ def generate_infrastructure(
                 "generated_at": ctx.generated_at,
                 "db_user": ctx.db_user,
                 "sink_target": ctx.sink_target,
-                "native_cdc_policy_seeds": ctx.native_cdc_policy_seeds,
             },
         )
         write_migration_file(

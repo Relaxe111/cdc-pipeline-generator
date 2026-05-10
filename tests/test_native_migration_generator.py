@@ -33,22 +33,11 @@ _SERVICE_CONFIG: dict[str, object] = {
 
 def _write_native_project(tmp_path: Path) -> Path:
     (tmp_path / "source-groups.yaml").write_text(
-        "adopus:\n"
-        "  pattern: db-per-tenant\n"
-        "  type: mssql\n"
-        "  sources:\n"
-        "    Test:\n"
-        "      schemas:\n"
-        "        - dbo\n",
+        "adopus:\n  pattern: db-per-tenant\n  type: mssql\n  sources:\n    Test:\n      schemas:\n        - dbo\n",
         encoding="utf-8",
     )
     (tmp_path / "sink-groups.yaml").write_text(
-        "sink_test:\n"
-        "  type: postgres\n"
-        "  sources:\n"
-        "    db:\n"
-        "      dev:\n"
-        "        database: native_dev\n",
+        "sink_test:\n  type: postgres\n  sources:\n    db:\n      dev:\n        database: native_dev\n",
         encoding="utf-8",
     )
     schema_dir = tmp_path / "services" / "_schemas" / "native_test" / "dbo"
@@ -142,7 +131,7 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'runtime_mode: "native"' in manifest_text
     assert 'topology_kind: "mssql_fdw_pull"' in manifest_text
     assert 'runtime_engine: "postgres_native"' in manifest_text
-    assert '00-infrastructure/03-native-cdc-runtime.sql' in manifest_text
+    assert "00-infrastructure/03-native-cdc-runtime.sql" in manifest_text
 
     assert 'PRIMARY KEY ("customer_id", "actno")' in final_table_sql
     assert '"__source_start_lsn" BYTEA' in final_table_sql
@@ -152,42 +141,20 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'CREATE OR REPLACE FUNCTION "adopus"."pull_actor_batch"' in staging_sql
     assert 'CREATE OR REPLACE FUNCTION "adopus"."bootstrap_actor_snapshot"' in staging_sql
     assert 'CREATE OR REPLACE PROCEDURE "adopus"."sp_merge_actor"' in staging_sql
-    assert 'Actor_base' in staging_sql
-    assert 'cdc_max_lsn' in staging_sql
-    assert 'cdc_min_lsn_Actor' in staging_sql
-    assert 'native_cdc_bootstrap_state' in staging_sql
+    assert "Actor_base" in staging_sql
+    assert "cdc_max_lsn" in staging_sql
+    assert "cdc_min_lsn_Actor" in staging_sql
+    assert "native_cdc_bootstrap_state" in staging_sql
     assert 'INSERT INTO "adopus"."Actor"' in staging_sql
     assert 'INSERT INTO "adopus"."stg_Actor"' in staging_sql
 
 
-def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) -> None:
-    """Native runtime should render explicit source-table native_cdc policy metadata."""
+def test_generate_native_runtime_renders_resolve_policy_dynamic(
+    tmp_path: Path,
+) -> None:
+    """Native runtime resolve function should query native_cdc_schedule_policy directly."""
     schema_base = _write_native_project(tmp_path)
     output_dir = tmp_path / "migrations"
-    service_config: dict[str, object] = {
-        **_SERVICE_CONFIG,
-        "source": {
-            "tables": {
-                "dbo.Actor": {
-                    "native_cdc": {
-                        "enabled": False,
-                        "schedule_profile": "hot",
-                        "tier_mode": "manual",
-                        "manual_schedule_profile": "cool",
-                        "poll_interval_seconds": 5,
-                        "min_poll_interval_seconds": 1,
-                        "max_poll_interval_seconds": 600,
-                        "max_rows_per_pull": 2000,
-                        "lease_seconds": 180,
-                        "poll_priority": 10,
-                        "jitter_millis": 25,
-                        "max_backoff_seconds": 1200,
-                        "business_hours_profile_key": "weekday_hot",
-                    },
-                },
-            },
-        },
-    }
 
     with (
         patch(
@@ -196,7 +163,7 @@ def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) 
         ),
         patch(
             "cdc_generator.core.migration_generator.load_service_config",
-            return_value=service_config,
+            return_value=_SERVICE_CONFIG,
         ),
         patch(
             "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
@@ -210,24 +177,28 @@ def test_generate_native_runtime_renders_configured_policy_seed(tmp_path: Path) 
         result = generate_migrations(
             "native_test",
             output_dir=output_dir,
+            topology="fdw",
             runtime_mode="native",
         )
 
     assert result.errors == []
 
-    native_infra_sql = (
-        output_dir / "sink_test.db" / "00-infrastructure" / "03-native-cdc-runtime.sql"
-    ).read_text(encoding="utf-8")
+    native_infra_sql = (output_dir / "sink_test.db" / "00-infrastructure" / "03-native-cdc-runtime.sql").read_text(encoding="utf-8")
 
-    assert "'weekday_hot'" in native_infra_sql
-    assert "'hot'" in native_infra_sql
-    assert "'manual'" in native_infra_sql
-    assert "'cool'" in native_infra_sql
-    assert "2000" in native_infra_sql
-    assert "1200" in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."sync_native_cdc_registration_state"' in native_infra_sql
     assert 'CREATE TRIGGER "trg_sync_native_cdc_registration_state"' in native_infra_sql
+
+    # Function body should contain a direct SELECT from the table, not VALUES
+    func_start = native_infra_sql.index('LANGUAGE sql')
+    func_end = native_infra_sql.index('$$;\n', func_start)
+    func_body = native_infra_sql[func_start:func_end]
+    assert 'native_cdc_schedule_policy' in func_body
+    assert 'UNION ALL' in func_body
+    assert 'WHERE NOT EXISTS' in func_body
+    assert 'VALUES' not in func_body
+    # sync call passes source_instance_key + logical_table_name
+    assert 'v_registration."source_instance_key"' in native_infra_sql
 
 
 def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:

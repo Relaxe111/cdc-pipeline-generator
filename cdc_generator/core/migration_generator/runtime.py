@@ -45,7 +45,6 @@ from .data_structures import (
     RuntimeMode,
     ServiceData,
 )
-from .native_cdc_policy import build_native_cdc_policy_seeds
 from .file_writers import write_manifest
 from .manual_migrations import (
     detect_removed_tables_for_manual_files as _detect_removed_tables_for_manual_files,
@@ -166,11 +165,7 @@ def _add_transform_output_columns(
                 continue
             item_dict = cast(dict[str, object], item)
             expected_output = item_dict.get("expected_output_column")
-            if (
-                isinstance(expected_output, str)
-                and expected_output
-                and expected_output not in existing_names
-            ):
+            if isinstance(expected_output, str) and expected_output and expected_output not in existing_names:
                 columns.append(MigrationColumn(name=expected_output, type="TEXT"))
                 existing_names.add(expected_output)
 
@@ -196,10 +191,7 @@ def build_full_column_list(
     """Build the full migration column pipeline (compatibility entrypoint)."""
     source_cfg = _get_source_table_config(service_config, source_key)
     ignore_raw = source_cfg.get("ignore_columns")
-    ignore_cols = (
-        [str(column) for column in cast(list[object], ignore_raw)]
-        if isinstance(ignore_raw, list) else None
-    )
+    ignore_cols = [str(column) for column in cast(list[object], ignore_raw)] if isinstance(ignore_raw, list) else None
 
     columns, primary_keys = build_columns_from_table_def(table_def, ignore_cols, type_mapper)
     columns = _add_column_template_columns(columns, sink_cfg)
@@ -311,8 +303,7 @@ def generate_migrations(
     ):
         supported_topologies = ", ".join(supported_topologies_for_source_type(source_type))
         result.errors.append(
-            f"Topology '{effective_topology}' is not supported for source type '{source_type}'. "
-            + f"Supported values: {supported_topologies}",
+            f"Topology '{effective_topology}' is not supported for source type '{source_type}'. " + f"Supported values: {supported_topologies}",
         )
         print_error(result.errors[-1])
         return result
@@ -350,8 +341,7 @@ def generate_migrations(
         )
 
     print_header(
-        f"Generating migrations for service: {service_name}"
-        + f" (topology: {effective_topology}, runtime: {effective_runtime_mode})",
+        f"Generating migrations for service: {service_name}" + f" (topology: {effective_topology}, runtime: {effective_runtime_mode})",
     )
 
     jinja_env = _create_jinja_env()
@@ -383,10 +373,7 @@ def generate_migrations(
 
         if table_filter:
             filter_lower = table_filter.casefold()
-            tables_for_sink = {
-                key: value for key, value in tables_for_sink.items()
-                if filter_lower in key.casefold()
-            }
+            tables_for_sink = {key: value for key, value in tables_for_sink.items() if filter_lower in key.casefold()}
             if not tables_for_sink:
                 continue
 
@@ -402,10 +389,6 @@ def generate_migrations(
             db_user=db_user,
             sink_target=sink_target,
             runtime_mode=effective_runtime_mode,
-            native_cdc_policy_seeds=(
-                build_native_cdc_policy_seeds(tables_for_sink, service_config, result)
-                if effective_runtime_mode == "native" else []
-            ),
         )
 
         _generate_for_sink(
@@ -466,10 +449,7 @@ def _generate_for_sink(
     )
 
     if dry_run:
-        db_list = ", ".join(
-            f"{env_name}={db_name}"
-            for env_name, db_name in sorted(ctx.sink_target.databases.items())
-        )
+        db_list = ", ".join(f"{env_name}={db_name}" for env_name, db_name in sorted(ctx.sink_target.databases.items()))
         print_info(f"[DRY RUN] Sink: {ctx.sink_target.sink_name}")
         print_info(f"  Output: {ctx.output_dir}")
         print_info(f"  Databases: {db_list or '(none resolved)'}")

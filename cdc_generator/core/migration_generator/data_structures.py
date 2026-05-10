@@ -89,28 +89,6 @@ class SinkTarget:
     databases: dict[str, str] = field(default_factory=dict[str, str])
 
 
-@dataclass(frozen=True)
-class NativeCdcPolicySeed:
-    """Resolved per-table native CDC policy defaults for SQL rendering."""
-
-    logical_table_name: str
-    target_schema_name: str
-    target_table_name: str
-    enabled: bool = True
-    schedule_profile: str = "warm"
-    tier_mode: str = "auto"
-    manual_schedule_profile: str | None = None
-    base_poll_interval_seconds: int = 5
-    min_poll_interval_seconds: int = 5
-    max_poll_interval_seconds: int = 60
-    max_rows_per_pull: int = 1000
-    lease_seconds: int = 120
-    poll_priority: int = 100
-    jitter_millis: int = 250
-    max_backoff_seconds: int = 300
-    business_hours_profile_key: str | None = None
-
-
 @dataclass
 class ServiceData:
     """Loaded service data shared across all sink targets.
@@ -168,7 +146,6 @@ class RenderContext:
     db_user: str
     sink_target: SinkTarget
     runtime_mode: RuntimeMode = "brokered"
-    native_cdc_policy_seeds: list[NativeCdcPolicySeed] = field(default_factory=list[NativeCdcPolicySeed])
 
 
 @dataclass

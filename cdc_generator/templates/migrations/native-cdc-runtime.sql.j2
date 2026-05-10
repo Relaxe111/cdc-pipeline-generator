@@ -466,10 +466,8 @@ CREATE INDEX IF NOT EXISTS "idx_native_cdc_bootstrap_state_status"
     );
 
 CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"(
-    p_logical_table_name text,
-    p_target_schema_name text,
-    p_target_table_name text,
-    p_registration_enabled boolean DEFAULT true
+    p_source_instance_key text,
+    p_logical_table_name text
 )
 RETURNS TABLE(
     "enabled" boolean,
@@ -488,171 +486,48 @@ RETURNS TABLE(
 )
 LANGUAGE sql
 AS $$
-WITH configured_policy AS (
-{% if native_cdc_policy_seeds %}
-    SELECT
-        cfg."logical_table_name",
-        cfg."target_schema_name",
-        cfg."target_table_name",
-        cfg."enabled",
-        cfg."schedule_profile",
-        cfg."tier_mode",
-        cfg."manual_schedule_profile",
-        cfg."base_poll_interval_seconds",
-        cfg."min_poll_interval_seconds",
-        cfg."max_poll_interval_seconds",
-        cfg."max_rows_per_pull",
-        cfg."lease_seconds",
-        cfg."poll_priority",
-        cfg."jitter_millis",
-        cfg."max_backoff_seconds",
-        cfg."business_hours_profile_key"
-    FROM (
-        VALUES
-{% for seed in native_cdc_policy_seeds %}
-            (
-                {{ seed.logical_table_name | sql_literal }},
-                {{ seed.target_schema_name | sql_literal }},
-                {{ seed.target_table_name | sql_literal }},
-                {{ seed.enabled | sql_literal }},
-                {{ seed.schedule_profile | sql_literal }},
-                {{ seed.tier_mode | sql_literal }},
-                {{ seed.manual_schedule_profile | sql_literal }},
-                {{ seed.base_poll_interval_seconds | sql_literal }},
-                {{ seed.min_poll_interval_seconds | sql_literal }},
-                {{ seed.max_poll_interval_seconds | sql_literal }},
-                {{ seed.max_rows_per_pull | sql_literal }},
-                {{ seed.lease_seconds | sql_literal }},
-                {{ seed.poll_priority | sql_literal }},
-                {{ seed.jitter_millis | sql_literal }},
-                {{ seed.max_backoff_seconds | sql_literal }},
-                {{ seed.business_hours_profile_key | sql_literal }}
-            ){% if not loop.last %},{% endif %}
-{% endfor %}
-    ) AS cfg(
-        "logical_table_name",
-        "target_schema_name",
-        "target_table_name",
-        "enabled",
-        "schedule_profile",
-        "tier_mode",
-        "manual_schedule_profile",
-        "base_poll_interval_seconds",
-        "min_poll_interval_seconds",
-        "max_poll_interval_seconds",
-        "max_rows_per_pull",
-        "lease_seconds",
-        "poll_priority",
-        "jitter_millis",
-        "max_backoff_seconds",
-        "business_hours_profile_key"
-    )
-{% else %}
-    SELECT
-        NULL::text AS "logical_table_name",
-        NULL::text AS "target_schema_name",
-        NULL::text AS "target_table_name",
-        NULL::boolean AS "enabled",
-        NULL::text AS "schedule_profile",
-        NULL::text AS "tier_mode",
-        NULL::text AS "manual_schedule_profile",
-        NULL::integer AS "base_poll_interval_seconds",
-        NULL::integer AS "min_poll_interval_seconds",
-        NULL::integer AS "max_poll_interval_seconds",
-        NULL::integer AS "max_rows_per_pull",
-        NULL::integer AS "lease_seconds",
-        NULL::integer AS "poll_priority",
-        NULL::integer AS "jitter_millis",
-        NULL::integer AS "max_backoff_seconds",
-        NULL::text AS "business_hours_profile_key"
-    WHERE false
-{% endif %}
-),
-selected_policy AS (
-    SELECT *
-    FROM configured_policy
-    WHERE "logical_table_name" = p_logical_table_name
-      AND "target_schema_name" = p_target_schema_name
-      AND "target_table_name" = p_target_table_name
-    LIMIT 1
-),
-resolved_profile AS (
-    SELECT COALESCE((SELECT "schedule_profile" FROM selected_policy), 'warm') AS "schedule_profile"
-)
 SELECT
-    COALESCE((SELECT "enabled" FROM selected_policy), COALESCE(p_registration_enabled, true)) AS "enabled",
-    (SELECT "schedule_profile" FROM resolved_profile) AS "schedule_profile",
-    COALESCE((SELECT "tier_mode" FROM selected_policy), 'auto') AS "tier_mode",
-    CASE
-        WHEN COALESCE((SELECT "tier_mode" FROM selected_policy), 'auto') = 'manual'
-            THEN COALESCE(
-                (SELECT "manual_schedule_profile" FROM selected_policy),
-                (SELECT "schedule_profile" FROM resolved_profile)
-            )
-        ELSE (SELECT "manual_schedule_profile" FROM selected_policy)
-    END AS "manual_schedule_profile",
-    COALESCE(
-        (SELECT "base_poll_interval_seconds" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 1
-            WHEN 'cool' THEN 30
-            WHEN 'cold' THEN 60
-            ELSE 5
-        END
-    ) AS "base_poll_interval_seconds",
-    COALESCE(
-        (SELECT "min_poll_interval_seconds" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 1
-            WHEN 'cool' THEN 30
-            WHEN 'cold' THEN 60
-            ELSE 5
-        END
-    ) AS "min_poll_interval_seconds",
-    COALESCE(
-        (SELECT "max_poll_interval_seconds" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 30
-            WHEN 'cool' THEN 300
-            WHEN 'cold' THEN 1800
-            ELSE 60
-        END
-    ) AS "max_poll_interval_seconds",
-    COALESCE(
-        (SELECT "max_rows_per_pull" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 2000
-            WHEN 'cool' THEN 750
-            WHEN 'cold' THEN 500
-            ELSE 1000
-        END
-    ) AS "max_rows_per_pull",
-    COALESCE(
-        (SELECT "lease_seconds" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'cold' THEN 180
-            ELSE 120
-        END
-    ) AS "lease_seconds",
-    COALESCE((SELECT "poll_priority" FROM selected_policy), 100) AS "poll_priority",
-    COALESCE(
-        (SELECT "jitter_millis" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 0
-            WHEN 'cool' THEN 1000
-            WHEN 'cold' THEN 5000
-            ELSE 250
-        END
-    ) AS "jitter_millis",
-    COALESCE(
-        (SELECT "max_backoff_seconds" FROM selected_policy),
-        CASE (SELECT "schedule_profile" FROM resolved_profile)
-            WHEN 'hot' THEN 60
-            WHEN 'cold' THEN 900
-            ELSE 300
-        END
-    ) AS "max_backoff_seconds",
-    (SELECT "business_hours_profile_key" FROM selected_policy) AS "business_hours_profile_key";
+    sp."enabled",
+    sp."schedule_profile",
+    sp."tier_mode",
+    sp."manual_schedule_profile",
+    sp."base_poll_interval_seconds",
+    sp."min_poll_interval_seconds",
+    sp."max_poll_interval_seconds",
+    sp."max_rows_per_pull",
+    sp."lease_seconds",
+    sp."poll_priority",
+    sp."jitter_millis",
+    sp."max_backoff_seconds",
+    sp."business_hours_profile_key"
+FROM "cdc_management"."native_cdc_schedule_policy" sp
+WHERE sp."source_instance_key" = p_source_instance_key
+  AND sp."logical_table_name" = p_logical_table_name
+
+UNION ALL
+
+SELECT
+    true AS "enabled",
+    'warm' AS "schedule_profile",
+    'auto' AS "tier_mode",
+    NULL::text AS "manual_schedule_profile",
+    5 AS "base_poll_interval_seconds",
+    5 AS "min_poll_interval_seconds",
+    60 AS "max_poll_interval_seconds",
+    1000 AS "max_rows_per_pull",
+    120 AS "lease_seconds",
+    100 AS "poll_priority",
+    250 AS "jitter_millis",
+    300 AS "max_backoff_seconds",
+    NULL::text AS "business_hours_profile_key"
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM "cdc_management"."native_cdc_schedule_policy" sp2
+    WHERE sp2."source_instance_key" = p_source_instance_key
+      AND sp2."logical_table_name" = p_logical_table_name
+)
+
+LIMIT 1;
 $$;
 
 CREATE OR REPLACE FUNCTION "cdc_management"."sync_native_cdc_registration_state"(
@@ -688,10 +563,8 @@ BEGIN
     SELECT *
     INTO v_policy
     FROM "cdc_management"."resolve_native_cdc_schedule_policy"(
-        v_registration."logical_table_name",
-        v_registration."target_schema_name",
-        v_registration."target_table_name",
-        v_registration."enabled"
+        v_registration."source_instance_key",
+        v_registration."logical_table_name"
     );
 
     SELECT cr."customer_id"

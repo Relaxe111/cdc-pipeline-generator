@@ -26,7 +26,7 @@ _MIN_COLLISION_ROUTE_COUNT = 2
 class UniqueIssueState:
     """Mutable collector state for unique template validation."""
 
-    collisions: dict[tuple[str, str, str, str], list[str]]
+    collisions: dict[tuple[str, str, str, str], set[str]]
     errors: list[str]
     missing_unique_values: list[str]
 
@@ -158,7 +158,7 @@ def _collect_sink_table_unique_issues(
                     resolved_template.template_key,
                     normalized_value,
                 )
-                state.collisions.setdefault(collision_key, []).append(route_identity)
+                state.collisions.setdefault(collision_key, set()).add(route_identity)
 
 
 def collect_unique_template_issues(
@@ -185,7 +185,7 @@ def collect_unique_template_issues(
     source_entries = cast(dict[str, Any], sources_raw)
     source_groups = cast(dict[str, Any], load_yaml_file(project_root() / "source-groups.yaml"))
 
-    collisions: dict[tuple[str, str, str, str], list[str]] = {}
+    collisions: dict[tuple[str, str, str, str], set[str]] = {}
     missing_unique_values: list[str] = []
     state = UniqueIssueState(
         collisions=collisions,
