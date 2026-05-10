@@ -804,15 +804,11 @@ BEGIN
         v_registration."logical_table_name",
         CASE
             WHEN v_checkpoint_start_lsn IS NOT NULL
-                OR v_registration."enabled"
-                OR v_policy."enabled"
                 THEN 'completed'
             ELSE 'pending'
         END,
         CASE
             WHEN v_checkpoint_start_lsn IS NOT NULL
-                OR v_registration."enabled"
-                OR v_policy."enabled"
                 THEN COALESCE(v_checkpoint_updated_at, NOW())
             ELSE NULL
         END,
@@ -858,13 +854,7 @@ SELECT
     reg."target_schema_name",
     reg."target_table_name",
     (reg."enabled" AND si."enabled" AND policy."enabled") AS "enabled",
-    COALESCE(
-        bootstrap."bootstrap_status",
-        CASE
-            WHEN reg."enabled" OR policy."enabled" THEN 'completed'
-            ELSE 'pending'
-        END
-    ) AS "bootstrap_status",
+    COALESCE(bootstrap."bootstrap_status", 'pending') AS "bootstrap_status",
     bootstrap."last_started_at" AS "bootstrap_last_started_at",
     bootstrap."last_completed_at" AS "bootstrap_last_completed_at",
     bootstrap."last_failed_at" AS "bootstrap_last_failed_at",
@@ -936,13 +926,7 @@ SELECT
     reg."enabled" AS "registration_enabled",
     si."enabled" AS "source_instance_enabled",
     policy."enabled" AS "policy_enabled",
-    COALESCE(
-        bootstrap."bootstrap_status",
-        CASE
-            WHEN reg."enabled" OR policy."enabled" THEN 'completed'
-            ELSE 'pending'
-        END
-    ) AS "bootstrap_status",
+    COALESCE(bootstrap."bootstrap_status", 'pending') AS "bootstrap_status",
     bootstrap."last_started_at" AS "bootstrap_last_started_at",
     bootstrap."last_completed_at" AS "bootstrap_last_completed_at",
     bootstrap."last_failed_at" AS "bootstrap_last_failed_at",
@@ -996,6 +980,34 @@ SELECT
     checkpoint."last_start_lsn",
     checkpoint."last_seqval",
     checkpoint."updated_at" AS "checkpoint_updated_at",
+    -- Health flags: make unsafe states obvious at a glance
+    CASE
+        WHEN COALESCE(bootstrap."bootstrap_status", 'pending') != 'completed'
+             AND (reg."enabled" OR policy."enabled") THEN true
+        ELSE false
+    END AS "unsafe_enabled_without_bootstrap",
+    CASE
+        WHEN COALESCE(bootstrap."bootstrap_status", 'pending') = 'completed'
+             AND checkpoint."last_start_lsn" IS NULL THEN true
+        ELSE false
+    END AS "unsafe_bootstrap_completed_without_checkpoint",
+    CASE
+        WHEN COALESCE(bootstrap."bootstrap_status", 'pending') = 'failed' THEN true
+        ELSE false
+    END AS "unsafe_failed_bootstrap",
+    CASE
+        WHEN COALESCE(bootstrap."bootstrap_status", 'pending') = 'pending'
+             AND COALESCE(reg."enabled", false)
+             AND COALESCE(policy."enabled", false) THEN true
+        ELSE false
+    END AS "unsafe_pending_bootstrap_enabled",
+    CASE
+        WHEN bootstrap."last_started_at" IS NOT NULL
+             AND bootstrap."last_completed_at" IS NULL
+             AND bootstrap."last_failed_at" IS NULL
+             AND COALESCE(EXTRACT(EPOCH FROM (NOW() - bootstrap."last_started_at")), 0) > 3600 THEN true
+        ELSE false
+    END AS "unsafe_stalled_bootstrap",
     si."source_database",
     si."fdw_schema_name",
     cr."customer_id"
@@ -1062,13 +1074,18 @@ BEGIN
         WHERE reg."enabled" = true
           AND policy."enabled" = true
           AND si."enabled" = true
-          AND COALESCE(
-                bootstrap."bootstrap_status",
-                CASE
-                    WHEN reg."enabled" OR policy."enabled" THEN 'completed'
-                    ELSE 'pending'
-                END
-              ) = 'completed'
+          AND COALESCE(bootstrap."bootstrap_status", 'pending') = 'completed'
+          AND EXISTS (
+                SELECT 1
+                FROM "cdc_management"."native_cdc_checkpoint" ckpt
+                JOIN "cdc_management"."source_instance" si2
+                    ON si2."source_instance_key" = runtime."source_instance_key"
+                JOIN "cdc_management"."customer_registry" cr2
+                    ON cr2."customer_key" = si2."customer_key"
+                WHERE ckpt."customer_id" = cr2."customer_id"
+                  AND ckpt."table_name" = runtime."logical_table_name"
+                  AND ckpt."last_start_lsn" IS NOT NULL
+          )
           AND COALESCE(runtime."next_pull_at", NOW()) <= NOW()
           AND (
                 runtime."lease_expires_at" IS NULL
@@ -1111,14 +1128,17 @@ BEGIN
         reg."target_table_name",
         resolved."effective_schedule_profile",
         COALESCE(runtime."current_poll_interval_seconds", policy."base_poll_interval_seconds", 60) AS "current_poll_interval_seconds",
-        CASE resolved."effective_schedule_profile"
-            WHEN 'hot' THEN 2000
-            WHEN 'cool' THEN 750
-            WHEN 'cold' THEN 500
-            ELSE 1000
-        END AS "max_rows_per_pull",
+        COALESCE(policy."max_rows_per_pull",
+            CASE resolved."effective_schedule_profile"
+                WHEN 'hot' THEN 2000
+                WHEN 'cool' THEN 750
+                WHEN 'cold' THEN 500
+                ELSE 1000
+            END
+        ) AS "max_rows_per_pull",
         COALESCE(
             NULLIF(p_lease_seconds, 0),
+            policy."lease_seconds",
             CASE resolved."effective_schedule_profile"
                 WHEN 'cold' THEN 180
                 ELSE 120
@@ -1204,13 +1224,7 @@ BEGIN
             reg."enabled" AS "registration_enabled",
             si."enabled" AS "source_instance_enabled",
             policy."enabled" AS "policy_enabled",
-            COALESCE(
-                bootstrap."bootstrap_status",
-                CASE
-                    WHEN reg."enabled" OR policy."enabled" THEN 'completed'
-                    ELSE 'pending'
-                END
-            ) AS "bootstrap_status"
+            COALESCE(bootstrap."bootstrap_status", 'pending') AS "bootstrap_status"
         FROM "cdc_management"."source_table_registration" reg
         JOIN "cdc_management"."source_instance" si
             ON si."source_instance_key" = reg."source_instance_key"
@@ -1231,13 +1245,7 @@ BEGIN
           )
           AND (
                 v_has_requested_tables
-                OR COALESCE(
-                    bootstrap."bootstrap_status",
-                    CASE
-                        WHEN reg."enabled" OR policy."enabled" THEN 'completed'
-                        ELSE 'pending'
-                    END
-                ) = 'pending'
+                OR COALESCE(bootstrap."bootstrap_status", 'pending') = 'pending'
           )
         ORDER BY reg."source_instance_key", reg."logical_table_name"
     LOOP

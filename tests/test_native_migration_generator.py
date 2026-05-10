@@ -132,6 +132,10 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'topology_kind: "mssql_fdw_pull"' in manifest_text
     assert 'runtime_engine: "postgres_native"' in manifest_text
     assert "00-infrastructure/03-native-cdc-runtime.sql" in manifest_text
+    # Phase A: Native mode must NOT include legacy broker management SQL
+    assert "02-cdc-management.sql" not in manifest_text, "Native runtime manifest must not reference legacy broker management SQL"
+    # Phase B: Table count must be non-zero
+    assert "table_count: 1" in manifest_text, "Native runtime manifest must have non-zero table count"
 
     assert 'PRIMARY KEY ("customer_id", "actno")' in final_table_sql
     assert '"__source_start_lsn" BYTEA' in final_table_sql
@@ -147,6 +151,37 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert "native_cdc_bootstrap_state" in staging_sql
     assert 'INSERT INTO "adopus"."Actor"' in staging_sql
     assert 'INSERT INTO "adopus"."stg_Actor"' in staging_sql
+
+    # Phase C: Bootstrap defaults to 'pending', not 'completed'
+    assert "COALESCE(bootstrap." in native_infra_sql
+    compact = native_infra_sql.replace(" ", "").replace("\n", "")
+    assert "bootstrap_status\",'pending')" in compact, (
+        "Bootstrap status must default to 'pending', not implicitly 'completed'"
+    )
+    # Phase C: No more unsafe implicit completed bootstrap from enabled registration
+    assert 'WHEN reg."enabled" OR policy."enabled" THEN \'completed\'' not in native_infra_sql, (
+        "Enabled registration must not imply completed bootstrap"
+    )
+
+    # Phase C: Health view must expose unsafe-state columns
+    assert '"unsafe_enabled_without_bootstrap"' in native_infra_sql
+    assert '"unsafe_bootstrap_completed_without_checkpoint"' in native_infra_sql
+    assert '"unsafe_failed_bootstrap"' in native_infra_sql
+    assert '"unsafe_pending_bootstrap_enabled"' in native_infra_sql
+    assert '"unsafe_stalled_bootstrap"' in native_infra_sql
+
+    # Phase E: claim_due_native_cdc_work uses policy.max_rows_per_pull as primary source
+    assert 'policy."max_rows_per_pull"' in compact, (
+        "Claim must use policy.max_rows_per_pull, not only hardcoded tier presets"
+    )
+
+    # Phase D: sp_merge_<table> checkpoint update is inside merge procedure (not pull)
+    assert 'UPDATE "cdc_management"."native_cdc_checkpoint"' in staging_sql
+    assert "sp_merge_actor" in staging_sql
+    # Checkpoint advancement should happen AFTER the merge operations
+    ckpt_line_idx = staging_sql.index('UPDATE "cdc_management"."native_cdc_checkpoint"')
+    merge_line_idx = staging_sql.index("ON CONFLICT")
+    assert ckpt_line_idx > merge_line_idx, "Checkpoint advancement must occur after merge/apply, not before"
 
 
 def test_generate_native_runtime_renders_resolve_policy_dynamic(
@@ -190,13 +225,13 @@ def test_generate_native_runtime_renders_resolve_policy_dynamic(
     assert 'CREATE TRIGGER "trg_sync_native_cdc_registration_state"' in native_infra_sql
 
     # Function body should contain a direct SELECT from the table, not VALUES
-    func_start = native_infra_sql.index('LANGUAGE sql')
-    func_end = native_infra_sql.index('$$;\n', func_start)
+    func_start = native_infra_sql.index("LANGUAGE sql")
+    func_end = native_infra_sql.index("$$;\n", func_start)
     func_body = native_infra_sql[func_start:func_end]
-    assert 'native_cdc_schedule_policy' in func_body
-    assert 'UNION ALL' in func_body
-    assert 'WHERE NOT EXISTS' in func_body
-    assert 'VALUES' not in func_body
+    assert "native_cdc_schedule_policy" in func_body
+    assert "UNION ALL" in func_body
+    assert "WHERE NOT EXISTS" in func_body
+    assert "VALUES" not in func_body
     # sync call passes source_instance_key + logical_table_name
     assert 'v_registration."source_instance_key"' in native_infra_sql
 
@@ -239,6 +274,10 @@ def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:
             runtime_mode="native",
         )
 
-    assert result.errors == [
-        "Table adopus.Actor: native runtime requires a customer_id column template",
-    ]
+    assert len(result.errors) == 2
+    assert any("customer_id column template" in err for err in result.errors), (
+        "Must require customer_id column template"
+    )
+    assert any("produced zero tables" in err for err in result.errors), (
+        "Must report zero tables when all tables fail validation"
+    )

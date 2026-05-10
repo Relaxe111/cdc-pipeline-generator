@@ -114,14 +114,17 @@ def _build_create_table_sql(
     evolution_sql = "\n".join(evolution_lines)
 
     return (
-        header + "\n"
-        + f'CREATE TABLE IF NOT EXISTS {qualified} (\n'
-        + columns_sql + "\n"
+        header
+        + "\n"
+        + f"CREATE TABLE IF NOT EXISTS {qualified} (\n"
+        + columns_sql
+        + "\n"
         + ");\n\n"
         + "-- Schema evolution (additive only): add missing columns to existing tables.\n"
         + "-- Drift guard runs in 'cdc manage-migrations apply' (Python pre-check), not in SQL body.\n"
         + "-- Manual migration is required for remove/rename/type-change or nullability/default transitions.\n"
-        + evolution_sql + "\n\n"
+        + evolution_sql
+        + "\n\n"
         + "-- Index on sync timestamp for efficient querying\n"
         + f'CREATE INDEX IF NOT EXISTS "idx_{table_name}_sync_ts"\n'
         + f'    ON {qualified} ("__sync_timestamp");\n'
@@ -149,17 +152,20 @@ def generate_infrastructure(
     )
     write_migration_file(infra_dir / "01-create-schemas.sql", schema_sql, result)
 
-    mgmt_sql = _render_template(
-        ctx.jinja_env,
-        "cdc-management.sql.j2",
-        {
-            "generated_at": ctx.generated_at,
-            "db_user": ctx.db_user,
-            "sink_target": ctx.sink_target,
-            "pattern": pattern,
-        },
-    )
-    write_migration_file(infra_dir / "02-cdc-management.sql", mgmt_sql, result)
+    # Native mode skips legacy broker management SQL (02-cdc-management.sql).
+    # Only brokered mode needs Kafka/Bento/Redpanda control tables and merge helpers.
+    if ctx.runtime_mode != "native":
+        mgmt_sql = _render_template(
+            ctx.jinja_env,
+            "cdc-management.sql.j2",
+            {
+                "generated_at": ctx.generated_at,
+                "db_user": ctx.db_user,
+                "sink_target": ctx.sink_target,
+                "pattern": pattern,
+            },
+        )
+        write_migration_file(infra_dir / "02-cdc-management.sql", mgmt_sql, result)
 
     if ctx.runtime_mode == "native":
         native_runtime_sql = _render_template(
@@ -254,22 +260,10 @@ def generate_table_files(
                     unique_primary_keys,
                 ),
                 "update_set_sql": update_set_sql,
-                "foreign_table_name": (
-                    migration.foreign_table_name
-                    or f"{migration.table_name}_CT"
-                ),
-                "base_foreign_table_name": (
-                    migration.base_foreign_table_name
-                    or f"{migration.table_name}_base"
-                ),
-                "min_lsn_table_name": (
-                    migration.min_lsn_table_name
-                    or f"cdc_min_lsn_{migration.table_name}"
-                ),
-                "capture_instance_name": (
-                    migration.capture_instance_name
-                    or f"{migration.source_schema}_{migration.table_name}"
-                ),
+                "foreign_table_name": (migration.foreign_table_name or f"{migration.table_name}_CT"),
+                "base_foreign_table_name": (migration.base_foreign_table_name or f"{migration.table_name}_base"),
+                "min_lsn_table_name": (migration.min_lsn_table_name or f"cdc_min_lsn_{migration.table_name}"),
+                "capture_instance_name": (migration.capture_instance_name or f"{migration.source_schema}_{migration.table_name}"),
                 "db_user": ctx.db_user,
             }
             staging_sql = _render_template(
@@ -363,7 +357,7 @@ def _build_native_pull_select_sql(migration: TableMigration) -> str:
         elif column_name == "__cdc_operation":
             expression = 'f."__$operation"'
         else:
-            expression = f'f.{_quote_ident(column_name)}'
+            expression = f"f.{_quote_ident(column_name)}"
         select_lines.append(f"            {expression}")
     return ",\n".join(select_lines)
 
@@ -393,7 +387,7 @@ def _build_native_snapshot_select_sql(migration: TableMigration) -> str:
         elif column_name == "__cdc_operation":
             expression = "2"
         else:
-            expression = f'f.{_quote_ident(column_name)}'
+            expression = f"f.{_quote_ident(column_name)}"
         select_lines.append(f"            {expression}")
     return ",\n".join(select_lines)
 
@@ -405,16 +399,11 @@ def _build_join_conditions_sql(
 ) -> str:
     """Build equality joins on the effective primary key columns."""
     return "\n      AND ".join(
-        f'{left_alias}.{_quote_ident(primary_key)} = {right_alias}.{_quote_ident(primary_key)}'
-        for primary_key in primary_keys
+        f"{left_alias}.{_quote_ident(primary_key)} = {right_alias}.{_quote_ident(primary_key)}" for primary_key in primary_keys
     )
 
 
 def _build_snapshot_order_by_sql(primary_keys: list[str]) -> str:
     """Build a deterministic ORDER BY for base-table snapshot loads."""
-    source_primary_keys = [
-        primary_key
-        for primary_key in _dedupe_names_case_insensitive(primary_keys)
-        if primary_key.casefold() != "customer_id"
-    ]
-    return ", ".join(f'f.{_quote_ident(primary_key)}' for primary_key in source_primary_keys)
+    source_primary_keys = [primary_key for primary_key in _dedupe_names_case_insensitive(primary_keys) if primary_key.casefold() != "customer_id"]
+    return ", ".join(f"f.{_quote_ident(primary_key)}" for primary_key in source_primary_keys)

@@ -501,6 +501,16 @@ def _generate_for_sink(
         tables_generated.append(migration.table_name)
         result.tables_processed += 1
 
+    # Native runtime mode must produce at least one tracked table.
+    # A zero-table native migration is non-runnable (orchestrator cannot pull/merge).
+    if ctx.runtime_mode == "native" and len(tables_generated) == 0:
+        result.errors.append(
+            "Native runtime generation produced zero tables. "
+            + "Check that the service config contains sink tables with valid 'from' references "
+            + "and that table definitions exist in services/_schemas/. "
+            + "Run 'cdc manage-services config --inspect' first if schema definitions are missing.",
+        )
+
     _ = write_manifest(
         ctx.output_dir,
         tables_generated,
