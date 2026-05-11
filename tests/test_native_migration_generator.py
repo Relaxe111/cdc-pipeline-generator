@@ -21,9 +21,6 @@ _SERVICE_CONFIG: dict[str, object] = {
                 "adopus.Actor": {
                     "from": "dbo.Actor",
                     "replicate_structure": True,
-                    "column_templates": [
-                        {"template": "customer_id", "name": "customer_id"},
-                    ],
                 },
             },
         },
@@ -43,9 +40,6 @@ _EXISTING_TARGET_SERVICE_CONFIG: dict[str, object] = {
                 "adopus.Actor": {
                     "from": "dbo.Actor",
                     "target_exists": True,
-                    "column_templates": [
-                        {"template": "customer_id", "name": "customer_id"},
-                    ],
                 },
             },
         },
@@ -79,19 +73,6 @@ def _write_native_project(tmp_path: Path) -> Path:
     return schema_dir.parent
 
 
-def _inject_customer_id_column(
-    columns: list[MigrationColumn],
-    _table_cfg: dict[str, object],
-) -> list[MigrationColumn]:
-    """Test helper to inject the resolved customer_id template column."""
-    if any(column.name.casefold() == "customer_id" for column in columns):
-        return columns
-    return [
-        *columns,
-        MigrationColumn(name="customer_id", type="UUID", nullable=False),
-    ]
-
-
 def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     """FDW topology should derive the native runtime and emit expected SQL."""
     schema_base = _write_native_project(tmp_path)
@@ -109,10 +90,6 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
         patch(
             "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
             return_value=[schema_base],
-        ),
-        patch(
-            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
-            side_effect=_inject_customer_id_column,
         ),
     ):
         result = generate_migrations(
@@ -232,10 +209,6 @@ def test_generate_native_runtime_keeps_existing_target_tables_and_cleans_stale_l
             "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
             return_value=[schema_base],
         ),
-        patch(
-            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
-            side_effect=_inject_customer_id_column,
-        ),
     ):
         result = generate_migrations(
             "native_test",
@@ -259,10 +232,6 @@ def test_generate_native_runtime_keeps_existing_target_tables_and_cleans_stale_l
         patch(
             "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
             return_value=[schema_base],
-        ),
-        patch(
-            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
-            side_effect=_inject_customer_id_column,
         ),
     ):
         second_result = generate_migrations(
@@ -311,10 +280,6 @@ def test_generate_native_runtime_renders_resolve_policy_dynamic(
             "cdc_generator.core.migration_generator.get_service_schema_read_dirs",
             return_value=[schema_base],
         ),
-        patch(
-            "cdc_generator.core.migration_generator.table_processing.add_column_template_columns",
-            side_effect=_inject_customer_id_column,
-        ),
     ):
         result = generate_migrations(
             "native_test",
@@ -343,8 +308,8 @@ def test_generate_native_runtime_renders_resolve_policy_dynamic(
     assert 'v_registration."source_instance_key"' in native_infra_sql
 
 
-def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:
-    """Native runtime mode should reject shared tables without customer_id."""
+def test_native_runtime_auto_injects_customer_id_column(tmp_path: Path) -> None:
+    """Native runtime mode should auto-inject customer_id without YAML templates."""
     schema_base = _write_native_project(tmp_path)
     output_dir = tmp_path / "migrations"
     service_config: dict[str, object] = {
@@ -381,6 +346,10 @@ def test_native_runtime_requires_customer_id_template(tmp_path: Path) -> None:
             runtime_mode="native",
         )
 
-    assert len(result.errors) == 2
-    assert any("customer_id column template" in err for err in result.errors), "Must require customer_id column template"
-    assert any("produced zero tables" in err for err in result.errors), "Must report zero tables when all tables fail validation"
+    assert result.errors == []
+
+    final_table_sql = (output_dir / "sink_test.db" / "01-tables" / "Actor.sql").read_text(
+        encoding="utf-8",
+    )
+    assert '"customer_id" UUID NOT NULL' in final_table_sql
+    assert 'PRIMARY KEY ("customer_id", "actno")' in final_table_sql

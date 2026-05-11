@@ -19,6 +19,7 @@ from cdc_generator.helpers.type_mapper import TypeMapper
 from .columns import (
     add_cdc_metadata_columns,
     add_native_cdc_metadata_columns,
+    add_native_runtime_columns,
     add_column_template_columns,
     build_columns_from_table_def,
 )
@@ -81,6 +82,7 @@ def process_table(
 
     columns = add_column_template_columns(columns, cast(dict[str, object], sink_cfg))
     if runtime_mode == "native":
+        columns = add_native_runtime_columns(columns)
         columns = add_native_cdc_metadata_columns(columns)
     else:
         columns = add_cdc_metadata_columns(columns)
@@ -90,12 +92,6 @@ def process_table(
         return None
 
     if runtime_mode == "native":
-        customer_id_present = any(column.name.casefold() == "customer_id" for column in columns)
-        if not customer_id_present:
-            result.errors.append(
-                f"Table {sink_key}: native runtime requires a customer_id column template",
-            )
-            return None
         primary_keys = _prepend_customer_id(primary_keys)
 
     foreign_table_name = build_foreign_table_name(

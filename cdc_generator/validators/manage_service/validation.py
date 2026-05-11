@@ -52,15 +52,11 @@ def _validate_service_identity(
 ) -> None:
     """Validate top-level service identity fields."""
     if "service" not in config:
-        errors.append(
-            f"Missing 'service' field (should be automatically added from '{service}:' root key)"
-        )
+        errors.append(f"Missing 'service' field (should be automatically added from '{service}:' root key)")
         return
 
     if config["service"] != service:
-        errors.append(
-            f"Service name mismatch: config has '{config['service']}' but file is '{service}.yaml'"
-        )
+        errors.append(f"Service name mismatch: config has '{config['service']}' but file is '{service}.yaml'")
 
 
 def _validate_source_tables(
@@ -83,23 +79,16 @@ def _validate_source_tables(
 
     for table_key, table_config in tables.items():
         if "." not in table_key:
-            warnings.append(
-                f"Table key '{table_key}' should be in schema.table format (e.g., 'public.users')"
-            )
+            warnings.append(f"Table key '{table_key}' should be in schema.table format (e.g., 'public.users')")
         if table_config is None:
             continue
         if not isinstance(table_config, dict):
-            errors.append(
-                f"{table_key}: table configuration must be a dict/object, got {type(table_config).__name__}"
-            )
+            errors.append(f"{table_key}: table configuration must be a dict/object, got {type(table_config).__name__}")
             continue
 
         for key in table_config:
             if key not in _VALID_SOURCE_TABLE_KEYS:
-                warnings.append(
-                    f"{table_key}: unknown configuration key '{key}' "
-                    + f"(valid: {', '.join(sorted(_VALID_SOURCE_TABLE_KEYS))})"
-                )
+                warnings.append(f"{table_key}: unknown configuration key '{key}' " + f"(valid: {', '.join(sorted(_VALID_SOURCE_TABLE_KEYS))})")
 
 
 def _validate_source_section(
@@ -137,22 +126,16 @@ def _validate_sink_tables(
             continue
 
         if "from" not in sink_table_config:
-            errors.append(
-                f"sinks.{sink_key}.tables.{sink_table_key}: missing 'from' field (source table reference)"
-            )
+            errors.append(f"sinks.{sink_key}.tables.{sink_table_key}: missing 'from' field (source table reference)")
         if "target_exists" not in sink_table_config:
-            warnings.append(
-                f"sinks.{sink_key}.tables.{sink_table_key}: missing 'target_exists' field (should be true or false)"
-            )
+            warnings.append(f"sinks.{sink_key}.tables.{sink_table_key}: missing 'target_exists' field (should be true or false)")
 
+        target_exists = bool(sink_table_config.get("target_exists", False))
         replicate = sink_table_config.get("replicate_structure", False)
         has_columns_mapping = "columns" in sink_table_config
         has_replicate_key = "replicate_structure" in sink_table_config
-        if (not replicate) and (not has_columns_mapping) and (not has_replicate_key):
-            warnings.append(
-                f"sinks.{sink_key}.tables.{sink_table_key}: neither 'columns' nor "
-                + "'replicate_structure' specified"
-            )
+        if (not target_exists) and (not replicate) and (not has_columns_mapping) and (not has_replicate_key):
+            warnings.append(f"sinks.{sink_key}.tables.{sink_table_key}: neither 'columns' nor " + "'replicate_structure' specified")
 
 
 def _validate_sinks_section(
@@ -192,20 +175,20 @@ def _validate_sinks_section(
 def _print_validation_messages(errors: list[str], warnings: list[str]) -> None:
     """Print validation errors and warnings."""
     if errors:
-        print_error(f"\n{'='*80}")
+        print_error(f"\n{'=' * 80}")
         print_error("Configuration Validation Errors")
-        print_error(f"{'='*80}\n")
+        print_error(f"{'=' * 80}\n")
         for error in errors:
             print_error(f"  ❌ {error}")
-        print_error(f"\n{'='*80}\n")
+        print_error(f"\n{'=' * 80}\n")
 
     if warnings:
-        print_warning(f"\n{'='*80}")
+        print_warning(f"\n{'=' * 80}")
         print_warning("Configuration Warnings")
-        print_warning(f"{'='*80}\n")
+        print_warning(f"{'=' * 80}\n")
         for warning in warnings:
             print_warning(f"  ⚠️  {warning}")
-        print_warning(f"\n{'='*80}\n")
+        print_warning(f"\n{'=' * 80}\n")
 
 
 def _validation_success(

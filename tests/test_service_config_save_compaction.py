@@ -92,8 +92,7 @@ def test_save_service_config_omits_customers_for_db_per_tenant(
     services_dir = tmp_path / "services"
     services_dir.mkdir(parents=True)
     (tmp_path / "source-groups.yaml").write_text(
-        "adopus:\n"
-        "  pattern: db-per-tenant\n",
+        "adopus:\n  pattern: db-per-tenant\n",
         encoding="utf-8",
     )
 
@@ -122,8 +121,7 @@ def test_save_service_config_preserves_customers_for_non_db_per_tenant(
     services_dir = tmp_path / "services"
     services_dir.mkdir(parents=True)
     (tmp_path / "source-groups.yaml").write_text(
-        "directory:\n"
-        "  pattern: db-shared\n",
+        "directory:\n  pattern: db-shared\n",
         encoding="utf-8",
     )
 
@@ -177,9 +175,42 @@ def test_save_service_config_preserves_existing_header_comment(
     services_dir.mkdir(parents=True)
     service_file = services_dir / "demo.yaml"
     service_file.write_text(
-        "# custom header\n"
-        "# second line\n"
-        "\n"
+        "# custom header\n# second line\n\ndemo:\n  source:\n    tables: {}\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config_module, "SERVICES_DIR", services_dir)
+    monkeypatch.setattr(config_module, "SERVICE_SCHEMAS_DIR", services_dir)
+
+    config: dict[str, object] = {
+        "service": "demo",
+        "source": {"tables": {"dbo.Actor": {}}},
+    }
+
+    assert config_module.save_service_config("demo", config) is True
+
+    rendered = service_file.read_text(encoding="utf-8")
+
+    assert rendered.startswith("# custom header\n# second line\n\n")
+    assert "CDC Service Configuration - Auto-managed" not in rendered
+
+
+def test_save_service_config_preserves_managed_validation_section(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+    service_file = services_dir / "demo.yaml"
+    service_file.write_text(
+        "# yaml-language-server: $schema=../.vscode/schemas/service.schema.json\n"
+        "# BEGIN GENERATED VALIDATION SECTION\n"
+        "# Schema validation metadata\n"
+        "# END GENERATED VALIDATION SECTION\n\n"
+        "# ============================================================================\n"
+        "# CDC Service Configuration - Auto-managed\n"
+        "# ============================================================================\n\n"
         "demo:\n"
         "  source:\n"
         "    tables: {}\n",
@@ -199,5 +230,6 @@ def test_save_service_config_preserves_existing_header_comment(
 
     rendered = service_file.read_text(encoding="utf-8")
 
-    assert rendered.startswith("# custom header\n# second line\n\n")
-    assert "CDC Service Configuration - Auto-managed" not in rendered
+    assert rendered.startswith("# yaml-language-server: $schema=../.vscode/schemas/service.schema.json\n")
+    assert "BEGIN GENERATED VALIDATION SECTION" in rendered
+    assert "CDC Service Configuration - Auto-managed" in rendered

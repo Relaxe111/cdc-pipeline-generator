@@ -568,13 +568,15 @@ def test_add_sink_table_fails_on_incompatible_identity_columns(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "id", "type": "text", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "id", "type": "text", "nullable": False},
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -613,13 +615,15 @@ def test_add_sink_table_accepts_explicit_mapping_for_required_sink_columns(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "user_id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "user_id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -755,13 +759,15 @@ def test_add_sink_table_accepts_required_column_from_column_template(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "actno", "type": "integer", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "customer_id", "type": "uuid", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "actno", "type": "integer", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "customer_id", "type": "uuid", "nullable": False},
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -806,13 +812,15 @@ def test_add_sink_table_accepts_required_column_from_source_transform(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "user_class", "type": "text", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "user_class", "type": "text", "nullable": False},
+            ]
+        ),
     )
 
     class _Output:
@@ -859,13 +867,15 @@ def test_add_sink_table_accepts_required_column_from_add_transform_option(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "user_class", "type": "text", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "user_class", "type": "text", "nullable": False},
+            ]
+        ),
     )
     monkeypatch.setattr(
         "cdc_generator.core.bloblang_refs.read_bloblang_ref",
@@ -906,22 +916,26 @@ def test_add_sink_table_rejects_required_column_from_commented_transform_output(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "user_class", "type": "text", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "user_class", "type": "text", "nullable": False},
+            ]
+        ),
     )
     monkeypatch.setattr(
         "cdc_generator.core.bloblang_refs.read_bloblang_ref",
-        lambda _ref: '\n'.join([
-            'let results = []',
-            '# root.user_class = "Patient"',
-            '# $results.append(this.merge({"user_class":"Patient"}))',
-            'root = this',
-        ]),
+        lambda _ref: "\n".join(
+            [
+                "let results = []",
+                '# root.user_class = "Patient"',
+                '# $results.append(this.merge({"user_class":"Patient"}))',
+                "root = this",
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -958,13 +972,15 @@ def test_add_sink_table_accepts_required_column_via_accept_column(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "user_id", "type": "uuid", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "user_id", "type": "uuid", "nullable": False},
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -1001,13 +1017,15 @@ def test_add_sink_table_rejects_invalid_accept_column_name(
     )
     monkeypatch.setattr(
         "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
-        lambda _service, _table: [
-            {"name": "id", "type": "uuid", "nullable": False},
-        ]
-        if _service == "test_service"
-        else [
-            {"name": "user_id", "type": "uuid", "nullable": False},
-        ],
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "user_id", "type": "uuid", "nullable": False},
+            ]
+        ),
     )
 
     result = add_sink_table(
@@ -1022,3 +1040,63 @@ def test_add_sink_table_rejects_invalid_accept_column_name(
     )
 
     assert result is False
+
+
+def test_add_sink_table_accepts_native_customer_id_without_manual_template(
+    monkeypatch: Any,
+) -> None:
+    """Native target_exists tables should treat customer_id as runtime-generated."""
+    config = _create_test_service_config()
+
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.load_service_config",
+        lambda _service: config,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations.save_service_config",
+        lambda _service, _config: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._validate_table_in_schemas",
+        lambda _sink_key, _table_key: True,
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_add_table_compatibility.get_project_root",
+        lambda: Path("/tmp/native-test"),
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_add_table_compatibility.resolve_source_group_config",
+        lambda _project_root: {"topology": "fdw", "type": "mssql"},
+    )
+    monkeypatch.setattr(
+        "cdc_generator.validators.manage_service.sink_operations._load_table_columns",
+        lambda _service, _table: (
+            [
+                {"name": "id", "type": "uuid", "nullable": False},
+            ]
+            if _service == "test_service"
+            else [
+                {"name": "customer_id", "type": "uuid", "nullable": False, "primary_key": True},
+                {"name": "id", "type": "uuid", "nullable": False, "primary_key": True},
+                {"name": "__sync_timestamp", "type": "timestamptz", "nullable": False},
+                {"name": "__source", "type": "varchar", "nullable": False},
+                {"name": "__source_db", "type": "varchar", "nullable": False},
+                {"name": "__source_table", "type": "varchar", "nullable": False},
+                {"name": "__source_start_lsn", "type": "bytea", "nullable": True},
+                {"name": "__source_seqval", "type": "bytea", "nullable": True},
+                {"name": "__cdc_operation", "type": "integer", "nullable": True},
+            ]
+        ),
+    )
+
+    result = add_sink_table(
+        service="test_service",
+        sink_key="sink_test.target",
+        table_key="dbo.Actor",
+        table_opts={
+            "target_exists": True,
+            "from": "dbo.Actor",
+        },
+    )
+
+    assert result is True

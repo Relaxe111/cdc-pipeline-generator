@@ -42,6 +42,10 @@ NATIVE_CDC_METADATA_COLUMNS: list[dict[str, str | bool]] = [
     {"name": "__cdc_operation", "type": "INTEGER", "nullable": True},
 ]
 
+NATIVE_RUNTIME_REQUIRED_COLUMNS: list[MigrationColumn] = [
+    MigrationColumn(name="customer_id", type="UUID", nullable=False),
+]
+
 
 def build_columns_from_table_def(
     table_def: dict[str, Any],
@@ -149,6 +153,19 @@ def add_transform_output_columns(
     return columns
 
 
+def add_native_runtime_columns(
+    columns: list[MigrationColumn],
+) -> list[MigrationColumn]:
+    """Append columns that native runtime populates from registration metadata."""
+    existing_names = {column.name.casefold() for column in columns}
+    for runtime_column in NATIVE_RUNTIME_REQUIRED_COLUMNS:
+        if runtime_column.name.casefold() in existing_names:
+            continue
+        columns.append(runtime_column)
+        existing_names.add(runtime_column.name.casefold())
+    return columns
+
+
 def add_cdc_metadata_columns(
     columns: list[MigrationColumn],
 ) -> list[MigrationColumn]:
@@ -205,6 +222,7 @@ def build_full_column_list(
     columns = add_column_template_columns(columns, sink_cfg)
     columns = add_transform_output_columns(columns, sink_cfg)
     if runtime_mode == "native":
+        columns = add_native_runtime_columns(columns)
         columns = add_native_cdc_metadata_columns(columns)
     else:
         columns = add_cdc_metadata_columns(columns)

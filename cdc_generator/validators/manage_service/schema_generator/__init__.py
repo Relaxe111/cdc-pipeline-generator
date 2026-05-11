@@ -16,8 +16,6 @@ The refactored structure:
 """
 
 import json
-from pathlib import Path
-from typing import Optional
 
 from cdc_generator.helpers.helpers_logging import (
     Colors,
@@ -44,11 +42,13 @@ from .yaml_loader import (
 )
 
 
-def generate_service_validation_schema(
-    service: str,
-    env: str = 'nonprod',
-    schema_filter: str | None = None
-) -> bool:
+def _remove_legacy_service_validation_schemas(output_dir: "Path") -> None:
+    """Remove obsolete per-database validation schemas from the output directory."""
+    for legacy_schema in output_dir.glob("*.service-validation.schema.json"):
+        legacy_schema.unlink()
+
+
+def generate_service_validation_schema(service: str, env: str = "nonprod", schema_filter: str | None = None) -> bool:
     """Generate JSON Schema for service YAML validation based on database schema.
 
     This is the main entry point for schema generation. It:
@@ -67,7 +67,7 @@ def generate_service_validation_schema(
     """
     try:
         config = load_service_config(service)
-        server_group = config.get('server_group', '')
+        server_group = config.get("server_group", "")
 
         # Load server groups configuration
         server_groups_data = load_server_groups_config()
@@ -93,7 +93,7 @@ def generate_service_validation_schema(
 
         # Get schema names and database for validation
         schema_names = sorted(schemas_data.keys())
-        database = config.get('source', {}).get('validation_database', service)
+        database = config.get("source", {}).get("validation_database", service)
 
         # Generate mini schemas for keys (BEFORE determining schema_ref so shared schemas exist)
         generate_service_enum_schema()
@@ -106,10 +106,10 @@ def generate_service_validation_schema(
         if len(schema_names) == 1:
             shared_name = schema_names[0]
         else:
-            shared_name = '_'.join(schema_names)
+            shared_name = "_".join(schema_names)
 
         project_root = get_project_root()
-        shared_schema_file = project_root / '.vscode' / 'schemas' / 'keys' / 'schema_name' / 'shared' / f'{shared_name}.schema.json'
+        shared_schema_file = project_root / ".vscode" / "schemas" / "keys" / "schema_name" / "shared" / f"{shared_name}.schema.json"
 
         if shared_schema_file.exists():
             schema_ref = f"keys/schema_name/shared/{shared_name}.schema.json"
@@ -118,19 +118,16 @@ def generate_service_validation_schema(
 
         # Build comprehensive JSON Schema
         json_schema = build_json_schema_structure(
-            service=service,
-            database=database,
-            server_group=server_group,
-            schema_ref=schema_ref,
-            schemas_data=schemas_data
+            service=service, database=database, server_group=server_group, schema_ref=schema_ref, schemas_data=schemas_data
         )
 
-        # Save JSON Schema
-        output_dir = project_root / '.vscode' / 'schemas'
+        # Save JSON Schema to the canonical shared path used by VS Code.
+        output_dir = project_root / ".vscode" / "schemas"
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = output_dir / f'{database}.service-validation.schema.json'
+        _remove_legacy_service_validation_schemas(output_dir)
+        output_file = output_dir / "service.schema.json"
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(json_schema, f, indent=2)
 
         print_success(f"\nGenerated validation schema: {output_file}")
@@ -145,17 +142,18 @@ def generate_service_validation_schema(
     except Exception as e:
         print_error(f"Failed to generate validation schema: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 # Re-export public API
 __all__ = [
-    'generate_database_name_schemas',
-    'generate_schema_name_schemas',
-    'generate_server_group_enum_schema',
-    'generate_service_enum_schema',
-    'generate_service_validation_schema',
-    'generate_table_names_enum_schema',
-    'save_detailed_schema',  # Legacy function kept for compatibility
+    "generate_database_name_schemas",
+    "generate_schema_name_schemas",
+    "generate_server_group_enum_schema",
+    "generate_service_enum_schema",
+    "generate_service_validation_schema",
+    "generate_table_names_enum_schema",
+    "save_detailed_schema",  # Legacy function kept for compatibility
 ]

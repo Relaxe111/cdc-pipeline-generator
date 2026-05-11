@@ -1,9 +1,15 @@
 """JSON Schema builder for service validation (main schema assembly)."""
 
+from pathlib import Path
+
 from typing import Any
 
 from cdc_generator.helpers.helpers_logging import print_error, print_success
 from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.validators.manage_service.config import (
+    build_service_validation_header_section,
+    render_service_file_header_comment,
+)
 
 from .schema_properties import (
     add_table_definitions,
@@ -37,9 +43,7 @@ def build_json_schema_structure(
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": f"{service.title()} Service Validation Schema",
         "description": (
-            f"Comprehensive validation schema for {service} service: "
-            + "structure + table content validation "
-            + f"(from service-schemas/{service})"
+            f"Comprehensive validation schema for {service} service: " + "structure + table content validation " + f"(from service-schemas/{service})"
         ),
         "type": "object",
         "required": [],
@@ -58,10 +62,7 @@ def build_json_schema_structure(
             },
             "reference": {
                 "type": "string",
-                "description": (
-                    "Reference customer/database for schema validation "
-                    + "(db-per-tenant only)"
-                ),
+                "description": ("Reference customer/database for schema validation " + "(db-per-tenant only)"),
             },
             "mode": {
                 "type": "string",
@@ -79,17 +80,11 @@ def build_json_schema_structure(
                     "type": {
                         "type": "string",
                         "enum": ["mssql", "postgres"],
-                        "description": (
-                            "⚠️ LEGACY: Source database type "
-                            + "(auto-detected from server_group)"
-                        ),
+                        "description": ("⚠️ LEGACY: Source database type " + "(auto-detected from server_group)"),
                     },
                     "validation_database": {
                         "$ref": f"keys/database_name/{server_group}.schema.json",
-                        "description": (
-                            "Database name for schema validation "
-                            + f"(from server_group: {server_group})"
-                        ),
+                        "description": ("Database name for schema validation " + f"(from server_group: {server_group})"),
                     },
                 },
             },
@@ -102,10 +97,7 @@ def build_json_schema_structure(
                     "properties": {
                         "schema": {
                             "$ref": schema_ref,
-                            "description": (
-                                "Database schema name "
-                                + f"(from validation_database: {database})"
-                            ),
+                            "description": ("Database schema name " + f"(from validation_database: {database})"),
                         },
                         "tables": {
                             "type": "array",
@@ -146,102 +138,34 @@ def update_service_yaml_header(
         True if update succeeded
     """
     try:
+        del database
         services_dir = get_project_root() / "services"
         service_yaml_path = services_dir / f"{service}.yaml"
-        schema_comment = (
-            "# yaml-language-server: "
-            + f"$schema=../.vscode/schemas/{database}.service-validation.schema.json"
+
+        report_path = _write_service_awareness_report(service, schemas_data)
+        validation_section = build_service_validation_header_section(
+            service,
+            report_path.name,
         )
 
-        # Detect case-variant column names
-        case_variants: dict[str, set[str]] = {}
-        for _schema_name, tables in schemas_data.items():
-            for _table_name, table_info in tables.items():
-                for col in table_info["columns"]:
-                    col_name = col["name"]
-                    col_lower = col_name.lower()
-                    if col_lower not in case_variants:
-                        case_variants[col_lower] = set()
-                    case_variants[col_lower].add(col_name)
+        content = service_yaml_path.read_text(encoding="utf-8")
+        header_lines_end = 0
+        for idx, line in enumerate(content.splitlines(keepends=True)):
+            stripped = line.strip()
+            if stripped.startswith("#") or (header_lines_end == idx and not stripped):
+                header_lines_end += len(line)
+                continue
+            break
 
-        overlapping_columns = {
-            col_lower: sorted(variants)
-            for col_lower, variants in case_variants.items()
-            if len(variants) > 1
-        }
-        has_case_variants = len(overlapping_columns) > 0
-
-        # Build informational header
-        info_header = f"""# redhat.vscode-yaml shows column names from all tables
-# in autocomplete suggestions, not just columns for the specific table being edited.
-# This is a known limitation of the extension's JSON Schema support.
-#
-# ✅ NOTE: Despite this limitation, the schema DOES validate that column names
-#    you specify actually exist in the specific table. Invalid columns will be
-#    marked as errors.
-#
-# 💡 HIERARCHICAL CONFIGURATION
-# Properties set at higher levels are inherited by lower levels unless overridden.
-# Environment mapping is resolved from source-groups.yaml (sources.<customer>.<env>).
-# Optional customer-level environments blocks are still accepted as overrides.
-# To validate hierarchical configuration:
-#   cdc manage-tables --service {service} --validate-hierarchy
-# To validate complete configuration for pipeline generation:
-#   cdc manage-tables --service {service} --validate-config
-#
-# 🛡️  existing_mssql FLAG
-# Controls database initialization behavior:
-#   • false: Fresh setup - can create database and tables (for local development)
-#   • true:  Existing DB - only enable CDC, never modify database (nonprod/prod)
-#
-"""
-
-        # Build warning comment if case variants exist
-        warning_comment = ""
-        if has_case_variants:
-            overlap_list: list[str] = []
-            for _col_lower, variants in sorted(overlapping_columns.items()):
-                overlap_list.append(f"#   - {', '.join(variants)}")
-            overlap_section = "\n".join(overlap_list)
-
-            warning_comment = f"""#
-# ⚠️  CASE SENSITIVITY WARNING
-# The following columns exist with different casing across tables:
-{overlap_section}
-#
-# Always verify the exact column name casing for your specific table.
-"""
-
-        final_comment = (
-            "# 📝 To verify column names for a specific table:\n"
-            + f"#    cdc manage-services config --service {service} "
-            + "--inspect --schema {schema_name}\n"
-            + "# "
-            + ("=" * 82)
-            + "\n"
+        existing_header = content[:header_lines_end] or None
+        yaml_content = content[header_lines_end:]
+        full_header = render_service_file_header_comment(
+            service,
+            existing_header,
+            validation_section,
         )
 
-        full_header = (
-            schema_comment + "\n" + info_header + warning_comment + final_comment
-        )
-
-        with service_yaml_path.open() as f:
-            content = f.read()
-
-        # Remove ALL old header comments (everything before first non-comment line)
-        lines = content.split("\n")
-        first_non_comment_idx = 0
-        for i, line in enumerate(lines):
-            if line and not line.startswith("#"):
-                first_non_comment_idx = i
-                break
-
-        # Keep only the actual YAML content
-        yaml_content = "\n".join(lines[first_non_comment_idx:])
-
-        # Write new header + content
-        with service_yaml_path.open("w") as f:
-            f.write(full_header + "\n" + yaml_content)
+        service_yaml_path.write_text(full_header + yaml_content, encoding="utf-8")
 
         print_success(f"\n✓ Updated schema validation in {service}.yaml")
         return True
@@ -249,3 +173,107 @@ def update_service_yaml_header(
     except Exception as e:
         print_error(f"Failed to update service YAML header: {e}")
         return False
+
+
+def _collect_case_variant_columns(
+    schemas_data: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Collect columns that appear with multiple casing variants across schemas."""
+    case_variants: dict[str, set[str]] = {}
+    for tables in schemas_data.values():
+        for table_info in tables.values():
+            columns = table_info.get("columns", [])
+            if not isinstance(columns, list):
+                continue
+            for column in columns:
+                if not isinstance(column, dict):
+                    continue
+                col_name = column.get("name")
+                if not isinstance(col_name, str):
+                    continue
+                col_lower = col_name.lower()
+                if col_lower not in case_variants:
+                    case_variants[col_lower] = set()
+                case_variants[col_lower].add(col_name)
+
+    return {col_lower: sorted(variants) for col_lower, variants in case_variants.items() if len(variants) > 1}
+
+
+def _build_service_awareness_report(
+    service: str,
+    schemas_data: dict[str, Any],
+    overlapping_columns: dict[str, list[str]],
+) -> str:
+    """Build the service-specific warnings and awareness report content."""
+    schema_names = sorted(schemas_data.keys())
+    table_count = sum(len(tables) for tables in schemas_data.values())
+    lines = [
+        f"# {service} Warnings and Awareness",
+        "",
+        "This file is auto-generated by:",
+        f"`cdc manage-services config --service {service} --generate-validation --all`",
+        "",
+        "It tracks service-specific observations, warnings, and recommendations",
+        "that developers should be aware of when working on this service.",
+        "",
+        "## Summary",
+        "",
+        f"- Schemas inspected: {', '.join(schema_names)}",
+        f"- Tables inspected: {table_count}",
+        f"- Global case-variant column groups: {len(overlapping_columns)}",
+        "",
+        "## Global Observations",
+        "",
+    ]
+
+    if overlapping_columns:
+        lines.extend(
+            [
+                "### Case-variant columns across tables",
+                "",
+                "These are cross-table observations from the inspected service schemas.",
+                "They do not automatically mean a runtime failure, but they increase the",
+                "risk of using the wrong column casing when authoring mappings, includes,",
+                "ignores, or transform outputs by hand.",
+                "",
+            ]
+        )
+        for variants in overlapping_columns.values():
+            lines.append(f"- {', '.join(variants)}")
+    else:
+        lines.extend(
+            [
+                "No global service-level warnings were detected during validation generation.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Recommendations",
+            "",
+            "- When mapping columns manually, inspect the exact table schema before choosing a column name.",
+            f"- Use `cdc manage-services config --service {service} --inspect --schema <schema_name>`",
+            "  to verify column names for a specific table.",
+            "- Treat this file as generated awareness information; rerun validation generation after schema refreshes.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _write_service_awareness_report(
+    service: str,
+    schemas_data: dict[str, Any],
+) -> Path:
+    """Write the service-specific warnings and awareness report next to the service YAML."""
+    services_dir = get_project_root() / "services"
+    report_path = services_dir / f"{service}-warnings.md"
+    overlapping_columns = _collect_case_variant_columns(schemas_data)
+    report_content = _build_service_awareness_report(
+        service,
+        schemas_data,
+        overlapping_columns,
+    )
+    report_path.write_text(report_content + "\n", encoding="utf-8")
+    return report_path

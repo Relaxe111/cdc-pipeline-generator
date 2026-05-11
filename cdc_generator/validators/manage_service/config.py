@@ -17,10 +17,13 @@ SERVICE_SCHEMAS_DIR = get_schema_write_root(PROJECT_ROOT)
 MIN_SIMILAR_BLOCK_SIZE = 2
 ANCHOR_SUFFIX_START = 2
 ANCHOR_PATH_PARTS = 2
+SERVICE_SCHEMA_COMMENT = "# yaml-language-server: $schema=../.vscode/schemas/service.schema.json"
+GENERATED_VALIDATION_SECTION_START = "# BEGIN GENERATED VALIDATION SECTION"
+GENERATED_VALIDATION_SECTION_END = "# END GENERATED VALIDATION SECTION"
 
 
-def build_service_file_header_comment(service: str) -> str:
-    """Build the standard auto-managed service-file header comment."""
+def _build_service_base_header_comment(service: str) -> str:
+    """Build the shared managed service-file header body."""
     sep = "=" * 76
     return f"""# {sep}
 # CDC Service Configuration - Auto-managed
@@ -46,16 +49,168 @@ def build_service_file_header_comment(service: str) -> str:
 #   - source.type: From source-groups.yaml type field
 #   - Database connections: From source-groups.yaml servers configuration
 # {sep}
-
 """
+
+
+def build_service_file_header_comment(
+    service: str,
+    generated_validation_section: str | None = None,
+) -> str:
+    """Build the shared managed service-file header comment."""
+    base_header = _build_service_base_header_comment(service).rstrip("\n")
+    if not generated_validation_section:
+        return base_header + "\n\n"
+
+    return generated_validation_section.rstrip("\n") + "\n\n" + base_header + "\n\n"
+
+
+def build_service_validation_header_section(
+    service: str,
+    report_file_name: str | None = None,
+) -> str:
+    """Build the generated validation metadata section for a service file."""
+    info_lines = [
+        SERVICE_SCHEMA_COMMENT,
+        GENERATED_VALIDATION_SECTION_START,
+        "# Schema validation metadata",
+        "# redhat.vscode-yaml shows column names from all tables",
+        "# in autocomplete suggestions, not just columns for the specific table being edited.",
+        "# This is a known limitation of the extension's JSON Schema support.",
+        "#",
+        "# NOTE: Despite this limitation, the schema validates that column names",
+        "# you specify actually exist in the specific table. Invalid columns are marked as errors.",
+        "#",
+        "# Hierarchical configuration inherits from higher levels unless overridden.",
+        "# Environment mapping is resolved from source-groups.yaml (sources.<customer>.<env>).",
+        "# Optional customer-level environments blocks are still accepted as overrides.",
+        "# To validate hierarchical configuration:",
+        f"#   cdc manage-services config --service {service} --validate-hierarchy",
+        "# To validate complete configuration for pipeline generation:",
+        f"#   cdc manage-services config --service {service} --validate-config",
+        "#",
+        "# existing_mssql controls database initialization behavior:",
+        "#   - false: Fresh setup; can create database and tables for local development",
+        "#   - true: Existing DB; only enable CDC and never modify the database",
+    ]
+
+    if report_file_name:
+        info_lines.extend(
+            [
+                "#",
+                "# Service-specific warnings and recommendations are tracked in:",
+                f"#   {report_file_name}",
+            ]
+        )
+
+    info_lines.extend(
+        [
+            "#",
+            "# To verify column names for a specific table:",
+            f"#   cdc manage-services config --service {service} --inspect --schema <schema_name>",
+            GENERATED_VALIDATION_SECTION_END,
+        ]
+    )
+    return "\n".join(info_lines) + "\n"
+
+
+def _is_managed_service_header(header: str) -> bool:
+    """Return whether a header belongs to the managed service-file format."""
+    return "CDC Service Configuration - Auto-managed" in header
+
+
+def _contains_legacy_validation_header(header: str) -> bool:
+    """Return whether a header contains legacy validation metadata text."""
+    return (
+        SERVICE_SCHEMA_COMMENT in header or "redhat.vscode-yaml shows column names from all tables" in header or "CASE SENSITIVITY WARNING" in header
+    )
+
+
+def _extract_generated_validation_section(header: str) -> str | None:
+    """Extract the generated validation section from a managed header."""
+    lines = header.splitlines(keepends=True)
+    start_idx: int | None = None
+    end_idx: int | None = None
+    for idx, line in enumerate(lines):
+        if line.strip() == GENERATED_VALIDATION_SECTION_START:
+            start_idx = idx
+        if line.strip() == GENERATED_VALIDATION_SECTION_END:
+            end_idx = idx
+            break
+
+    if start_idx is None or end_idx is None:
+        return None
+
+    section_start = start_idx
+    if start_idx > 0 and lines[start_idx - 1].strip() == SERVICE_SCHEMA_COMMENT:
+        section_start = start_idx - 1
+    return "".join(lines[section_start : end_idx + 1])
+
+
+def _remove_generated_validation_section(header: str) -> str:
+    """Remove managed or legacy generated validation content from a header."""
+    lines = header.splitlines(keepends=True)
+    filtered: list[str] = []
+    in_generated_section = False
+    in_legacy_section = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped == GENERATED_VALIDATION_SECTION_START:
+            in_generated_section = True
+            continue
+        if stripped == GENERATED_VALIDATION_SECTION_END:
+            in_generated_section = False
+            continue
+        if in_generated_section:
+            continue
+        if stripped == SERVICE_SCHEMA_COMMENT:
+            continue
+        if stripped == "# Schema validation metadata" or stripped.startswith("# redhat.vscode-yaml shows column names from all tables"):
+            in_legacy_section = True
+            continue
+        if in_legacy_section:
+            if stripped.startswith("# ================================================================="):
+                in_legacy_section = False
+            continue
+        filtered.append(line)
+
+    return "".join(filtered).strip("\n")
+
+
+def render_service_file_header_comment(
+    service: str,
+    existing_header: str | None,
+    generated_validation_section: str | None = None,
+) -> str:
+    """Render the effective header comment for a service file."""
+    if existing_header is None:
+        return build_service_file_header_comment(service, generated_validation_section)
+
+    if _is_managed_service_header(existing_header):
+        validation_section = generated_validation_section
+        if validation_section is None:
+            validation_section = _extract_generated_validation_section(existing_header)
+        return build_service_file_header_comment(service, validation_section)
+
+    if _contains_legacy_validation_header(existing_header):
+        if generated_validation_section is None:
+            return build_service_file_header_comment(service)
+        return build_service_file_header_comment(service, generated_validation_section)
+
+    if generated_validation_section is None:
+        return existing_header
+
+    cleaned_header = _remove_generated_validation_section(existing_header)
+    if not cleaned_header:
+        return build_service_file_header_comment(service, generated_validation_section)
+
+    return generated_validation_section.rstrip("\n") + "\n\n" + cleaned_header + "\n\n"
 
 
 def resolve_service_file_header_comment(service: str, service_file: Path) -> str:
     """Return the existing leading comment block or the standard header."""
     existing_header = _extract_leading_comment_block(service_file)
-    if existing_header is not None:
-        return existing_header
-    return build_service_file_header_comment(service)
+    return render_service_file_header_comment(service, existing_header)
 
 
 def _extract_leading_comment_block(service_file: Path) -> str | None:
@@ -65,9 +220,9 @@ def _extract_leading_comment_block(service_file: Path) -> str | None:
 
     header_lines: list[str] = []
     has_comment = False
-    for line in service_file.read_text(encoding='utf-8').splitlines(keepends=True):
+    for line in service_file.read_text(encoding="utf-8").splitlines(keepends=True):
         stripped = line.strip()
-        if stripped.startswith('#'):
+        if stripped.startswith("#"):
             header_lines.append(line)
             has_comment = True
             continue
@@ -81,7 +236,7 @@ def _extract_leading_comment_block(service_file: Path) -> str | None:
 
     if not has_comment:
         return None
-    return ''.join(header_lines)
+    return "".join(header_lines)
 
 
 def _sanitize_anchor_part(value: str) -> str:
@@ -94,9 +249,7 @@ def _sanitize_anchor_part(value: str) -> str:
 
 def _build_anchor_name(path_parts: list[str], used_names: set[str]) -> str:
     """Build a deterministic, unique anchor name for a mapping path."""
-    base_parts = [
-        _sanitize_anchor_part(part) for part in path_parts[-ANCHOR_PATH_PARTS:]
-    ]
+    base_parts = [_sanitize_anchor_part(part) for part in path_parts[-ANCHOR_PATH_PARTS:]]
     base = "shared_defaults_" + "_".join(part for part in base_parts if part)
     candidate = base
     counter = ANCHOR_SUFFIX_START
@@ -147,9 +300,7 @@ def _compact_similar_mapping_block(
         for entry_key in key_signature:
             expected_value = first_entry.get(entry_key)
             if all(
-                isinstance(container.get(sibling_key), dict)
-                and cast(dict[str, object], container[sibling_key]).get(entry_key)
-                == expected_value
+                isinstance(container.get(sibling_key), dict) and cast(dict[str, object], container[sibling_key]).get(entry_key) == expected_value
                 for sibling_key in sibling_keys
             ):
                 common_keys.append(entry_key)
@@ -240,10 +391,10 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
         header_comment = resolve_service_file_header_comment(service, service_file)
 
         # Remove 'service' field if present (it's redundant in new format)
-        config_to_save = {k: v for k, v in config.items() if k != 'service'}
-        if _resolve_service_pattern(config_to_save) == 'db-per-tenant':
+        config_to_save = {k: v for k, v in config.items() if k != "service"}
+        if _resolve_service_pattern(config_to_save) == "db-per-tenant":
             # db-per-tenant customers are derived from source-groups at load time.
-            config_to_save.pop('customers', None)
+            config_to_save.pop("customers", None)
 
         # Keep repetitive YAML blocks concise and deterministic.
         _compact_repetitive_yaml_blocks(config_to_save, [service], set())
@@ -251,7 +402,7 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
         # Wrap in service name key
         wrapped_config = {service: config_to_save}
 
-        with service_file.open('w', encoding='utf-8') as f:
+        with service_file.open("w", encoding="utf-8") as f:
             f.write(header_comment)
             yaml.dump(wrapped_config, f)
         return True
@@ -263,27 +414,27 @@ def save_service_config(service: str, config: dict[str, object]) -> bool:
 def _normalize_service_pattern(raw_pattern: object) -> str | None:
     """Normalize supported service/server-group patterns."""
     normalized = str(raw_pattern).strip().lower()
-    if normalized in {'db-per-tenant', 'db_shared', 'db-shared'}:
-        return 'db-shared' if normalized in {'db_shared', 'db-shared'} else 'db-per-tenant'
-    if normalized in {'shared-db', 'shared_db'}:
-        return 'db-shared'
+    if normalized in {"db-per-tenant", "db_shared", "db-shared"}:
+        return "db-shared" if normalized in {"db_shared", "db-shared"} else "db-per-tenant"
+    if normalized in {"shared-db", "shared_db"}:
+        return "db-shared"
     return None
 
 
 def _resolve_service_pattern(config: dict[str, object]) -> str | None:
     """Resolve service pattern from source-groups when possible."""
-    server_group = config.get('server_group')
+    server_group = config.get("server_group")
     if isinstance(server_group, str) and server_group:
-        source_groups_file = get_project_root() / 'source-groups.yaml'
+        source_groups_file = get_project_root() / "source-groups.yaml"
         if source_groups_file.exists():
             source_groups_data = load_yaml_file(source_groups_file)
             group_cfg = source_groups_data.get(server_group)
             if isinstance(group_cfg, dict):
-                resolved = _normalize_service_pattern(group_cfg.get('pattern'))
+                resolved = _normalize_service_pattern(group_cfg.get("pattern"))
                 if resolved is not None:
                     return resolved
 
-    return _normalize_service_pattern(config.get('mode'))
+    return _normalize_service_pattern(config.get("mode"))
 
 
 def detect_service_mode(service: str) -> str:
@@ -301,6 +452,6 @@ def detect_service_mode(service: str) -> str:
         resolved_mode = _resolve_service_pattern(config)
         if resolved_mode is not None:
             return resolved_mode
-        return 'db-per-tenant'
+        return "db-per-tenant"
     except Exception:
-        return 'db-per-tenant'
+        return "db-per-tenant"

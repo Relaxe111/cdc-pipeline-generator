@@ -104,7 +104,15 @@ def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[
         Dict[group_name, Set[database_names]]
     """
     all_database_names_by_group: dict[str, set[str]] = {}
-    server_group_dict = server_groups_data.get('server_group', {})
+    wrapped_server_groups = server_groups_data.get('server_group')
+    if isinstance(wrapped_server_groups, dict):
+        server_group_dict = wrapped_server_groups
+    else:
+        server_group_dict = {
+            group_name: group
+            for group_name, group in server_groups_data.items()
+            if isinstance(group, dict)
+        }
 
     for group_name, sg in server_group_dict.items():
         db_names: set[str] = set()
@@ -119,6 +127,22 @@ def extract_database_names_by_group(server_groups_data: dict[str, Any]) -> dict[
                     db_name = db_dict.get('name')
                     if isinstance(db_name, str) and db_name:
                         db_names.add(db_name)
+
+        sources = sg.get('sources', {})
+        if isinstance(sources, dict):
+            for source_cfg in sources.values():
+                if not isinstance(source_cfg, dict):
+                    continue
+                for env_cfg in source_cfg.values():
+                    if not isinstance(env_cfg, dict):
+                        continue
+                    db_name = env_cfg.get('database')
+                    if isinstance(db_name, str) and db_name:
+                        db_names.add(db_name)
+
+        database_ref = sg.get('database_ref')
+        if isinstance(database_ref, str) and database_ref:
+            db_names.add(database_ref)
         all_database_names_by_group[group_name] = db_names
 
     return all_database_names_by_group

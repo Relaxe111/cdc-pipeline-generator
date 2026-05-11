@@ -197,8 +197,9 @@ def build_full_column_list(
     columns = _add_column_template_columns(columns, sink_cfg)
     columns = _add_transform_output_columns(columns, sink_cfg)
     if runtime_mode == "native":
-        from .columns import add_native_cdc_metadata_columns
+        from .columns import add_native_cdc_metadata_columns, add_native_runtime_columns
 
+        columns = add_native_runtime_columns(columns)
         columns = add_native_cdc_metadata_columns(columns)
     else:
         columns = _add_cdc_metadata_columns(columns)

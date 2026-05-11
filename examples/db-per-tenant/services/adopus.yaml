@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=../.vscode/schemas/AdOpusTest.service-validation.schema.json
 # The redhat.vscode-yaml extension shows ALL possible column names from ALL tables
 # in autocomplete suggestions, not just columns for the specific table being edited.
 # This is a known limitation of the extension's JSON Schema support.

@@ -1,5 +1,3 @@
-# yaml-language-server: $schema=../../.vscode/schemas/directory.service-validation.schema.json
-
 service: directory
 server_group: asma
 

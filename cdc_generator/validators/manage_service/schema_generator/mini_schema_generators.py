@@ -9,6 +9,152 @@ from cdc_generator.helpers.helpers_logging import print_error, print_info, print
 from cdc_generator.helpers.service_config import get_project_root
 
 
+def _get_server_groups(data: object) -> dict[str, dict[str, Any]]:
+    """Return server groups from either wrapped or top-level source-groups YAML."""
+    if not isinstance(data, dict):
+        return {}
+
+    wrapped_groups = data.get("server_group")
+    if isinstance(wrapped_groups, dict):
+        return {
+            str(group_name): group
+            for group_name, group in wrapped_groups.items()
+            if isinstance(group, dict)
+        }
+
+    return {
+        str(group_name): group
+        for group_name, group in data.items()
+        if isinstance(group, dict)
+    }
+
+
+def _build_string_enum_schema(
+    schema_id: str,
+    title: str,
+    description: str,
+    values: list[str],
+) -> dict[str, Any]:
+    """Build a valid string schema, omitting enum when no values were discovered."""
+    schema: dict[str, Any] = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$id": schema_id,
+        "title": title,
+        "description": description,
+        "type": "string",
+    }
+    if values:
+        schema["enum"] = values
+    else:
+        schema["description"] = description + " (no values discovered)"
+    return schema
+
+
+def _extract_group_service_names(group_name: str, group: dict[str, Any]) -> set[str]:
+    """Extract service names from a server group across supported layouts."""
+    services: set[str] = set()
+    group_type = group.get("pattern")
+
+    if group_type == "db-per-tenant":
+        services.add(group_name)
+
+    sources = group.get("sources")
+    if isinstance(sources, dict):
+        for source_name in sources.keys():
+            if isinstance(source_name, str) and source_name:
+                services.add(source_name)
+
+    databases = group.get("databases")
+    if isinstance(databases, list):
+        for db in databases:
+            if not isinstance(db, dict):
+                continue
+            service_name = db.get("service")
+            if isinstance(service_name, str) and service_name:
+                services.add(service_name)
+
+    return services
+
+
+def _extract_group_database_names(group: dict[str, Any]) -> list[str]:
+    """Extract database names from a server group across supported layouts."""
+    db_names: list[str] = []
+    group_type = group.get("pattern")
+    database_ref = group.get("database_ref")
+    if group_type == "db-per-tenant" and isinstance(database_ref, str) and database_ref:
+        db_names.append(database_ref)
+
+    databases = group.get("databases")
+    if isinstance(databases, list):
+        for db in databases:
+            if isinstance(db, str) and db:
+                db_names.append(db)
+                continue
+            if not isinstance(db, dict):
+                continue
+            db_name = db.get("name")
+            if isinstance(db_name, str) and db_name:
+                db_names.append(db_name)
+
+    sources = group.get("sources")
+    if isinstance(sources, dict):
+        for source_cfg in sources.values():
+            if not isinstance(source_cfg, dict):
+                continue
+            for env_cfg in source_cfg.values():
+                if not isinstance(env_cfg, dict):
+                    continue
+                db_name = env_cfg.get("database")
+                if isinstance(db_name, str) and db_name:
+                    db_names.append(db_name)
+
+    return sorted(set(db_names))
+
+
+def _extract_group_database_schema_pairs(group: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    """Extract database/schema pairs across supported source-group layouts."""
+    pairs: list[tuple[str, list[str]]] = []
+    group_type = group.get("pattern")
+    database_ref = group.get("database_ref")
+
+    databases = group.get("databases")
+    if isinstance(databases, list):
+        for db in databases:
+            if not isinstance(db, dict):
+                continue
+            db_name = db.get("name")
+            schemas = db.get("schemas")
+            if isinstance(db_name, str) and db_name and isinstance(schemas, list):
+                typed_schemas = [schema for schema in schemas if isinstance(schema, str) and schema]
+                if typed_schemas:
+                    pairs.append((db_name, typed_schemas))
+
+    sources = group.get("sources")
+    if isinstance(sources, dict):
+        for source_cfg in sources.values():
+            if not isinstance(source_cfg, dict):
+                continue
+            schemas_obj = source_cfg.get("schemas")
+            if not isinstance(schemas_obj, list):
+                continue
+            schemas = [schema for schema in schemas_obj if isinstance(schema, str) and schema]
+            if not schemas:
+                continue
+            for env_name, env_cfg in source_cfg.items():
+                if env_name == "schemas" or not isinstance(env_cfg, dict):
+                    continue
+                db_name = env_cfg.get("database")
+                if isinstance(db_name, str) and db_name:
+                    pairs.append((db_name, schemas))
+
+    if group_type == "db-per-tenant" and isinstance(database_ref, str) and database_ref:
+        matching_pair = next((pair for pair in pairs if pair[0] == database_ref), None)
+        if matching_pair is not None:
+            return [matching_pair]
+
+    return pairs
+
+
 def generate_service_enum_schema() -> bool:
     """Generate mini schema for 'service' key from source-groups.yaml.
 
@@ -32,29 +178,19 @@ def generate_service_enum_schema() -> bool:
             data = yaml.safe_load(f)
 
         services: set[str] = set()
+        server_groups = _get_server_groups(data)
 
-        for group_name, group in data.get('server_group', {}).items():
-            group_type = group.get('pattern')
-
-            if group_type == 'db-per-tenant':
-                # For db-per-tenant: group name IS the service name
-                services.add(group_name)
-            elif group_type == 'db-shared':
-                # Collect all unique service names from databases
-                for db in group.get('databases', []):
-                    service_name = db.get('service')
-                    if service_name:
-                        services.add(service_name)
+        for group_name, group in server_groups.items():
+            services.update(_extract_group_service_names(group_name, group))
 
         # Create the mini schema for service key only
-        schema: dict[str, Any] = {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "$id": "service.schema.json",
-            "title": "Service Name Validation",
-            "description": "Valid service names from source-groups.yaml (auto-generated)",
-            "type": "string",
-            "enum": sorted(list(services))
-        }
+        sorted_services = sorted(list(services))
+        schema = _build_string_enum_schema(
+            schema_id="service.schema.json",
+            title="Service Name Validation",
+            description="Valid service names from source-groups.yaml (auto-generated)",
+            values=sorted_services,
+        )
 
         # Save to keys directory
         keys_dir = project_root / '.vscode' / 'schemas' / 'keys'
@@ -65,7 +201,7 @@ def generate_service_enum_schema() -> bool:
             json.dump(schema, f, indent=2)
 
         print_success(f"Generated service mini schema: {output_file}")
-        print_info(f"  {len(services)} services: {', '.join(sorted(services))}")
+        print_info(f"  {len(sorted_services)} services: {', '.join(sorted_services)}")
 
         return True
 
@@ -96,17 +232,15 @@ def generate_server_group_enum_schema() -> bool:
         with open(server_groups_file) as f:
             data = yaml.safe_load(f)
 
-        server_groups = list(data.get('server_group', {}).keys())
+        server_groups = sorted(_get_server_groups(data).keys())
 
         # Create the mini schema for server_group key only
-        schema: dict[str, Any] = {
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "$id": "server_group.schema.json",
-            "title": "Server Group Validation",
-            "description": "Valid server group names from source-groups.yaml (auto-generated)",
-            "type": "string",
-            "enum": sorted(server_groups)
-        }
+        schema = _build_string_enum_schema(
+            schema_id="server_group.schema.json",
+            title="Server Group Validation",
+            description="Valid server group names from source-groups.yaml (auto-generated)",
+            values=server_groups,
+        )
 
         # Save to keys directory
         keys_dir = project_root / '.vscode' / 'schemas' / 'keys'
@@ -153,21 +287,9 @@ def generate_database_name_schemas() -> bool:
 
         generated_count = 0
 
-        for group_name, group in data.get('server_group', {}).items():
+        for group_name, group in _get_server_groups(data).items():
 
-            # Extract database names from this server group
-            db_names: list[str] = []
-
-            # For db-per-tenant, include database_ref if it exists
-            group_type = group.get('pattern')
-            database_ref = group.get('database_ref')
-            if group_type == 'db-per-tenant' and database_ref:
-                db_names.append(database_ref)
-
-            for db in group.get('databases', []):
-                db_name = db.get('name')
-                if db_name:
-                    db_names.append(db_name)
+            db_names = _extract_group_database_names(group)
 
             if not db_names:
                 continue
@@ -179,7 +301,7 @@ def generate_database_name_schemas() -> bool:
                 "title": f"Database Name Validation ({group_name})",
                 "description": f"Valid database names from server group '{group_name}' (auto-generated)",
                 "type": "string",
-                "enum": sorted(set(db_names))  # Use set to deduplicate if database_ref is also in databases list
+                "enum": db_names
             }
 
             output_file = keys_dir / f'{group_name}.schema.json'
@@ -229,28 +351,12 @@ def generate_schema_name_schemas() -> bool:
         databases_to_generate: list[tuple[str, list[str]]] = []
 
         # First pass: collect all databases and group by schema list
-        for _group_name, group in data.get('server_group', {}).items():
-            group_type = group.get('pattern')
-            database_ref = group.get('database_ref')
-
-            for db in group.get('databases', []):
-                db_name = db.get('name')
-                schemas: list[str] = db.get('schemas', [])
-
-                if not db_name or not schemas:
-                    continue
-
-                # Group by schema list (include ALL databases for shared detection)
+        for _group_name, group in _get_server_groups(data).items():
+            for db_name, schemas in _extract_group_database_schema_pairs(group):
                 schema_key: tuple[str, ...] = tuple(sorted(schemas))
                 if schema_key not in schema_groups:
                     schema_groups[schema_key] = []
                 schema_groups[schema_key].append(db_name)
-
-                # For db-per-tenant, only process database_ref for file generation
-                if group_type == 'db-per-tenant' and database_ref:
-                    if db_name != database_ref:
-                        continue
-
                 databases_to_generate.append((db_name, schemas))
 
         # Create shared schemas for schema lists used by 2+ databases

@@ -4,7 +4,15 @@ import re
 from collections.abc import Callable
 from typing import Any, cast
 
+from cdc_generator.core.migration_generator.columns import (
+    NATIVE_CDC_METADATA_COLUMNS,
+)
+from cdc_generator.core.migration_generator.service_parsing import (
+    resolve_source_group_config,
+)
 from cdc_generator.helpers.helpers_logging import print_info, print_warning
+from cdc_generator.helpers.service_config import get_project_root
+from cdc_generator.helpers.topology_runtime import resolve_runtime_mode
 
 from .sink_mapping import load_table_columns, validate_column_mappings
 from .sink_operations_helpers import _get_source_tables_dict, _get_target_service_from_sink_key
@@ -12,14 +20,16 @@ from .sink_operations_table_config import TableConfigOptions
 from .sink_operations_type_compatibility import _normalize_type_name
 from .sink_type_compatibility import check_type_compatibility_impl
 
+_NATIVE_GENERATED_SINK_COLUMNS = {
+    "customer_id",
+    *(str(column["name"]) for column in NATIVE_CDC_METADATA_COLUMNS),
+}
+
 
 def _is_required_sink_column(column: dict[str, Any]) -> bool:
     nullable = bool(column.get("nullable", True))
     primary_key = bool(column.get("primary_key", False))
-    has_default = (
-        column.get("default") is not None
-        or column.get("default_value") is not None
-    )
+    has_default = column.get("default") is not None or column.get("default_value") is not None
     if has_default:
         return False
     return (not nullable) or primary_key
@@ -80,9 +90,7 @@ def _analyze_identity_coverage(
                 check_type_compatibility,
             )
         except ValueError as exc:
-            raise ValueError(
-                f"{sink_column} ({source_type}->{sink_type}): {exc}"
-            ) from exc
+            raise ValueError(f"{sink_column} ({source_type}->{sink_type}): {exc}") from exc
 
         if compatible:
             identity_covered.add(sink_column)
@@ -99,9 +107,7 @@ def _find_required_unmapped_sink_columns(
     return sorted(
         str(column.get("name"))
         for column in sink_columns
-        if isinstance(column.get("name"), str)
-        and _is_required_sink_column(column)
-        and str(column.get("name")) not in covered_sink_columns
+        if isinstance(column.get("name"), str) and _is_required_sink_column(column) and str(column.get("name")) not in covered_sink_columns
     )
 
 
@@ -109,25 +115,13 @@ def _validate_accepted_columns(
     accepted_columns: list[str],
     sink_columns: list[dict[str, Any]],
 ) -> str | None:
-    sink_column_names = {
-        str(col.get("name"))
-        for col in sink_columns
-        if isinstance(col.get("name"), str)
-    }
-    invalid = sorted(
-        column_name
-        for column_name in accepted_columns
-        if column_name not in sink_column_names
-    )
+    sink_column_names = {str(col.get("name")) for col in sink_columns if isinstance(col.get("name"), str)}
+    invalid = sorted(column_name for column_name in accepted_columns if column_name not in sink_column_names)
     if not invalid:
         return None
 
     available = ", ".join(sorted(sink_column_names))
-    return (
-        "Invalid --accept-column value(s): "
-        + ", ".join(invalid)
-        + f"\nAvailable sink columns: {available}"
-    )
+    return "Invalid --accept-column value(s): " + ", ".join(invalid) + f"\nAvailable sink columns: {available}"
 
 
 def _collect_column_template_coverage(opts: TableConfigOptions) -> set[str]:
@@ -157,6 +151,16 @@ def _collect_add_transform_coverage(opts: TableConfigOptions) -> set[str]:
     return _collect_transform_coverage_from_entries(
         [{"bloblang_ref": opts.add_transform}],
     )
+
+
+def _resolve_runtime_generated_columns(config: dict[str, object]) -> set[str]:
+    """Return sink columns populated implicitly by the active runtime."""
+    project_root = get_project_root()
+    source_group_cfg = resolve_source_group_config(project_root)
+    runtime_mode = resolve_runtime_mode(config, source_group=source_group_cfg)
+    if runtime_mode != "native":
+        return set()
+    return set(_NATIVE_GENERATED_SINK_COLUMNS)
 
 
 def _extract_bloblang_output_columns(bloblang: str) -> set[str]:
@@ -209,10 +213,7 @@ def _collect_transform_coverage_from_entries(
             except (FileNotFoundError, ValueError):
                 rule = None
 
-            if (
-                rule is not None
-                and rule.output_column is not None
-            ):
+            if rule is not None and rule.output_column is not None:
                 covered.add(rule.output_column.name)
 
         bloblang_ref = entry.get("bloblang_ref")
@@ -263,30 +264,20 @@ def _build_add_table_compatibility_guidance(
     if incompatible_identity:
         guidance_lines.append("Incompatible same-name columns:")
         for col_name, src_type, sink_type in incompatible_identity:
-            guidance_lines.append(
-                f"  - {col_name}: source={src_type}, sink={sink_type}"
-            )
-            guidance_lines.append(
-                f"    Suggestion: --map-column {col_name} <sink_column>"
-            )
+            guidance_lines.append(f"  - {col_name}: source={src_type}, sink={sink_type}")
+            guidance_lines.append(f"    Suggestion: --map-column {col_name} <sink_column>")
 
     if required_unmapped:
-        guidance_lines.append(
-            "Required sink columns without compatible source mapping:"
-        )
+        guidance_lines.append("Required sink columns without compatible source mapping:")
         for col_name in sorted(required_unmapped):
             guidance_lines.append(f"  - {col_name}")
             if source_names:
                 candidates = ", ".join(source_names[:5])
                 guidance_lines.append(
-                    "    Suggestion: add --map-column "
-                    + f"<source_column> {col_name} "
-                    + f"(available source columns: {candidates})"
+                    "    Suggestion: add --map-column " + f"<source_column> {col_name} " + f"(available source columns: {candidates})"
                 )
 
-    guidance_lines.append(
-        "When columns match by name and type, mapping is applied implicitly."
-    )
+    guidance_lines.append("When columns match by name and type, mapping is applied implicitly.")
     return "\n".join(guidance_lines)
 
 
@@ -314,13 +305,8 @@ def validate_add_table_schema_compatibility(
     source_columns = load_table_columns_fn(service, source_table)
     sink_columns = load_table_columns_fn(target_service, sink_table)
     if source_columns is None or sink_columns is None:
-        print_warning(
-            "Skipping add-time compatibility check because schema files are missing."
-        )
-        print_info(
-            "Run inspect/save to enable strict checks: "
-            + f"--inspect --all --save and --inspect-sink {sink_key} --all --save"
-        )
+        print_warning("Skipping add-time compatibility check because schema files are missing.")
+        print_info("Run inspect/save to enable strict checks: " + f"--inspect --all --save and --inspect-sink {sink_key} --all --save")
         return None
 
     explicit_mappings = opts.columns or {}
@@ -335,19 +321,12 @@ def validate_add_table_schema_compatibility(
     )
     if mapping_errors:
         details = "\n  - ".join(mapping_errors)
-        return (
-            "Invalid --map-column configuration:\n"
-            + f"  - {details}"
-        )
+        return "Invalid --map-column configuration:\n" + f"  - {details}"
 
     source_types = _collect_named_column_types(source_columns)
     sink_types = _collect_named_column_types(sink_columns)
     accepted_columns = opts.accepted_columns or []
-    accepted_columns_set = {
-        column_name.strip()
-        for column_name in accepted_columns
-        if column_name.strip()
-    }
+    accepted_columns_set = {column_name.strip() for column_name in accepted_columns if column_name.strip()}
     accepted_validation_error = _validate_accepted_columns(
         sorted(accepted_columns_set),
         sink_columns,
@@ -360,10 +339,7 @@ def validate_add_table_schema_compatibility(
     transform_covered = _collect_source_transform_coverage(config, source_table)
     add_transform_covered = _collect_add_transform_coverage(opts)
     generated_covered = (
-        template_covered
-        | transform_covered
-        | add_transform_covered
-        | accepted_columns_set
+        template_covered | transform_covered | add_transform_covered | _resolve_runtime_generated_columns(config) | accepted_columns_set
     )
     try:
         identity_covered, incompatible_identity = _analyze_identity_coverage(
@@ -375,10 +351,7 @@ def validate_add_table_schema_compatibility(
             check_type_compatibility_impl,
         )
     except ValueError as exc:
-        return (
-            "Type compatibility map error: "
-            + str(exc)
-        )
+        return "Type compatibility map error: " + str(exc)
     covered = mapped_sink_columns | generated_covered | identity_covered
     required_unmapped = _find_required_unmapped_sink_columns(
         sink_columns,
@@ -396,4 +369,3 @@ def validate_add_table_schema_compatibility(
         required_unmapped,
         source_names,
     )
-
