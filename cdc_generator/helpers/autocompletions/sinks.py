@@ -27,10 +27,7 @@ def _warn_completion_compatibility_error(error_message: str) -> None:
         return
 
     _COMPLETION_COMPATIBILITY_WARNINGS.add(error_message)
-    print_warning(
-        "Completion compatibility warning: "
-        + error_message
-    )
+    print_warning("Completion compatibility warning: " + error_message)
 
 
 def list_sink_keys_for_service(service_name: str) -> list[str]:
@@ -57,8 +54,8 @@ def list_sink_keys_for_service(service_name: str) -> list[str]:
     if not yaml:
         return []
 
-    services_dir = find_directory_upward('services')
-    service_file = services_dir / f'{service_name}.yaml' if services_dir else None
+    services_dir = find_directory_upward("services")
+    service_file = services_dir / f"{service_name}.yaml" if services_dir else None
     if not service_file or not service_file.is_file():
         return []
 
@@ -71,12 +68,10 @@ def list_sink_keys_for_service(service_name: str) -> list[str]:
 
         # Support new format (service name as root key)
         config = (
-            cast(dict[str, object], data_dict[service_name])
-            if service_name in data_dict and isinstance(data_dict[service_name], dict)
-            else data_dict
+            cast(dict[str, object], data_dict[service_name]) if service_name in data_dict and isinstance(data_dict[service_name], dict) else data_dict
         )
 
-        sinks = config.get('sinks', {})
+        sinks = config.get("sinks", {})
         return sorted(cast(dict[str, object], sinks).keys()) if isinstance(sinks, dict) else []
 
     except Exception:
@@ -143,7 +138,7 @@ def list_available_sink_keys() -> list[str]:
     if not yaml:
         return []
 
-    sink_file = find_file_upward('sink-groups.yaml')
+    sink_file = find_file_upward("sink-groups.yaml")
     if not sink_file:
         return []
 
@@ -187,7 +182,7 @@ def list_target_tables_for_sink(
         >>> list_target_tables_for_sink('chat', 'sink_asma.directory')
         ['public.customers', 'public.users']
     """
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
 
@@ -214,7 +209,7 @@ def list_tables_for_sink_target(sink_key: str) -> list[str]:
         >>> list_tables_for_sink_target('sink_asma.chat')
         ['public.users', 'public.rooms', 'logs.activity']
     """
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
 
@@ -234,7 +229,7 @@ def list_custom_table_definitions_for_sink_target(sink_key: str) -> list[str]:
     Returns:
         Sorted list of ``schema.table`` references.
     """
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
 
@@ -271,6 +266,61 @@ def get_default_sink_for_service(service_name: str) -> str:
     return ""
 
 
+def list_target_sink_envs_for_service(service_name: str) -> list[str]:
+    """List target sink env names reachable from a service's configured sinks.
+
+    Reads sink keys from ``services/{service}.yaml`` and resolves the available
+    env names from the corresponding entries in ``sink-groups.yaml``.
+    """
+    sink_keys = list_sink_keys_for_service(service_name)
+    if not sink_keys:
+        return []
+
+    sink_file = find_file_upward("sink-groups.yaml")
+    if not sink_file:
+        return []
+
+    try:
+        config = load_yaml_file(sink_file)
+        if not isinstance(config, dict):
+            return []
+
+        sink_groups = cast(dict[str, Any], config)
+        env_names: set[str] = set()
+
+        for sink_key in sink_keys:
+            parts = sink_key.split(".", 1)
+            if len(parts) != SCHEMA_TABLE_PARTS:
+                continue
+
+            sink_group_name, sink_service_name = parts
+            sink_group_raw = sink_groups.get(sink_group_name)
+            if not isinstance(sink_group_raw, dict):
+                continue
+
+            sink_group = cast(dict[str, Any], sink_group_raw)
+            sources_raw = sink_group.get("sources", {})
+            if not isinstance(sources_raw, dict):
+                continue
+
+            sources = cast(dict[str, Any], sources_raw)
+            sink_service_raw = sources.get(sink_service_name)
+            if not isinstance(sink_service_raw, dict):
+                continue
+
+            sink_service = cast(dict[str, Any], sink_service_raw)
+            for env_name, env_cfg in sink_service.items():
+                if env_name == "schemas" or not isinstance(env_cfg, dict):
+                    continue
+                normalized_env = str(env_name).strip()
+                if normalized_env:
+                    env_names.add(normalized_env)
+
+        return sorted(env_names)
+    except Exception:
+        return []
+
+
 def list_target_columns_for_sink_table(
     sink_key: str,
     target_table: str,
@@ -296,8 +346,8 @@ def list_target_columns_for_sink_table(
     if not yaml:
         return []
 
-    parts = sink_key.split('.', 1)
-    table_parts = target_table.split('.', 1)
+    parts = sink_key.split(".", 1)
+    table_parts = target_table.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS or len(table_parts) != SCHEMA_TABLE_PARTS:
         return []
 
@@ -313,13 +363,7 @@ def list_target_columns_for_sink_table(
 
             columns = table_schema.get("columns", [])
             return (
-                sorted(
-                    str(col.get("name", ""))
-                    for col in columns
-                    if isinstance(col, dict) and col.get("name")
-                )
-                if isinstance(columns, list)
-                else []
+                sorted(str(col.get("name", "")) for col in columns if isinstance(col, dict) and col.get("name")) if isinstance(columns, list) else []
             )
         except Exception:
             continue
@@ -347,15 +391,13 @@ def load_sink_tables_for_autocomplete(
     if not yaml:
         return None
 
-    services_dir = find_directory_upward('services')
-    service_file = (
-        services_dir / f'{service_name}.yaml' if services_dir else None
-    )
+    services_dir = find_directory_upward("services")
+    service_file = services_dir / f"{service_name}.yaml" if services_dir else None
     if not service_file or not service_file.is_file():
         return None
 
     try:
-        with service_file.open(encoding='utf-8') as f:
+        with service_file.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if not data or not isinstance(data, dict):
             return None
@@ -363,18 +405,14 @@ def load_sink_tables_for_autocomplete(
         return None
 
     data_dict = cast(dict[str, Any], data)
-    config = (
-        data_dict[service_name]
-        if service_name in data_dict and isinstance(data_dict[service_name], dict)
-        else data_dict
-    )
+    config = data_dict[service_name] if service_name in data_dict and isinstance(data_dict[service_name], dict) else data_dict
     config_dict = cast(dict[str, object], config)
 
-    sinks = config_dict.get('sinks', {})
+    sinks = config_dict.get("sinks", {})
     sinks_dict = cast(dict[str, object], sinks) if isinstance(sinks, dict) else {}
     sink_cfg = cast(dict[str, object], sinks_dict.get(sink_key, {}))
 
-    return cast(dict[str, object], sink_cfg.get('tables', {}))
+    return cast(dict[str, object], sink_cfg.get("tables", {}))
 
 
 def list_custom_tables_for_service_sink(
@@ -400,10 +438,7 @@ def list_custom_tables_for_service_sink(
     if tables is None:
         return []
 
-    return sorted(
-        str(k) for k, v in tables.items()
-        if isinstance(v, dict) and cast(dict[str, Any], v).get('custom')
-    )
+    return sorted(str(k) for k, v in tables.items() if isinstance(v, dict) and cast(dict[str, Any], v).get("custom"))
 
 
 def list_sink_tables_for_service(service_name: str, sink_key: str) -> list[str]:
@@ -458,15 +493,15 @@ def list_custom_table_columns_for_autocomplete(
     if not isinstance(tbl_cfg, dict):
         return []
     tbl_cfg_dict = cast(dict[str, Any], tbl_cfg)
-    if not tbl_cfg_dict.get('custom'):
+    if not tbl_cfg_dict.get("custom"):
         return []
 
-    columns = tbl_cfg_dict.get('columns', {})
+    columns = tbl_cfg_dict.get("columns", {})
     if isinstance(columns, dict):
         columns_dict = cast(dict[str, Any], columns)
         return sorted(str(k) for k in columns_dict)
 
-    sink_parts = sink_key.split('.', 1)
+    sink_parts = sink_key.split(".", 1)
     if len(sink_parts) != 2:  # noqa: PLR2004
         return []
     target_service = sink_parts[1]
@@ -483,10 +518,7 @@ def list_custom_table_columns_for_autocomplete(
         cols_raw = data.get("columns")
         if not isinstance(cols_raw, list):
             continue
-        col_names = [
-            str(col["name"]) for col in cols_raw
-            if isinstance(col, dict) and isinstance(col.get("name"), str)
-        ]
+        col_names = [str(col["name"]) for col in cols_raw if isinstance(col, dict) and isinstance(col.get("name"), str)]
         return sorted(col_names)
 
     return []
@@ -526,12 +558,12 @@ def list_source_columns_for_sink_table(
     tbl_cfg_dict = cast(dict[str, Any], tbl_cfg)
 
     # Resolve source table from 'from' field
-    from_table = tbl_cfg_dict.get('from')
+    from_table = tbl_cfg_dict.get("from")
     if not isinstance(from_table, str):
         # Fall back to table_key if no 'from' field
         from_table = table_key
 
-    table_parts = from_table.split('.', 1)
+    table_parts = from_table.split(".", 1)
     if len(table_parts) != SCHEMA_TABLE_PARTS:
         return []
 
@@ -546,13 +578,7 @@ def list_source_columns_for_sink_table(
 
             columns = table_schema.get("columns", [])
             return (
-                sorted(
-                    str(col.get("name", ""))
-                    for col in columns
-                    if isinstance(col, dict) and col.get("name")
-                )
-                if isinstance(columns, list)
-                else []
+                sorted(str(col.get("name", "")) for col in columns if isinstance(col, dict) and col.get("name")) if isinstance(columns, list) else []
             )
         except Exception:
             continue
@@ -562,7 +588,7 @@ def list_source_columns_for_sink_table(
 
 def _load_column_type_map(service_name: str, table_key: str) -> dict[str, str]:
     """Load ``{column_name: type}`` from schema YAML for ``schema.table``."""
-    table_parts = table_key.split('.', 1)
+    table_parts = table_key.split(".", 1)
     if len(table_parts) != SCHEMA_TABLE_PARTS:
         return {}
 
@@ -632,7 +658,7 @@ def list_compatible_target_columns_for_source_column(
     if source_column not in source_types:
         return []
 
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
     target_service = parts[1]
@@ -696,7 +722,7 @@ def list_compatible_target_prefixes_for_map_column(
     if limit <= 0:
         return []
 
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
     target_service = parts[1]
@@ -705,10 +731,7 @@ def list_compatible_target_prefixes_for_map_column(
     if not target_types:
         return []
 
-    return [
-        f"{target_column}:"
-        for target_column in sorted(target_types)
-    ][:limit]
+    return [f"{target_column}:" for target_column in sorted(target_types)][:limit]
 
 
 def list_compatible_map_column_pairs_for_target_prefix(
@@ -731,7 +754,7 @@ def list_compatible_map_column_pairs_for_target_prefix(
     if not source_types:
         return []
 
-    parts = sink_key.split('.', 1)
+    parts = sink_key.split(".", 1)
     if len(parts) != SCHEMA_TABLE_PARTS:
         return []
     target_service = parts[1]
@@ -748,18 +771,12 @@ def list_compatible_map_column_pairs_for_target_prefix(
     ) -> list[str]:
         results: list[str] = []
         for target_column in sorted(target_types):
-            if (
-                resolved_target_prefix
-                and not target_column.casefold().startswith(resolved_target_prefix)
-            ):
+            if resolved_target_prefix and not target_column.casefold().startswith(resolved_target_prefix):
                 continue
 
             target_type = target_types[target_column]
             for source_column in sorted(source_types):
-                if (
-                    resolved_source_prefix
-                    and not source_column.casefold().startswith(resolved_source_prefix)
-                ):
+                if resolved_source_prefix and not source_column.casefold().startswith(resolved_source_prefix):
                     continue
 
                 source_type = source_types[source_column]

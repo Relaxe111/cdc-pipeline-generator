@@ -59,7 +59,7 @@ def load_service_config(service_name: str) -> dict[str, object]:
         service_config = raw_config_dict[service_name]
         if isinstance(service_config, dict):
             config = cast(dict[str, object], dict(cast(dict[str, Any], service_config)))
-            config['service'] = service_name
+            config["service"] = service_name
             return _normalize_loaded_service_config(config)
 
     # Legacy format: already has 'service' field
@@ -76,12 +76,12 @@ def _normalize_loaded_service_config(config: dict[str, object]) -> dict[str, obj
     """
     _normalize_legacy_source_tables(config)
 
-    server_group_name_raw = config.get('server_group') or config.get('service')
+    server_group_name_raw = config.get("server_group") or config.get("service")
     server_group_name = str(server_group_name_raw).strip()
     if not server_group_name:
         return config
 
-    config['server_group'] = server_group_name
+    config["server_group"] = server_group_name
 
     source_groups = _load_source_groups_file()
     source_groups_dict = cast(dict[str, Any], source_groups)
@@ -91,11 +91,11 @@ def _normalize_loaded_service_config(config: dict[str, object]) -> dict[str, obj
 
     server_group = cast(dict[str, Any], server_group_raw)
     pattern = _resolve_server_group_pattern(server_group)
-    if pattern != 'db-per-tenant':
+    if pattern != "db-per-tenant":
         return config
 
     derived_customers = _derive_customers_from_source_group(server_group)
-    config['customers'] = derived_customers
+    config["customers"] = derived_customers
     return config
 
 
@@ -108,16 +108,12 @@ def _normalize_legacy_source_tables(config: dict[str, object]) -> None:
           dbo.Actor: {primary_key: actno, ignore_columns: [...]}
           dbo.Address: {}
     """
-    shared_raw = config.get('shared')
-    if isinstance(shared_raw, dict) and shared_raw.get('source_tables'):
-        return
-
-    source_raw = config.get('source')
+    source_raw = config.get("source")
     if not isinstance(source_raw, dict):
         return
 
     source_dict = cast(dict[str, Any], source_raw)
-    tables_raw = source_dict.get('tables')
+    tables_raw = source_dict.get("tables")
     if not isinstance(tables_raw, dict):
         return
 
@@ -128,37 +124,166 @@ def _normalize_legacy_source_tables(config: dict[str, object]) -> None:
         if not table_ref:
             continue
 
-        if '.' in table_ref:
-            schema_name, table_name = table_ref.split('.', 1)
+        if "." in table_ref:
+            schema_name, table_name = table_ref.split(".", 1)
         else:
-            schema_name, table_name = 'dbo', table_ref
+            schema_name, table_name = "dbo", table_ref
 
         table_cfg = cast(dict[str, Any], table_cfg_raw) if isinstance(table_cfg_raw, dict) else {}
-        normalized_table: dict[str, object] = {'name': table_name}
+        normalized_table: dict[str, object] = {"name": table_name}
 
-        primary_key = table_cfg.get('primary_key')
+        primary_key = table_cfg.get("primary_key")
         if primary_key is not None:
-            normalized_table['primary_key'] = primary_key
+            normalized_table["primary_key"] = primary_key
 
-        ignore_columns = table_cfg.get('ignore_columns')
+        ignore_columns = table_cfg.get("ignore_columns")
         if ignore_columns is not None:
-            normalized_table['ignore_columns'] = ignore_columns
+            normalized_table["ignore_columns"] = ignore_columns
 
-        include_columns = table_cfg.get('include_columns')
+        include_columns = table_cfg.get("include_columns")
         if include_columns is not None:
-            normalized_table['include_columns'] = include_columns
+            normalized_table["include_columns"] = include_columns
 
         grouped.setdefault(schema_name, []).append(normalized_table)
 
-    source_tables = [
-        {'schema': schema_name, 'tables': tables_for_schema}
-        for schema_name, tables_for_schema in grouped.items()
-    ]
+    source_tables = [{"schema": schema_name, "tables": tables_for_schema} for schema_name, tables_for_schema in grouped.items()]
 
-    config['shared'] = {
-        'source_tables': source_tables,
-        'ignore_tables': [],
+    shared_raw = config.get("shared")
+    shared = cast(dict[str, Any], shared_raw) if isinstance(shared_raw, dict) else {}
+    ignore_tables = shared.get("ignore_tables", [])
+    if not isinstance(ignore_tables, list):
+        ignore_tables = []
+
+    existing_source_tables_raw = shared.get("source_tables", [])
+    if isinstance(existing_source_tables_raw, list) and existing_source_tables_raw:
+        merged_source_tables = _merge_shared_source_tables(
+            cast(list[object], existing_source_tables_raw),
+            source_tables,
+        )
+    else:
+        merged_source_tables = source_tables
+
+    config["shared"] = {
+        **shared,
+        "source_tables": merged_source_tables,
+        "ignore_tables": ignore_tables,
     }
+
+
+def _merge_shared_source_tables(
+    existing_source_tables: list[object],
+    legacy_source_tables: list[dict[str, object]],
+) -> list[object]:
+    """Merge legacy ``source.tables`` into existing hierarchical tracked tables.
+
+    Existing ``shared.source_tables`` entries stay authoritative for ordering and
+    explicitly configured fields. Missing tables and missing per-table metadata are
+    backfilled from ``source.tables`` so runtime readers see a complete tracked set.
+    """
+    merged_source_tables = list(existing_source_tables)
+
+    schema_groups: dict[str, dict[str, Any]] = {}
+    known_tables: set[tuple[str, str]] = set()
+
+    for schema_group_raw in merged_source_tables:
+        if not isinstance(schema_group_raw, dict):
+            continue
+        schema_group = cast(dict[str, Any], schema_group_raw)
+        schema_name_raw = schema_group.get("schema")
+        schema_name = str(schema_name_raw).strip() if schema_name_raw is not None else ""
+        if not schema_name:
+            continue
+
+        normalized_schema = schema_name.casefold()
+        schema_groups[normalized_schema] = schema_group
+
+        tables_raw = schema_group.get("tables", [])
+        if not isinstance(tables_raw, list):
+            continue
+
+        for table_raw in cast(list[object], tables_raw):
+            if isinstance(table_raw, str):
+                table_name = table_raw.strip()
+            elif isinstance(table_raw, dict):
+                table_name_raw = cast(dict[str, Any], table_raw).get("name")
+                table_name = str(table_name_raw).strip() if table_name_raw is not None else ""
+            else:
+                continue
+
+            if not table_name:
+                continue
+
+            normalized_key = (normalized_schema, table_name.casefold())
+            known_tables.add(normalized_key)
+
+    for legacy_schema_group in legacy_source_tables:
+        schema_name_raw = legacy_schema_group.get("schema")
+        schema_name = str(schema_name_raw).strip() if schema_name_raw is not None else ""
+        if not schema_name:
+            continue
+
+        normalized_schema = schema_name.casefold()
+        schema_group = schema_groups.get(normalized_schema)
+        if schema_group is None:
+            schema_group = {"schema": schema_name, "tables": []}
+            merged_source_tables.append(schema_group)
+            schema_groups[normalized_schema] = schema_group
+
+        tables_raw = schema_group.get("tables")
+        if not isinstance(tables_raw, list):
+            tables_raw = []
+            schema_group["tables"] = tables_raw
+        schema_tables = cast(list[object], tables_raw)
+
+        legacy_tables_raw = legacy_schema_group.get("tables", [])
+        if not isinstance(legacy_tables_raw, list):
+            continue
+
+        for legacy_table_raw in cast(list[object], legacy_tables_raw):
+            if not isinstance(legacy_table_raw, dict):
+                continue
+
+            legacy_table = cast(dict[str, Any], legacy_table_raw)
+            table_name_raw = legacy_table.get("name")
+            table_name = str(table_name_raw).strip() if table_name_raw is not None else ""
+            if not table_name:
+                continue
+
+            normalized_key = (normalized_schema, table_name.casefold())
+            if normalized_key in known_tables:
+                _merge_existing_shared_table(schema_tables, legacy_table)
+                continue
+
+            schema_tables.append(dict(legacy_table))
+            known_tables.add(normalized_key)
+
+    return merged_source_tables
+
+
+def _merge_existing_shared_table(
+    schema_tables: list[object],
+    legacy_table: dict[str, Any],
+) -> None:
+    """Backfill missing metadata onto an existing shared tracked-table entry."""
+    legacy_name_raw = legacy_table.get("name")
+    legacy_name = str(legacy_name_raw).strip() if legacy_name_raw is not None else ""
+    if not legacy_name:
+        return
+
+    for existing_table_raw in schema_tables:
+        if not isinstance(existing_table_raw, dict):
+            continue
+
+        existing_table = cast(dict[str, Any], existing_table_raw)
+        existing_name_raw = existing_table.get("name")
+        existing_name = str(existing_name_raw).strip() if existing_name_raw is not None else ""
+        if existing_name.casefold() != legacy_name.casefold():
+            continue
+
+        for key in ("primary_key", "ignore_columns", "include_columns"):
+            if key not in existing_table and key in legacy_table:
+                existing_table[key] = legacy_table[key]
+        return
 
 
 def _load_source_groups_file() -> dict[str, object]:
@@ -177,7 +302,7 @@ def _load_source_groups_file() -> dict[str, object]:
 
 def _resolve_server_group_pattern(server_group: dict[str, Any]) -> str:
     """Resolve normalized server group pattern."""
-    raw_pattern = server_group.get('pattern', '')
+    raw_pattern = server_group.get("pattern", "")
     return str(raw_pattern).strip().lower()
 
 
@@ -185,7 +310,7 @@ def _derive_customers_from_source_group(
     server_group: dict[str, Any],
 ) -> list[dict[str, object]]:
     """Build customers list from source-groups sources map."""
-    sources_raw = server_group.get('sources', {})
+    sources_raw = server_group.get("sources", {})
     if not isinstance(sources_raw, dict):
         return []
 
@@ -202,13 +327,13 @@ def _derive_customers_from_source_group(
 
         customers.append(
             {
-                'name': customer_name,
-                'schema': customer_name,
-                'customer_id': customer_id,
+                "name": customer_name,
+                "schema": customer_name,
+                "customer_id": customer_id,
             }
         )
 
-    customers.sort(key=lambda customer: str(customer.get('name', '')))
+    customers.sort(key=lambda customer: str(customer.get("name", "")))
     return customers
 
 
@@ -217,13 +342,13 @@ def _resolve_customer_id_from_source_entry(source_entry: dict[str, Any]) -> obje
 
     Prefers environment-level ``customer_id`` values, then top-level fallback.
     """
-    top_level_customer_id = source_entry.get('customer_id')
+    top_level_customer_id = source_entry.get("customer_id")
 
     for env_name, env_cfg in source_entry.items():
-        if env_name == 'schemas' or not isinstance(env_cfg, dict):
+        if env_name == "schemas" or not isinstance(env_cfg, dict):
             continue
         env_cfg_dict = cast(dict[str, Any], env_cfg)
-        env_customer_id = env_cfg_dict.get('customer_id')
+        env_customer_id = env_cfg_dict.get("customer_id")
         if env_customer_id is not None:
             return env_customer_id
 
@@ -238,7 +363,7 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
     normalized_service_config = _normalize_loaded_service_config(dict(service_config))
 
     # Find customer in service config
-    customers_raw = normalized_service_config.get('customers', [])
+    customers_raw = normalized_service_config.get("customers", [])
     if not isinstance(customers_raw, list):
         raise ValueError(f"Customer '{customer_name}' not found in service config")
     customers = cast(list[object], customers_raw)
@@ -248,8 +373,8 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
         if not isinstance(customer_entry, dict):
             continue
         customer_entry_dict = cast(dict[str, Any], customer_entry)
-        candidate_name_raw = customer_entry_dict.get('name')
-        candidate_name = str(candidate_name_raw).casefold() if candidate_name_raw is not None else ''
+        candidate_name_raw = customer_entry_dict.get("name")
+        candidate_name = str(candidate_name_raw).casefold() if candidate_name_raw is not None else ""
         if candidate_name == normalized_customer_name:
             customer_data = cast(dict[str, object], customer_entry_dict)
             break
@@ -261,67 +386,59 @@ def merge_customer_config(service_config: dict[str, object], customer_name: str)
     # New format: [{schema: "dbo", tables: [{name: "Actor", primary_key: "actno"}]}]
     # Or simplified: [{schema: "dbo", tables: ["Actor", "Fraver"]}]  (when no extra properties)
     # Old format: [{schema: "dbo", table: "Actor", primary_key: "actno"}]
-    shared_raw = normalized_service_config.get('shared')
+    shared_raw = normalized_service_config.get("shared")
     shared_cfg = cast(dict[str, Any], shared_raw) if isinstance(shared_raw, dict) else {}
     source_tables_flat = _flatten_shared_source_tables(shared_cfg)
 
     # Start with backward-compatible structure
     merged: dict[str, object] = {
-        'customer': customer_name,
-        'schema': customer_data.get('schema', normalized_customer_name),
-        'customer_id': customer_data.get('customer_id'),
-        'service': normalized_service_config.get('service'),
-        'server_group': normalized_service_config.get('server_group'),
-        'cdc_tables': source_tables_flat,
-        'environments': {}
+        "customer": customer_name,
+        "schema": customer_data.get("schema", normalized_customer_name),
+        "customer_id": customer_data.get("customer_id"),
+        "service": normalized_service_config.get("service"),
+        "server_group": normalized_service_config.get("server_group"),
+        "cdc_tables": source_tables_flat,
+        "environments": {},
     }
 
     derived_environments = _derive_customer_environments_from_source_groups(
         normalized_service_config,
         customer_name,
     )
-    merged['environments'] = derived_environments
+    merged["environments"] = derived_environments
 
     return merged
 
 
 def _flatten_shared_source_tables(shared_cfg: dict[str, Any]) -> list[dict[str, object]]:
     """Flatten shared source tables into legacy cdc_tables format."""
-    source_tables_hierarchical_raw = shared_cfg.get('source_tables', [])
-    ignore_tables_raw = shared_cfg.get('ignore_tables', [])
-    source_tables_hierarchical = (
-        cast(list[object], source_tables_hierarchical_raw)
-        if isinstance(source_tables_hierarchical_raw, list)
-        else []
-    )
-    ignore_tables = (
-        cast(list[object], ignore_tables_raw)
-        if isinstance(ignore_tables_raw, list)
-        else []
-    )
+    source_tables_hierarchical_raw = shared_cfg.get("source_tables", [])
+    ignore_tables_raw = shared_cfg.get("ignore_tables", [])
+    source_tables_hierarchical = cast(list[object], source_tables_hierarchical_raw) if isinstance(source_tables_hierarchical_raw, list) else []
+    ignore_tables = cast(list[object], ignore_tables_raw) if isinstance(ignore_tables_raw, list) else []
 
     source_tables_flat: list[dict[str, object]] = []
     for schema_group_raw in source_tables_hierarchical:
         if not isinstance(schema_group_raw, dict):
             continue
         schema_group = cast(dict[str, Any], schema_group_raw)
-        schema_name_raw = schema_group.get('schema')
-        schema_name = str(schema_name_raw).strip() if schema_name_raw is not None else ''
+        schema_name_raw = schema_group.get("schema")
+        schema_name = str(schema_name_raw).strip() if schema_name_raw is not None else ""
         if not schema_name:
             continue
 
-        tables_raw = schema_group.get('tables', [])
+        tables_raw = schema_group.get("tables", [])
         if not isinstance(tables_raw, list):
             continue
 
         for table in cast(list[object], tables_raw):
             if isinstance(table, str):
                 table_name = table
-                table_dict: dict[str, Any] = {'name': table}
+                table_dict: dict[str, Any] = {"name": table}
             elif isinstance(table, dict):
                 table_dict = cast(dict[str, Any], table)
-                table_name_raw = table_dict.get('name')
-                table_name = str(table_name_raw).strip() if table_name_raw is not None else ''
+                table_name_raw = table_dict.get("name")
+                table_name = str(table_name_raw).strip() if table_name_raw is not None else ""
             else:
                 continue
 
@@ -329,18 +446,18 @@ def _flatten_shared_source_tables(shared_cfg: dict[str, Any]) -> list[dict[str, 
                 continue
 
             table_config: dict[str, object] = {
-                'schema': schema_name,
-                'table': table_name,
-                'primary_key': table_dict.get('primary_key'),
+                "schema": schema_name,
+                "table": table_name,
+                "primary_key": table_dict.get("primary_key"),
             }
 
-            ignore_cols = table_dict.get('ignore_columns')
-            include_cols = table_dict.get('include_columns')
+            ignore_cols = table_dict.get("ignore_columns")
+            include_cols = table_dict.get("include_columns")
 
             if ignore_cols:
-                table_config['ignore_columns'] = ignore_cols
+                table_config["ignore_columns"] = ignore_cols
             elif include_cols:
-                table_config['include_columns'] = include_cols
+                table_config["include_columns"] = include_cols
 
             source_tables_flat.append(table_config)
 
@@ -351,7 +468,7 @@ def _should_ignore_table(ignore_tables: list[object], schema_name: str, table_na
     """Return whether a table should be ignored based on ignore_tables rules."""
     for ignore_entry in ignore_tables:
         if isinstance(ignore_entry, str):
-            if table_name == ignore_entry and schema_name == 'dbo':
+            if table_name == ignore_entry and schema_name == "dbo":
                 return True
             continue
 
@@ -359,10 +476,7 @@ def _should_ignore_table(ignore_tables: list[object], schema_name: str, table_na
             continue
 
         ignore_dict = cast(dict[str, Any], ignore_entry)
-        if (
-            ignore_dict.get('table') == table_name
-            and ignore_dict.get('schema', 'dbo') == schema_name
-        ):
+        if ignore_dict.get("table") == table_name and ignore_dict.get("schema", "dbo") == schema_name:
             return True
 
     return False
@@ -393,7 +507,7 @@ def _derive_customer_environments_from_source_groups(
 
     This is the canonical source for db-per-tenant environment/database/server mapping.
     """
-    server_group_name_raw = service_config.get('server_group')
+    server_group_name_raw = service_config.get("server_group")
     server_group_name = str(server_group_name_raw).strip()
     if not server_group_name:
         return {}
@@ -414,7 +528,7 @@ def _derive_customer_environments_from_source_groups(
         return {}
 
     server_group_dict = cast(dict[str, Any], server_group)
-    sources_raw = server_group_dict.get('sources', {})
+    sources_raw = server_group_dict.get("sources", {})
     if not isinstance(sources_raw, dict):
         return {}
 
@@ -422,7 +536,7 @@ def _derive_customer_environments_from_source_groups(
     if source_entry is None:
         return {}
 
-    servers_raw = server_group_dict.get('servers', {})
+    servers_raw = server_group_dict.get("servers", {})
     servers: dict[str, object] = {}
     if isinstance(servers_raw, dict):
         servers = cast(dict[str, object], dict(cast(dict[str, Any], servers_raw)))
@@ -430,40 +544,40 @@ def _derive_customer_environments_from_source_groups(
     environments: dict[str, dict[str, object]] = {}
     for env_name_raw, env_cfg_raw in source_entry.items():
         env_name = str(env_name_raw).strip()
-        if not env_name or env_name == 'schemas' or not isinstance(env_cfg_raw, dict):
+        if not env_name or env_name == "schemas" or not isinstance(env_cfg_raw, dict):
             continue
 
         env_cfg = cast(dict[str, Any], env_cfg_raw)
-        database_name_raw = env_cfg.get('database')
-        database_name = str(database_name_raw).strip() if database_name_raw is not None else ''
-        server_name_raw = env_cfg.get('server', 'default')
-        server_name = str(server_name_raw).strip() or 'default'
+        database_name_raw = env_cfg.get("database")
+        database_name = str(database_name_raw).strip() if database_name_raw is not None else ""
+        server_name_raw = env_cfg.get("server", "default")
+        server_name = str(server_name_raw).strip() or "default"
 
         env_data: dict[str, object] = {
-            'existing_mssql': True,
-            'database': {'name': database_name},
-            'topic_prefix': f"{env_name}.{customer_name}.{database_name}",
+            "existing_mssql": True,
+            "database": {"name": database_name},
+            "topic_prefix": f"{env_name}.{customer_name}.{database_name}",
         }
 
-        target_sink_env_raw = env_cfg.get('target_sink_env')
+        target_sink_env_raw = env_cfg.get("target_sink_env")
         if isinstance(target_sink_env_raw, str) and target_sink_env_raw.strip():
-            env_data['target_sink_env'] = target_sink_env_raw.strip()
+            env_data["target_sink_env"] = target_sink_env_raw.strip()
 
         server_cfg_raw = servers.get(server_name)
         if isinstance(server_cfg_raw, dict):
             server_cfg = cast(dict[str, Any], server_cfg_raw)
             mssql_config = {
-                'host': server_cfg.get('host', ''),
-                'port': server_cfg.get('port', ''),
-                'user': server_cfg.get('user', ''),
-                'password': server_cfg.get('password', ''),
+                "host": server_cfg.get("host", ""),
+                "port": server_cfg.get("port", ""),
+                "user": server_cfg.get("user", ""),
+                "password": server_cfg.get("password", ""),
             }
-            env_data['mssql'] = mssql_config
+            env_data["mssql"] = mssql_config
 
-            kafka_bootstrap = server_cfg.get('kafka_bootstrap_servers')
+            kafka_bootstrap = server_cfg.get("kafka_bootstrap_servers")
             if kafka_bootstrap is not None:
-                env_data['kafka'] = {
-                    'bootstrap_servers': kafka_bootstrap,
+                env_data["kafka"] = {
+                    "bootstrap_servers": kafka_bootstrap,
                 }
 
         environments[env_name] = env_data
@@ -509,9 +623,7 @@ def load_customer_config(customer: str, service_name: str | None = None) -> dict
     customers_dir = get_project_root() / "2-customers"
     config_path = customers_dir / f"{customer}.yaml"
     if not config_path.exists():
-        raise FileNotFoundError(
-            f"Customer config not found in service or legacy format: {customer}"
-        ) from fallback_exc
+        raise FileNotFoundError(f"Customer config not found in service or legacy format: {customer}") from fallback_exc
 
     with config_path.open() as f:
         loaded = yaml.load(f)
@@ -533,7 +645,7 @@ def get_all_customers(service_name: str | None = None) -> list[str]:
         if not resolved_service:
             raise FileNotFoundError("No service config discovered")
         service_config = load_service_config(resolved_service)
-        customers = service_config.get('customers', [])
+        customers = service_config.get("customers", [])
         if not isinstance(customers, list):
             return []
 
@@ -542,7 +654,7 @@ def get_all_customers(service_name: str | None = None) -> list[str]:
             if not isinstance(customer_entry, dict):
                 continue
             customer_entry_dict = cast(dict[str, Any], customer_entry)
-            customer_name = customer_entry_dict.get('name')
+            customer_name = customer_entry_dict.get("name")
             if isinstance(customer_name, str) and customer_name:
                 names.append(customer_name)
         return names
@@ -557,4 +669,4 @@ def get_all_customers(service_name: str | None = None) -> list[str]:
 def get_customer_environments(customer: str) -> list[str]:
     """Get list of environments configured for a customer."""
     config = load_customer_config(customer)
-    return list(config.get('environments', {}).keys())
+    return list(config.get("environments", {}).keys())

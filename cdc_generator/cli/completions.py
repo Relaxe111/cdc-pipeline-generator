@@ -120,6 +120,7 @@ __all__ = [
     "complete_column_templates",
     "complete_custom_table_column_spec",
     "complete_existing_services",
+    "complete_fdw_target_sink_envs",
     "complete_migration_envs",
     "complete_non_inherited_sink_group_names",
     "complete_pg_types",
@@ -219,6 +220,26 @@ def complete_available_tables(
         _safe_call,
         _filter,
         _get_multi_param_values,
+    )
+
+
+def complete_fdw_target_sink_envs(
+    ctx: click.Context,
+    _param: click.Parameter,
+    incomplete: str,
+) -> list[CompletionItem]:
+    """Complete fdw target sink envs from the selected service's sink config."""
+    from cdc_generator.helpers.autocompletions.sinks import (
+        list_target_sink_envs_for_service,
+    )
+
+    service_name = _get_service(ctx)
+    if not service_name:
+        return []
+
+    return _filter(
+        _safe_call(list_target_sink_envs_for_service, service_name),
+        incomplete,
     )
 
 

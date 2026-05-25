@@ -246,10 +246,11 @@ class TestFdwOptions:
     """fdw must have typed Click subcommands and option declarations."""
 
     def test_fdw_group_has_expected_subcommands(self) -> None:
-        """The top-level fdw group should expose plan and sql."""
+        """The top-level fdw group should expose plan, sql, and apply."""
         group = _get_fdw_group()
         assert "plan" in group.commands
         assert "sql" in group.commands
+        assert "apply" in group.commands
 
     def test_fdw_plan_has_common_options(self) -> None:
         """fdw plan should declare the common planning options."""
@@ -258,6 +259,7 @@ class TestFdwOptions:
         for opt in [
             "--service",
             "--source-env",
+            "--target-sink-env",
             "--customer",
             "--table",
             "--target-schema",
@@ -268,11 +270,18 @@ class TestFdwOptions:
         ]:
             assert opt in opts, f"Missing option: {opt}"
 
-    def test_fdw_sql_has_output_options(self) -> None:
+    def test_fdw_sql_has_sql_options(self) -> None:
         """fdw sql should declare SQL rendering-specific options."""
         group = _get_fdw_group()
         opts = _get_command_option_names(group.commands["sql"])
-        for opt in ["--metadata-only", "--output"]:
+        for opt in ["--metadata-only"]:
+            assert opt in opts, f"Missing option: {opt}"
+
+    def test_fdw_apply_has_apply_options(self) -> None:
+        """fdw apply should declare apply-specific options."""
+        group = _get_fdw_group()
+        opts = _get_command_option_names(group.commands["apply"])
+        for opt in ["--sink", "--sql-path", "--psql-bin", "--dry-run"]:
             assert opt in opts, f"Missing option: {opt}"
 
     def test_has_source_table_options(self) -> None:
@@ -776,6 +785,13 @@ class TestShellCompleteCallbacksWired:
         for subcommand in required_env_subcommands:
             cmd = group.commands[subcommand]
             assert self._is_required_option(cmd, "--env"), f"manage-migrations {subcommand} should require --env"
+
+    def test_fdw_target_sink_env_has_shell_complete(self) -> None:
+        """fdw --target-sink-env should provide sink-aware completions."""
+        group = _get_fdw_group()
+        for subcommand in ["plan", "sql", "apply"]:
+            cmd = group.commands[subcommand]
+            assert self._has_shell_complete(cmd, "--target-sink-env"), f"fdw {subcommand} --target-sink-env missing shell_complete callback"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -118,6 +118,7 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_tier_assignment"' in native_infra_sql
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."native_cdc_activity_rollup_hourly"' in native_infra_sql
     assert 'CREATE UNLOGGED TABLE IF NOT EXISTS "cdc_management"."native_cdc_runtime_state"' in native_infra_sql
+    assert 'CREATE ROLE "cdc_runner"' in native_infra_sql
     assert 'ALTER TABLE "cdc_management"."native_cdc_runtime_state" SET UNLOGGED' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."claim_due_native_cdc_work"' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."bootstrap_native_cdc_tables"' in native_infra_sql
@@ -126,6 +127,7 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'ADD COLUMN IF NOT EXISTS "tier_mode" text' in native_infra_sql
     assert 'ADD COLUMN IF NOT EXISTS "manual_schedule_profile" text' in native_infra_sql
     assert 'ADD COLUMN IF NOT EXISTS "jitter_millis" integer' in native_infra_sql
+    assert 'GRANT USAGE ON SCHEMA "cdc_management" TO "cdc_runner";' in native_infra_sql
     assert "interval '1 millisecond'" in native_infra_sql
     assert 'runtime_mode: "native"' in manifest_text
     assert 'topology_kind: "mssql_fdw_pull"' in manifest_text

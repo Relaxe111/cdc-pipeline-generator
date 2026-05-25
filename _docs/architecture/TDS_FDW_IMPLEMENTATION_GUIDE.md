@@ -2156,9 +2156,9 @@ This is the safest path to make the design work now while still leaving room for
 Recommended command-assisted order:
 
 1. keep `source-groups.yaml`, service YAML, and schema YAML current
-2. run `cdc fdw plan --service <service> --source-env <env>`
-3. run `cdc fdw sql --service <service> --source-env <env> --output <file>`
-4. apply the generated SQL in PostgreSQL
+2. run `cdc fdw plan --service <service> --target-sink-env <sink-env>`
+3. run `cdc fdw sql --service <service> --target-sink-env <sink-env>`
+4. run `cdc fdw apply --service <service> --target-sink-env <sink-env>` or apply the generated SQL in PostgreSQL manually
 5. verify FDW reads using `SELECT ... LIMIT 1`
 6. run `cdc manage-migrations generate --service <service> --topology fdw`
 7. apply the generated migrations in PostgreSQL

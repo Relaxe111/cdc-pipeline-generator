@@ -7,6 +7,18 @@
 
 CREATE SCHEMA IF NOT EXISTS "cdc_management";
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_roles
+        WHERE rolname = 'cdc_runner'
+    ) THEN
+        EXECUTE 'CREATE ROLE "cdc_runner"';
+    END IF;
+END;
+$$;
+
 -- Bootstrap metadata tables used by `cdc fdw sql` and the native runtime.
 CREATE TABLE IF NOT EXISTS "cdc_management"."customer_registry" (
     "customer_key" text PRIMARY KEY,
@@ -1571,3 +1583,24 @@ GRANT EXECUTE ON FUNCTION "cdc_management"."bootstrap_native_cdc_tables"(text, t
 GRANT EXECUTE ON PROCEDURE "cdc_management"."renew_native_cdc_lease"(text, text, text, integer) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_success"(text, text, bigint, bigint) TO "{{ db_user }}";
 GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_failure"(text, text, text, integer) TO "{{ db_user }}";
+
+{% if db_user != "cdc_runner" %}
+GRANT USAGE ON SCHEMA "cdc_management" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."customer_registry" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."environment_profile" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."source_instance" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."source_table_registration" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_schedule_policy" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_tier_assignment" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_activity_rollup_hourly" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_runtime_state" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_checkpoint" TO "cdc_runner";
+GRANT SELECT, INSERT, UPDATE ON "cdc_management"."native_cdc_bootstrap_state" TO "cdc_runner";
+GRANT SELECT ON "cdc_management"."v_native_cdc_schedule" TO "cdc_runner";
+GRANT SELECT ON "cdc_management"."v_native_cdc_health" TO "cdc_runner";
+GRANT EXECUTE ON FUNCTION "cdc_management"."claim_due_native_cdc_work"(integer, integer, text) TO "cdc_runner";
+GRANT EXECUTE ON FUNCTION "cdc_management"."bootstrap_native_cdc_tables"(text, text[], boolean) TO "cdc_runner";
+GRANT EXECUTE ON PROCEDURE "cdc_management"."renew_native_cdc_lease"(text, text, text, integer) TO "cdc_runner";
+GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_success"(text, text, bigint, bigint) TO "cdc_runner";
+GRANT EXECUTE ON PROCEDURE "cdc_management"."mark_native_cdc_failure"(text, text, text, integer) TO "cdc_runner";
+{% endif %}

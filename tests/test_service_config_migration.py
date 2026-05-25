@@ -163,6 +163,67 @@ adopus:
     ]
 
 
+def test_load_service_config_merges_partial_shared_source_tables(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    services_dir = tmp_path / "services"
+    services_dir.mkdir(parents=True)
+
+    _write_yaml(
+        services_dir / "adopus.yaml",
+        """
+adopus:
+  server_group: adopus
+  source:
+    tables:
+      dbo.Actor: {}
+      dbo.AdgangLinjer: {}
+      dbo.Soknad: {}
+  shared:
+    source_tables:
+      - schema: dbo
+        tables:
+          - name: Actor
+    ignore_tables: []
+""".strip()
+        + "\n",
+    )
+
+    _write_yaml(
+        tmp_path / "source-groups.yaml",
+        """
+adopus:
+  pattern: db-per-tenant
+  sources:
+    AVProd:
+      default:
+        server: default
+        database: AdOpusAVProd
+""".strip()
+        + "\n",
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    config = load_service_config("adopus")
+    shared = config.get("shared")
+    assert isinstance(shared, dict)
+
+    source_tables = shared.get("source_tables")
+    assert isinstance(source_tables, list)
+    assert source_tables == [
+        {
+            "schema": "dbo",
+            "tables": [
+                {"name": "Actor"},
+                {"name": "AdgangLinjer"},
+                {"name": "Soknad"},
+            ],
+        }
+    ]
+
+
 def test_get_all_customers_reads_derived_customers(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,

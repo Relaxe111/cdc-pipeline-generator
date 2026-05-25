@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+from cdc_generator.helpers.env_resolution import build_env_lookup, resolve_config_value
 from cdc_generator.helpers.fdw_identifiers import (
     build_base_foreign_table_name,
     build_foreign_table_name,
@@ -19,7 +19,6 @@ from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 _CDC_SCHEMA_NAME = "cdc"
 _DEFAULT_TDS_VERSION = "7.4"
-_MIN_QUOTED_VALUE_LENGTH = 2
 _FDW_META_COLUMNS: tuple[tuple[str, str], ...] = (
     ("__$start_lsn", "bytea"),
     ("__$seqval", "bytea"),
@@ -27,7 +26,6 @@ _FDW_META_COLUMNS: tuple[tuple[str, str], ...] = (
     ("__$update_mask", "bytea"),
 )
 _MAX_LSN_TABLE_NAME = "cdc_max_lsn"
-_ENV_VAR_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 _SQL_TYPE_BASE_PATTERN = re.compile(r"^\s*([A-Za-z0-9_]+)")
 _IDENTIFIER_SANITIZE_PATTERN = re.compile(r"[^A-Za-z0-9_]+")
 
@@ -61,6 +59,7 @@ class FdwBootstrapRequest:
 
     customers: tuple[str, ...] = ()
     tables: tuple[str, ...] = ()
+    target_sink_env: str | None = None
     target_schema_name: str | None = None
     runner_role: str = "cdc_runner"
     fdw_server_prefix: str = "mssql"
@@ -76,6 +75,7 @@ class FdwSourcePlan:
     customer_name: str
     customer_id: str
     source_env: str
+    target_sink_env: str | None
     environment_profile_name: str
     server_name: str
     source_database: str
@@ -93,7 +93,10 @@ class FdwBootstrapPlan:
 
     service_name: str
     server_group_name: str
-    source_env: str
+    source_env: str | None
+    resolved_source_envs: tuple[str, ...]
+    resolved_server_names: tuple[str, ...]
+    target_sink_env: str | None
     target_schema_name: str
     runner_role: str
     resolve_env_values: bool
@@ -104,7 +107,7 @@ class FdwBootstrapPlan:
 
 def build_fdw_bootstrap_plan(
     service_name: str,
-    source_env: str,
+    source_env: str | None,
     request: FdwBootstrapRequest | None = None,
 ) -> FdwBootstrapPlan:
     """Build a metadata-driven FDW bootstrap plan from implementation YAML.
@@ -122,7 +125,7 @@ def build_fdw_bootstrap_plan(
 
     normalized_service_name = str(service_config.get("service", service_name)).strip()
     normalized_target_schema = effective_request.target_schema_name.strip() if effective_request.target_schema_name else normalized_service_name
-    env_lookup = _build_env_lookup(project_root)
+    env_lookup = build_env_lookup(project_root)
 
     tracked_tables = _load_tracked_tables(service_config)
     filtered_tables = _filter_tracked_tables(
@@ -142,6 +145,7 @@ def build_fdw_bootstrap_plan(
         source_group,
         source_env,
         list(effective_request.customers),
+        target_sink_env=effective_request.target_sink_env,
         fdw_server_prefix=effective_request.fdw_server_prefix,
         fdw_schema_prefix=effective_request.fdw_schema_prefix,
         resolve_env_values=effective_request.resolve_env_values,
@@ -149,14 +153,23 @@ def build_fdw_bootstrap_plan(
     )
 
     if not source_plans:
+        if effective_request.target_sink_env:
+            raise ValueError(
+                "No valid source instances matched the requested filters for " + f"target sink env '{effective_request.target_sink_env}'"
+            )
         raise ValueError("No valid source instances matched the requested filters")
 
     _assign_environment_profile_names(source_plans)
+    resolved_source_envs = tuple(sorted({source_plan.source_env for source_plan in source_plans}))
+    resolved_server_names = tuple(sorted({source_plan.server_name for source_plan in source_plans}))
 
     return FdwBootstrapPlan(
         service_name=normalized_service_name,
         server_group_name=server_group_name,
         source_env=source_env,
+        resolved_source_envs=resolved_source_envs,
+        resolved_server_names=resolved_server_names,
+        target_sink_env=effective_request.target_sink_env,
         target_schema_name=normalized_target_schema,
         runner_role=effective_request.runner_role,
         resolve_env_values=effective_request.resolve_env_values,
@@ -171,7 +184,10 @@ def render_fdw_plan_summary(plan: FdwBootstrapPlan) -> list[str]:
     lines = [
         f"Service: {plan.service_name}",
         f"Server group: {plan.server_group_name}",
-        f"Source env: {plan.source_env}",
+        f"Source env filter: {plan.source_env or '(auto)'}",
+        f"Resolved source envs: {_format_values(plan.resolved_source_envs)}",
+        f"Resolved source servers: {_format_values(plan.resolved_server_names)}",
+        f"Target sink env: {plan.target_sink_env or '(any)'}",
         f"Target schema: {plan.target_schema_name}",
         f"Runner role: {plan.runner_role}",
         f"Tracked tables: {len(plan.table_plans)}",
@@ -189,6 +205,7 @@ def render_fdw_plan_summary(plan: FdwBootstrapPlan) -> list[str]:
             "  - "
             + f"{source_plan.customer_name} ({source_plan.customer_id}) -> "
             + f"{source_plan.source_database} | "
+            + f"sink {source_plan.target_sink_env or '(any)'} | "
             + f"server {source_plan.fdw_server_name} | "
             + f"schema {source_plan.fdw_schema_name}"
         )
@@ -217,9 +234,20 @@ def render_fdw_bootstrap_sql(
     sections: list[str] = [
         "-- Generated by: cdc fdw sql",
         f"-- Service: {plan.service_name}",
-        f"-- Source env: {plan.source_env}",
+        f"-- Source env filter: {plan.source_env or '(auto)'}",
+        f"-- Resolved source envs: {_format_values(plan.resolved_source_envs)}",
+        f"-- Resolved source servers: {_format_values(plan.resolved_server_names)}",
+        f"-- Target sink env: {plan.target_sink_env or '(any)'}",
         f"-- Target schema: {plan.target_schema_name}",
         f"-- Runner role: {plan.runner_role}",
+        "-- Prerequisites:",
+        "--   - extension tds_fdw must already exist in the target PostgreSQL database",
+        "--   - schema cdc_management must already exist in the target PostgreSQL database",
+        "--   - cdc_management.customer_registry must already exist",
+        "--   - cdc_management.environment_profile must already exist",
+        "--   - cdc_management.source_instance must already exist",
+        "--   - cdc_management.source_table_registration must already exist",
+        "--   - the configured runner role must already exist before apply",
     ]
     if plan.warnings:
         sections.append("-- Warnings:")
@@ -227,23 +255,6 @@ def render_fdw_bootstrap_sql(
             sections.append(f"--   {warning}")
     sections.append("")
 
-    if not metadata_only:
-        sections.extend(
-            [
-                "CREATE EXTENSION IF NOT EXISTS tds_fdw;",
-                'CREATE SCHEMA IF NOT EXISTS "cdc_management";',
-                "",
-            ]
-        )
-    else:
-        sections.extend(
-            [
-                'CREATE SCHEMA IF NOT EXISTS "cdc_management";',
-                "",
-            ]
-        )
-
-    sections.append(_render_metadata_tables_sql())
     sections.append(_render_customer_registry_sql(plan))
     sections.append(_render_environment_profiles_sql(plan))
     sections.append(_render_source_instances_sql(plan))
@@ -523,9 +534,10 @@ def _map_mssql_column_type(source_type: str, mapper: TypeMapper) -> str:
 
 def _build_source_plans(
     source_group: dict[str, Any],
-    source_env: str,
+    source_env: str | None,
     customers: list[str] | None,
     *,
+    target_sink_env: str | None,
     fdw_server_prefix: str,
     fdw_schema_prefix: str,
     resolve_env_values: bool,
@@ -550,66 +562,90 @@ def _build_source_plans(
             continue
 
         source_entry = cast(dict[str, Any], source_entry_raw)
-        env_cfg_raw = source_entry.get(source_env)
-        if not isinstance(env_cfg_raw, dict):
+        env_entries = _select_source_env_entries(source_entry, source_env)
+        if not env_entries:
             warnings.append(f"Skipping {source_name}: source env '{source_env}' is not configured")
             continue
 
-        env_cfg = cast(dict[str, Any], env_cfg_raw)
-        customer_id = _resolve_customer_id(source_entry, env_cfg)
-        if customer_id is None:
-            warnings.append(f"Skipping {source_name}: customer_id is missing for env '{source_env}'")
-            continue
+        for env_name, env_cfg in env_entries:
+            configured_target_sink_env = _resolve_target_sink_env(env_cfg)
+            if not _matches_target_sink_env(configured_target_sink_env, target_sink_env):
+                continue
 
-        source_database_raw = env_cfg.get("database")
-        source_database = str(source_database_raw).strip() if source_database_raw is not None else ""
-        if not source_database:
-            warnings.append(f"Skipping {source_name}: database is missing for env '{source_env}'")
-            continue
+            customer_id = _resolve_customer_id(source_entry, env_cfg)
+            if customer_id is None:
+                warnings.append(f"Skipping {source_name}: customer_id is missing for env '{env_name}'")
+                continue
 
-        server_name_raw = env_cfg.get("server", "default")
-        server_name = str(server_name_raw).strip() if server_name_raw is not None else "default"
-        server_cfg_raw = servers.get(server_name)
-        if not isinstance(server_cfg_raw, dict):
-            warnings.append(f"Skipping {source_name}: server '{server_name}' is not defined")
-            continue
+            source_database_raw = env_cfg.get("database")
+            source_database = str(source_database_raw).strip() if source_database_raw is not None else ""
+            if not source_database:
+                warnings.append(f"Skipping {source_name}: database is missing for env '{env_name}'")
+                continue
 
-        server_cfg = cast(dict[str, Any], server_cfg_raw)
-        try:
-            host = _resolve_config_value(server_cfg.get("host"), env_lookup, resolve_env_values, "host")
-            port = _resolve_config_value(server_cfg.get("port"), env_lookup, resolve_env_values, "port")
-            username = _resolve_config_value(
-                server_cfg.get("username", server_cfg.get("user")),
-                env_lookup,
-                resolve_env_values,
-                "username",
+            server_name_raw = env_cfg.get("server", "default")
+            server_name = str(server_name_raw).strip() if server_name_raw is not None else "default"
+            server_cfg_raw = servers.get(server_name)
+            if not isinstance(server_cfg_raw, dict):
+                warnings.append(f"Skipping {source_name}: server '{server_name}' is not defined")
+                continue
+
+            server_cfg = cast(dict[str, Any], server_cfg_raw)
+            try:
+                host = resolve_config_value(server_cfg.get("host"), env_lookup, resolve_env_values, "host")
+                port = resolve_config_value(server_cfg.get("port"), env_lookup, resolve_env_values, "port")
+                username = resolve_config_value(
+                    server_cfg.get("username", server_cfg.get("user")),
+                    env_lookup,
+                    resolve_env_values,
+                    "username",
+                )
+                password = resolve_config_value(server_cfg.get("password"), env_lookup, resolve_env_values, "password")
+            except ValueError as exc:
+                warnings.append(f"Skipping {source_name}: {exc}")
+                continue
+
+            fdw_source_key = _sanitize_object_name(customer_key)
+            source_plans.append(
+                FdwSourcePlan(
+                    customer_key=customer_key,
+                    customer_name=source_name,
+                    customer_id=customer_id,
+                    source_env=env_name,
+                    target_sink_env=configured_target_sink_env,
+                    environment_profile_name=env_name,
+                    server_name=server_name,
+                    source_database=source_database,
+                    fdw_server_name=f"{_sanitize_object_name(fdw_server_prefix)}_{_sanitize_object_name(env_name)}_{fdw_source_key}",
+                    fdw_schema_name=f"{_sanitize_object_name(fdw_schema_prefix)}_{_sanitize_object_name(env_name)}_{fdw_source_key}",
+                    host=host,
+                    port=port,
+                    username=username,
+                    password=password,
+                )
             )
-            password = _resolve_config_value(server_cfg.get("password"), env_lookup, resolve_env_values, "password")
-        except ValueError as exc:
-            warnings.append(f"Skipping {source_name}: {exc}")
-            continue
 
-        fdw_source_key = _sanitize_object_name(customer_key)
-        source_plans.append(
-            FdwSourcePlan(
-                customer_key=customer_key,
-                customer_name=source_name,
-                customer_id=customer_id,
-                source_env=source_env,
-                environment_profile_name=source_env,
-                server_name=server_name,
-                source_database=source_database,
-                fdw_server_name=f"{_sanitize_object_name(fdw_server_prefix)}_{_sanitize_object_name(source_env)}_{fdw_source_key}",
-                fdw_schema_name=f"{_sanitize_object_name(fdw_schema_prefix)}_{_sanitize_object_name(source_env)}_{fdw_source_key}",
-                host=host,
-                port=port,
-                username=username,
-                password=password,
-            )
-        )
-
-    source_plans.sort(key=lambda source_plan: source_plan.customer_key)
+    source_plans.sort(key=lambda source_plan: (source_plan.server_name, source_plan.source_env, source_plan.customer_key))
     return source_plans, warnings
+
+
+def _select_source_env_entries(
+    source_entry: dict[str, Any],
+    source_env: str | None,
+) -> list[tuple[str, dict[str, Any]]]:
+    if source_env is not None:
+        env_cfg_raw = source_entry.get(source_env)
+        if not isinstance(env_cfg_raw, dict):
+            return []
+        return [(source_env, cast(dict[str, Any], env_cfg_raw))]
+
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for env_name_raw, env_cfg_raw in source_entry.items():
+        env_name = str(env_name_raw).strip()
+        if not env_name or env_name == "schemas" or not isinstance(env_cfg_raw, dict):
+            continue
+        entries.append((env_name, cast(dict[str, Any], env_cfg_raw)))
+    return entries
 
 
 def _resolve_customer_id(
@@ -624,6 +660,32 @@ def _resolve_customer_id(
     if top_level_customer_id is None or not str(top_level_customer_id).strip():
         return None
     return str(top_level_customer_id).strip()
+
+
+def _resolve_target_sink_env(env_cfg: dict[str, Any]) -> str | None:
+    target_sink_env_raw = env_cfg.get("target_sink_env")
+    if target_sink_env_raw is None:
+        return None
+
+    target_sink_env = str(target_sink_env_raw).strip()
+    if not target_sink_env:
+        return None
+    return target_sink_env
+
+
+def _matches_target_sink_env(
+    configured_target_sink_env: str | None,
+    requested_target_sink_env: str | None,
+) -> bool:
+    if requested_target_sink_env is None:
+        return True
+    return configured_target_sink_env == requested_target_sink_env
+
+
+def _format_values(values: tuple[str, ...]) -> str:
+    if not values:
+        return "(none)"
+    return ", ".join(values)
 
 
 def _assign_environment_profile_names(source_plans: list[FdwSourcePlan]) -> None:
@@ -644,99 +706,6 @@ def _assign_environment_profile_names(source_plans: list[FdwSourcePlan]) -> None
         profile_name = f"{_sanitize_object_name(source_env)}_{_sanitize_object_name(server_name)}" if multiple_profiles else source_env
         for source_plan in grouped_plans:
             source_plan.environment_profile_name = profile_name
-
-
-def _build_env_lookup(project_root: Path) -> dict[str, str]:
-    env_lookup = dict(os.environ)
-    env_path = project_root / ".env"
-    if not env_path.exists():
-        return env_lookup
-
-    for line in env_path.read_text().splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", 1)
-        env_lookup.setdefault(key.strip(), _strip_env_value(value.strip()))
-
-    return env_lookup
-
-
-def _strip_env_value(value: str) -> str:
-    if len(value) >= _MIN_QUOTED_VALUE_LENGTH and value[0] == value[-1] and value[0] in {'"', "'"}:
-        return value[1:-1]
-    return value
-
-
-def _resolve_config_value(
-    raw_value: object,
-    env_lookup: dict[str, str],
-    resolve_env_values: bool,
-    field_name: str,
-) -> str:
-    if raw_value is None:
-        raise ValueError(f"{field_name} is missing")
-
-    value = str(raw_value).strip()
-    if not value:
-        raise ValueError(f"{field_name} is empty")
-    if not resolve_env_values:
-        return value
-
-    missing_vars = [match.group(1) for match in _ENV_VAR_PATTERN.finditer(value) if not env_lookup.get(match.group(1), "").strip()]
-    if missing_vars:
-        missing_list = ", ".join(sorted(set(missing_vars)))
-        raise ValueError(f"{field_name} uses missing environment variable(s): {missing_list}")
-
-    resolved_value = _ENV_VAR_PATTERN.sub(
-        lambda match: env_lookup.get(match.group(1), ""),
-        value,
-    )
-    if not resolved_value.strip():
-        raise ValueError(f"{field_name} resolves to an empty value")
-    return resolved_value
-
-
-def _render_metadata_tables_sql() -> str:
-    return "\n".join(
-        [
-            'CREATE TABLE IF NOT EXISTS "cdc_management"."customer_registry" (',
-            '    "customer_key" text PRIMARY KEY,',
-            '    "customer_id" uuid NOT NULL UNIQUE,',
-            '    "customer_name" text NOT NULL',
-            ");",
-            "",
-            'CREATE TABLE IF NOT EXISTS "cdc_management"."environment_profile" (',
-            '    "environment_name" text PRIMARY KEY,',
-            '    "mssql_host" text NOT NULL,',
-            '    "mssql_port" integer NOT NULL,',
-            "    \"tds_version\" text NOT NULL DEFAULT '7.4',",
-            '    "enabled" boolean NOT NULL DEFAULT true',
-            ");",
-            "",
-            'CREATE TABLE IF NOT EXISTS "cdc_management"."source_instance" (',
-            '    "source_instance_key" text PRIMARY KEY,',
-            '    "environment_name" text NOT NULL REFERENCES "cdc_management"."environment_profile"("environment_name"),',
-            '    "customer_key" text NOT NULL REFERENCES "cdc_management"."customer_registry"("customer_key"),',
-            '    "source_database" text NOT NULL,',
-            '    "fdw_server_name" text NOT NULL UNIQUE,',
-            '    "fdw_schema_name" text NOT NULL UNIQUE,',
-            '    "enabled" boolean NOT NULL DEFAULT true',
-            ");",
-            "",
-            'CREATE TABLE IF NOT EXISTS "cdc_management"."source_table_registration" (',
-            '    "source_instance_key" text NOT NULL REFERENCES "cdc_management"."source_instance"("source_instance_key"),',
-            '    "logical_table_name" text NOT NULL,',
-            '    "remote_schema_name" text NOT NULL,',
-            '    "remote_table_name" text NOT NULL,',
-            '    "target_schema_name" text NOT NULL,',
-            '    "target_table_name" text NOT NULL,',
-            '    "enabled" boolean NOT NULL DEFAULT true,',
-            '    PRIMARY KEY ("source_instance_key", "logical_table_name")',
-            ");",
-            "",
-        ]
-    )
 
 
 def _render_customer_registry_sql(plan: FdwBootstrapPlan) -> str:

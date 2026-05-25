@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
+from typing import Any
 
 import click
 
-from cdc_generator.cli.completions import (
-    complete_available_envs,
-    complete_existing_services,
-)
+from cdc_generator.cli import completions as completion_callbacks
 
 _PASSTHROUGH_CTX: dict[str, object] = {
     "allow_extra_args": True,
     "ignore_unknown_options": True,
 }
+
+CommandCallback = Callable[..., object]
+completion_callbacks_any: Any = completion_callbacks
 
 
 def _dispatch_command_passthrough(command: str) -> int:
@@ -41,20 +43,26 @@ def fdw_cmd(ctx: click.Context) -> int:
     return 0
 
 
-def _add_common_fdw_options(func: click.Command) -> click.Command:
+def _add_common_fdw_options(func: CommandCallback) -> CommandCallback:
     """Apply shared fdw options to subcommands."""
     options = [
         click.option(
             "--service",
-            required=True,
-            shell_complete=complete_existing_services,
-            help="Service name",
+            required=False,
+            shell_complete=completion_callbacks_any.complete_existing_services,
+            help="Service name; inferred when exactly one service exists",
         ),
         click.option(
             "--source-env",
-            default="default",
-            shell_complete=complete_available_envs,
-            help="Source environment key from source-groups.yaml",
+            default=None,
+            shell_complete=completion_callbacks_any.complete_available_envs,
+            help="Optional source environment key from source-groups.yaml",
+        ),
+        click.option(
+            "--target-sink-env",
+            default=None,
+            shell_complete=completion_callbacks_any.complete_fdw_target_sink_envs,
+            help="Only include source routes whose target_sink_env matches this sink env",
         ),
         click.option(
             "--customer",
@@ -101,6 +109,39 @@ def _add_common_fdw_options(func: click.Command) -> click.Command:
     return decorated
 
 
+def _add_apply_fdw_options(func: CommandCallback) -> CommandCallback:
+    """Apply fdw apply-specific options to the subcommand."""
+    options = [
+        click.option(
+            "--sink",
+            default=None,
+            help="Sink target key in the form <sink-group>.<sink-service>",
+        ),
+        click.option(
+            "--sql-path",
+            default=None,
+            type=click.Path(dir_okay=False, path_type=str),
+            help="Override the SQL file to apply",
+        ),
+        click.option(
+            "--psql-bin",
+            default=None,
+            type=click.Path(dir_okay=False, path_type=str),
+            help="Override the psql executable path",
+        ),
+        click.option(
+            "--dry-run",
+            is_flag=True,
+            help="Print the resolved target and psql command without applying the SQL",
+        ),
+    ]
+
+    decorated = func
+    for option in reversed(options):
+        decorated = option(decorated)
+    return decorated
+
+
 @fdw_cmd.command(
     name="plan",
     help="Preview derived FDW source and table registrations",
@@ -125,13 +166,22 @@ def fdw_plan_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     is_flag=True,
     help="Render only cdc_management metadata registration SQL",
 )
-@click.option(
-    "--output",
-    default=None,
-    help="Write SQL to this file instead of stdout",
-)
 @_add_common_fdw_options
 @click.pass_context
 def fdw_sql_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """fdw sql passthrough."""
+    return _dispatch_command_passthrough("fdw")
+
+
+@fdw_cmd.command(
+    name="apply",
+    help="Apply a generated FDW SQL file to the target PostgreSQL sink environment",
+    context_settings=_PASSTHROUGH_CTX,
+    add_help_option=False,
+)
+@_add_apply_fdw_options
+@_add_common_fdw_options
+@click.pass_context
+def fdw_apply_cmd(_ctx: click.Context, **_kwargs: object) -> int:
+    """fdw apply passthrough."""
     return _dispatch_command_passthrough("fdw")
