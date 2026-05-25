@@ -83,8 +83,10 @@ def _add_common_fdw_options(func: CommandCallback) -> CommandCallback:
         ),
         click.option(
             "--runner-role",
-            default="cdc_runner",
-            help="PostgreSQL role name for CREATE USER MAPPING",
+            "runner_roles",
+            multiple=True,
+            default=("cdc_runner",),
+            help="PostgreSQL role name for CREATE USER MAPPING; repeat to include multiple",
         ),
         click.option(
             "--fdw-server-prefix",

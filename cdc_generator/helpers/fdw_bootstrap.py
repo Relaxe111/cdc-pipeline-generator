@@ -61,7 +61,7 @@ class FdwBootstrapRequest:
     tables: tuple[str, ...] = ()
     target_sink_env: str | None = None
     target_schema_name: str | None = None
-    runner_role: str = "cdc_runner"
+    runner_roles: tuple[str, ...] = ("cdc_runner",)
     fdw_server_prefix: str = "mssql"
     fdw_schema_prefix: str = "fdw"
     resolve_env_values: bool = True
@@ -98,7 +98,7 @@ class FdwBootstrapPlan:
     resolved_server_names: tuple[str, ...]
     target_sink_env: str | None
     target_schema_name: str
-    runner_role: str
+    runner_roles: tuple[str, ...]
     resolve_env_values: bool
     table_plans: list[FdwTablePlan]
     source_plans: list[FdwSourcePlan]
@@ -125,6 +125,7 @@ def build_fdw_bootstrap_plan(
 
     normalized_service_name = str(service_config.get("service", service_name)).strip()
     normalized_target_schema = effective_request.target_schema_name.strip() if effective_request.target_schema_name else normalized_service_name
+    normalized_runner_roles = _normalize_runner_roles(effective_request.runner_roles)
     env_lookup = build_env_lookup(project_root)
 
     tracked_tables = _load_tracked_tables(service_config)
@@ -171,7 +172,7 @@ def build_fdw_bootstrap_plan(
         resolved_server_names=resolved_server_names,
         target_sink_env=effective_request.target_sink_env,
         target_schema_name=normalized_target_schema,
-        runner_role=effective_request.runner_role,
+        runner_roles=normalized_runner_roles,
         resolve_env_values=effective_request.resolve_env_values,
         table_plans=table_plans,
         source_plans=source_plans,
@@ -189,7 +190,7 @@ def render_fdw_plan_summary(plan: FdwBootstrapPlan) -> list[str]:
         f"Resolved source servers: {_format_values(plan.resolved_server_names)}",
         f"Target sink env: {plan.target_sink_env or '(any)'}",
         f"Target schema: {plan.target_schema_name}",
-        f"Runner role: {plan.runner_role}",
+        f"Runner roles: {_format_values(plan.runner_roles)}",
         f"Tracked tables: {len(plan.table_plans)}",
         f"Customer sources: {len(plan.source_plans)}",
         f"Foreign tables to create: {len(plan.table_plans) * len(plan.source_plans)}",
@@ -239,7 +240,7 @@ def render_fdw_bootstrap_sql(
         f"-- Resolved source servers: {_format_values(plan.resolved_server_names)}",
         f"-- Target sink env: {plan.target_sink_env or '(any)'}",
         f"-- Target schema: {plan.target_schema_name}",
-        f"-- Runner role: {plan.runner_role}",
+        f"-- Runner roles: {_format_values(plan.runner_roles)}",
         "-- Prerequisites:",
         "--   - extension tds_fdw must already exist in the target PostgreSQL database",
         "--   - schema cdc_management must already exist in the target PostgreSQL database",
@@ -247,7 +248,7 @@ def render_fdw_bootstrap_sql(
         "--   - cdc_management.environment_profile must already exist",
         "--   - cdc_management.source_instance must already exist",
         "--   - cdc_management.source_table_registration must already exist",
-        "--   - the configured runner role must already exist before apply",
+        "--   - the configured runner roles must already exist before apply",
     ]
     if plan.warnings:
         sections.append("-- Warnings:")
@@ -266,7 +267,8 @@ def render_fdw_bootstrap_sql(
     for source_plan in plan.source_plans:
         sections.append(_render_schema_sql(source_plan))
         sections.append(_render_server_sql(source_plan))
-        sections.append(_render_user_mapping_sql(plan.runner_role, source_plan))
+        for runner_role in plan.runner_roles:
+            sections.append(_render_user_mapping_sql(runner_role, source_plan))
         sections.append(_render_max_lsn_table_sql(source_plan))
         for table_plan in plan.table_plans:
             sections.append(_render_foreign_table_sql(source_plan, table_plan))
@@ -680,6 +682,21 @@ def _matches_target_sink_env(
     if requested_target_sink_env is None:
         return True
     return configured_target_sink_env == requested_target_sink_env
+
+
+def _normalize_runner_roles(runner_roles: tuple[str, ...]) -> tuple[str, ...]:
+    normalized_roles: list[str] = []
+    seen_roles: set[str] = set()
+    for runner_role in runner_roles:
+        normalized_role = runner_role.strip()
+        if not normalized_role or normalized_role in seen_roles:
+            continue
+        normalized_roles.append(normalized_role)
+        seen_roles.add(normalized_role)
+
+    if not normalized_roles:
+        return ("cdc_runner",)
+    return tuple(normalized_roles)
 
 
 def _format_values(values: tuple[str, ...]) -> str:

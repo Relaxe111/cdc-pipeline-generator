@@ -245,6 +245,35 @@ def test_render_fdw_bootstrap_sql_includes_metadata_and_foreign_tables(
     assert "CREATE EXTENSION IF NOT EXISTS tds_fdw;" not in sql_text
 
 
+def test_fdw_cli_sql_supports_multiple_runner_roles(
+    fdw_project: Path,
+) -> None:
+    """Repeated --runner-role options should create one mapping per PostgreSQL role."""
+    output_path = fdw_project / "generated" / "fdw" / "adopus-default-dev-fdw.sql"
+
+    result = fdw_main(
+        [
+            "sql",
+            "--service",
+            "adopus",
+            "--target-sink-env",
+            "dev",
+            "--runner-role",
+            "cdc_runner",
+            "--runner-role",
+            "postgres",
+        ]
+    )
+
+    assert result == 0
+    sql_text = output_path.read_text(encoding="utf-8")
+    assert "-- Runner roles: cdc_runner, postgres" in sql_text
+    assert 'CREATE USER MAPPING FOR "cdc_runner"' in sql_text
+    assert 'ALTER USER MAPPING FOR "cdc_runner"' in sql_text
+    assert 'CREATE USER MAPPING FOR "postgres"' in sql_text
+    assert 'ALTER USER MAPPING FOR "postgres"' in sql_text
+
+
 def test_build_fdw_bootstrap_plan_can_infer_routes_from_target_sink_env(
     fdw_project: Path,
 ) -> None:
@@ -449,3 +478,64 @@ def test_fdw_cli_apply_uses_resolved_sink_target_and_default_sql_path(
     ]
     assert captured["check"] is False
     assert cast(dict[str, str], captured["env"])["PGPASSWORD"] == "pg_password_nonprod"
+
+
+def test_fdw_cli_apply_refreshes_default_sql_for_current_runner_roles(
+    fdw_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fdw apply should rewrite the default SQL file from the current CLI arguments."""
+    del fdw_project
+
+    captured: dict[str, object] = {}
+    output_path = Path("generated/fdw/adopus-default-dev-fdw.sql")
+
+    monkeypatch.setattr("cdc_generator.cli.fdw.shutil.which", lambda _value: "/usr/bin/psql")
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        env: dict[str, str],
+    ) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured["check"] = check
+        captured["env"] = env
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("cdc_generator.cli.fdw.subprocess.run", fake_run)
+
+    apply_result = fdw_main(
+        [
+            "apply",
+            "--service",
+            "adopus",
+            "--target-sink-env",
+            "dev",
+            "--runner-role",
+            "cdc_runner",
+            "--runner-role",
+            "postgres",
+        ]
+    )
+
+    assert apply_result == 0
+    assert output_path.exists()
+    sql_text = output_path.read_text(encoding="utf-8")
+    assert 'CREATE USER MAPPING FOR "cdc_runner"' in sql_text
+    assert 'CREATE USER MAPPING FOR "postgres"' in sql_text
+    assert captured["command"] == [
+        "/usr/bin/psql",
+        "-h",
+        "10.90.37.20",
+        "-p",
+        "5432",
+        "-U",
+        "pg_user_nonprod",
+        "-d",
+        "directory_dev",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-f",
+        "generated/fdw/adopus-default-dev-fdw.sql",
+    ]

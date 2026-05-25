@@ -187,8 +187,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--runner-role",
-        default="cdc_runner",
-        help="PostgreSQL role name for CREATE USER MAPPING (default: cdc_runner)",
+        dest="runner_roles",
+        action="append",
+        default=None,
+        help="PostgreSQL role name for CREATE USER MAPPING; repeat to include multiple (default: cdc_runner)",
     )
     parser.add_argument(
         "--fdw-server-prefix",
@@ -379,7 +381,7 @@ def _build_plan_from_args(args: argparse.Namespace) -> FdwBootstrapPlan:
             tables=tuple(args.tables or []),
             target_sink_env=args.target_sink_env,
             target_schema_name=args.target_schema,
-            runner_role=args.runner_role,
+            runner_roles=tuple(args.runner_roles or []),
             fdw_server_prefix=args.fdw_server_prefix,
             fdw_schema_prefix=args.fdw_schema_prefix,
             resolve_env_values=not args.keep_placeholders,
@@ -406,18 +408,28 @@ def _run_sql_subcommand(
     *,
     metadata_only: bool,
 ) -> int:
+    output_path = _write_fdw_sql_output(plan, metadata_only=metadata_only)
+    print_success(f"Wrote FDW bootstrap SQL to {output_path}")
+    return 0
+
+
+def _write_fdw_sql_output(
+    plan: FdwBootstrapPlan,
+    *,
+    metadata_only: bool,
+    output_path: Path | None = None,
+) -> Path:
+    resolved_output_path = output_path or _build_default_output_path(
+        plan,
+        metadata_only=metadata_only,
+    )
     sql_text = render_fdw_bootstrap_sql(
         plan,
         metadata_only=metadata_only,
     )
-    output_path = _build_default_output_path(
-        plan,
-        metadata_only=metadata_only,
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(sql_text, encoding="utf-8")
-    print_success(f"Wrote FDW bootstrap SQL to {output_path}")
-    return 0
+    resolved_output_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_output_path.write_text(sql_text, encoding="utf-8")
+    return resolved_output_path
 
 
 def _run_apply_subcommand(
@@ -441,7 +453,10 @@ def _run_apply_subcommand(
         print_error(str(exc))
         return 1
 
-    if not sql_path.exists():
+    sql_path_override = args.sql_path.strip() if isinstance(args.sql_path, str) else ""
+    if not sql_path_override:
+        sql_path = _write_fdw_sql_output(plan, metadata_only=False, output_path=sql_path)
+    elif not sql_path.exists():
         print_error(f"FDW SQL file not found: {sql_path}")
         print_info("Run 'cdc fdw sql ...' first or pass --sql-path to an existing SQL file")
         return 1
