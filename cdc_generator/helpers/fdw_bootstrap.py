@@ -121,11 +121,7 @@ def build_fdw_bootstrap_plan(
     _validate_source_group(source_group, server_group_name)
 
     normalized_service_name = str(service_config.get("service", service_name)).strip()
-    normalized_target_schema = (
-        effective_request.target_schema_name.strip()
-        if effective_request.target_schema_name
-        else normalized_service_name
-    )
+    normalized_target_schema = effective_request.target_schema_name.strip() if effective_request.target_schema_name else normalized_service_name
     env_lookup = _build_env_lookup(project_root)
 
     tracked_tables = _load_tracked_tables(service_config)
@@ -232,16 +228,20 @@ def render_fdw_bootstrap_sql(
     sections.append("")
 
     if not metadata_only:
-        sections.extend([
-            "CREATE EXTENSION IF NOT EXISTS tds_fdw;",
-            "CREATE SCHEMA IF NOT EXISTS \"cdc_management\";",
-            "",
-        ])
+        sections.extend(
+            [
+                "CREATE EXTENSION IF NOT EXISTS tds_fdw;",
+                'CREATE SCHEMA IF NOT EXISTS "cdc_management";',
+                "",
+            ]
+        )
     else:
-        sections.extend([
-            "CREATE SCHEMA IF NOT EXISTS \"cdc_management\";",
-            "",
-        ])
+        sections.extend(
+            [
+                'CREATE SCHEMA IF NOT EXISTS "cdc_management";',
+                "",
+            ]
+        )
 
     sections.append(_render_metadata_tables_sql())
     sections.append(_render_customer_registry_sql(plan))
@@ -294,13 +294,11 @@ def _validate_source_group(source_group: dict[str, Any], server_group_name: str)
 
     if pattern != "db-per-tenant":
         raise ValueError(
-            "fdw bootstrap currently supports only db-per-tenant services; "
-            + f"source group '{server_group_name}' uses '{pattern or 'unknown'}'"
+            "fdw bootstrap currently supports only db-per-tenant services; " + f"source group '{server_group_name}' uses '{pattern or 'unknown'}'"
         )
     if source_type != "mssql":
         raise ValueError(
-            "fdw bootstrap currently supports only MSSQL sources; "
-            + f"source group '{server_group_name}' uses '{source_type or 'unknown'}'"
+            "fdw bootstrap currently supports only MSSQL sources; " + f"source group '{server_group_name}' uses '{source_type or 'unknown'}'"
         )
 
 
@@ -507,11 +505,7 @@ def _normalize_name_list(values: object) -> set[str]:
     if not isinstance(values, list):
         return set()
 
-    return {
-        str(value).strip().casefold()
-        for value in cast(list[object], values)
-        if str(value).strip()
-    }
+    return {str(value).strip().casefold() for value in cast(list[object], values) if str(value).strip()}
 
 
 def _map_mssql_column_type(source_type: str, mapper: TypeMapper) -> str:
@@ -558,34 +552,26 @@ def _build_source_plans(
         source_entry = cast(dict[str, Any], source_entry_raw)
         env_cfg_raw = source_entry.get(source_env)
         if not isinstance(env_cfg_raw, dict):
-            warnings.append(
-                f"Skipping {source_name}: source env '{source_env}' is not configured"
-            )
+            warnings.append(f"Skipping {source_name}: source env '{source_env}' is not configured")
             continue
 
         env_cfg = cast(dict[str, Any], env_cfg_raw)
         customer_id = _resolve_customer_id(source_entry, env_cfg)
         if customer_id is None:
-            warnings.append(
-                f"Skipping {source_name}: customer_id is missing for env '{source_env}'"
-            )
+            warnings.append(f"Skipping {source_name}: customer_id is missing for env '{source_env}'")
             continue
 
         source_database_raw = env_cfg.get("database")
         source_database = str(source_database_raw).strip() if source_database_raw is not None else ""
         if not source_database:
-            warnings.append(
-                f"Skipping {source_name}: database is missing for env '{source_env}'"
-            )
+            warnings.append(f"Skipping {source_name}: database is missing for env '{source_env}'")
             continue
 
         server_name_raw = env_cfg.get("server", "default")
         server_name = str(server_name_raw).strip() if server_name_raw is not None else "default"
         server_cfg_raw = servers.get(server_name)
         if not isinstance(server_cfg_raw, dict):
-            warnings.append(
-                f"Skipping {source_name}: server '{server_name}' is not defined"
-            )
+            warnings.append(f"Skipping {source_name}: server '{server_name}' is not defined")
             continue
 
         server_cfg = cast(dict[str, Any], server_cfg_raw)
@@ -655,11 +641,7 @@ def _assign_environment_profile_names(source_plans: list[FdwSourcePlan]) -> None
 
     multiple_profiles = len(profile_groups) > 1
     for (source_env, server_name, _host, _port, _username, _password), grouped_plans in profile_groups.items():
-        profile_name = (
-            f"{_sanitize_object_name(source_env)}_{_sanitize_object_name(server_name)}"
-            if multiple_profiles
-            else source_env
-        )
+        profile_name = f"{_sanitize_object_name(source_env)}_{_sanitize_object_name(server_name)}" if multiple_profiles else source_env
         for source_plan in grouped_plans:
             source_plan.environment_profile_name = profile_name
 
@@ -681,11 +663,7 @@ def _build_env_lookup(project_root: Path) -> dict[str, str]:
 
 
 def _strip_env_value(value: str) -> str:
-    if (
-        len(value) >= _MIN_QUOTED_VALUE_LENGTH
-        and value[0] == value[-1]
-        and value[0] in {'"', "'"}
-    ):
+    if len(value) >= _MIN_QUOTED_VALUE_LENGTH and value[0] == value[-1] and value[0] in {'"', "'"}:
         return value[1:-1]
     return value
 
@@ -705,16 +683,10 @@ def _resolve_config_value(
     if not resolve_env_values:
         return value
 
-    missing_vars = [
-        match.group(1)
-        for match in _ENV_VAR_PATTERN.finditer(value)
-        if not env_lookup.get(match.group(1), "").strip()
-    ]
+    missing_vars = [match.group(1) for match in _ENV_VAR_PATTERN.finditer(value) if not env_lookup.get(match.group(1), "").strip()]
     if missing_vars:
         missing_list = ", ".join(sorted(set(missing_vars)))
-        raise ValueError(
-            f"{field_name} uses missing environment variable(s): {missing_list}"
-        )
+        raise ValueError(f"{field_name} uses missing environment variable(s): {missing_list}")
 
     resolved_value = _ENV_VAR_PATTERN.sub(
         lambda match: env_lookup.get(match.group(1), ""),
@@ -726,73 +698,77 @@ def _resolve_config_value(
 
 
 def _render_metadata_tables_sql() -> str:
-    return "\n".join([
-        "CREATE TABLE IF NOT EXISTS \"cdc_management\".\"customer_registry\" (",
-        "    \"customer_key\" text PRIMARY KEY,",
-        "    \"customer_id\" uuid NOT NULL UNIQUE,",
-        "    \"customer_name\" text NOT NULL",
-        ");",
-        "",
-        "CREATE TABLE IF NOT EXISTS \"cdc_management\".\"environment_profile\" (",
-        "    \"environment_name\" text PRIMARY KEY,",
-        "    \"mssql_host\" text NOT NULL,",
-        "    \"mssql_port\" integer NOT NULL,",
-        "    \"mssql_username\" text NOT NULL,",
-        "    \"mssql_password\" text NOT NULL,",
-        "    \"tds_version\" text NOT NULL DEFAULT '7.4',",
-        "    \"enabled\" boolean NOT NULL DEFAULT true",
-        ");",
-        "",
-        "CREATE TABLE IF NOT EXISTS \"cdc_management\".\"source_instance\" (",
-        "    \"source_instance_key\" text PRIMARY KEY,",
-        "    \"environment_name\" text NOT NULL REFERENCES \"cdc_management\".\"environment_profile\"(\"environment_name\"),",
-        "    \"customer_key\" text NOT NULL REFERENCES \"cdc_management\".\"customer_registry\"(\"customer_key\"),",
-        "    \"source_database\" text NOT NULL,",
-        "    \"fdw_server_name\" text NOT NULL UNIQUE,",
-        "    \"fdw_schema_name\" text NOT NULL UNIQUE,",
-        "    \"enabled\" boolean NOT NULL DEFAULT true",
-        ");",
-        "",
-        "CREATE TABLE IF NOT EXISTS \"cdc_management\".\"source_table_registration\" (",
-        "    \"source_instance_key\" text NOT NULL REFERENCES \"cdc_management\".\"source_instance\"(\"source_instance_key\"),",
-        "    \"logical_table_name\" text NOT NULL,",
-        "    \"remote_schema_name\" text NOT NULL,",
-        "    \"remote_table_name\" text NOT NULL,",
-        "    \"target_schema_name\" text NOT NULL,",
-        "    \"target_table_name\" text NOT NULL,",
-        "    \"enabled\" boolean NOT NULL DEFAULT true,",
-        "    PRIMARY KEY (\"source_instance_key\", \"logical_table_name\")",
-        ");",
-        "",
-    ])
+    return "\n".join(
+        [
+            'CREATE TABLE IF NOT EXISTS "cdc_management"."customer_registry" (',
+            '    "customer_key" text PRIMARY KEY,',
+            '    "customer_id" uuid NOT NULL UNIQUE,',
+            '    "customer_name" text NOT NULL',
+            ");",
+            "",
+            'CREATE TABLE IF NOT EXISTS "cdc_management"."environment_profile" (',
+            '    "environment_name" text PRIMARY KEY,',
+            '    "mssql_host" text NOT NULL,',
+            '    "mssql_port" integer NOT NULL,',
+            "    \"tds_version\" text NOT NULL DEFAULT '7.4',",
+            '    "enabled" boolean NOT NULL DEFAULT true',
+            ");",
+            "",
+            'CREATE TABLE IF NOT EXISTS "cdc_management"."source_instance" (',
+            '    "source_instance_key" text PRIMARY KEY,',
+            '    "environment_name" text NOT NULL REFERENCES "cdc_management"."environment_profile"("environment_name"),',
+            '    "customer_key" text NOT NULL REFERENCES "cdc_management"."customer_registry"("customer_key"),',
+            '    "source_database" text NOT NULL,',
+            '    "fdw_server_name" text NOT NULL UNIQUE,',
+            '    "fdw_schema_name" text NOT NULL UNIQUE,',
+            '    "enabled" boolean NOT NULL DEFAULT true',
+            ");",
+            "",
+            'CREATE TABLE IF NOT EXISTS "cdc_management"."source_table_registration" (',
+            '    "source_instance_key" text NOT NULL REFERENCES "cdc_management"."source_instance"("source_instance_key"),',
+            '    "logical_table_name" text NOT NULL,',
+            '    "remote_schema_name" text NOT NULL,',
+            '    "remote_table_name" text NOT NULL,',
+            '    "target_schema_name" text NOT NULL,',
+            '    "target_table_name" text NOT NULL,',
+            '    "enabled" boolean NOT NULL DEFAULT true,',
+            '    PRIMARY KEY ("source_instance_key", "logical_table_name")',
+            ");",
+            "",
+        ]
+    )
 
 
 def _render_customer_registry_sql(plan: FdwBootstrapPlan) -> str:
     value_rows = [
         "    ("
-        + ", ".join([
-            _quote_literal(source_plan.customer_key),
-            _quote_literal(source_plan.customer_id),
-            _quote_literal(source_plan.customer_name),
-        ])
+        + ", ".join(
+            [
+                _quote_literal(source_plan.customer_key),
+                _quote_literal(source_plan.customer_id),
+                _quote_literal(source_plan.customer_name),
+            ]
+        )
         + ")"
         for source_plan in plan.source_plans
     ]
 
-    return "\n".join([
-        "INSERT INTO \"cdc_management\".\"customer_registry\" (",
-        "    \"customer_key\",",
-        "    \"customer_id\",",
-        "    \"customer_name\"",
-        ")",
-        "VALUES",
-        ",\n".join(value_rows),
-        "ON CONFLICT (\"customer_key\") DO UPDATE",
-        "SET",
-        "    \"customer_id\" = EXCLUDED.\"customer_id\",",
-        "    \"customer_name\" = EXCLUDED.\"customer_name\";",
-        "",
-    ])
+    return "\n".join(
+        [
+            'INSERT INTO "cdc_management"."customer_registry" (',
+            '    "customer_key",',
+            '    "customer_id",',
+            '    "customer_name"',
+            ")",
+            "VALUES",
+            ",\n".join(value_rows),
+            'ON CONFLICT ("customer_key") DO UPDATE',
+            "SET",
+            '    "customer_id" = EXCLUDED."customer_id",',
+            '    "customer_name" = EXCLUDED."customer_name";',
+            "",
+        ]
+    )
 
 
 def _render_environment_profiles_sql(plan: FdwBootstrapPlan) -> str:
@@ -802,81 +778,83 @@ def _render_environment_profiles_sql(plan: FdwBootstrapPlan) -> str:
 
     value_rows = [
         "    ("
-        + ", ".join([
-            _quote_literal(profile_name),
-            _quote_literal(source_plan.host),
-            _quote_literal(source_plan.port),
-            _quote_literal(source_plan.username),
-            _quote_literal(source_plan.password),
-            _quote_literal(_DEFAULT_TDS_VERSION),
-            "true",
-        ])
+        + ", ".join(
+            [
+                _quote_literal(profile_name),
+                _quote_literal(source_plan.host),
+                _quote_literal(source_plan.port),
+                _quote_literal(_DEFAULT_TDS_VERSION),
+                "true",
+            ]
+        )
         + ")"
         for profile_name, source_plan in sorted(rendered_profiles.items())
     ]
 
-    return "\n".join([
-        "INSERT INTO \"cdc_management\".\"environment_profile\" (",
-        "    \"environment_name\",",
-        "    \"mssql_host\",",
-        "    \"mssql_port\",",
-        "    \"mssql_username\",",
-        "    \"mssql_password\",",
-        "    \"tds_version\",",
-        "    \"enabled\"",
-        ")",
-        "VALUES",
-        ",\n".join(value_rows),
-        "ON CONFLICT (\"environment_name\") DO UPDATE",
-        "SET",
-        "    \"mssql_host\" = EXCLUDED.\"mssql_host\",",
-        "    \"mssql_port\" = EXCLUDED.\"mssql_port\",",
-        "    \"mssql_username\" = EXCLUDED.\"mssql_username\",",
-        "    \"mssql_password\" = EXCLUDED.\"mssql_password\",",
-        "    \"tds_version\" = EXCLUDED.\"tds_version\",",
-        "    \"enabled\" = EXCLUDED.\"enabled\";",
-        "",
-    ])
+    return "\n".join(
+        [
+            'INSERT INTO "cdc_management"."environment_profile" (',
+            '    "environment_name",',
+            '    "mssql_host",',
+            '    "mssql_port",',
+            '    "tds_version",',
+            '    "enabled"',
+            ")",
+            "VALUES",
+            ",\n".join(value_rows),
+            'ON CONFLICT ("environment_name") DO UPDATE',
+            "SET",
+            '    "mssql_host" = EXCLUDED."mssql_host",',
+            '    "mssql_port" = EXCLUDED."mssql_port",',
+            '    "tds_version" = EXCLUDED."tds_version",',
+            '    "enabled" = EXCLUDED."enabled";',
+            "",
+        ]
+    )
 
 
 def _render_source_instances_sql(plan: FdwBootstrapPlan) -> str:
     value_rows = [
         "    ("
-        + ", ".join([
-            _quote_literal(f"{source_plan.source_env}_{source_plan.customer_key}"),
-            _quote_literal(source_plan.environment_profile_name),
-            _quote_literal(source_plan.customer_key),
-            _quote_literal(source_plan.source_database),
-            _quote_literal(source_plan.fdw_server_name),
-            _quote_literal(source_plan.fdw_schema_name),
-            "true",
-        ])
+        + ", ".join(
+            [
+                _quote_literal(f"{source_plan.source_env}_{source_plan.customer_key}"),
+                _quote_literal(source_plan.environment_profile_name),
+                _quote_literal(source_plan.customer_key),
+                _quote_literal(source_plan.source_database),
+                _quote_literal(source_plan.fdw_server_name),
+                _quote_literal(source_plan.fdw_schema_name),
+                "true",
+            ]
+        )
         + ")"
         for source_plan in plan.source_plans
     ]
 
-    return "\n".join([
-        "INSERT INTO \"cdc_management\".\"source_instance\" (",
-        "    \"source_instance_key\",",
-        "    \"environment_name\",",
-        "    \"customer_key\",",
-        "    \"source_database\",",
-        "    \"fdw_server_name\",",
-        "    \"fdw_schema_name\",",
-        "    \"enabled\"",
-        ")",
-        "VALUES",
-        ",\n".join(value_rows),
-        "ON CONFLICT (\"source_instance_key\") DO UPDATE",
-        "SET",
-        "    \"environment_name\" = EXCLUDED.\"environment_name\",",
-        "    \"customer_key\" = EXCLUDED.\"customer_key\",",
-        "    \"source_database\" = EXCLUDED.\"source_database\",",
-        "    \"fdw_server_name\" = EXCLUDED.\"fdw_server_name\",",
-        "    \"fdw_schema_name\" = EXCLUDED.\"fdw_schema_name\",",
-        "    \"enabled\" = EXCLUDED.\"enabled\";",
-        "",
-    ])
+    return "\n".join(
+        [
+            'INSERT INTO "cdc_management"."source_instance" (',
+            '    "source_instance_key",',
+            '    "environment_name",',
+            '    "customer_key",',
+            '    "source_database",',
+            '    "fdw_server_name",',
+            '    "fdw_schema_name",',
+            '    "enabled"',
+            ")",
+            "VALUES",
+            ",\n".join(value_rows),
+            'ON CONFLICT ("source_instance_key") DO UPDATE',
+            "SET",
+            '    "environment_name" = EXCLUDED."environment_name",',
+            '    "customer_key" = EXCLUDED."customer_key",',
+            '    "source_database" = EXCLUDED."source_database",',
+            '    "fdw_server_name" = EXCLUDED."fdw_server_name",',
+            '    "fdw_schema_name" = EXCLUDED."fdw_schema_name",',
+            '    "enabled" = EXCLUDED."enabled";',
+            "",
+        ]
+    )
 
 
 def _render_source_table_registrations_sql(plan: FdwBootstrapPlan) -> str:
@@ -886,203 +864,209 @@ def _render_source_table_registrations_sql(plan: FdwBootstrapPlan) -> str:
         for table_plan in plan.table_plans:
             value_rows.append(
                 "    ("
-                + ", ".join([
-                    _quote_literal(source_instance_key),
-                    _quote_literal(table_plan.logical_table_name),
-                    _quote_literal(_CDC_SCHEMA_NAME),
-                    _quote_literal(table_plan.remote_table_name),
-                    _quote_literal(table_plan.target_schema_name),
-                    _quote_literal(table_plan.target_table_name),
-                    "true",
-                ])
+                + ", ".join(
+                    [
+                        _quote_literal(source_instance_key),
+                        _quote_literal(table_plan.logical_table_name),
+                        _quote_literal(_CDC_SCHEMA_NAME),
+                        _quote_literal(table_plan.remote_table_name),
+                        _quote_literal(table_plan.target_schema_name),
+                        _quote_literal(table_plan.target_table_name),
+                        "true",
+                    ]
+                )
                 + ")"
             )
 
-    return "\n".join([
-        "INSERT INTO \"cdc_management\".\"source_table_registration\" (",
-        "    \"source_instance_key\",",
-        "    \"logical_table_name\",",
-        "    \"remote_schema_name\",",
-        "    \"remote_table_name\",",
-        "    \"target_schema_name\",",
-        "    \"target_table_name\",",
-        "    \"enabled\"",
-        ")",
-        "VALUES",
-        ",\n".join(value_rows),
-        "ON CONFLICT (\"source_instance_key\", \"logical_table_name\") DO UPDATE",
-        "SET",
-        "    \"remote_schema_name\" = EXCLUDED.\"remote_schema_name\",",
-        "    \"remote_table_name\" = EXCLUDED.\"remote_table_name\",",
-        "    \"target_schema_name\" = EXCLUDED.\"target_schema_name\",",
-        "    \"target_table_name\" = EXCLUDED.\"target_table_name\",",
-        "    \"enabled\" = EXCLUDED.\"enabled\";",
-        "",
-    ])
+    return "\n".join(
+        [
+            'INSERT INTO "cdc_management"."source_table_registration" (',
+            '    "source_instance_key",',
+            '    "logical_table_name",',
+            '    "remote_schema_name",',
+            '    "remote_table_name",',
+            '    "target_schema_name",',
+            '    "target_table_name",',
+            '    "enabled"',
+            ")",
+            "VALUES",
+            ",\n".join(value_rows),
+            'ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE',
+            "SET",
+            '    "remote_schema_name" = EXCLUDED."remote_schema_name",',
+            '    "remote_table_name" = EXCLUDED."remote_table_name",',
+            '    "target_schema_name" = EXCLUDED."target_schema_name",',
+            '    "target_table_name" = EXCLUDED."target_table_name",',
+            '    "enabled" = EXCLUDED."enabled";',
+            "",
+        ]
+    )
 
 
 def _render_schema_sql(source_plan: FdwSourcePlan) -> str:
-    return f'CREATE SCHEMA IF NOT EXISTS {_quote_ident(source_plan.fdw_schema_name)};\n'
+    return f"CREATE SCHEMA IF NOT EXISTS {_quote_ident(source_plan.fdw_schema_name)};\n"
 
 
 def _render_server_sql(source_plan: FdwSourcePlan) -> str:
     server_sql = (
-        f'CREATE SERVER {_quote_ident(source_plan.fdw_server_name)}\n'
-        + 'FOREIGN DATA WRAPPER tds_fdw\n'
-        + 'OPTIONS (\n'
+        f"CREATE SERVER {_quote_ident(source_plan.fdw_server_name)}\n"
+        + "FOREIGN DATA WRAPPER tds_fdw\n"
+        + "OPTIONS (\n"
         + f"    servername {_quote_literal(source_plan.host)},\n"
         + f"    port {_quote_literal(source_plan.port)},\n"
         + f"    database {_quote_literal(source_plan.source_database)},\n"
         + f"    tds_version {_quote_literal(_DEFAULT_TDS_VERSION)},\n"
         + "    dbuse '0',\n"
         + "    msg_handler 'notice'\n"
-        + ');'
+        + ");"
     )
     alter_sql = (
-        f'ALTER SERVER {_quote_ident(source_plan.fdw_server_name)}\n'
-        + 'OPTIONS (\n'
+        f"ALTER SERVER {_quote_ident(source_plan.fdw_server_name)}\n"
+        + "OPTIONS (\n"
         + f"    SET servername {_quote_literal(source_plan.host)},\n"
         + f"    SET port {_quote_literal(source_plan.port)},\n"
         + f"    SET database {_quote_literal(source_plan.source_database)},\n"
         + f"    SET tds_version {_quote_literal(_DEFAULT_TDS_VERSION)},\n"
         + "    SET dbuse '0',\n"
         + "    SET msg_handler 'notice'\n"
-        + ');'
+        + ");"
     )
 
-    return "\n".join([
-        'DO $fdw$',
-        'BEGIN',
-        '    IF NOT EXISTS (',
-        '        SELECT 1',
-        '        FROM pg_foreign_server',
-        f"        WHERE srvname = {_quote_literal(source_plan.fdw_server_name)}",
-        '    ) THEN',
-        f"        EXECUTE {_quote_literal(server_sql)};",
-        '    ELSE',
-        f"        EXECUTE {_quote_literal(alter_sql)};",
-        '    END IF;',
-        'END',
-        '$fdw$;',
-        '',
-    ])
+    return "\n".join(
+        [
+            "DO $fdw$",
+            "BEGIN",
+            "    IF NOT EXISTS (",
+            "        SELECT 1",
+            "        FROM pg_foreign_server",
+            f"        WHERE srvname = {_quote_literal(source_plan.fdw_server_name)}",
+            "    ) THEN",
+            f"        EXECUTE {_quote_literal(server_sql)};",
+            "    ELSE",
+            f"        EXECUTE {_quote_literal(alter_sql)};",
+            "    END IF;",
+            "END",
+            "$fdw$;",
+            "",
+        ]
+    )
 
 
 def _render_user_mapping_sql(runner_role: str, source_plan: FdwSourcePlan) -> str:
     create_sql = (
-        f'CREATE USER MAPPING FOR {_quote_ident(runner_role)}\n'
-        + f'SERVER {_quote_ident(source_plan.fdw_server_name)}\n'
-        + 'OPTIONS (\n'
+        f"CREATE USER MAPPING FOR {_quote_ident(runner_role)}\n"
+        + f"SERVER {_quote_ident(source_plan.fdw_server_name)}\n"
+        + "OPTIONS (\n"
         + f"    username {_quote_literal(source_plan.username)},\n"
         + f"    password {_quote_literal(source_plan.password)}\n"
-        + ');'
+        + ");"
     )
     alter_sql = (
-        f'ALTER USER MAPPING FOR {_quote_ident(runner_role)}\n'
-        + f'SERVER {_quote_ident(source_plan.fdw_server_name)}\n'
-        + 'OPTIONS (\n'
+        f"ALTER USER MAPPING FOR {_quote_ident(runner_role)}\n"
+        + f"SERVER {_quote_ident(source_plan.fdw_server_name)}\n"
+        + "OPTIONS (\n"
         + f"    SET username {_quote_literal(source_plan.username)},\n"
         + f"    SET password {_quote_literal(source_plan.password)}\n"
-        + ');'
+        + ");"
     )
 
-    return "\n".join([
-        'DO $fdw$',
-        'BEGIN',
-        '    IF NOT EXISTS (',
-        '        SELECT 1',
-        '        FROM pg_user_mappings um',
-        '        JOIN pg_foreign_server s ON s.oid = um.srvid',
-        '        JOIN pg_roles r ON r.oid = um.umuser',
-        f"        WHERE s.srvname = {_quote_literal(source_plan.fdw_server_name)}",
-        f"          AND r.rolname = {_quote_literal(runner_role)}",
-        '    ) THEN',
-        f"        EXECUTE {_quote_literal(create_sql)};",
-        '    ELSE',
-        f"        EXECUTE {_quote_literal(alter_sql)};",
-        '    END IF;',
-        'END',
-        '$fdw$;',
-        '',
-    ])
+    return "\n".join(
+        [
+            "DO $fdw$",
+            "BEGIN",
+            "    IF NOT EXISTS (",
+            "        SELECT 1",
+            "        FROM pg_user_mappings um",
+            "        JOIN pg_foreign_server s ON s.oid = um.srvid",
+            "        JOIN pg_roles r ON r.oid = um.umuser",
+            f"        WHERE s.srvname = {_quote_literal(source_plan.fdw_server_name)}",
+            f"          AND r.rolname = {_quote_literal(runner_role)}",
+            "    ) THEN",
+            f"        EXECUTE {_quote_literal(create_sql)};",
+            "    ELSE",
+            f"        EXECUTE {_quote_literal(alter_sql)};",
+            "    END IF;",
+            "END",
+            "$fdw$;",
+            "",
+        ]
+    )
 
 
 def _render_foreign_table_sql(source_plan: FdwSourcePlan, table_plan: FdwTablePlan) -> str:
-    column_lines = [
-        f"    {_quote_ident(column_name)} {column_type}"
-        for column_name, column_type in table_plan.columns
-    ]
-    return "\n".join([
-        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.foreign_table_name)};',
-        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.foreign_table_name)} (',
-        ",\n".join(column_lines),
-        ')',
-        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
-        'OPTIONS (',
-        f"    schema_name {_quote_literal(_CDC_SCHEMA_NAME)},",
-        f"    table_name {_quote_literal(table_plan.remote_table_name)},",
-        "    match_column_names 'true',",
-        "    row_estimate_method 'showplan_all'",
-        ');',
-        '',
-    ])
+    column_lines = [f"    {_quote_ident(column_name)} {column_type}" for column_name, column_type in table_plan.columns]
+    return "\n".join(
+        [
+            f"DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.foreign_table_name)};",
+            f"CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.foreign_table_name)} (",
+            ",\n".join(column_lines),
+            ")",
+            f"SERVER {_quote_ident(source_plan.fdw_server_name)}",
+            "OPTIONS (",
+            f"    schema_name {_quote_literal(_CDC_SCHEMA_NAME)},",
+            f"    table_name {_quote_literal(table_plan.remote_table_name)},",
+            "    match_column_names 'true',",
+            "    row_estimate_method 'showplan_all'",
+            ");",
+            "",
+        ]
+    )
 
 
 def _render_base_foreign_table_sql(source_plan: FdwSourcePlan, table_plan: FdwTablePlan) -> str:
-    column_lines = [
-        f"    {_quote_ident(column_name)} {column_type}"
-        for column_name, column_type in table_plan.base_columns
-    ]
-    return "\n".join([
-        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)};',
-        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)} (',
-        ",\n".join(column_lines),
-        ')',
-        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
-        'OPTIONS (',
-        f"    schema_name {_quote_literal(table_plan.source_schema_name)},",
-        f"    table_name {_quote_literal(table_plan.source_table_name)},",
-        "    match_column_names 'true',",
-        "    row_estimate_method 'showplan_all'",
-        ');',
-        '',
-    ])
+    column_lines = [f"    {_quote_ident(column_name)} {column_type}" for column_name, column_type in table_plan.base_columns]
+    return "\n".join(
+        [
+            f"DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)};",
+            f"CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.base_foreign_table_name)} (",
+            ",\n".join(column_lines),
+            ")",
+            f"SERVER {_quote_ident(source_plan.fdw_server_name)}",
+            "OPTIONS (",
+            f"    schema_name {_quote_literal(table_plan.source_schema_name)},",
+            f"    table_name {_quote_literal(table_plan.source_table_name)},",
+            "    match_column_names 'true',",
+            "    row_estimate_method 'showplan_all'",
+            ");",
+            "",
+        ]
+    )
 
 
 def _render_max_lsn_table_sql(source_plan: FdwSourcePlan) -> str:
-    query = 'SELECT sys.fn_cdc_get_max_lsn() AS max_lsn'
-    return "\n".join([
-        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)};',
-        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)} (',
-        '    "max_lsn" bytea',
-        ')',
-        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
-        'OPTIONS (',
-        f"    query {_quote_literal(query)},",
-        "    row_estimate_method 'execute'",
-        ');',
-        '',
-    ])
+    query = "SELECT sys.fn_cdc_get_max_lsn() AS max_lsn"
+    return "\n".join(
+        [
+            f"DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)};",
+            f"CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(_MAX_LSN_TABLE_NAME)} (",
+            '    "max_lsn" bytea',
+            ")",
+            f"SERVER {_quote_ident(source_plan.fdw_server_name)}",
+            "OPTIONS (",
+            f"    query {_quote_literal(query)},",
+            "    row_estimate_method 'execute'",
+            ");",
+            "",
+        ]
+    )
 
 
 def _render_gap_table_sql(source_plan: FdwSourcePlan, table_plan: FdwTablePlan) -> str:
-    query = (
-        "SELECT sys.fn_cdc_get_min_lsn("
-        + _quote_literal(table_plan.capture_instance_name)
-        + ") AS min_lsn"
+    query = "SELECT sys.fn_cdc_get_min_lsn(" + _quote_literal(table_plan.capture_instance_name) + ") AS min_lsn"
+    return "\n".join(
+        [
+            f"DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.min_lsn_table_name)};",
+            f"CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.min_lsn_table_name)} (",
+            '    "min_lsn" bytea',
+            ")",
+            f"SERVER {_quote_ident(source_plan.fdw_server_name)}",
+            "OPTIONS (",
+            f"    query {_quote_literal(query)},",
+            "    row_estimate_method 'execute'",
+            ");",
+            "",
+        ]
     )
-    return "\n".join([
-        f'DROP FOREIGN TABLE IF EXISTS {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.min_lsn_table_name)};',
-        f'CREATE FOREIGN TABLE {_quote_ident(source_plan.fdw_schema_name)}.{_quote_ident(table_plan.min_lsn_table_name)} (',
-        '    "min_lsn" bytea',
-        ')',
-        f'SERVER {_quote_ident(source_plan.fdw_server_name)}',
-        'OPTIONS (',
-        f"    query {_quote_literal(query)},",
-        "    row_estimate_method 'execute'",
-        ');',
-        '',
-    ])
 
 
 def _sanitize_object_name(value: str) -> str:

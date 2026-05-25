@@ -281,10 +281,15 @@ def _compact_similar_mapping_block(
     for key, value in container.items():
         if not isinstance(value, dict):
             continue
-        if "<<" in value:
+        # Detect existing merge entries via ruamel.yaml's merge attribute
+        # (<< is stored in .merge, not as a regular dict key).
+        if hasattr(value, "merge") and value.merge:  # type: ignore[union-attr]
             continue
         typed_value = cast(dict[str, object], value)
-        key_signature = tuple(typed_value.keys())
+        # Sort keys so merge entries (which iterate merge keys last) and
+        # plain entries (which iterate in insertion order) produce the same
+        # signature when they have the same effective key set.
+        key_signature = tuple(sorted(typed_value.keys()))
         grouped_keys.setdefault(key_signature, []).append(key)
 
     for key_signature, sibling_keys in grouped_keys.items():
@@ -336,6 +341,77 @@ def _compact_similar_mapping_block(
                 merged[field_key] = sibling.get(field_key)
 
             container[sibling_key] = merged
+
+    # Second pass: match remaining plain entries to existing anchors.
+    # When a new plain entry has the same shared key-value pairs as an
+    # existing anchored merge entry, reuse that anchor instead of
+    # leaving the fields duplicated inline.
+    _reuse_existing_anchors(container)
+
+
+def _reuse_existing_anchors(container: dict[str, object]) -> None:
+    """Convert plain entries that match existing anchors to merge form.
+
+    When a non-merge entry contains all the same key-value pairs found
+    in an existing ``<<: *anchor`` entry's shared defaults, the entry
+    is rewritten to use the same ``<<: *anchor`` merge key.
+    """
+    try:
+        from ruamel.yaml.comments import CommentedMap
+        from ruamel.yaml.mergevalue import MergeValue
+    except Exception:
+        return
+
+    # Collect existing anchors with their shared defaults.
+    anchored_defaults: dict[str, tuple[CommentedMap, dict[str, object]]] = {}
+    for _key, value in container.items():
+        if not isinstance(value, dict):
+            continue
+        if not hasattr(value, "merge") or not value.merge:  # type: ignore[union-attr]
+            continue
+        merge_attrib: Any = value.merge  # type: ignore[union-attr]
+        if not merge_attrib:
+            continue
+        shared = cast(CommentedMap, merge_attrib[0])
+        shared_any = cast(Any, shared)
+        if shared_any.yaml_anchor() is None:
+            continue
+        anchor_name = str(shared_any.yaml_anchor())
+        shared_dict: dict[str, object] = {str(k): v for k, v in cast(dict[str, object], shared_any).items()}
+        anchored_defaults[anchor_name] = (shared, shared_dict)
+
+    if not anchored_defaults:
+        return
+
+    # For each plain entry, try to match an existing anchor.
+    for key, value in list(container.items()):
+        if not isinstance(value, dict):
+            continue
+        if hasattr(value, "merge") and value.merge:  # type: ignore[union-attr]
+            continue
+        typed_value = cast(dict[str, object], value)
+
+        for _anchor_name, (anchor_obj, shared_dict) in anchored_defaults.items():
+            # Check this entry contains all shared defaults with same values.
+            matches = all(typed_value.get(sk) == sv for sk, sv in shared_dict.items())
+            if not matches:
+                continue
+
+            # Build differing fields (those not in the shared defaults).
+            differing: dict[str, object] = {str(fk): fv for fk, fv in typed_value.items() if fk not in shared_dict}
+
+            # Reuse the existing anchor.
+            merged = CommentedMap()
+            merge_value = MergeValue()
+            cast(Any, merge_value).append(anchor_obj)
+            merge_value.merge_pos = 0
+            cast(Any, merged).add_yaml_merge(merge_value)
+
+            for fk, fv in differing.items():
+                merged[fk] = fv
+
+            container[key] = merged
+            break
 
 
 def _compact_repetitive_yaml_blocks(

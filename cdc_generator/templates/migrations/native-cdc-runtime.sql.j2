@@ -18,8 +18,6 @@ CREATE TABLE IF NOT EXISTS "cdc_management"."environment_profile" (
     "environment_name" text PRIMARY KEY,
     "mssql_host" text NOT NULL,
     "mssql_port" integer NOT NULL,
-    "mssql_username" text NOT NULL,
-    "mssql_password" text NOT NULL,
     "tds_version" text NOT NULL DEFAULT '7.4',
     "enabled" boolean NOT NULL DEFAULT true
 );
