@@ -46,6 +46,7 @@
 | [Bento Migration Plan](_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md) | Runtime switch planning (legacy runtime → Bento), decision gates, phased rollout |
 | [Bloblang Runtime Docs](_docs/bento-bloblang/README.md) | Pipeline templates, Bloblang syntax |
 | [Decision Navigation (ADR)](.github/decisions/README.md) | Entry point for past architectural decisions; load targeted ADRs only |
+| [Document Organization](.github/skills/document-organization/SKILL.md) | Document naming conventions, folder structure, metadata standards |
 
 ---
 
@@ -93,6 +94,7 @@ When any ADR becomes obsolete, keep only a minimal tombstone entry (status + sup
 | Bloblang/templates | `pipelines/templates/*.yaml` + [Bloblang docs](_docs/bento-bloblang/README.md) |
 | Bento migration / runtime switch | `_docs/architecture/BENTO_MIGRATION_DECISION_PLAN.md` + `cdc_generator/core/pipeline_generator.py` + `pipelines/templates/*.yaml` |
 | Architecture decisions / ADR rationale | `.github/decisions/README.md` + relevant `000X-*.md` + [architecture](.github/copilot-instructions-architecture.md) |
+| Document creation / review / reorganization | [Document Organization](.github/skills/document-organization/SKILL.md) |
 
 ---
 
