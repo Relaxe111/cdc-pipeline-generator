@@ -435,7 +435,7 @@ def test_fdw_cli_apply_uses_resolved_sink_target_and_default_sql_path(
     assert output_path.exists()
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr("cdc_generator.cli.fdw.shutil.which", lambda _value: "/usr/bin/psql")
+    monkeypatch.setattr("cdc_generator.helpers.fdw_sink_target.shutil.which", lambda _value: "/usr/bin/psql")
 
     def fake_run(
         command: list[str],
@@ -490,7 +490,7 @@ def test_fdw_cli_apply_refreshes_default_sql_for_current_runner_roles(
     captured: dict[str, object] = {}
     output_path = Path("generated/fdw/adopus-default-dev-fdw.sql")
 
-    monkeypatch.setattr("cdc_generator.cli.fdw.shutil.which", lambda _value: "/usr/bin/psql")
+    monkeypatch.setattr("cdc_generator.helpers.fdw_sink_target.shutil.which", lambda _value: "/usr/bin/psql")
 
     def fake_run(
         command: list[str],

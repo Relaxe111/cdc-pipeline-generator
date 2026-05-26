@@ -187,3 +187,11 @@ def fdw_sql_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 def fdw_apply_cmd(_ctx: click.Context, **_kwargs: object) -> int:
     """fdw apply passthrough."""
     return _dispatch_command_passthrough("fdw")
+
+
+# Register bootstrap as a subcommand of fdw
+from cdc_generator.cli.click_commands_fdw_bootstrap import (  # noqa: E402
+    fdw_bootstrap_cmd,
+)
+
+fdw_cmd.add_command(fdw_bootstrap_cmd)

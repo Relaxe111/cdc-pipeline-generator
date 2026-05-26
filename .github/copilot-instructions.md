@@ -88,6 +88,7 @@ When any ADR becomes obsolete, keep only a minimal tombstone entry (status + sup
 | Pipeline generation                         | `pipelines/templates/*.yaml` + `cdc_generator/core/pipeline_generator.py`                                                         |
 | Server group changes                        | `source-groups.yaml` + `validators/manage_server_group/`                                                                          |
 | CLI command work                            | `cdc_generator/cli/commands.py` + `cdc_generator/cli/*.py`                                                                        |
+| FDW bootstrap command work                  | `cdc_generator/cli/fdw_bootstrap.py` + `cdc_generator/cli/click_commands_fdw_bootstrap.py` + `cdc_generator/cli/completions_bootstrap.py` + `cdc_generator/helpers/fdw_sink_target.py` |
 | Type/lint fixes                             | `pyrightconfig.json` + `pyproject.toml` + [type-safety](.github/copilot-instructions-type-safety.md)                              |
 | Adding helpers                              | `cdc_generator/helpers/*.py` (check existing before creating new)                                                                 |
 | Schema validation                           | `cdc_generator/validators/manage_service/schema_generator/`                                                                       |

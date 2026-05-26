@@ -1,5 +1,5 @@
-cdc manage-services config directory	80
-cdc manage-services config directory | flags: --al	80
+cdc manage-services config directory	82
+cdc manage-services config directory | flags: --al	82
 cdc test | flags: --all, --cli	33
 cdc test-coverage	6
 cdc manage-source-groups | flags: --help	4
@@ -9,6 +9,7 @@ cdc fdw | flags: --help	1
 cdc manage-services config | flags: --help	1
 cdc manage-sink-groups | flags: --help	1
 cdc msc | flags: --add-sink-table, --from, --map-column	1
+cdc reload-cdc-autocompletions	1
 cdc scaffold debugproj | flags: --extraction-pattern, --pattern, --source-type	1
 cdc scaffold debugproj2 | flags: --extraction-pattern, --pattern, --source-type	1
 cdc scaffold | flags: --help	1

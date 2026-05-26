@@ -793,6 +793,24 @@ class TestShellCompleteCallbacksWired:
             cmd = group.commands[subcommand]
             assert self._has_shell_complete(cmd, "--target-sink-env"), f"fdw {subcommand} --target-sink-env missing shell_complete callback"
 
+    def test_fdw_bootstrap_dynamic_options_have_shell_complete(self) -> None:
+        """fdw bootstrap typed subcommands must expose completion callbacks."""
+        group = _get_fdw_group()
+        bootstrap_group = group.commands["bootstrap"]
+        assert isinstance(bootstrap_group, click.Group)
+
+        status_cmd = bootstrap_group.commands["status"]
+        run_cmd = bootstrap_group.commands["run"]
+        retry_cmd = bootstrap_group.commands["retry"]
+
+        for cmd in [status_cmd, run_cmd, retry_cmd]:
+            assert self._has_shell_complete(cmd, "--target-sink-env")
+            assert self._has_shell_complete(cmd, "--table")
+
+        assert self._has_shell_complete(status_cmd, "--source")
+        assert self._has_shell_complete(run_cmd, "--source")
+        assert self._has_shell_complete(retry_cmd, "--source")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Smart completion (context-aware option filtering)
