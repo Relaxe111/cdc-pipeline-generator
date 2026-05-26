@@ -212,6 +212,10 @@ def test_build_fdw_bootstrap_plan_derives_sources_and_tables(
     assert actor_plan.base_foreign_table_name == "Actor_base"
     assert actor_plan.remote_table_name == "dbo_Actor_CT"
     assert actor_plan.columns[0] == ("__$start_lsn", "bytea")
+    assert actor_plan.columns[1] == ("__$end_lsn", "bytea")
+    assert actor_plan.columns[2] == ("__$seqval", "bytea")
+    assert actor_plan.columns[5] == ("actno", "integer")
+    assert actor_plan.columns[-1] == ("__$command_id", "integer")
     assert actor_plan.base_columns[0] == ("actno", "integer")
     assert ("actno", "integer") in actor_plan.columns
     assert ("Navn", "varchar") in actor_plan.columns
@@ -237,12 +241,71 @@ def test_render_fdw_bootstrap_sql_includes_metadata_and_foreign_tables(
     assert 'CREATE FOREIGN TABLE "fdw_default_test"."Actor_base"' in sql_text
     assert 'CREATE FOREIGN TABLE "fdw_default_test"."cdc_min_lsn_Actor"' in sql_text
     assert 'CREATE FOREIGN TABLE "fdw_default_test"."cdc_max_lsn"' in sql_text
+    assert '    "__$end_lsn" bytea,' in sql_text
+    assert '    "__$command_id" integer\n)' in sql_text
+    assert '    "__$update_mask" bytea,\n    "actno" integer,' in sql_text
     assert "SELECT sys.fn_cdc_get_min_lsn(''dbo_Actor'') AS min_lsn" in sql_text
     assert "SELECT sys.fn_cdc_get_max_lsn() AS max_lsn" in sql_text
+    assert ', false)' in sql_text
+    assert (
+      'ON CONFLICT ("environment_name") DO UPDATE\n'
+      + 'SET\n'
+      + '    "mssql_host" = EXCLUDED."mssql_host",\n'
+      + '    "mssql_port" = EXCLUDED."mssql_port",\n'
+      + '    "tds_version" = EXCLUDED."tds_version";'
+    ) in sql_text
+    assert (
+      'ON CONFLICT ("source_instance_key") DO UPDATE\n'
+      + 'SET\n'
+      + '    "environment_name" = EXCLUDED."environment_name",\n'
+      + '    "customer_key" = EXCLUDED."customer_key",\n'
+      + '    "source_database" = EXCLUDED."source_database",\n'
+      + '    "fdw_server_name" = EXCLUDED."fdw_server_name",\n'
+      + '    "fdw_schema_name" = EXCLUDED."fdw_schema_name";'
+    ) in sql_text
+    assert (
+      'ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE\n'
+      + 'SET\n'
+      + '    "remote_schema_name" = EXCLUDED."remote_schema_name",\n'
+      + '    "remote_table_name" = EXCLUDED."remote_table_name",\n'
+      + '    "target_schema_name" = EXCLUDED."target_schema_name",\n'
+      + '    "target_table_name" = EXCLUDED."target_table_name";'
+    ) in sql_text
     assert 'CREATE ROLE "cdc_runner"' not in sql_text
     assert 'CREATE TABLE IF NOT EXISTS "cdc_management"."customer_registry"' not in sql_text
     assert 'CREATE SCHEMA IF NOT EXISTS "cdc_management";' not in sql_text
     assert "CREATE EXTENSION IF NOT EXISTS tds_fdw;" not in sql_text
+
+
+def test_render_fdw_bootstrap_sql_preserves_actor_ct_column_order(
+    fdw_project: Path,
+) -> None:
+    """Rendered Actor_CT DDL should preserve the exact SQL Server CDC column order."""
+    del fdw_project
+
+    plan = build_fdw_bootstrap_plan(
+        "adopus",
+        "default",
+        FdwBootstrapRequest(tables=("Actor",), customers=("Test",)),
+    )
+    sql_text = render_fdw_bootstrap_sql(plan)
+
+    start_marker = 'CREATE FOREIGN TABLE "fdw_default_test"."Actor_CT" (\n'
+    end_marker = ')\nSERVER "mssql_default_test"'
+    actor_ct_block = sql_text.split(start_marker, 1)[1].split(end_marker, 1)[0]
+    actor_ct_lines = actor_ct_block.splitlines()
+
+    assert actor_ct_lines == [
+        '    "__$start_lsn" bytea,',
+        '    "__$end_lsn" bytea,',
+        '    "__$seqval" bytea,',
+        '    "__$operation" integer,',
+        '    "__$update_mask" bytea,',
+        '    "actno" integer,',
+        '    "Navn" varchar,',
+        '    "changedt" timestamp,',
+        '    "__$command_id" integer',
+    ]
 
 
 def test_fdw_cli_sql_supports_multiple_runner_roles(

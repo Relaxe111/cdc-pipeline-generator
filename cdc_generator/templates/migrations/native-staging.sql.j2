@@ -320,7 +320,7 @@ BEGIN
         NULL,
         NOW()
     )
-    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+    ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE
     SET
         "bootstrap_status" = 'in_progress',
         "last_started_at" = NOW(),
@@ -350,7 +350,7 @@ BEGIN
     END IF;
 
     EXECUTE format(
-        'SELECT f."__$seqval" FROM %I.%I f WHERE f."__$start_lsn" = $1::bytea ORDER BY f."__$seqval" DESC LIMIT 1',
+        'SELECT f."__$seqval" FROM %I.%I f WHERE encode(f."__$start_lsn", ''hex'') = encode($1::bytea, ''hex'') ORDER BY f."__$seqval" DESC LIMIT 1',
         v_fdw_schema,
         '{{ foreign_table_name }}'
     )
@@ -458,7 +458,7 @@ BEGIN
         NULL,
         NOW()
     )
-    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+    ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE
     SET
         "bootstrap_status" = 'completed',
         "last_completed_at" = NOW(),
@@ -499,7 +499,7 @@ EXCEPTION
                 SQLERRM,
                 NOW()
             )
-            ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+            ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE
             SET
                 "bootstrap_status" = 'failed',
                 "last_failed_at" = NOW(),

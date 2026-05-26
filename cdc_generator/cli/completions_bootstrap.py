@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import click
 from click.shell_completion import CompletionItem
 
 from cdc_generator.helpers.fdw_bootstrap import (
@@ -32,42 +33,47 @@ _CACHE_DIR_NAME = "cdc-bootstrap-completions"
 
 
 def complete_bootstrap_sources(
-    ctx: object,
-    param: object,
+    ctx: click.Context,
+    param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete ``--source`` with source database names."""
     try:
         del param
 
-        service_name = _get_service_from_ctx(ctx)
+        service_name = _get_service(ctx)
         if not service_name:
             return []
 
-        target_sink_env = _get_target_sink_env_from_ctx(ctx)
+        target_sink_env = _get_target_sink_env(ctx)
         plan = build_fdw_bootstrap_plan(
             service_name,
             source_env=None,
             request=FdwBootstrapRequest(target_sink_env=target_sink_env or None),
         )
-        source_databases = sorted({source_plan.source_database for source_plan in plan.source_plans if source_plan.source_database})
-        normalized = incomplete.casefold()
-        return [CompletionItem(source_database) for source_database in source_databases if source_database.casefold().startswith(normalized)]
+        source_databases = sorted(
+            {
+                source_plan.source_database
+                for source_plan in plan.source_plans
+                if source_plan.source_database
+            }
+        )
+        return _filter(source_databases, incomplete)
     except Exception:
         return []
 
 
 def complete_bootstrap_tables(
-    ctx: object,
-    param: object,
+    ctx: click.Context,
+    param: click.Parameter,
     incomplete: str,
 ) -> list[CompletionItem]:
     """Complete ``--table`` from ``native_cdc_bootstrap_state``."""
     try:
         del param
 
-        service_name = _get_service_from_ctx(ctx)
-        target_sink_env = _get_target_sink_env_from_ctx(ctx)
+        service_name = _get_service(ctx)
+        target_sink_env = _get_target_sink_env(ctx)
         if not service_name or not target_sink_env:
             return []
 
@@ -76,7 +82,7 @@ def complete_bootstrap_tables(
             source_env=None,
             request=FdwBootstrapRequest(target_sink_env=target_sink_env),
         )
-        source_values = _get_sources_from_ctx(ctx)
+        source_values = _get_multi_param(ctx, "sources")
         source_keys = _resolve_source_keys_for_completion(plan, source_values)
         include_completed = _get_command_name(ctx) == "status"
 
@@ -110,57 +116,77 @@ def complete_bootstrap_tables(
             )
             _store_cached_values(cache_path, values)
 
-        normalized = incomplete.casefold()
-        return [CompletionItem(value) for value in values if value.casefold().startswith(normalized)]
+        return _filter(values, incomplete)
     except Exception:
         return []
 
 
-def _get_command_name(ctx: object) -> str:
-    """Return the current subcommand name, if available."""
-    command = getattr(ctx, "command", None)
-    command_name = getattr(command, "name", "")
-    return str(command_name)
+# ---------------------------------------------------------------------------
+# Context helpers — use click.Context directly, same pattern as completions.py
+# ---------------------------------------------------------------------------
 
 
-def _get_target_sink_env_from_ctx(ctx: object) -> str:
-    """Extract ``--target-sink-env`` from the Click context chain."""
-    value = _get_param_value(ctx, "target_sink_env")
-    return str(value).strip() if value else ""
-
-
-def _get_sources_from_ctx(ctx: object) -> list[str]:
-    """Extract repeatable ``--source`` values from the Click context chain."""
-    value = _get_param_value(ctx, "sources")
-    if isinstance(value, tuple):
-        return [str(item).strip() for item in value if str(item).strip()]
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return []
-
-
-def _get_service_from_ctx(ctx: object) -> str:
-    """Extract service name from Click context."""
-    value = _get_param_value(ctx, "service")
+def _get_service(ctx: click.Context) -> str:
+    """Extract service name from Click context params or auto-detect."""
+    value = _get_param(ctx, "service")
     if value:
-        return str(value)
+        return value
     try:
         return resolve_service_name(None)
     except Exception:
         return ""
 
 
-def _get_param_value(ctx: object, param_name: str) -> object:
-    """Return the first non-empty parameter value from the context chain."""
-    current_ctx: object | None = ctx
-    while current_ctx is not None:
-        ctx_params = getattr(current_ctx, "params", None)
-        if isinstance(ctx_params, dict):
-            value = ctx_params.get(param_name)
-            if value not in (None, "", (), []):
-                return value
-        current_ctx = getattr(current_ctx, "parent", None)
-    return None
+def _get_target_sink_env(ctx: click.Context) -> str:
+    """Extract ``--target-sink-env`` from Click context params."""
+    return _get_param(ctx, "target_sink_env")
+
+
+def _get_param(ctx: click.Context, name: str) -> str:
+    """Return a single string param value from ctx.params."""
+    value = ctx.params.get(name)
+    if value is None:
+        return ""
+    if isinstance(value, (tuple, list)):
+        for item in value:
+            if item:
+                return str(item)
+        return ""
+    return str(value)
+
+
+def _get_multi_param(ctx: click.Context, name: str) -> list[str]:
+    """Return all values for a multi-value param from ctx.params."""
+    value = ctx.params.get(name)
+    if value is None:
+        return []
+    if isinstance(value, (tuple, list)):
+        return [str(item) for item in value if str(item).strip()]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _get_command_name(ctx: click.Context) -> str:
+    """Return the current subcommand name, if available."""
+    command = getattr(ctx, "command", None)
+    command_name = getattr(command, "name", "")
+    return str(command_name)
+
+
+def _filter(values: list[str], incomplete: str) -> list[CompletionItem]:
+    """Filter values by prefix and return CompletionItem list."""
+    normalized = incomplete.casefold()
+    return [
+        CompletionItem(value)
+        for value in values
+        if value.casefold().startswith(normalized)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Source key resolution
+# ---------------------------------------------------------------------------
 
 
 def _resolve_source_keys_for_completion(
@@ -189,7 +215,9 @@ def _build_table_completion_query(
     statuses_sql = ", ".join(_quote_sql_literal(status) for status in allowed_statuses)
     source_filter = ""
     if source_keys:
-        quoted_source_keys = ", ".join(_quote_sql_literal(source_key) for source_key in source_keys)
+        quoted_source_keys = ", ".join(
+            _quote_sql_literal(source_key) for source_key in source_keys
+        )
         source_filter = f" AND source_instance_key IN ({quoted_source_keys})"
 
     return (
@@ -251,6 +279,11 @@ def _query_bootstrap_table_names(
 
     rows = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     return sorted(dict.fromkeys(rows))
+
+
+# ---------------------------------------------------------------------------
+# Caching
+# ---------------------------------------------------------------------------
 
 
 def _get_cache_file_path(

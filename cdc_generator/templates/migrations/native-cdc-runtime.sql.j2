@@ -517,7 +517,7 @@ WHERE sp."source_instance_key" = p_source_instance_key
 UNION ALL
 
 SELECT
-    true AS "enabled",
+    reg."enabled" AS "enabled",
     'warm' AS "schedule_profile",
     'auto' AS "tier_mode",
     NULL::text AS "manual_schedule_profile",
@@ -530,11 +530,14 @@ SELECT
     250 AS "jitter_millis",
     300 AS "max_backoff_seconds",
     NULL::text AS "business_hours_profile_key"
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM "cdc_management"."native_cdc_schedule_policy" sp2
-    WHERE sp2."source_instance_key" = p_source_instance_key
-      AND sp2."logical_table_name" = p_logical_table_name
+FROM "cdc_management"."source_table_registration" reg
+WHERE reg."source_instance_key" = p_source_instance_key
+    AND reg."logical_table_name" = p_logical_table_name
+    AND NOT EXISTS (
+        SELECT 1
+        FROM "cdc_management"."native_cdc_schedule_policy" sp2
+        WHERE sp2."source_instance_key" = p_source_instance_key
+            AND sp2."logical_table_name" = p_logical_table_name
 )
 
 LIMIT 1;
@@ -1393,7 +1396,7 @@ BEGIN
                         SQLERRM,
                         NOW()
                     )
-                    ON CONFLICT ("source_instance_key", "logical_table_name") DO UPDATE
+                    ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE
                     SET
                         "bootstrap_status" = 'failed',
                         "last_failed_at" = NOW(),

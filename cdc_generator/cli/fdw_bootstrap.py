@@ -588,6 +588,8 @@ def _run_bootstrap_operation(
             message = result.stderr.strip() or "Bootstrap query failed"
             print_error(f"Bootstrap failed for {rows_for_source[0].source_database}: {message}")
             exit_code = result.returncode or 1
+        elif result.stdout.strip():
+            print_info(result.stdout.rstrip())
 
     try:
         post_rows = _query_bootstrap_state_rows(
@@ -619,6 +621,18 @@ def _run_bootstrap_operation(
                 target_sink_env=args.target_sink_env,
             ):
                 print(summary_line)
+
+    all_unchanged = all(
+        row.result not in ("bootstrapped", "failed", "skipped")
+        for row in result_rows
+    )
+    if all_unchanged and result_rows:
+        print_warning(
+            "No tables changed state. "
+            + "Source instances must be disabled before bootstrap can load data. "
+            + "Check the function output above for skip reasons "
+            + "(e.g. 'skipped_active' means the registration is still enabled)."
+        )
 
     if count_failed_results(result_rows):
         exit_code = 1

@@ -19,11 +19,15 @@ from cdc_generator.helpers.yaml_loader import load_yaml_file
 
 _CDC_SCHEMA_NAME = "cdc"
 _DEFAULT_TDS_VERSION = "7.4"
-_FDW_META_COLUMNS: tuple[tuple[str, str], ...] = (
+_FDW_META_PREFIX_COLUMNS: tuple[tuple[str, str], ...] = (
     ("__$start_lsn", "bytea"),
+    ("__$end_lsn", "bytea"),
     ("__$seqval", "bytea"),
     ("__$operation", "integer"),
     ("__$update_mask", "bytea"),
+)
+_FDW_META_SUFFIX_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("__$command_id", "integer"),
 )
 _MAX_LSN_TABLE_NAME = "cdc_max_lsn"
 _SQL_TYPE_BASE_PATTERN = re.compile(r"^\s*([A-Za-z0-9_]+)")
@@ -468,7 +472,7 @@ def _build_table_plans(
                 remote_table_name=f"{schema_name}_{table_name}_CT",
                 target_schema_name=target_schema_name,
                 target_table_name=table_name,
-                columns=(*_FDW_META_COLUMNS, *base_columns),
+                columns=(*_FDW_META_PREFIX_COLUMNS, *base_columns, *_FDW_META_SUFFIX_COLUMNS),
                 base_columns=base_columns,
             )
         )
@@ -792,8 +796,7 @@ def _render_environment_profiles_sql(plan: FdwBootstrapPlan) -> str:
             "SET",
             '    "mssql_host" = EXCLUDED."mssql_host",',
             '    "mssql_port" = EXCLUDED."mssql_port",',
-            '    "tds_version" = EXCLUDED."tds_version",',
-            '    "enabled" = EXCLUDED."enabled";',
+            '    "tds_version" = EXCLUDED."tds_version";',
             "",
         ]
     )
@@ -836,8 +839,7 @@ def _render_source_instances_sql(plan: FdwBootstrapPlan) -> str:
             '    "customer_key" = EXCLUDED."customer_key",',
             '    "source_database" = EXCLUDED."source_database",',
             '    "fdw_server_name" = EXCLUDED."fdw_server_name",',
-            '    "fdw_schema_name" = EXCLUDED."fdw_schema_name",',
-            '    "enabled" = EXCLUDED."enabled";',
+            '    "fdw_schema_name" = EXCLUDED."fdw_schema_name";',
             "",
         ]
     )
@@ -858,7 +860,7 @@ def _render_source_table_registrations_sql(plan: FdwBootstrapPlan) -> str:
                         _quote_literal(table_plan.remote_table_name),
                         _quote_literal(table_plan.target_schema_name),
                         _quote_literal(table_plan.target_table_name),
-                        "true",
+                        "false",
                     ]
                 )
                 + ")"
@@ -882,8 +884,7 @@ def _render_source_table_registrations_sql(plan: FdwBootstrapPlan) -> str:
             '    "remote_schema_name" = EXCLUDED."remote_schema_name",',
             '    "remote_table_name" = EXCLUDED."remote_table_name",',
             '    "target_schema_name" = EXCLUDED."target_schema_name",',
-            '    "target_table_name" = EXCLUDED."target_table_name",',
-            '    "enabled" = EXCLUDED."enabled";',
+            '    "target_table_name" = EXCLUDED."target_table_name";',
             "",
         ]
     )

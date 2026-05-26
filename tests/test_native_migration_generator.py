@@ -122,6 +122,7 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert 'ALTER TABLE "cdc_management"."native_cdc_runtime_state" SET UNLOGGED' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."claim_due_native_cdc_work"' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."bootstrap_native_cdc_tables"' in native_infra_sql
+    assert 'ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE' in native_infra_sql
     assert 'CREATE OR REPLACE PROCEDURE "cdc_management"."renew_native_cdc_lease"' in native_infra_sql
     assert 'CREATE OR REPLACE VIEW "cdc_management"."v_native_cdc_health"' in native_infra_sql
     assert 'ADD COLUMN IF NOT EXISTS "tier_mode" text' in native_infra_sql
@@ -150,6 +151,8 @@ def test_generate_native_runtime_writes_expected_files(tmp_path: Path) -> None:
     assert "cdc_max_lsn" in staging_sql
     assert "cdc_min_lsn_Actor" in staging_sql
     assert "native_cdc_bootstrap_state" in staging_sql
+    assert "encode(f.\"__$start_lsn\", ''hex'') = encode($1::bytea, ''hex'')" in staging_sql
+    assert 'ON CONFLICT ON CONSTRAINT "native_cdc_bootstrap_state_pkey" DO UPDATE' in staging_sql
     assert 'INSERT INTO "adopus"."Actor"' in staging_sql
     assert 'INSERT INTO "adopus"."stg_Actor"' in staging_sql
 
@@ -297,14 +300,17 @@ def test_generate_native_runtime_renders_resolve_policy_dynamic(
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."resolve_native_cdc_schedule_policy"' in native_infra_sql
     assert 'CREATE OR REPLACE FUNCTION "cdc_management"."sync_native_cdc_registration_state"' in native_infra_sql
     assert 'CREATE TRIGGER "trg_sync_native_cdc_registration_state"' in native_infra_sql
+    assert 'reg."enabled" AS "enabled"' in native_infra_sql
+    assert 'true AS "enabled"' not in native_infra_sql
 
     # Function body should contain a direct SELECT from the table, not VALUES
     func_start = native_infra_sql.index("LANGUAGE sql")
     func_end = native_infra_sql.index("$$;\n", func_start)
     func_body = native_infra_sql[func_start:func_end]
     assert "native_cdc_schedule_policy" in func_body
+    assert 'FROM "cdc_management"."source_table_registration" reg' in func_body
     assert "UNION ALL" in func_body
-    assert "WHERE NOT EXISTS" in func_body
+    assert "NOT EXISTS" in func_body
     assert "VALUES" not in func_body
     # sync call passes source_instance_key + logical_table_name
     assert 'v_registration."source_instance_key"' in native_infra_sql
