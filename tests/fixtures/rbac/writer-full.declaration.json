@@ -1,0 +1,164 @@
+{
+  "connection": "editor_app",
+  "context": {
+    "app.customer_id": "transaction-local UUID",
+    "app.role": [
+      "recipient",
+      "super_user",
+      "therapist"
+    ],
+    "app.user_id": "transaction-local UUID"
+  },
+  "kind": "OwnerWriterDeclaration",
+  "openddSourceSha256": "5d431417995903fcdceb4becf99359203243a76ccd64c5bad982e10d43165e0e",
+  "owner": "asma-bunjs-editor",
+  "qualification": "TEST_ONLY_NONOWNER_ISO",
+  "relation": "editor.qnrs",
+  "rules": [
+    {
+      "columns": [],
+      "command": "DELETE",
+      "role": "therapist",
+      "using": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      },
+      "withCheck": null
+    },
+    {
+      "columns": [
+        "activity_id",
+        "archived_at",
+        "artifact_package_id",
+        "changed_at",
+        "changed_by",
+        "changed_by_kind",
+        "created_at",
+        "created_by",
+        "customer_id",
+        "deleted_at",
+        "id",
+        "journal",
+        "lifecycle_status",
+        "offer_id",
+        "qnr_template_id",
+        "template_version",
+        "user_id",
+        "valid_from",
+        "valid_to"
+      ],
+      "command": "INSERT",
+      "role": "therapist",
+      "using": null,
+      "withCheck": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "columns": [
+        "activity_id",
+        "archived_at",
+        "artifact_package_id",
+        "changed_at",
+        "changed_by",
+        "changed_by_kind",
+        "created_at",
+        "created_by",
+        "customer_id",
+        "deleted_at",
+        "id",
+        "journal",
+        "lifecycle_status",
+        "offer_id",
+        "qnr_template_id",
+        "template_version",
+        "user_id",
+        "valid_from",
+        "valid_to"
+      ],
+      "command": "UPDATE",
+      "role": "therapist",
+      "using": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      },
+      "withCheck": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

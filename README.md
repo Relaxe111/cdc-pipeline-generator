@@ -168,7 +168,7 @@ migration byte hashes plus the owned SELECT structural hash in lock format 3
 `rbac/.rbac-lock.json`. Each immutable history entry retains lossless base64
 source/catalog bytes, their byte and canonical JSON SHA256 hashes, the semantic
 contract hash, predecessor hash and regenerated output hashes. The lock pins the
-four owned RBAC source hashes and the exactly pinned `jsonschema` version.
+owned RBAC implementation/schema hashes and the exactly pinned `jsonschema` version.
 Shared CDC helpers and unpinned dependency versions are not fingerprint gates;
 the latter are recorded separately as environment observations. Checks revalidate every input receipt and regenerate every historical
 up/down and SELECT projection, then require the complete owned migration
@@ -182,8 +182,9 @@ and drift evidence, not a signature or protection against replacing an entire
 internally consistent input/output/lock set. No timestamps, host paths or Git
 checkout are required at runtime. A changed source requires a new migration.
 Existing history is immutable; unchanged inputs produce no writes.
-Rollback restores the previous generated policies; fresh rollback drops only
-those policies. This subset emits no GRANT or REVOKE statements: schema, table
+Reader-only rollback restores the previous generated policies; its fresh rollback drops only
+those policies. Qualified writer rollback requires a qualified writer predecessor;
+otherwise it refuses before writes rather than removing writer fences. This subset emits no GRANT or REVOKE statements: schema, table
 and column ACLs remain unchanged in either direction. Neither direction changes
 RLS enable/force flags. Activation is
 outside this admission subset and requires separately owned owner-write, worker
@@ -254,7 +255,7 @@ so local `#/definitions` references resolve correctly; tests compare every
 validation keyword to upstream. External schema retrieval is disabled. Local
 semantic checks validate role/model/type/column references, session mapping,
 mandatory tenant equality, and equal column envelopes across roles. Relationships,
-OR/NOT, literals, presets, mutations and other versions fail closed. This is the
+OR/NOT, literals, presets, mutations and other versions in unqualified reader input fail closed. This is the
 local validator authorized by the ROOT disposition; it makes no hosted DDN build
 or full DDN semantic-validation claim.
 
@@ -281,6 +282,106 @@ in another repository. These tests qualify this compiler
 subset; they do not discharge the artifact owner's full 1,177-migration L3
 oracles or prove target installation. Publication is PR-only for independent
 exact-head review.
+
+### Source candidate: explicit writer and retained-policy composition
+
+The ASMA-8350 source continuation implements the finite `ownerEnvelope` catalog
+extension adopted by ROOT disposition
+`QNR-ROOT-8350-OWNER-ENVELOPE-COMPATIBILITY-DISPOSITION-20261004-1`
+(SHA256 `6badca45f5659342616b1232466bf088fbedaa9fc994f65ce87fc60233b69be1`).
+Its exact schema is copied from artifact attachment `dc3006c5`, SHA256
+`4a3eb93017637557b7c5cb37bdbad494b4a3c80b5c2e9aa167363d2835bb8ea5`;
+no artifact metadata, migrations, G4 or installation inputs are modified here.
+
+The pinned official OpenDD `ModelPermission` supports `relationalInsert`,
+`relationalUpdate` and `relationalDelete` opt-ins, each defined as an empty object
+with `additionalProperties: false`. These markers cannot express row/column
+authority. The compiler therefore binds explicit per-role/command/column and
+old/new-row rules in the referenced owning declarative source, retaining the
+official OpenDD bytes and offline validator unchanged. SELECT rules and ACLs
+never supply missing writer rules. Every required command needs independently
+generated coverage; a role need not receive every command. The fixture grants
+I/U/D only to `therapist`, with tenant **and actor** comparisons, while its read
+rule is tenant-only. This fixture is test data, not genuine owner or worker rights.
+
+Inputs use the existing `--source` and `--catalog` interfaces. The catalog retains
+the exact finite `ownerEnvelope` and offline `sourceSnapshots` containing each
+commit/path/SHA256 reference and base64 original bytes. The source review must
+match an admitted source/review identity; arbitrary self-consistent references
+and hashes never confer authority. **No actual owning source/review is admitted.**
+The current admission pins are disclosed `TEST_ONLY_NONOWNER_ISO` fixtures.
+Generated snapshot paths prefixed `generated:ISO/` identify embedded fixture
+receipts, not files claimed to exist in a historical Git commit. The declaration
+and review paths identify exact committed fixture files. Compiler context binds
+the owned implementation and validator hashes. A generation receipt binds all
+source/context/policy references and the complete writer output bytes; validation
+regenerates those bytes through the same renderer used by `cdc rbac generate`.
+SQL/hand-authored policy text cannot substitute for a declaration or witness.
+
+The supported column envelope is explicit whole-relation INSERT/UPDATE authority
+and no DELETE column assignment. Per-role partial changed-column authority is
+refused: PostgreSQL row policies cannot implement it. Qualified table SELECT
+also requires explicit complete reader column coverage. The finite full-table
+catalog types are `uuid`, `text`, `int4`, `date`, `timestamptz`; predicates still
+require real UUID tenant/actor columns. Default reader-only admission retains
+its original four-column type/profile and byte-identical historical SQL/SELECT.
+
+Retained policies are compatibility inputs only and never enter CREATE/ALTER/DROP
+output. The compiler parses the supported positive flat SQL language: typed
+tenant/actor session equalities, exact existing role equalities, parentheses,
+AND/OR and Boolean constants, including PostgreSQL 17 deparse text casts.
+Unknown functions, types, contexts, literals, NOT, subqueries and unsupported
+definitions refuse. It enumerates the complete symbolic equality/context states
+and expands ALL for each command, proving permissive OR/restrictive AND cannot
+widen SELECT, INSERT new-row CHECK, UPDATE old-row USING/new-row CHECK, or DELETE
+USING. It also refuses loss of authorized positives; universal denial is not
+compatibility. Retained UPDATE/ALL with null WITH CHECK is outside the exact
+attachment schema, so implicit fallback is refused rather than fabricated.
+
+Before policy writes, qualified SQL compares exact complete originated/effective
+CRUD, grant options, table owner, schema USAGE, column ACLs, recursive membership
+and role attributes/options, actual named creator global/schema defaults, and
+every generated/retained policy command/role/permissiveness/USING/CHECK definition.
+Names and hashes alone do not pass. Missing/excess/changed rights or definitions
+abort without revoking rights or rewriting retained policies. A relation lock
+serializes relation changes during preflight. It does not qualify global role/
+creator change control: genuine installation staging remains an actual prerequisite.
+
+Only owned disposable databases named `asma8350_writer_<32 lowercase hex digits>`
+can execute this test-only composed SQL. Other database names refuse before
+policy writes. The compiler emits **policies only**, with no grants, RLS activation,
+new principal, Hasura mutations or guard/worker implementation. Schema USAGE and
+SELECT/CRUD grants while RLS is inactive open un-isolated reads; activation must
+precede or be atomic with exposure after complete genuine writer/read/guard/
+worker coverage. The test fixture activates RLS before test ACL exposure and
+authenticates independently as nonowner, NOSUPERUSER/NOBYPASSRLS `editor_app`.
+Bootstrap/table-owner success is never its positive oracle.
+
+History retains every original source snapshot and generated output. Reviewed
+re-attestation can admit an output-identical compiler change while retaining the
+prior implementation context; it cannot replace writer authority, policy bytes
+or previous history. Inputs without qualified composition retain strict REQ-001
+CRUD and retained-policy refusal. G4 remains separate and excluded from writes.
+
+The focused fixture tests include unfiltered INSERT/UPDATE/DELETE without
+WHERE/RETURNING alongside filtered/RETURNING forms. Seeded permissive policies
+demonstrate that SELECT masking can hide widening in filtered probes. Same-tenant
+positive writes, foreign/missing/malformed/reader/unknown-worker denials, committed
+row readback, transaction-local context reset and final-row trigger mutation
+are exercised. The invoker test trigger is not the real guard/definer contract.
+The original **18 oracles / 34 variants** remain unexecuted as complete canonical
+cases; the **22 runtime spec IDs** retain distinct per-case fixture/blocked status
+in the [source evidence ledger](tests/fixtures/rbac/writer-composition-cases.json).
+No source test or partial fixture result becomes
+a guard/permit/worker/revocation/Hasura-connection qualification.
+
+All ten `targetInputs` remain null. Actual connection/owner/default creators,
+guard identities and full helper ACLs, worker lease/bootstrap/executor/issuer/
+revoker facts and actual Hasura context are unqualified. PostgreSQL and Hasura
+metadata operations are separate; no shared transaction is claimed. Publication
+is a compiler SOURCE PR for exact-head review. Target install, owner-qualified
+production emission, RLS activation, artifact-master auto-install and A6/8350
+completion stay **HELD**.
 
 ### Guard-owner and installation contract supplement
 

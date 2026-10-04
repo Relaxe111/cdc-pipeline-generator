@@ -1,0 +1,164 @@
+[
+  {
+    "definition": {
+      "modelName": "editor_qnrs",
+      "permissions": [
+        {
+          "role": "recipient",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                },
+                {
+                  "fieldComparison": {
+                    "field": "user_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-user-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "super_user",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "relationalDelete": {},
+          "relationalInsert": {},
+          "relationalUpdate": {},
+          "role": "therapist",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "kind": "ModelPermissions",
+    "version": "v1"
+  },
+  {
+    "definition": {
+      "permissions": [
+        {
+          "output": {
+            "allowedFields": [
+              "activity_id",
+              "archived_at",
+              "artifact_package_id",
+              "changed_at",
+              "changed_by",
+              "changed_by_kind",
+              "created_at",
+              "created_by",
+              "customer_id",
+              "deleted_at",
+              "id",
+              "journal",
+              "lifecycle_status",
+              "offer_id",
+              "qnr_template_id",
+              "template_version",
+              "user_id",
+              "valid_from",
+              "valid_to"
+            ]
+          },
+          "role": "recipient"
+        },
+        {
+          "output": {
+            "allowedFields": [
+              "activity_id",
+              "archived_at",
+              "artifact_package_id",
+              "changed_at",
+              "changed_by",
+              "changed_by_kind",
+              "created_at",
+              "created_by",
+              "customer_id",
+              "deleted_at",
+              "id",
+              "journal",
+              "lifecycle_status",
+              "offer_id",
+              "qnr_template_id",
+              "template_version",
+              "user_id",
+              "valid_from",
+              "valid_to"
+            ]
+          },
+          "role": "super_user"
+        },
+        {
+          "output": {
+            "allowedFields": [
+              "activity_id",
+              "archived_at",
+              "artifact_package_id",
+              "changed_at",
+              "changed_by",
+              "changed_by_kind",
+              "created_at",
+              "created_by",
+              "customer_id",
+              "deleted_at",
+              "id",
+              "journal",
+              "lifecycle_status",
+              "offer_id",
+              "qnr_template_id",
+              "template_version",
+              "user_id",
+              "valid_from",
+              "valid_to"
+            ]
+          },
+          "role": "therapist"
+        }
+      ],
+      "typeName": "editor_qnrs"
+    },
+    "kind": "TypePermissions",
+    "version": "v1"
+  }
+]

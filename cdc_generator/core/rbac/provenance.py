@@ -14,11 +14,21 @@ from cdc_generator.core.rbac.validation import Contract, Json, canonical, compil
 COMPILER = "cdc-rbac-flat-v2"
 LOCK_FORMAT = 3
 PACKAGE = Path(__file__).resolve().parents[2]
-IMPLEMENTATION_FILES = (
+READER_IMPLEMENTATION_FILES = (
     "core/rbac/artifacts.py",
     "core/rbac/provenance.py",
     "core/rbac/rendering.py",
     "core/rbac/validation.py",
+)
+IMPLEMENTATION_FILES = (
+    *READER_IMPLEMENTATION_FILES,
+    "core/rbac/composition.py",
+    "core/rbac/composition_models.py",
+    "core/rbac/composition_readback.py",
+    "core/rbac/composition_sql.py",
+    "core/rbac/policy_semantics.py",
+    "core/rbac/writer_rules.py",
+    "templates/rbac/owner-envelope.schema.json",
 )
 RUNTIME = ("jsonschema", "jsonschema-specifications", "referencing", "rpds-py", "attrs", "ruamel.yaml")
 MIGRATION = r"migrations/default/[0-9]{13}_rbac_editor_qnrs"
@@ -41,9 +51,10 @@ def _implementation(value: Json) -> bool:
     """Validate current or previously reviewed six-file provenance; return legacy."""
     obj = mapping(value)
     files, runtime = mapping(obj.get("files")), mapping(obj.get("runtime"))
-    legacy_files = {*IMPLEMENTATION_FILES, "helpers/yaml_loader.py", "core/migration_generator/file_writers.py"}
+    legacy_files = {*READER_IMPLEMENTATION_FILES, "helpers/yaml_loader.py", "core/migration_generator/file_writers.py"}
     legacy = set(files) == legacy_files and set(runtime) == set(RUNTIME)
-    if set(obj) != {"files", "runtime"} or not (legacy or (set(files) == set(IMPLEMENTATION_FILES) and set(runtime) == {"jsonschema"})):
+    owned = set(files) in (set(IMPLEMENTATION_FILES), set(READER_IMPLEMENTATION_FILES)) and set(runtime) == {"jsonschema"}
+    if set(obj) != {"files", "runtime"} or not (legacy or owned):
         raise ValueError("Unsupported implementation receipt")
     for source_hash in files.values():
         if not re.fullmatch(r"[a-f0-9]{64}", string(source_hash)):
@@ -99,7 +110,7 @@ def _reviews(state: dict[str, Json], history: list[Json]) -> None:
         raise ValueError("Re-attestation head disagrees with lock provenance")
 
 
-def snapshot(source: bytes, catalog: bytes) -> tuple[Contract, dict[str, Json]]:
+def snapshot(source: bytes, catalog: bytes, *, reviewed_contexts: tuple[Json, ...] = ()) -> tuple[Contract, dict[str, Json]]:
     """Bind both exact owner-authored bytes and their canonical JSON meaning."""
     values = {"source": parse_json(source), "catalog": parse_json(catalog)}
     receipts: dict[str, Json] = {
@@ -110,10 +121,10 @@ def snapshot(source: bytes, catalog: bytes) -> tuple[Contract, dict[str, Json]]:
         }
         for name, raw in [("source", source), ("catalog", catalog)]
     }
-    return compile_contract(values["source"], values["catalog"]), receipts
+    return compile_contract(values["source"], values["catalog"], reviewed_contexts=reviewed_contexts), receipts
 
 
-def restore(value: Json) -> tuple[Contract, dict[str, Json]]:
+def restore(value: Json, *, reviewed_contexts: tuple[Json, ...] = ()) -> tuple[Contract, dict[str, Json]]:
     """Rehash and revalidate stored bytes instead of trusting a claimed input hash."""
     inputs = mapping(value)
     try:
@@ -121,7 +132,7 @@ def restore(value: Json) -> tuple[Contract, dict[str, Json]]:
         catalog = base64.b64decode(string(mapping(inputs.get("catalog"))["base64"]), validate=True)
     except (KeyError, binascii.Error) as error:
         raise ValueError("Malformed input byte receipt") from error
-    contract, expected = snapshot(source, catalog)
+    contract, expected = snapshot(source, catalog, reviewed_contexts=reviewed_contexts)
     if canonical(inputs) != canonical(expected):
         raise ValueError("Input byte/canonical hash provenance mismatch")
     return contract, expected
@@ -170,6 +181,16 @@ def verify_history(state: dict[str, Json], *, reattesting: bool = False) -> tupl
     if not history:
         raise ValueError("Missing immutable emission history")
     _reviews(state, history)
+    # Historical writer receipts may name a prior implementation only when it is
+    # already bound by this lock's validated review chain. Regeneration still
+    # uses current code and compares every old output byte.
+    contexts = [context(state)]
+    for value in sequence(state.get("reattestations", [])):
+        review = mapping(value)
+        contexts.extend([_context(review["from"]), _context(review["to"])])
+    writer_contexts: tuple[Json, ...] = tuple(
+        {"compiler": COMPILER, "implementation": item["implementation"], "pins": item["pins"]} for item in contexts
+    )
     previous = None
     current = None
     last_migration = ""
@@ -179,7 +200,7 @@ def verify_history(state: dict[str, Json], *, reattesting: bool = False) -> tupl
         migration = string(entry.get("migration"))
         if not re.fullmatch(MIGRATION, migration) or migration <= last_migration:
             raise ValueError("Emission history must have strictly ordered canonical migration identities")
-        current, inputs = restore(entry.get("inputs"))
+        current, inputs = restore(entry.get("inputs"), reviewed_contexts=writer_contexts)
         expected = emission(migration, current, inputs, previous)
         if canonical(entry) != canonical(expected):
             raise ValueError(f"Regenerated emission provenance mismatch: {migration}")
@@ -188,8 +209,8 @@ def verify_history(state: dict[str, Json], *, reattesting: bool = False) -> tupl
         previous = current
     # The latest convenience fields are assertions, never independent authority.
     latest = mapping(history[-1])
-    current, inputs = restore(latest["inputs"])
-    previous = restore(mapping(history[-2])["inputs"])[0] if len(history) > 1 else None
+    current, inputs = restore(latest["inputs"], reviewed_contexts=writer_contexts)
+    previous = restore(mapping(history[-2])["inputs"], reviewed_contexts=writer_contexts)[0] if len(history) > 1 else None
     expected_fields: dict[str, Json] = {
         "source": current.source,
         "catalog": current.catalog,

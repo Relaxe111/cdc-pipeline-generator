@@ -1,0 +1,134 @@
+{
+  "connection": "editor_app",
+  "context": {
+    "app.customer_id": "transaction-local UUID",
+    "app.role": [
+      "recipient",
+      "super_user",
+      "therapist"
+    ],
+    "app.user_id": "transaction-local UUID"
+  },
+  "kind": "OwnerWriterDeclaration",
+  "openddSourceSha256": "ba3658bd2b79249078e4b873d7e76f2dc09b3f3ad0c8893380edb2017ac7e12e",
+  "owner": "asma-bunjs-editor",
+  "qualification": "TEST_ONLY_NONOWNER_ISO",
+  "relation": "editor.qnrs",
+  "rules": [
+    {
+      "columns": [],
+      "command": "DELETE",
+      "role": "therapist",
+      "using": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      },
+      "withCheck": null
+    },
+    {
+      "columns": [
+        "customer_id",
+        "id",
+        "lifecycle_status",
+        "user_id"
+      ],
+      "command": "INSERT",
+      "role": "therapist",
+      "using": null,
+      "withCheck": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "columns": [
+        "customer_id",
+        "id",
+        "lifecycle_status",
+        "user_id"
+      ],
+      "command": "UPDATE",
+      "role": "therapist",
+      "using": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      },
+      "withCheck": {
+        "and": [
+          {
+            "fieldComparison": {
+              "field": "customer_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-customer-id"
+              }
+            }
+          },
+          {
+            "fieldComparison": {
+              "field": "user_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

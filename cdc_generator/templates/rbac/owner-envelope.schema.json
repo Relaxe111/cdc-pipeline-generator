@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "columnPrivileges": {
+      "const": []
+    },
+    "connection": {
+      "const": "editor_app"
+    },
+    "creatorDefaultsSource": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "grantOption": {
+      "const": false
+    },
+    "membershipSource": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "privileges": {
+      "const": [
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    "relation": {
+      "const": "editor.qnrs"
+    },
+    "retainedPolicies": {
+      "description": "Preserved readback definitions for semantic compatibility checking only. Never a writerAuthorizationSource or substitute for compiler-generated INSERT/UPDATE/DELETE coverage.",
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "command": {
+                  "const": "INSERT"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "using": {
+                  "type": "null"
+                },
+                "withCheck": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "command": {
+                  "enum": [
+                    "UPDATE",
+                    "ALL"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "using": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "withCheck": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "command": {
+                  "enum": [
+                    "SELECT",
+                    "DELETE"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "using": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "withCheck": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "command": {
+            "enum": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "ALL"
+            ]
+          },
+          "definitionSha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[a-z_][a-z0-9_]{0,62}$",
+            "type": "string"
+          },
+          "permissive": {
+            "type": "boolean"
+          },
+          "roles": {
+            "const": [
+              "editor_app"
+            ]
+          },
+          "source": {
+            "additionalProperties": false,
+            "properties": {
+              "commit": {
+                "pattern": "^[a-f0-9]{40}$",
+                "type": "string"
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "commit",
+              "path",
+              "sha256"
+            ],
+            "type": "object"
+          },
+          "using": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "withCheck": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "command",
+          "roles",
+          "permissive",
+          "using",
+          "withCheck",
+          "definitionSha256",
+          "source"
+        ],
+        "type": "object"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "workerSource": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "pattern": "^[a-f0-9]{40}$",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit",
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "writerAuthorizationSource": {
+      "additionalProperties": false,
+      "description": "Compiler-generated writer RLS from the owning service's reviewed declarative source only. Source references and hashes require actual review/provenance verification and byte-identical compiler regeneration; schema-valid labels alone confer no authority. Retained policies cannot supply a writer witness.",
+      "properties": {
+        "commands": {
+          "const": [
+            "DELETE",
+            "INSERT",
+            "UPDATE"
+          ]
+        },
+        "compilerGenerationReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "pattern": "^[a-f0-9]{40}$",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit",
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "compilerSource": {
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "pattern": "^[a-f0-9]{40}$",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit",
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "generatedWriterPolicySetSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "kind": {
+          "const": "COMPILER_GENERATED_WRITER_RLS"
+        },
+        "ownerDeclarativeSource": {
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "pattern": "^[a-f0-9]{40}$",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit",
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "ownerSourceReview": {
+          "additionalProperties": false,
+          "properties": {
+            "commit": {
+              "pattern": "^[a-f0-9]{40}$",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "commit",
+            "path",
+            "sha256"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "ownerDeclarativeSource",
+        "ownerSourceReview",
+        "compilerSource",
+        "compilerGenerationReceipt",
+        "generatedWriterPolicySetSha256",
+        "commands"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "relation",
+    "connection",
+    "privileges",
+    "columnPrivileges",
+    "grantOption",
+    "membershipSource",
+    "creatorDefaultsSource",
+    "writerAuthorizationSource",
+    "workerSource",
+    "retainedPolicies"
+  ],
+  "type": "object"
+}

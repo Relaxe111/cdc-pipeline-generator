@@ -15,6 +15,8 @@ from referencing import Registry
 from referencing.exceptions import NoSuchResource
 from referencing.jsonschema import Schema
 
+from cdc_generator.core.rbac.composition_models import Composition
+
 Json = str | int | float | bool | None | list["Json"] | dict[str, "Json"]
 ROLES = ("recipient", "super_user", "therapist")
 UPSTREAM = "94915fe51d6d21bd7f6d4452dc16221bef8cfefd"
@@ -22,6 +24,7 @@ UPSTREAM_HASH = "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b2
 SLICE_HASH = "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3"
 VALIDATOR = "4.25.1"
 MAX_FILTER_DEPTH = 16
+OWNER_COLUMN_TYPES = {"uuid", "text", "int4", "date", "timestamptz"}
 ASSETS = Path(__file__).resolve().parents[2] / "templates" / "rbac"
 SESSION = {"x-hasura-customer-id": ("customer_id", "app.customer_id"), "x-hasura-user-id": ("user_id", "app.user_id")}
 
@@ -45,6 +48,7 @@ class Contract:
     rules: tuple[Rule, ...]
     source: Json
     catalog: Json
+    composition: Composition | None = None
 
 
 def digest(data: bytes) -> str:
@@ -180,7 +184,12 @@ def _comparisons(predicate: Json, depth: int = 0) -> tuple[tuple[str, str], ...]
     return ((string(comparison["field"]), variable),)
 
 
-def compile_contract(source: Json, catalog_value: Json) -> Contract:
+def compile_comparisons(predicate: Json) -> tuple[tuple[str, str], ...]:
+    """Share the existing flat predicate compiler with explicit owning writer rules."""
+    return _comparisons(predicate)
+
+
+def compile_contract(source: Json, catalog_value: Json, *, reviewed_contexts: tuple[Json, ...] = ()) -> Contract:
     """Validate pinned catalog names and local OpenDD semantics before emission."""
     definitions = _permissions(source)
     catalog = mapping(catalog_value)
@@ -196,7 +205,8 @@ def compile_contract(source: Json, catalog_value: Json) -> Contract:
     for item in sequence(catalog["columns"]):
         column = mapping(item)
         name, sql_type = identifier(column["name"]), string(column["type"])
-        if name in columns or sql_type not in {"uuid", "text"}:
+        column_types = OWNER_COLUMN_TYPES if "ownerEnvelope" in catalog else {"uuid", "text"}
+        if name in columns or sql_type not in column_types:
             raise ValueError(f"Unsupported or duplicate catalog column: {name}")
         columns[name] = sql_type
     model_roles, type_roles = _role_map(model), _role_map(types)
@@ -205,7 +215,10 @@ def compile_contract(source: Json, catalog_value: Json) -> Contract:
     rules: list[Rule] = []
     for role in sorted(model_roles):
         permission, type_permission = model_roles[role], type_roles[role]
-        if set(permission) != {"role", "select"} or set(type_permission) != {"role", "output"}:
+        admitted = {"role", "select"}
+        if "ownerEnvelope" in catalog:
+            admitted.update({"relationalInsert", "relationalUpdate", "relationalDelete"})
+        if not {"role", "select"} <= set(permission) <= admitted or set(type_permission) != {"role", "output"}:
             raise ValueError("Unsupported permissions: only SELECT/output is admitted")
         select = mapping(permission["select"])
         if set(select) != {"filter"}:
@@ -221,7 +234,16 @@ def compile_contract(source: Json, catalog_value: Json) -> Contract:
         rules.append(Rule(role, fields, pairs))
     if len({rule.columns for rule in rules}) != 1:
         raise ValueError("Role-specific column envelopes require a separate compiler capability")
-    return Contract(schema, table, tuple(sorted(columns.items())), tuple(rules), source, catalog_value)
+    contract = Contract(schema, table, tuple(sorted(columns.items())), tuple(rules), source, catalog_value)
+    if "ownerEnvelope" in catalog:
+        from dataclasses import replace
+
+        from cdc_generator.core.rbac.composition import compile_composition
+
+        return replace(contract, composition=compile_composition(contract, reviewed_contexts))
+    if "sourceSnapshots" in catalog:
+        raise ValueError("Source snapshots require a qualified ownerEnvelope")
+    return contract
 
 
 def generate_schema(catalog_value: Json) -> Json:

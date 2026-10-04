@@ -1,0 +1,635 @@
+{
+  "actualHasuraContext": null,
+  "actualRevocationFacts": null,
+  "actualWorkerFacts": null,
+  "attachmentSha256": "4a3eb93017637557b7c5cb37bdbad494b4a3c80b5c2e9aa167363d2835bb8ea5",
+  "authoritySha256": "6badca45f5659342616b1232466bf088fbedaa9fc994f65ce87fc60233b69be1",
+  "baseCommit": "1a2aab52154dd5ff3836633512972fd6a4ecd728",
+  "classification": "COMPILER_SOURCE_CANDIDATE_AND_DISCLOSED_ISO_SUBSETS_ONLY",
+  "fixtureBoundary": "Actual authenticated editor_app nonowner/NOSUPERUSER/NOBYPASSRLS under active RLS; four and full 19-column QNR shapes only. No real guard, worker, permit, creator or target replacement. Source checks are not the 22 runtime cases or 34 installation variants.",
+  "holds": [
+    "NO_TARGET_INSTALL",
+    "NO_ARTIFACT_EMISSION",
+    "NO_PRODUCT_RLS_ACTIVATION",
+    "NO_ARTIFACT_MASTER_MERGE_AUTO_INSTALL",
+    "NO_A6_OR_ASMA_8350_COMPLETION",
+    "PG_AND_HASURA_NOT_ONE_TRANSACTION"
+  ],
+  "originalOracles": [
+    {
+      "id": "G5-IDENTITY-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-OWNER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-SEARCHPATH-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-FOR-SHARE-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-GUARD-ACL-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-FUNCTION-ACL-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-CREATOR-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-CREATOR-ATOMIC-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-TRIGGER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-SINGLE-WRITER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-LEGACY-TRANSPORT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-FUNCTION-READ-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-PERMIT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G2-WORKER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G2-ACTIVATION-GRANT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G1-REQ001-UPGRADE-NEG",
+      "modes": [
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-UPGRADE-PRESERVE-NEG",
+      "modes": [
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "id": "G5-ROLLBACK-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "status": "BLOCKED_NOT_EXECUTED"
+    }
+  ],
+  "originalVariants": [
+    {
+      "executed": false,
+      "id": "G5-IDENTITY-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-IDENTITY-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-OWNER-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-OWNER-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-SEARCHPATH-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-SEARCHPATH-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FOR-SHARE-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FOR-SHARE-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-GUARD-ACL-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-GUARD-ACL-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FUNCTION-ACL-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FUNCTION-ACL-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-CREATOR-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-CREATOR-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-CREATOR-ATOMIC-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-CREATOR-ATOMIC-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-TRIGGER-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-TRIGGER-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-SINGLE-WRITER-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-SINGLE-WRITER-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-LEGACY-TRANSPORT-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-LEGACY-TRANSPORT-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FUNCTION-READ-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-FUNCTION-READ-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-PERMIT-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-PERMIT-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G2-WORKER-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G2-WORKER-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G2-ACTIVATION-GRANT-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G2-ACTIVATION-GRANT-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G1-REQ001-UPGRADE-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-UPGRADE-PRESERVE-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-ROLLBACK-NEG",
+      "mode": "fresh",
+      "status": "BLOCKED_NOT_EXECUTED"
+    },
+    {
+      "executed": false,
+      "id": "G5-ROLLBACK-NEG",
+      "mode": "upgrade",
+      "status": "BLOCKED_NOT_EXECUTED"
+    }
+  ],
+  "runtimeSpecifications": [
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "strict-REQ001-refusal-unchanged",
+      "isoSubsetTests": [
+        "tests/test_rbac_postgres.py::test_installation_failure_is_transactional"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "strict-retained-policy-refusal-unchanged",
+      "isoSubsetTests": [
+        "tests/test_rbac_postgres.py::test_installation_failure_is_transactional"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "qualified-owner-positive",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial",
+        "tests/test_rbac_composition_postgres.py::test_full_19_column_source_nonowner_positive_and_negative"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "foreign-or-missing-context-negative",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_missing_malformed_and_unqualified_context_denials",
+        "tests/test_rbac_composition_postgres.py::test_tenant_change_and_trigger_final_row_fence"
+      ],
+      "remaining": "Fixture invoker trigger final-row rollback is tested; canonical guard/helper/permit side effects remain unknown.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "acl-missing-each",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes"
+      ],
+      "remaining": "Required genuine helper/guard rights are not provided or executed.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "acl-excess-each",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes"
+      ],
+      "remaining": "Unrelated object/function rights and genuine inherited/default creator closure remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "acl-changed-origins",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes"
+      ],
+      "remaining": "Tests compare direct/PUBLIC origin, membership and creator default snapshots; actual creator/guard graph is unknown.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "policy-missing-extra-name",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_retained_exact_definition_each_field_refuses_before_writes"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "policy-changed-definition-each",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_retained_exact_definition_each_field_refuses_before_writes",
+        "tests/test_rbac_composition_postgres.py::test_owned_policy_changed_definitions_refuse_upgrade"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "policy-read-union",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_retained_permissive_union_refuses_and_unfiltered_probe_exposes_hazard",
+        "tests/test_rbac_composition_postgres.py::test_compatible_retained_policy_preserved_and_upgrade_down"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "policy-writer-positive-closure",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial",
+        "tests/test_rbac_composition_postgres.py::test_full_19_column_source_nonowner_positive_and_negative"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "tenant-change-negative",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_direct_tenant_actor_change_denied_without_select_mask",
+        "tests/test_rbac_composition_postgres.py::test_tenant_change_and_trigger_final_row_fence"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "reader-remains-select-only",
+      "isoSubsetTests": [
+        "tests/test_rbac_postgres.py::test_hasura_two_tenants_and_no_mutations",
+        "tests/test_rbac_postgres.py::test_real_hasura_cli_export_only_changes_select"
+      ],
+      "remaining": "Existing Hasura regressions use a bootstrap-backed test engine; they are not nonowner app.* Hasura context proof.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "worker-unknown-negative",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_missing_malformed_and_unqualified_context_denials"
+      ],
+      "remaining": "Unknown admin/nil contexts deny in the fixture. Genuine bootstrap/lease/executor/issuer/revoker closure remains unexecuted.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "BLOCKED_NOT_EXECUTED",
+      "fullCasePass": false,
+      "id": "guard-positive-and-excess",
+      "isoSubsetTests": [],
+      "remaining": "No genuine nonowner guard identities, functions, helper/column rights or installation candidate. No substituted superuser guard.",
+      "sourceChecks": []
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "SOURCE_CHECKS_ONLY_RUNTIME_NOT_CLAIMED",
+      "fullCasePass": false,
+      "id": "history-golden-strict",
+      "isoSubsetTests": [],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": [
+        "tests/test_rbac_reattest.py::test_reviewed_reattest_recovers_real_old_lock_and_preserves_every_output"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "SOURCE_CHECKS_ONLY_RUNTIME_NOT_CLAIMED",
+      "fullCasePass": false,
+      "id": "history-envelope-byte-binding",
+      "isoSubsetTests": [],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": [
+        "tests/test_rbac_composition.py::test_history_bindings_upgrade_down_and_g4_never_written",
+        "tests/test_rbac_composition.py::test_exact_source_bytes_refuse_even_output_identical_format_tampering"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "history-upgrade-and-down",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_compatible_retained_policy_preserved_and_upgrade_down"
+      ],
+      "remaining": "Composed-to-composed fixture rollback passes. Fresh/reader-only predecessor rollback refuses to preserve writer fences; the full source-owned installation rollback is unknown.",
+      "sourceChecks": [
+        "tests/test_rbac_composition.py::test_output_identical_upgrade_reattests_prior_writer_implementation"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "SOURCE_CHECKS_ONLY_RUNTIME_NOT_CLAIMED",
+      "fullCasePass": false,
+      "id": "history-reattest-changed-output",
+      "isoSubsetTests": [],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": [
+        "tests/test_rbac_composition.py::test_changed_writer_bytes_refuse_reattest"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "SOURCE_CHECKS_ONLY_RUNTIME_NOT_CLAIMED",
+      "fullCasePass": false,
+      "id": "writer-generated-provenance-negative",
+      "isoSubsetTests": [],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": [
+        "tests/test_rbac_composition.py::test_source_and_generated_receipt_refuse_before_emission",
+        "tests/test_rbac_composition.py::test_self_consistent_forged_review_is_not_authority"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "SOURCE_CHECKS_ONLY_RUNTIME_NOT_CLAIMED",
+      "fullCasePass": false,
+      "id": "retained-writer-not-authority",
+      "isoSubsetTests": [],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": [
+        "tests/test_rbac_writer_rules.py::test_retained_writer_cannot_supply_missing_generated_command",
+        "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority"
+      ]
+    },
+    {
+      "actualStatus": "BLOCKED_NOT_EXECUTED",
+      "fixtureEvidenceStatus": "EXECUTED_BOUNDED_ISO_SUBSET",
+      "fullCasePass": false,
+      "id": "policy-write-union",
+      "isoSubsetTests": [
+        "tests/test_rbac_composition_postgres.py::test_retained_permissive_union_refuses_and_unfiltered_probe_exposes_hazard",
+        "tests/test_rbac_composition_postgres.py::test_compatible_retained_policy_preserved_and_upgrade_down"
+      ],
+      "remaining": "Actual owning declarations/reviews, target connection/owner/creator/guard and complete worker/Hasura context remain unqualified.",
+      "sourceChecks": []
+    }
+  ],
+  "targetInputs": {
+    "bootstrapConnection": null,
+    "bunConnectionLogin": null,
+    "existingHasuraConnectionLogin": null,
+    "guardOwner": null,
+    "installedArtifactHead": null,
+    "installedConsumerHead": null,
+    "installedMetadataSha256": null,
+    "nonprodIdentity": null,
+    "objectCreators": null,
+    "stagingControls": null
+  }
+}

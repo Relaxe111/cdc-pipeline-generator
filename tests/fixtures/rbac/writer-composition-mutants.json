@@ -1,0 +1,191 @@
+{
+  "classification": "SEEDED_SOURCE_MUTANTS_NOT_ACTUAL_INSTALLATION_ORACLES",
+  "method": "One source mutant at a time, fresh bytecode cache; each exact original file restored and SHA256 verified in finally. KILLED requires failed behavioral assertion, not setup/import error.",
+  "rawResultsSha256": "bfcc37a00bbd5765152be7b30227f2157a6680a34ad9b3ef7a206ba4b07650e1",
+  "results": [
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_____________ test_self_consistent_forged_review_is_not_authority ______________\ntests/test_rbac_composition.py:288: in test_self_consistent_forged_review_is_not_authority\n    with pytest.raises(ValueError, match=\"Actual owning declaration/review not admitted\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition.py::test_self_consistent_forged_review_is_not_authority\n1 failed in 0.72s\n",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "C1-review",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition.py::test_self_consistent_forged_review_is_not_authority"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_source_and_generated_receipt_refuse_before_emission[receipt-output] ___\ntests/test_rbac_composition.py:105: in test_source_and_generated_receipt_refuse_before_emission\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition.py::test_source_and_generated_receipt_refuse_before_emission[receipt-output]\n1 failed in 0.76s\n",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "C1-byte-regeneration",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition.py::test_source_and_generated_receipt_refuse_before_emission[receipt-output]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____ test_exact_source_bytes_refuse_even_output_identical_format_tampering _____\ntests/test_rbac_composition.py:237: in test_exact_source_bytes_refuse_even_output_identical_format_tampering\n    with pytest.raises(ValueError, match=\"changed source snapshot bytes\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition.py::test_exact_source_bytes_refuse_even_output_identical_format_tampering\n1 failed in 0.63s\n",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "source-raw-bytes",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition.py::test_exact_source_bytes_refuse_even_output_identical_format_tampering"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_retained_source_identity_is_not_semantic_normalization[definition-hash] _\ntests/test_rbac_composition.py:266: in test_retained_source_identity_is_not_semantic_normalization\n    with pytest.raises(ValueError, match=r\"Retained policy definition/source mismatch|Owner envelope schema clause\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition.py::test_retained_source_identity_is_not_semantic_normalization[definition-hash]\n1 failed in 0.62s\n",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "retained-definition-hash",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition.py::test_retained_source_identity_is_not_semantic_normalization[definition-hash]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_retained_source_identity_is_not_semantic_normalization[source-body] ___\ntests/test_rbac_composition.py:266: in test_retained_source_identity_is_not_semantic_normalization\n    with pytest.raises(ValueError, match=r\"Retained policy definition/source mismatch|Owner envelope schema clause\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition.py::test_retained_source_identity_is_not_semantic_normalization[source-body]\n1 failed in 0.65s\n",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "retained-source-identity",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition.py::test_retained_source_identity_is_not_semantic_normalization[source-body]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____ test_writer_declaration_refuses_missing_or_guessed_authority[columns] _____\ntests/test_rbac_writer_rules.py:72: in test_writer_declaration_refuses_missing_or_guessed_authority\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[columns]\n1 failed in 0.21s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-columns",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[columns]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_____ test_writer_declaration_refuses_missing_or_guessed_authority[tenant] _____\ntests/test_rbac_writer_rules.py:72: in test_writer_declaration_refuses_missing_or_guessed_authority\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[tenant]\n1 failed in 0.21s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-tenant",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[tenant]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_writer_declaration_refuses_missing_or_guessed_authority[missing-command] _\ntests/test_rbac_writer_rules.py:72: in test_writer_declaration_refuses_missing_or_guessed_authority\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[missing-command]\n1 failed in 0.22s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-coverage",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[missing-command]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____ test_writer_declaration_refuses_missing_or_guessed_authority[context] _____\ntests/test_rbac_writer_rules.py:72: in test_writer_declaration_refuses_missing_or_guessed_authority\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[context]\n1 failed in 0.21s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-context",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[context]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_writer_declaration_refuses_missing_or_guessed_authority[ignored-definition] _\ntests/test_rbac_writer_rules.py:72: in test_writer_declaration_refuses_missing_or_guessed_authority\n    with pytest.raises(ValueError):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[ignored-definition]\n1 failed in 0.21s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-ignored-clause",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_writer_declaration_refuses_missing_or_guessed_authority[ignored-definition]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_nonowner_active_rls_positive_and_foreign_denial[False-UPDATE-False] ___\ntests/test_rbac_composition_postgres.py:160: in test_nonowner_active_rls_positive_and_foreign_denial\n    assert probe(app, statements(command, returning)) == 1\nE   assert 2 == 1\nE    +  where 2 = probe(<connection object at 0x10ad55fc0; dsn: 'user=editor_app password=xxx dbname=asma8350_writer_3e962b1846d146abb0bd2f2144dda230 host=127.0.0.1 port=55485', closed: 0>, \"UPDATE editor.qnrs SET lifecycle_status='written'\")\nE    +    where \"UPDATE editor.qnrs SET lifecycle_status='written'\" = statements('UPDATE', False)\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-UPDATE-False]\n1 failed in 0.69s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-actor",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-UPDATE-False]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_nonowner_active_rls_positive_and_foreign_denial[False-INSERT-False] ___\ntests/test_rbac_composition_postgres.py:160: in test_nonowner_active_rls_positive_and_foreign_denial\n    assert probe(app, statements(command, returning)) == 1\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/test_rbac_composition_postgres.py:124: in probe\n    cursor.execute(query)\nE   psycopg2.errors.InsufficientPrivilege: new row violates row-level security policy for table \"qnrs\"\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-INSERT-False]\n1 failed in 0.60s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-INSERT-CHECK",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-INSERT-False]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_nonowner_active_rls_positive_and_foreign_denial[False-DELETE-False] ___\ntests/test_rbac_composition_postgres.py:160: in test_nonowner_active_rls_positive_and_foreign_denial\n    assert probe(app, statements(command, returning)) == 1\nE   AssertionError: assert 0 == 1\nE    +  where 0 = probe(<connection object at 0x108175fc0; dsn: 'user=editor_app password=xxx dbname=asma8350_writer_8dfa73f7a6ab462d910166126c25c2ed host=127.0.0.1 port=55485', closed: 0>, 'DELETE FROM editor.qnrs')\nE    +    where 'DELETE FROM editor.qnrs' = statements('DELETE', False)\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-DELETE-False]\n1 failed in 0.59s\n",
+      "file": "cdc_generator/core/rbac/writer_rules.py",
+      "id": "writer-DELETE-USING",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_nonowner_active_rls_positive_and_foreign_denial[False-DELETE-False]"
+    },
+    {
+      "failedAssertions": "ized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[True-INSERT] _____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[True-UPDATE] _____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[True-DELETE] _____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n______ test_semantic_union_refuses_widening_or_universal_denial[True-ALL] ______\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-SELECT]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-INSERT]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-UPDATE]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-DELETE]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-ALL]\n5 failed, 5 passed in 0.29s\n",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "C2-C3-widening",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial"
+    },
+    {
+      "failedAssertions": "):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[False-INSERT] ____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[False-UPDATE] ____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n____ test_semantic_union_refuses_widening_or_universal_denial[False-DELETE] ____\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n_____ test_semantic_union_refuses_widening_or_universal_denial[False-ALL] ______\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[False-SELECT]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[False-INSERT]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[False-UPDATE]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[False-DELETE]\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[False-ALL]\n5 failed, 5 passed in 0.29s\n",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "positive-not-denial",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_semantic_union_refuses_widening_or_universal_denial[True-ALL] ______\ntests/test_rbac_writer_rules.py:84: in test_semantic_union_refuses_widening_or_universal_denial\n    with pytest.raises(ValueError, match=r\"widens|removes authorized\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-ALL]\n1 failed in 0.21s\n",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "ALL-expansion",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_semantic_union_refuses_widening_or_universal_denial[True-ALL]"
+    },
+    {
+      "failedAssertions": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n_ test_literal_case_and_field_types_are_not_normalized_to_safe_policy[NULLIF(current_setting('app.role',true),'') = 'THERAPIST'] _\ntests/test_rbac_writer_rules.py:130: in test_literal_case_and_field_types_are_not_normalized_to_safe_policy\n    with pytest.raises(ValueError, match=\"Unsupported retained equality/context/type\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE ValueError\n=========================== short test summary info ============================\nFAILED tests/test_rbac_writer_rules.py::test_literal_case_and_field_types_are_not_normalized_to_safe_policy[NULLIF(current_setting('app.role',true),'') = 'THERAPIST']\n1 failed, 1 passed in 0.20s\n",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "literal-case",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_writer_rules.py::test_literal_case_and_field_types_are_not_normalized_to_safe_policy"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n____ test_exact_acl_creator_membership_refusal_before_writes[column-False] _____\ntests/test_rbac_composition_postgres.py:261: in test_exact_acl_creator_membership_refusal_before_writes\n    with pytest.raises(psycopg2.Error, match=r\"RBAC.*(changed|privileged|nonowner)\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[column-False]\n1 failed in 0.65s\n",
+      "file": "cdc_generator/core/rbac/composition_sql.py",
+      "id": "ACL-origin",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[column-False]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_exact_acl_creator_membership_refusal_before_writes[role-inherit-False] __\ntests/test_rbac_composition_postgres.py:261: in test_exact_acl_creator_membership_refusal_before_writes\n    with pytest.raises(psycopg2.Error, match=r\"RBAC.*(changed|privileged|nonowner)\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[role-inherit-False]\n1 failed in 0.64s\n",
+      "file": "cdc_generator/core/rbac/composition_sql.py",
+      "id": "membership-attributes",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[role-inherit-False]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n___ test_exact_acl_creator_membership_refusal_before_writes[defaults-False] ____\ntests/test_rbac_composition_postgres.py:261: in test_exact_acl_creator_membership_refusal_before_writes\n    with pytest.raises(psycopg2.Error, match=r\"RBAC.*(changed|privileged|nonowner)\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[defaults-False]\n1 failed in 0.63s\n",
+      "file": "cdc_generator/core/rbac/composition_sql.py",
+      "id": "creator-defaults",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_exact_acl_creator_membership_refusal_before_writes[defaults-False]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_owned_policy_changed_definitions_refuse_upgrade[writer-check] ______\ntests/test_rbac_composition_postgres.py:420: in test_owned_policy_changed_definitions_refuse_upgrade\n    with pytest.raises(psycopg2.Error, match=\"exact generated/retained policy definition drift\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_owned_policy_changed_definitions_refuse_upgrade[writer-check]\n1 failed in 0.64s\n",
+      "file": "cdc_generator/core/rbac/composition_sql.py",
+      "id": "policy-definition",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_owned_policy_changed_definitions_refuse_upgrade[writer-check]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n_ test_test_only_source_never_admits_other_database_installation[unqualified] __\ntests/test_rbac_composition_postgres.py:500: in test_test_only_source_never_admits_other_database_installation\n    with pytest.raises(psycopg2.Error, match=\"no actual target installation admission\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_test_only_source_never_admits_other_database_installation[unqualified]\n1 failed in 0.65s\n",
+      "file": "cdc_generator/core/rbac/composition_sql.py",
+      "id": "installation-hold",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_test_only_source_never_admits_other_database_installation[unqualified]"
+    },
+    {
+      "failedAssertions": "F                                                                        [100%]\n=================================== FAILURES ===================================\n__________ test_compatible_retained_policy_preserved_and_upgrade_down __________\ntests/test_rbac_composition_postgres.py:322: in test_compatible_retained_policy_preserved_and_upgrade_down\n    with pytest.raises(psycopg2.Error, match=\"lacks qualified predecessor\"):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE   Failed: DID NOT RAISE Error\n=========================== short test summary info ============================\nFAILED tests/test_rbac_composition_postgres.py::test_compatible_retained_policy_preserved_and_upgrade_down\n1 failed in 0.66s\n",
+      "file": "cdc_generator/core/rbac/rendering.py",
+      "id": "rollback-writer-fences",
+      "returncode": 1,
+      "status": "KILLED",
+      "test": "tests/test_rbac_composition_postgres.py::test_compatible_retained_policy_preserved_and_upgrade_down"
+    }
+  ]
+}

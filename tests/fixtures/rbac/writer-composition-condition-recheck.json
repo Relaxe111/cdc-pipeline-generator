@@ -1,0 +1,253 @@
+{
+  "actualStatus": {
+    "freshUpgradeVariants": "34/34 BLOCKED_NOT_EXECUTED",
+    "originalOracles": "18/18 BLOCKED_NOT_EXECUTED",
+    "runtimeSpecifications": "22/22 actual BLOCKED_NOT_EXECUTED; bounded ISO/source subdivisions unchanged",
+    "targetInputs": "10/10 null"
+  },
+  "boundedTests": {
+    "byFile": {
+      "test_rbac": 66,
+      "test_rbac_composition": 38,
+      "test_rbac_composition_cases": 3,
+      "test_rbac_composition_postgres": 125,
+      "test_rbac_postgres": 56,
+      "test_rbac_provenance": 41,
+      "test_rbac_reattest": 35,
+      "test_rbac_repairs": 24,
+      "test_rbac_writer_rules": 32
+    },
+    "coveragePercentRounded": 97,
+    "coverageStatements": 1025,
+    "failed": 0,
+    "junitSha256": "5e19af56dbdcd94b5c2724c729b0c1e293c335e091e66345617af2d8c0a8fcc1",
+    "passed": 420,
+    "totalStatements": 1052
+  },
+  "casesLedgerSha256": "4a992f8b79213ce6d1c61b4e03a4988d0708b03b7394534335ab9e281a9831d3",
+  "classification": "SOURCE_CONDITION_RECHECK_AND_DISPOSABLE_ISO_ONLY",
+  "conditions": [
+    {
+      "id": "C1",
+      "negative": "Role-agnostic tenant-only retained SELECT opens NULL/unknown role when generated SELECT covers every known role; proof refuses",
+      "noPartialOutput": "Compile-time proof emits nothing",
+      "positive": "Restrictive tenant fence preserves every known-role authorized positive",
+      "status": "KILLED"
+    },
+    {
+      "id": "C2",
+      "negative": "Cohesively rehashed worker source with unproved actualWorker is refused",
+      "noPartialOutput": "Owner file bytes unchanged and lock absent after refusal",
+      "positive": "Exact test-only worker source emits and checks",
+      "status": "KILLED"
+    },
+    {
+      "id": "C3",
+      "negative": "Cohesively rehashed unreviewed compiler context is refused",
+      "noPartialOutput": "Owner file bytes unchanged and lock absent after refusal",
+      "positive": "Exact current compiler context emits and checks",
+      "status": "KILLED"
+    },
+    {
+      "id": "C4",
+      "negative": "Coherently source-bound retained cdc_rbac_ name is refused",
+      "noPartialOutput": "Owner file bytes unchanged and lock absent after refusal",
+      "positive": "Compatible other-owner tenant fence emits and checks",
+      "status": "KILLED"
+    },
+    {
+      "id": "C5",
+      "negative": "Generated up prefix holds ACCESS EXCLUSIVE before preflight; competing ALTER times out",
+      "noPartialOutput": "Prefix rollback leaves policy and ACL inventories identical",
+      "positive": "Same ALTER succeeds after rollback and full up preserves nonowner active-RLS writer positive",
+      "status": "KILLED"
+    }
+  ],
+  "freshFixture": {
+    "credential": "disposable fixture only",
+    "fixtureCreatedRoleDropped": true,
+    "fixtureDatabasesDropped": true,
+    "preexistingEditorApp": false,
+    "standalonePostgresTestsFailed": 0,
+    "standalonePostgresTestsPassed": 124
+  },
+  "fullRepository": {
+    "baselineClassification": "Same 3 previously reproduced unrelated fixture failures; affected files unchanged from landed base",
+    "cliEnvironment": "Explicit worktree .venv/bin first PATH and empty test-owned XDG_CONFIG_HOME for fish",
+    "failed": 3,
+    "failures": [
+      "tests.test_pipeline_generation::test_generate_all_writes_canonical_pipeline_paths",
+      "tests.test_pipeline_generation::test_verify_full_passes_on_minimal_fixture",
+      "tests.test_server_group_handlers.TestHandleSetTargetSinkEnv::test_set_target_sink_env_succeeds"
+    ],
+    "globalFishCliFailuresReproducedAsProductRegression": false,
+    "junitSha256": "10dfe38825b032a28baa515ace3001e6bb57f959d1d6aad6a0ee3281c7ee3ac4",
+    "passed": 2085
+  },
+  "holds": [
+    "NO_TARGET_INSTALL",
+    "NO_ARTIFACT_EMISSION",
+    "NO_PRODUCT_RLS_ACTIVATION",
+    "NO_ARTIFACT_MASTER_MERGE_AUTO_INSTALL",
+    "NO_A6_OR_ASMA_8350_COMPLETION"
+  ],
+  "independentReviewInitialMutationAccounting": {
+    "killed": 7,
+    "survived": 12,
+    "total": 19
+  },
+  "landedBase": "1a2aab52154dd5ff3836633512972fd6a4ecd728",
+  "lowMutantResultSha256": "95ff0a5130085811235de44f96efc4b45eab82d23ee81b35489d0d73b67a33a4",
+  "newCompilingBehavioralMutants": [
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_writer_rules.py::test_role_agnostic_tenant_read_refuses_absent_and_unknown_role_states",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "C1-state-space-unknown",
+      "mutation": "ROLES",
+      "original": "(*ROLES, None, \"unknown\")",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_writer_rules.py::test_role_agnostic_tenant_read_refuses_absent_and_unknown_role_states"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[worker-source]",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "C2-worker-source",
+      "mutation": "if False:",
+      "original": "if worker != {\"qualification\": QUALIFICATION, \"context\": CONTEXT, \"actualWorker\": None, \"unknownWorker\": \"REFUSE\"}:",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[worker-source]"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[compiler-context]",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "C3-compiler-context",
+      "mutation": "if False:",
+      "original": "if context not in (compiler_context(), *reviewed_contexts):",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[compiler-context]"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[retained-name]",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "C4-retained-prefix",
+      "mutation": "if name in result:",
+      "original": "if name.startswith(\"cdc_rbac_\") or name in result:",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition.py::test_condition_bindings_refuse_before_output_and_keep_positive_control[retained-name]"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition_postgres.py::test_generated_up_takes_relation_lock_before_preflight_and_releases_on_rollback",
+      "file": "cdc_generator/core/rbac/rendering.py",
+      "id": "C5-up-lock",
+      "mutation": "lock = []",
+      "original": "lock = ['LOCK TABLE \"editor\".\"qnrs\" IN ACCESS EXCLUSIVE MODE;'] if current.composition else []",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition_postgres.py::test_generated_up_takes_relation_lock_before_preflight_and_releases_on_rollback"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition.py::test_unused_well_formed_source_receipt_refuses_before_output",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "Low-unbound-sources",
+      "mutation": "if False:",
+      "original": "if sources.used != set(sources.bodies):",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition.py::test_unused_well_formed_source_receipt_refuses_before_output"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_composition.py::test_reviewed_envelope_schema_byte_pin_refuses_before_output",
+      "file": "cdc_generator/core/rbac/composition.py",
+      "id": "Low-schema-pin",
+      "mutation": "if False:",
+      "original": "if digest(schema_path.read_bytes()) != ENVELOPE_SCHEMA_SHA256:",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_composition.py::test_reviewed_envelope_schema_byte_pin_refuses_before_output"
+    },
+    {
+      "compiles": true,
+      "failedAssertion": "FAILED tests/test_rbac_writer_rules.py::test_retained_parser_refuses_trailing_tokens_after_a_valid_positive_expression",
+      "file": "cdc_generator/core/rbac/policy_semantics.py",
+      "id": "Low-parser-trailing",
+      "mutation": "if False:",
+      "original": "if parser.pos != len(parser.tokens):",
+      "status": "KILLED_BY_BEHAVIORAL_ASSERTION",
+      "test": "tests/test_rbac_writer_rules.py::test_retained_parser_refuses_trailing_tokens_after_a_valid_positive_expression"
+    }
+  ],
+  "officialValidatorPins": {
+    "jsonschema": "4.25.1",
+    "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  },
+  "ownerEnvelopeSchemaSha256": "e0254d2536357090b90189045859a334056718b3c476b0b3c6082470f6f5e4f8",
+  "priorReviewedHead": "7f93fc8018332610644b0a88cfe1add92e9452d1",
+  "recheckMutationAccounting": {
+    "previousSurvivorsNewlyKilled": 8,
+    "remainingLow": 4
+  },
+  "remainingLowClassification": [
+    {
+      "id": "OWN-fixture-qualification",
+      "reason": "Both admitted declaration/review byte hashes pin their TEST_ONLY_NONOWNER_ISO qualification; altered bytes lose exact admission before this guard. No actual owner source is admitted.",
+      "status": "SURVIVED_CURRENT_FIXTURE_EQUIVALENCE"
+    },
+    {
+      "id": "OWN-review-binds-declaration",
+      "reason": "Both admitted review/declaration byte hashes pin their matching declaration and OpenDD hashes. A changed pair is rejected by exact admission. This does not qualify a future owner source.",
+      "status": "SURVIVED_CURRENT_FIXTURE_EQUIVALENCE"
+    },
+    {
+      "id": "OWN-reader-projection",
+      "reason": "The current pinned declarations and whole-relation writer columns block a partial-reader input earlier. The independent guard is retained; a future actual owner admission needs a direct compatible-input oracle.",
+      "status": "SURVIVED_MISSING_DIRECT_ORACLE"
+    },
+    {
+      "id": "OWN-parser-any-cast",
+      "reason": "The accepted flat equality AST excludes unsupported casts later even if the early cast guard is removed in the observed mutation. Exhaustive equivalence is not claimed; the guard remains.",
+      "status": "SURVIVED_NO_DIRECT_ORACLE"
+    }
+  ],
+  "rootConditionPacketSha256": "16d715aa0249872a9ebb93652c752fccc420b17ac7cde91d298924a9aafbfd3b",
+  "selectedMutantResultSha256": "91b0ca07dcf9eda6ea0f0bcec7e62176df8958e97f80efcf47266401a82592a8",
+  "sourceCli": {
+    "checkoutAndInstalledWheelCalls": 27,
+    "cliResultSha256": "2b5932774fbfd35feb6598ee8986ac6ff69dddac8558a9b9fe554925839e06cf",
+    "expectedOutcomesMatched": true,
+    "fishDoctorLogSha256": "a5fe9f0b8dbdebcd3b11f6ba249bc8452cf1649d4b5ec12704ba2ab73ba6f233",
+    "fishResolvedWorktreeVenv": true,
+    "freshOutputs": {
+      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "0fe9b651148406981f1d983b4b0d6e010b52363e8451fa728692752f3dab2547",
+      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "aa934f36020ffad9850d34ecf5080a23e6717f4a330553cc93dfcbb431642bb2",
+      "rbac/.rbac-lock.json": "2b24be2a73686ebdec9622f9ad5e496006bb58cf5379e0327c8035fc72c3010f"
+    },
+    "g4ByteIdentical": true,
+    "reattestation": {
+      "byteIdenticalWholeHistory": true,
+      "candidateSha256": "a18f9f25799cc9fa5ca62fc8d46778240da0301f5a607ed3f8e44f594d454539",
+      "previousLockSha256": "39acc74773353c893688fabba6b7dc8eacf13a09053a801717a08a5f6b10b5d7",
+      "recordedPriorImplementation": true
+    },
+    "upgradeOutputs": {
+      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "0fe9b651148406981f1d983b4b0d6e010b52363e8451fa728692752f3dab2547",
+      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "aa934f36020ffad9850d34ecf5080a23e6717f4a330553cc93dfcbb431642bb2",
+      "migrations/default/1800000000001_rbac_editor_qnrs/down.sql": "97871ef113ba549c0276751b560a1a98f4f74336637079f5fc406c0fb0136f27",
+      "migrations/default/1800000000001_rbac_editor_qnrs/up.sql": "97871ef113ba549c0276751b560a1a98f4f74336637079f5fc406c0fb0136f27",
+      "rbac/.rbac-lock.json": "39acc74773353c893688fabba6b7dc8eacf13a09053a801717a08a5f6b10b5d7"
+    },
+    "usageStatsAbsent": true
+  },
+  "sourceImplementationChanged": false,
+  "sourceImplementationSha256": "ad34901be066c48c4de0dda7f6d086cfbac5a6d75723b3ba7859a011be6b153f",
+  "staticChecks": {
+    "black": "PASS",
+    "pyright": "0 errors, 0 warnings",
+    "ruff": "PASS"
+  }
+}
