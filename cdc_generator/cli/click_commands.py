@@ -76,6 +76,7 @@ from cdc_generator.cli.completions import (
     complete_transform_rules,
     complete_transforms_on_table,
 )
+from cdc_generator.cli.rbac import rbac_cmd
 from cdc_generator.cli.smart_command import (
     MANAGE_SCHEMA_CUSTOM_TABLES_ALWAYS,
     MANAGE_SCHEMA_CUSTOM_TABLES_GROUPS,
@@ -567,6 +568,7 @@ def setup_local_cmd(_ctx: click.Context, **_kwargs: object) -> int:
 
 CLICK_COMMANDS: dict[str, click.Command] = {
     "fdw": fdw_cmd,
+    "rbac": rbac_cmd,
     "manage-services": manage_services_cmd,
     "manage-source-groups": manage_source_groups_cmd,
     "manage-sink-groups": manage_sink_groups_cmd,

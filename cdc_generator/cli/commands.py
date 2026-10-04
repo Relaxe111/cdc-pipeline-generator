@@ -555,7 +555,7 @@ def main() -> int:
             )
         return 0
 
-    if len(sys.argv) >= _MIN_ARGS:
+    if len(sys.argv) >= _MIN_ARGS and sys.argv[1] != "rbac":
         workspace_root, _implementation_name, _is_dev_container = detect_environment()
         with contextlib.suppress(Exception):
             track_usage(workspace_root, sys.argv[1:])

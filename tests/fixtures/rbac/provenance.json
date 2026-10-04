@@ -1,0 +1,44 @@
+{
+  "artifact_input_commit": "af7fa36775ef994bb66f9f125042ee71e5d26758",
+  "authority": {
+    "id": "QNR-ROOT-8350-SINGLE-WRITER-DISPOSITION-20261004-1",
+    "sha256": "7d215655cb5f82037e3d2c1ac21cd7f8a7bf6938ba676f91fe8fe81b575244bd"
+  },
+  "compiler_base": {
+    "head": "539a76bb8822837602a39ea42e18e7554223eab4",
+    "origin_freshly_verified": true,
+    "remote": "https://github.com/Relaxe111/cdc-pipeline-generator.git"
+  },
+  "fixtures": {
+    "compiler-input-contract.json": "027ba9707ef63dbda7a5811c18811f3ab2dc619b800a23ba14a10eafd738ebab",
+    "editor.catalog.json": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65",
+    "editor.rbac.json": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2",
+    "editor_qnrs.yaml": "e5b55a75e6485b5b5bbf9f09f9a3e88ffa964e67c58c1d638ac8eac03a27a8f0",
+    "expected-generation.json": "e249723f326b851dc22a128d17d2000a598798a6fbdef8490bee6b9e17de7370",
+    "public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f"
+  },
+  "generated": {
+    "down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
+    "select_permissions": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba",
+    "up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180"
+  },
+  "pins": {
+    "jsonschema": "4.25.1",
+    "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  },
+  "runtime": {
+    "attrs": "26.1.0",
+    "jsonschema": "4.25.1",
+    "jsonschema-specifications": "2025.9.1",
+    "referencing": "0.37.0",
+    "rpds-py": "2026.6.3",
+    "ruamel.yaml": "0.19.1"
+  },
+  "scope": "Compiler admission subset only; no target installation or full L3 discharge",
+  "validator_wheel": {
+    "name": "jsonschema-4.25.1-py3-none-any.whl",
+    "sha256": "3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63"
+  }
+}

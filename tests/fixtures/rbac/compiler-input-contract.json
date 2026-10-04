@@ -1,0 +1,113 @@
+{
+  "issue": "ASMA-8350",
+  "readiness": "READY_TO_REVIEW_INPUTS; BLOCKED_COMPILER_IMPLEMENTATION_AND_DDN_OFFLINE_QUALIFICATION",
+  "compiler": {
+    "repository": "Relaxe111/cdc-pipeline-generator",
+    "base": "539a76bb8822837602a39ea42e18e7554223eab4",
+    "version": "0.48.4",
+    "entryPoint": "cdc_generator.cli.commands:main",
+    "registry": "cdc_generator/cli/click_commands.py",
+    "existingRbacCommand": false,
+    "implementationOwnerScope": "G1-G3 in current compiler only; ASMA-6790 unchanged"
+  },
+  "schema": {
+    "path": "inputs/editor-qnrs.schema.json",
+    "sha256": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65",
+    "table": "editor.qnrs",
+    "columns": [
+      "id",
+      "customer_id",
+      "user_id",
+      "lifecycle_status"
+    ],
+    "introspection": "Actual PG 17.11 catalog after reviewed combined 1177-migration package",
+    "catalogPath": "evidence/qnrs-catalog.json",
+    "catalogSha256": "8e621840ce96c50a059cc3c40f4a6717e54cddf7e93032517ab03274ddf7cfab"
+  },
+  "input": {
+    "path": "inputs/editor-qnrs.opendd.json",
+    "sha256": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2",
+    "kinds": [
+      "ModelPermissions v1",
+      "TypePermissions v1"
+    ],
+    "roles": [
+      "recipient",
+      "super_user",
+      "therapist"
+    ],
+    "operators": [
+      "_eq",
+      "and"
+    ],
+    "variables": [
+      "x-hasura-customer-id",
+      "x-hasura-user-id"
+    ],
+    "connectionGucs": {
+      "x-hasura-customer-id": "app.customer_id",
+      "x-hasura-user-id": "app.user_id",
+      "role": "app.role"
+    },
+    "use": "Compiler admission subset only; not full service policy, write grant, RLS activation or target authorization"
+  },
+  "openDD": {
+    "repository": "hasura/graphql-engine",
+    "commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "upstreamPath": "v3/crates/open-dds/metadata.jsonschema",
+    "upstreamSha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20",
+    "slicePath": "inputs/opendd-permissions.schema.json",
+    "sliceSha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "sliceDerivation": "Exact upstream v1 variants and recursive definitions, with nested $id annotations removed so local #/definitions references resolve at document root under JSON Schema. Validation keywords/permission shapes unchanged.",
+    "permissionSourcePath": "v3/crates/open-dds/src/permissions.rs",
+    "permissionSourceSha256": "425092838f9a764ae0506a5d0608aeda84ba9f9c442a02bd77bd7ee57382554a"
+  },
+  "offlineShapeValidator": {
+    "distribution": "jsonschema",
+    "version": "4.25.1",
+    "purpose": "Official JSON Schema shape validation only; proposed dependency in current compiler G1, not a parallel compiler",
+    "runtimeLock": "evidence/python-dependencies.txt",
+    "wheel": {
+      "filename": "jsonschema-4.25.1-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/bf/9c/8c95d856233c1f82500c2450b8c68576b4cf1c871db3afac5c34ff84e6fd/jsonschema-4.25.1-py3-none-any.whl",
+      "sha256": "3fba0169e345c7175110351d456342c364814cfcf3b964ba4587f22915230a63"
+    }
+  },
+  "ddn": {
+    "binary": "/usr/local/bin/ddn",
+    "version": "v2.19.0",
+    "sha256": "8576958bd378e5b28901b5444a276e66e57bd8e55b36625efe43f4f0c44300d9",
+    "observedCommand": [
+      "ddn",
+      "supergraph",
+      "build",
+      "local",
+      "--help"
+    ],
+    "observedBehavior": "Help describes DDN hosted metadata build service",
+    "offlineSemanticValidation": "BLOCKED; no qualified offline DDN invocation/artifact. Do not call hosted local build offline validation."
+  },
+  "G1": [
+    "Integrate real-name/accepted-role enums and official shape validation in pinned compiler; fail closed for missing/unsupported constructs",
+    "Qualify mandatory DDN offline validation separately before admission"
+  ],
+  "G2": [
+    "Generate RLS and SELECT-only Hasura for supported flat predicates",
+    "Derive exact connection grant envelope from supported rules",
+    "Close authenticated reads, owner writes and qualified worker contexts before RLS activation"
+  ],
+  "G3": [
+    "Deterministic diff and lock provenance, new immutable migrations only",
+    "Structured merge only owned editor SELECT permissions; preserve relationships/unrelated source",
+    "Verify separately owned public.queries G4 exception; do not add internal session role to platform enum",
+    "Tampering and misspelled roles must fail"
+  ],
+  "forbidden": [
+    "Handwritten RLS",
+    "Generated Hasura insert/update/delete for owner-exclusive schemas",
+    "Parallel compiler/tool",
+    "Full RBAC roadmap",
+    "ASMA-6790 rescope",
+    "Target apply"
+  ]
+}

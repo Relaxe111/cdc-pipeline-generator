@@ -1,0 +1,142 @@
+table:
+  name: qnrs
+  schema: editor
+object_relationships:
+  - name: content_instances_qnr
+    using:
+      foreign_key_constraint_on:
+        column: instance_id
+        table:
+          name: content_instances_qnr
+          schema: editor
+  - name: qnr_instance_sync_link
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_instance_sync_links
+          schema: editor
+  - name: qnr_template_version
+    using:
+      manual_configuration:
+        column_mapping:
+          qnr_template_id: qnr_template_id
+          template_version: version
+        insertion_order: null
+        remote_table:
+          name: qnr_template_versions
+          schema: editor
+array_relationships:
+  - name: dataSourceSubscriptionsByQnrId
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: data_source_subscriptions
+          schema: editor
+  - name: data_source_subscriptions
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          id: qnr_id
+        insertion_order: null
+        remote_table:
+          name: data_source_subscriptions
+          schema: editor
+  - name: qnrAccessCredentialsByQnrId
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_access_credentials
+          schema: editor
+  - name: qnrAnswerSlotsByQnrId
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_answer_slots
+          schema: editor
+  - name: qnrJournalDispatchesByQnrId
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_journal_dispatches
+          schema: editor
+  - name: qnr_access_credentials
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          id: qnr_id
+        insertion_order: null
+        remote_table:
+          name: qnr_access_credentials
+          schema: editor
+  - name: qnr_answer_checkpoints
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_answer_checkpoints
+          schema: editor
+  - name: qnr_answer_grid_row_orders
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_answer_grid_row_orders
+          schema: editor
+  - name: qnr_answer_grid_rows
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_answer_grid_rows
+          schema: editor
+  - name: qnr_answer_slots
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          id: qnr_id
+        insertion_order: null
+        remote_table:
+          name: qnr_answer_slots
+          schema: editor
+  - name: qnr_answer_values
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_answer_values
+          schema: editor
+  - name: qnr_instance_sync_links
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          id: qnr_id
+        insertion_order: null
+        remote_table:
+          name: qnr_instance_sync_links
+          schema: editor
+  - name: qnr_journal_dispatches
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          id: qnr_id
+        insertion_order: null
+        remote_table:
+          name: qnr_journal_dispatches
+          schema: editor
+  - name: qnr_question_states
+    using:
+      foreign_key_constraint_on:
+        column: qnr_id
+        table:
+          name: qnr_question_states
+          schema: editor
