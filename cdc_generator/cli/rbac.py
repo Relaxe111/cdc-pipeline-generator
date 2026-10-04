@@ -84,5 +84,5 @@ def emit_cmd(source: str, catalog: str, hsr: str, migration_version: str) -> Non
 @click.option("--catalog", required=True, type=_INPUT)
 @click.option("--hsr", required=True, type=_HSR)
 def check_cmd(source: str, catalog: str, hsr: str) -> None:
-    """Detect source, schema, SQL, metadata, provenance and preserved-G4 drift."""
+    """Detect source, SQL, owned SELECT and provenance drift; verify G4 identity."""
     _run(lambda: check(Path(hsr), Path(source), Path(catalog)))

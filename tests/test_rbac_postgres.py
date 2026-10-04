@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import subprocess
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,6 +19,7 @@ try:
 except ImportError:
     pytest.skip("Install the database extra to run PostgreSQL tests", allow_module_level=True)
 
+from cdc_generator.core.rbac.artifacts import G4, TABLES, check, emit
 from cdc_generator.core.rbac.rendering import render_migration, select_permissions
 from cdc_generator.core.rbac.validation import Contract, compile_contract, load_json, mapping, sequence
 
@@ -99,6 +101,12 @@ def _read(db: connection, role: str | None, tenant: str | None, actor: str | Non
             cursor.execute("ROLLBACK")
 
 
+def _activate_test_rls(db: connection) -> None:
+    """Activate only disposable test tables; activation is outside compiler scope."""
+    with db.cursor() as cursor:
+        cursor.execute("ALTER TABLE editor.qnrs ENABLE ROW LEVEL SECURITY; ALTER TABLE editor.qnrs FORCE ROW LEVEL SECURITY")
+
+
 @pytest.mark.parametrize(
     ("role", "tenant", "actor", "count"),
     [
@@ -118,6 +126,7 @@ def _read(db: connection, role: str | None, tenant: str | None, actor: str | Non
 def test_fresh_two_tenant_session_matrix(database: connection, role: str | None, tenant: str | None, actor: str | None, count: int) -> None:
     """Tenant, actor, platform role and missing-context negatives run on real RLS."""
     _apply(database, render_migration(_baseline(), None)[0])
+    _activate_test_rls(database)
     assert len(_read(database, role, tenant, actor)) == count
     assert _read(database, None, None, None) == []  # reused connection never inherits prior transaction context
 
@@ -126,6 +135,7 @@ def test_fresh_two_tenant_session_matrix(database: connection, role: str | None,
 def test_forbidden_privileges(database: connection, operation: str) -> None:
     """No writes, unprojected columns, or malformed tenant can bypass the subset."""
     _apply(database, render_migration(_baseline(), None)[0])
+    _activate_test_rls(database)
     statements = {
         "INSERT": "INSERT INTO editor.qnrs(id) VALUES (gen_random_uuid())",
         "UPDATE": "UPDATE editor.qnrs SET lifecycle_status='active'",
@@ -208,6 +218,7 @@ def test_upgrade_and_rollback_authorization(database: connection) -> None:
     mapping(permissions[2])["select"] = copy.deepcopy(mapping(permissions[0])["select"])
     current = compile_contract(source, baseline.catalog)
     _apply(database, render_migration(baseline, None)[0])
+    _activate_test_rls(database)
     assert len(_read(database, "therapist", TENANT_A, ACTOR_A)) == 2
     up, down = render_migration(current, baseline)
     _apply(database, up)
@@ -218,6 +229,68 @@ def test_upgrade_and_rollback_authorization(database: connection) -> None:
     _apply(database, render_migration(baseline, None)[1])
     with pytest.raises(psycopg2.Error, match="permission denied"):
         _read(database, "therapist", TENANT_A, ACTOR_A)
+
+
+@pytest.mark.parametrize(("enabled", "forced"), [(False, False), (True, False), (True, True), (False, True)])
+def test_preparation_and_rollbacks_preserve_activation_flags(database: connection, enabled: bool, forced: bool) -> None:
+    """Fresh, upgrade and both downs never enable, force, disable or unforce RLS."""
+    with database.cursor() as cursor:
+        cursor.execute("ALTER TABLE editor.qnrs " + ("ENABLE" if enabled else "DISABLE") + " ROW LEVEL SECURITY")
+        cursor.execute("ALTER TABLE editor.qnrs " + ("FORCE" if forced else "NO FORCE") + " ROW LEVEL SECURITY")
+    baseline = _baseline()
+    source = sequence(copy.deepcopy(baseline.source))
+    permissions = sequence(mapping(mapping(source[0])["definition"])["permissions"])
+    mapping(permissions[2])["select"] = copy.deepcopy(mapping(permissions[0])["select"])
+    current = compile_contract(source, baseline.catalog)
+    fresh_up, fresh_down = render_migration(baseline, None)
+    up, down = render_migration(current, baseline)
+    for sql, policy_count in [(fresh_up, 3), (up, 3), (down, 3), (fresh_down, 0)]:
+        _apply(database, sql)
+        with database.cursor() as cursor:
+            cursor.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='editor.qnrs'::regclass")
+            assert cursor.fetchone() == (enabled, forced)
+            cursor.execute("SELECT count(*) FROM pg_policy WHERE polrelid='editor.qnrs'::regclass")
+            assert cursor.fetchone() == (policy_count,)
+
+
+def test_inactive_preparation_preserves_owner_writes_and_admin_worker_reads(database: connection) -> None:
+    """Policy preparation leaves the existing non-RLS owner and worker contexts intact."""
+    owner = "rbac_owner_" + uuid.uuid4().hex
+    worker = "rbac_worker_" + uuid.uuid4().hex
+    with database.cursor() as cursor:
+        cursor.execute(f'CREATE ROLE "{owner}" NOLOGIN; CREATE ROLE "{worker}" NOLOGIN')
+        cursor.execute(f'GRANT USAGE ON SCHEMA editor TO "{owner}","{worker}"')
+        cursor.execute(f'ALTER TABLE editor.qnrs OWNER TO "{owner}"; GRANT SELECT(id) ON editor.qnrs TO "{worker}"')
+    baseline = _baseline()
+    source = sequence(copy.deepcopy(baseline.source))
+    permissions = sequence(mapping(mapping(source[0])["definition"])["permissions"])
+    mapping(permissions[2])["select"] = copy.deepcopy(mapping(permissions[0])["select"])
+    current = compile_contract(source, baseline.catalog)
+    fresh_up, fresh_down = render_migration(baseline, None)
+    up, down = render_migration(current, baseline)
+    try:
+        for sql, app_select in [(fresh_up, True), (up, True), (down, True), (fresh_down, False)]:
+            _apply(database, sql)
+            if app_select:
+                assert len(_read(database, "admin", None, None)) == 3
+            with database.cursor() as cursor:
+                cursor.execute(f"BEGIN; SET LOCAL ROLE \"{worker}\"; SET LOCAL app.role = 'admin'")
+                cursor.execute("SELECT id FROM editor.qnrs")
+                assert len(cursor.fetchall()) == 3
+                cursor.execute("ROLLBACK")
+                cursor.execute(f'BEGIN; SET LOCAL ROLE "{owner}"')
+                cursor.execute("UPDATE editor.qnrs SET lifecycle_status='active'")
+                assert cursor.rowcount == 3
+                cursor.execute("INSERT INTO editor.qnrs(id,customer_id,lifecycle_status) VALUES(gen_random_uuid(),%s,'draft')", (TENANT_A,))
+                assert cursor.rowcount == 1
+                cursor.execute("DELETE FROM editor.qnrs WHERE lifecycle_status='draft'")
+                assert cursor.rowcount == 1
+                cursor.execute("ROLLBACK")
+    finally:
+        with database.cursor() as cursor:
+            cursor.execute("ROLLBACK")
+            cursor.execute("ALTER TABLE editor.qnrs OWNER TO postgres")
+            cursor.execute(f'DROP OWNED BY "{owner}","{worker}"; DROP ROLE "{owner}","{worker}"')
 
 
 def _http(endpoint: str, value: object, headers: dict[str, str] | None = None) -> dict[str, object]:
@@ -264,6 +337,7 @@ def test_hasura_two_tenants_and_no_mutations() -> None:
         if not cursor.fetchone():
             cursor.execute("CREATE ROLE editor_app NOLOGIN NOSUPERUSER NOBYPASSRLS")
     _apply(db, render_migration(_baseline(), None)[0])
+    _activate_test_rls(db)
     try:
         _http(
             "/v1/metadata",
@@ -303,4 +377,98 @@ def test_hasura_two_tenants_and_no_mutations() -> None:
         _http("/v1/metadata", {"type": "clear_metadata", "args": {}})
         with db.cursor() as cursor:
             cursor.execute("DROP SCHEMA editor CASCADE")
+        db.close()
+
+
+def _cli_export(project: Path) -> None:
+    """Use the explicitly supplied real Hasura CLI against disposable localhost."""
+    result = subprocess.run(
+        [os.environ["RBAC_TEST_HASURA_CLI"], "metadata", "export", "--project", str(project), "--skip-update-check", "--envfile", "/dev/null"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_real_hasura_cli_export_only_changes_select(tmp_path: Path) -> None:
+    """Canonical CLI re-exports match fresh SELECT bytes and remain upgradeable."""
+    if not all(os.environ.get(key) for key in ("RBAC_TEST_DSN", "RBAC_TEST_HASURA_URL", "RBAC_TEST_HASURA_CLI")):
+        pytest.skip("Set disposable PostgreSQL/Hasura endpoints and a real RBAC_TEST_HASURA_CLI")
+    db = psycopg2.connect(os.environ["RBAC_TEST_DSN"])
+    db.autocommit = True
+    _http("/v1/metadata", {"type": "clear_metadata", "args": {}})
+    with db.cursor() as cursor:
+        cursor.execute(DDL + "CREATE TABLE public.queries(id uuid PRIMARY KEY)")
+    editor = {
+        "table": {"schema": "editor", "name": "qnrs"},
+        "object_relationships": [
+            {
+                "name": "owner_relationship",
+                "using": {
+                    "manual_configuration": {
+                        "column_mapping": {"id": "id"},
+                        "insertion_order": None,
+                        "remote_table": {"schema": "public", "name": "queries"},
+                    }
+                },
+            },
+        ],
+    }
+    legacy = {
+        "table": {"schema": "public", "name": "queries"},
+        "update_permissions": [
+            {"role": "legacy_owner", "permission": {"columns": ["id"], "filter": {}, "check": {}}},
+        ],
+    }
+    tables = [editor, legacy]
+    metadata = {
+        "version": 3,
+        "sources": [
+            {
+                "name": "default",
+                "kind": "postgres",
+                "configuration": {"connection_info": {"database_url": {"from_env": "HASURA_GRAPHQL_DATABASE_URL"}}},
+                "tables": tables,
+            }
+        ],
+    }
+    try:
+        _http("/v1/metadata", {"type": "replace_metadata", "args": metadata})
+        (tmp_path / "config.yaml").write_text(
+            "version: 3\nendpoint: "
+            + os.environ["RBAC_TEST_HASURA_URL"]
+            + "\nmetadata_directory: metadata\nmigrations_directory: migrations\nenable_telemetry: false\n"
+        )
+        _cli_export(tmp_path)
+        path = tmp_path / TABLES / "editor_qnrs.yaml"
+        original = path.read_bytes()
+        g4 = (tmp_path / G4).read_bytes()
+        source = tmp_path / "source.json"
+        source.write_bytes((FIXTURES / "editor.rbac.json").read_bytes())
+        catalog = FIXTURES / "editor.catalog.json"
+        emit(tmp_path, source, catalog, "1800000000000")
+        emitted = path.read_bytes()
+        assert emitted.startswith(original)
+        assert (tmp_path / G4).read_bytes() == g4
+        editor["select_permissions"] = select_permissions(_baseline())
+        _http("/v1/metadata", {"type": "replace_metadata", "args": metadata})
+        _cli_export(tmp_path)
+        assert path.read_bytes() == emitted
+        check(tmp_path, source, catalog)
+        permissions = sequence(load_json(source))
+        roles = sequence(mapping(mapping(permissions[0])["definition"])["permissions"])
+        mapping(roles[2])["select"] = copy.deepcopy(mapping(roles[0])["select"])
+        source.write_bytes(json.dumps(permissions).encode())
+        emit(tmp_path, source, catalog, "1800000000001")
+        editor["select_permissions"] = select_permissions(compile_contract(permissions, load_json(catalog)))
+        upgraded = path.read_bytes()
+        _http("/v1/metadata", {"type": "replace_metadata", "args": metadata})
+        _cli_export(tmp_path)
+        assert path.read_bytes() == upgraded
+        check(tmp_path, source, catalog)
+    finally:
+        _http("/v1/metadata", {"type": "clear_metadata", "args": {}})
+        with db.cursor() as cursor:
+            cursor.execute("DROP SCHEMA editor CASCADE; DROP TABLE public.queries")
         db.close()

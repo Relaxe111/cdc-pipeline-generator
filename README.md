@@ -160,18 +160,27 @@ cdc rbac check --hsr . --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
   --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
 ```
 
-`generate` prints reviewable first-install SQL and metadata. `emit-migration`
+`generate` prints reviewable policy-preparation SQL and metadata. `emit-migration`
 requires an explicit 13-digit migration version after the owner's existing
 migrations. It emits `migrations/default/<version>_rbac_editor_qnrs/{up,down}.sql`,
-merges only SELECT into the existing canonical table YAML, and records exact
-input/output hashes in `rbac/.rbac-lock.json`. A changed source requires a new
+merges only SELECT into the existing canonical table YAML, and records input and
+migration byte hashes plus the owned SELECT structural hash in the version-2
+`rbac/.rbac-lock.json`. A changed source requires a new
 migration. Existing history is immutable; unchanged inputs produce no writes.
 Rollback restores the previous generated rules; fresh rollback revokes generated
-SELECT rights and keeps RLS forced to preserve deny-by-default.
+SELECT rights. Neither direction changes RLS enable/force flags. Activation is
+outside this admission subset and requires separately owned owner-write, worker
+and Hasura-connection coverage first. Prepared policies do not enforce row
+filters while RLS remains disabled.
 
-The merge preserves relationships and checks the table identity and include
-index. Separately owned `public.queries` G4 metadata is read and hashed, never
-written; changes to its identity or bytes fail the drift check. The compiler
+The structured merge serializes only the SELECT block in Hasura CLI export
+format, preserving all other table-file bytes, including relationship comments
+and explicit nulls. Hasura's omitted false aggregation default and explicit
+false are equivalent during ownership checks. Relationship edits and format-only
+re-exports remain checkable and upgradeable. The table identity and include index
+are checked. Separately owned `public.queries` G4 metadata is verified by table
+identity and excluded from the compiler write set; its owner can evolve legacy
+write permissions without re-baselining the compiler lock. The compiler
 never emits Hasura mutations, creates roles, changes creator defaults, or grants
 write/table-wide privileges. Missing/privileged/owning `editor_app`, unexpected
 policies, catalog mismatch, and preexisting broad privileges abort generated SQL
@@ -191,17 +200,23 @@ local validator authorized by the ROOT disposition; it makes no hosted DDN build
 or full DDN semantic-validation claim.
 
 ```bash
-python -m pytest tests/test_rbac.py
+python -m pytest tests/test_rbac.py tests/test_rbac_repairs.py
 # Explicit disposable local PostgreSQL and Hasura only:
 RBAC_TEST_DSN='host=127.0.0.1 port=58350 dbname=postgres user=postgres' \
 RBAC_TEST_HASURA_URL='http://127.0.0.1:58351' \
+RBAC_TEST_HASURA_CLI='/opt/homebrew/bin/hasura' \
   python -m pytest tests/test_rbac_postgres.py
 ```
 
 The integration suite creates disposable databases, uses the canonical
 `editor_app` connection identity, and executes generated SQL plus real Hasura
 queries across two synthetic tenants. It tests fresh and upgrade failures,
-negative ACLs, context reset and rollback. These tests qualify this compiler
+negative ACLs, context reset and rollback. Enforcement tests activate RLS only
+inside disposable fixtures; preparation/rollback tests verify all enable/force
+states remain unchanged and existing inactive owner/worker contexts still work.
+A real Hasura CLI fresh/upgrade export round trip checks canonical byte output.
+RBAC commands skip workdir usage statistics so they do not create `_docs/_stats`
+in another repository. These tests qualify this compiler
 subset; they do not discharge the artifact owner's full 1,177-migration L3
 oracles or prove target installation. Publication is PR-only for independent
 exact-head review.

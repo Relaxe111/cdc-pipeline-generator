@@ -64,7 +64,8 @@ def test_offline_validation_and_both_targets(contract: Contract) -> None:
         up, down = render_migration(contract, None)
     assert b'FOR SELECT TO "editor_app"' in up
     assert b"GRANT SELECT (" in up
-    assert b"FORCE ROW LEVEL SECURITY" in up
+    assert b"ENABLE ROW LEVEL SECURITY" not in up
+    assert b"FORCE ROW LEVEL SECURITY" not in up
     assert b"CREATE ROLE" not in up and b"GRANT ALL" not in up
     assert b"DISABLE ROW LEVEL SECURITY" not in down
     for rule, permission in zip(contract.rules, select_permissions(contract), strict=True):
@@ -209,14 +210,12 @@ def test_structured_merge_and_determinism(owner: Path, contract: Contract) -> No
         "source.json",
         "catalog.json",
         "rbac/.rbac-lock.json",
-        "metadata/databases/default/tables/editor_qnrs.yaml",
-        "metadata/databases/default/tables/public_queries.yaml",
         "migrations/default/1800000000000_rbac_editor_qnrs/up.sql",
         "migrations/default/1800000000000_rbac_editor_qnrs/down.sql",
     ],
 )
 def test_drift_detected(owner: Path, target: str) -> None:
-    """Exact input/output/G4 edits all fail the read-only drift check."""
+    """Exact compiler input, migration and provenance edits fail drift checks."""
     emit(owner, owner / "source.json", owner / "catalog.json", "1800000000000")
     path = owner / target
     path.write_bytes(path.read_bytes() + b"\n")
@@ -405,15 +404,15 @@ def test_owner_layout_boundaries(owner: Path, failure: str) -> None:
     assert before == {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
 
 
-@pytest.mark.parametrize("failure", ["g4_hash", "sql_hash", "select", "mutation", "input_state"])
+@pytest.mark.parametrize("failure", ["g4_identity", "sql_hash", "select", "mutation", "input_state"])
 def test_forged_hash_cannot_hide_generated_drift(owner: Path, failure: str) -> None:
     """Recomputed contract outputs catch tampering even after a hash is rewritten."""
     from cdc_generator.core.rbac.validation import digest
     from cdc_generator.helpers.yaml_loader import save_yaml_file
 
     state = emit(owner, owner / "source.json", owner / "catalog.json", "1800000000000")
-    if failure == "g4_hash":
-        state["preserved"] = {str(G4): "bad hash"}
+    if failure == "g4_identity":
+        state["preserved"] = {str(G4): {"table": {"schema": "public", "name": "other"}}}
     elif failure == "sql_hash":
         relative = str(state["migration"]) + "/up.sql"
         (owner / relative).write_bytes(b"-- attacker update\n")
@@ -423,10 +422,10 @@ def test_forged_hash_cannot_hide_generated_drift(owner: Path, failure: str) -> N
         metadata = load_yaml_file(owner / relative)
         if failure == "select":
             metadata["select_permissions"] = []
+            mapping(state["select"])["sha256"] = digest(canonical([]))
         else:
             metadata["update_permissions"] = [{"role": "therapist"}]
         save_yaml_file(metadata, owner / relative)
-        mapping(state["files"])[relative] = digest((owner / relative).read_bytes())
     elif failure == "input_state":
         # This provenance-only edit changes neither SQL nor metadata, so input-state equality catches it.
         mapping(state["catalog"])["provenance"] = "tampered"

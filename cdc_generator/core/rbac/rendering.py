@@ -26,7 +26,6 @@ def select_permissions(contract: Contract) -> list[Json]:
             "permission": {
                 "columns": list(rule.columns),
                 "filter": {"_and": [{field: {"_eq": variable}} for field, variable in rule.comparisons]},
-                "allow_aggregations": False,
             },
         }
         for rule in contract.rules
@@ -45,7 +44,7 @@ def _drop(contract: Contract) -> list[str]:
 def _install(contract: Contract) -> list[str]:
     """Render least-privilege SELECT policies; never grant table writes."""
     relation = _relation(contract)
-    sql = [f"ALTER TABLE {relation} ENABLE ROW LEVEL SECURITY;", f"ALTER TABLE {relation} FORCE ROW LEVEL SECURITY;"]
+    sql: list[str] = []
     types = dict(contract.column_types)
     for rule in contract.rules:
         terms = [f"NULLIF(current_setting('app.role', true), '') = '{rule.role}'"]
@@ -124,6 +123,5 @@ def render_migration(current: Contract, previous: Contract | None) -> tuple[byte
     down = ["BEGIN;", *_drop(current)]
     if previous:
         down.extend(_install(previous))
-    # Keep RLS forced after a fresh rollback: removing a grant must not open rows.
     down.append("COMMIT;")
     return (inject_checksum(header + "\n".join(up) + "\n").encode(), inject_checksum(header + "\n".join(down) + "\n").encode())

@@ -14,13 +14,13 @@
     "editor.catalog.json": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65",
     "editor.rbac.json": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2",
     "editor_qnrs.yaml": "e5b55a75e6485b5b5bbf9f09f9a3e88ffa964e67c58c1d638ac8eac03a27a8f0",
-    "expected-generation.json": "e6e95b5a7a33b8849eb031dba38a568b30e452e8928140c7877c044420ebda57",
+    "expected-generation.json": "6db78c573ae7997ee21b4e9199abafa3b83f83f07ec8ed60a6d34ffc130e8439",
     "public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f"
   },
   "generated": {
     "down.sql": "148405fba1e6b20ea65746254c38c833ce842338fd0133296e1b64e4d19c4df2",
-    "select_permissions": "1487c9bb143a79403782ad90216b83d6386d71b953a91a7c0cde5784cb8a2e4f",
-    "up.sql": "a299f3c4fd032dbe4ce99b9518c7925a7da059b5e0ca58ce998ad7e0d8d6ba53"
+    "select_permissions": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba",
+    "up.sql": "cc2ebeaf2405cb9584df7f6f358e35497e415403b7cfe285fb256dffc62dd1e7"
   },
   "pins": {
     "jsonschema": "4.25.1",

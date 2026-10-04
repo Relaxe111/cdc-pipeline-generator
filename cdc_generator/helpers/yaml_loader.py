@@ -55,7 +55,7 @@ def _validate_yaml_loader(obj: object) -> None:
         raise TypeError("YAML.dump is not callable")
 
 
-def _create_yaml_loader() -> YAMLLoader:
+def create_yaml_loader() -> YAMLLoader:
     """Create and validate YAML loader instance.
 
     Returns:
@@ -74,7 +74,7 @@ def _create_yaml_loader() -> YAMLLoader:
 
 
 # Create singleton validated YAML loader instance
-yaml: YAMLLoader = _create_yaml_loader()
+yaml: YAMLLoader = create_yaml_loader()
 
 
 def load_yaml_file(file_path: Path) -> ConfigDict:
