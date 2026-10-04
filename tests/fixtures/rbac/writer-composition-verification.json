@@ -1,0 +1,172 @@
+{
+  "actualStatus": {
+    "originalFreshUpgradeVariants": "34/34 BLOCKED_NOT_EXECUTED",
+    "originalOracles": "18/18 BLOCKED_NOT_EXECUTED",
+    "runtimeSpecifications": "22/22 actual BLOCKED_NOT_EXECUTED; 16 bounded ISO subsets, 5 source checks only, 1 fully blocked",
+    "targetInputs": "10/10 null"
+  },
+  "approvedAttachmentSha256": "4a3eb93017637557b7c5cb37bdbad494b4a3c80b5c2e9aa167363d2835bb8ea5",
+  "baseCommit": "1a2aab52154dd5ff3836633512972fd6a4ecd728",
+  "bounded": {
+    "byTestFile": {
+      "test_rbac": 66,
+      "test_rbac_composition": 33,
+      "test_rbac_composition_cases": 3,
+      "test_rbac_composition_postgres": 124,
+      "test_rbac_postgres": 56,
+      "test_rbac_provenance": 41,
+      "test_rbac_reattest": 35,
+      "test_rbac_repairs": 24,
+      "test_rbac_writer_rules": 30
+    },
+    "coveragePercent": 97,
+    "coveredStatements": 1020,
+    "failed": 0,
+    "junitSha256": "1749d1c02fa96155009fbeb7d15f89590fa246b70b8072d22c02a26982c370a9",
+    "passed": 412,
+    "total": 412,
+    "totalStatements": 1052
+  },
+  "casesLedger": "tests/fixtures/rbac/writer-composition-cases.json",
+  "casesLedgerSha256": "4a992f8b79213ce6d1c61b4e03a4988d0708b03b7394534335ab9e281a9831d3",
+  "classification": "COMPILER_SOURCE_AND_DISCLOSED_DISPOSABLE_ISO_EVIDENCE_ONLY",
+  "compilerImplementation": {
+    "files": {
+      "core/rbac/artifacts.py": "f9b66f50a7c7214e55f164598e62f08c0bbbaf568414204f95f127d88dd2ddac",
+      "core/rbac/composition.py": "ccb53774b07649b3c091cc627098d93789e18efc4f1e79f613ad770f1d6450a5",
+      "core/rbac/composition_models.py": "4f802b482a12d25db8b9555e11d7e2b3e5bff8d3cff7f783ca19164dd91ba2c1",
+      "core/rbac/composition_readback.py": "a51da3538b4a9fef39d2f57555da5b71b115839bf11fe234a8bc6c47000afca5",
+      "core/rbac/composition_sql.py": "b5ea8138b9cdf7b0721397e85dfb91e2b5559d0f6b15c5af8b1e8c4a11ecc0fc",
+      "core/rbac/policy_semantics.py": "b8a3499ca84025eb120e5f5ac08d6a7cca0d92ae65f8a95884fbdf7944471fc2",
+      "core/rbac/provenance.py": "7833674515e72e6ed0b277bd22ba9d61b16709cc6dccd684bbe07c0f6f46bbce",
+      "core/rbac/rendering.py": "f84da885f769a404d0558f4ddcdf69e541082575036cf26a66c45003aa8b1607",
+      "core/rbac/validation.py": "6915e94792666181558ca57b8e9191ead269a0d260373f308fd31d59bc7e8d67",
+      "core/rbac/writer_rules.py": "0fc26bf2a5d75a95299c075a88c357dc62d159fe24c59e7082a3bd14afcdbdbe",
+      "templates/rbac/owner-envelope.schema.json": "e0254d2536357090b90189045859a334056718b3c476b0b3c6082470f6f5e4f8"
+    },
+    "runtime": {
+      "jsonschema": "4.25.1"
+    }
+  },
+  "compilerImplementationSha256": "ad34901be066c48c4de0dda7f6d086cfbac5a6d75723b3ba7859a011be6b153f",
+  "fixtureSourcePairs": [
+    {
+      "commit": "cc3aa1c9ab0606a22749eab109699614c6dda145",
+      "declarationPath": "tests/fixtures/rbac/writer.declaration.json",
+      "declarationSha256": "0c78d73237c183488b0a6aca183194cee9d67423d68eb8be25654086c554878e",
+      "qualification": "TEST_ONLY_NONOWNER_ISO",
+      "reviewPath": "tests/fixtures/rbac/writer.review.json",
+      "reviewSha256": "26d056f7bc44d51e0d5913db50eb367f7dde1fc14a5584424be835cfe7222d06"
+    },
+    {
+      "commit": "2a8cf55de3966d09deb4c07ee6ee91a9c10fddf3",
+      "declarationPath": "tests/fixtures/rbac/writer-full.declaration.json",
+      "declarationSha256": "7a8da29dc25bf98c9a0984673e43cafe72150e19e0725f3425014bb8d59e4a99",
+      "qualification": "TEST_ONLY_NONOWNER_ISO",
+      "reviewPath": "tests/fixtures/rbac/writer-full.review.json",
+      "reviewSha256": "262d79d29df873b602fd532f95bbfdfeeb61e74cc8600e2ed20b0515ec146422"
+    }
+  ],
+  "fullRepository": {
+    "classification": "THREE_PREEXISTING_NON_RBAC_FAILURES_REPRODUCED",
+    "failed": 3,
+    "failedTestFilesUnchangedFromBase": true,
+    "failures": [
+      "tests.test_pipeline_generation::test_generate_all_writes_canonical_pipeline_paths",
+      "tests.test_pipeline_generation::test_verify_full_passes_on_minimal_fixture",
+      "tests.test_server_group_handlers.TestHandleSetTargetSinkEnv::test_set_target_sink_env_succeeds"
+    ],
+    "passed": 2077
+  },
+  "holds": [
+    "NO_TARGET_INSTALL",
+    "NO_ARTIFACT_EMISSION",
+    "NO_PRODUCT_RLS_ACTIVATION",
+    "NO_ARTIFACT_MASTER_MERGE_AUTO_INSTALL",
+    "NO_A6_OR_ASMA_8350_COMPLETION"
+  ],
+  "isolatedHasura": {
+    "cliVersion": "2.48.3",
+    "engineImageDigest": "5d435a6756de53709bf48c15b822cabab38d57acd22e656cf633cc2df67df150",
+    "engineVersion": "2.51.0",
+    "qualification": "existing bootstrap-backed SELECT-only regression; not actual Hasura app context"
+  },
+  "isolatedPostgres": {
+    "connection": "independently authenticated editor_app; NOSUPERUSER; NOBYPASSRLS; nonowner; ENABLE and FORCE RLS only in disposable fixture",
+    "imageDigest": "a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d",
+    "serverVersion": "PostgreSQL 17.10",
+    "unfilteredAndFilteredWriteProbes": true
+  },
+  "realCli": {
+    "changedOutputRefused": true,
+    "checkoutAndWheelCommands": 27,
+    "expectedOutcomesMatched": true,
+    "freshCheckoutAndWheelOutputHashes": {
+      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "0fe9b651148406981f1d983b4b0d6e010b52363e8451fa728692752f3dab2547",
+      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "aa934f36020ffad9850d34ecf5080a23e6717f4a330553cc93dfcbb431642bb2",
+      "rbac/.rbac-lock.json": "2b24be2a73686ebdec9622f9ad5e496006bb58cf5379e0327c8035fc72c3010f"
+    },
+    "g4ByteIdentical": true,
+    "rawResultSha256": "2b5932774fbfd35feb6598ee8986ac6ff69dddac8558a9b9fe554925839e06cf",
+    "reattestation": {
+      "byteIdenticalWholeHistory": true,
+      "candidateSha256": "a18f9f25799cc9fa5ca62fc8d46778240da0301f5a607ed3f8e44f594d454539",
+      "previousLockSha256": "39acc74773353c893688fabba6b7dc8eacf13a09053a801717a08a5f6b10b5d7",
+      "recordedPriorImplementation": true
+    },
+    "upgradeCheckoutAndWheelOutputHashes": {
+      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "0fe9b651148406981f1d983b4b0d6e010b52363e8451fa728692752f3dab2547",
+      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "aa934f36020ffad9850d34ecf5080a23e6717f4a330553cc93dfcbb431642bb2",
+      "migrations/default/1800000000001_rbac_editor_qnrs/down.sql": "97871ef113ba549c0276751b560a1a98f4f74336637079f5fc406c0fb0136f27",
+      "migrations/default/1800000000001_rbac_editor_qnrs/up.sql": "97871ef113ba549c0276751b560a1a98f4f74336637079f5fc406c0fb0136f27",
+      "rbac/.rbac-lock.json": "39acc74773353c893688fabba6b7dc8eacf13a09053a801717a08a5f6b10b5d7"
+    },
+    "usageStatsAbsent": true,
+    "wheelSha256": "502e6a3edc7d75e3eca60b3587dc971e4c06e0fc5adf285d40634482a5173f19"
+  },
+  "rootDispositionSha256": "6badca45f5659342616b1232466bf088fbedaa9fc994f65ce87fc60233b69be1",
+  "seededMutants": {
+    "committedSummary": "tests/fixtures/rbac/writer-composition-mutants.json",
+    "committedSummarySha256": "d00112a4cc62fbb30679d3dfc97c95b9039787dcbd10639ddad8af1093a03a3f",
+    "ids": [
+      "C1-review",
+      "C1-byte-regeneration",
+      "source-raw-bytes",
+      "retained-definition-hash",
+      "retained-source-identity",
+      "writer-columns",
+      "writer-tenant",
+      "writer-coverage",
+      "writer-context",
+      "writer-ignored-clause",
+      "writer-actor",
+      "writer-INSERT-CHECK",
+      "writer-DELETE-USING",
+      "C2-C3-widening",
+      "positive-not-denial",
+      "ALL-expansion",
+      "literal-case",
+      "ACL-origin",
+      "membership-attributes",
+      "creator-defaults",
+      "policy-definition",
+      "installation-hold",
+      "rollback-writer-fences"
+    ],
+    "killed": 23,
+    "rawResultSha256": "bfcc37a00bbd5765152be7b30227f2157a6680a34ad9b3ef7a206ba4b07650e1",
+    "survived": 0
+  },
+  "sourceCheckpoint": "d96b571bce24cea63c16c9291548b6eb4f6a78bd",
+  "static": {
+    "black": "PASS",
+    "pyright": "PASS: 0 errors, 0 warnings",
+    "ruff": "PASS"
+  },
+  "validatorPins": {
+    "jsonschema": "4.25.1",
+    "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  }
+}
