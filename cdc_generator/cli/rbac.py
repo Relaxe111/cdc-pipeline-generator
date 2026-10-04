@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from cdc_generator.core.rbac.artifacts import check, emit
+from cdc_generator.core.rbac.artifacts import check, emit, reattest
 from cdc_generator.core.rbac.rendering import render_migration, select_permissions
 from cdc_generator.core.rbac.validation import compile_contract, doctor, generate_schema, load_json
 
@@ -86,3 +86,13 @@ def emit_cmd(source: str, catalog: str, hsr: str, migration_version: str) -> Non
 def check_cmd(source: str, catalog: str, hsr: str) -> None:
     """Detect source, SQL, owned SELECT and provenance drift; verify G4 identity."""
     _run(lambda: check(Path(hsr), Path(source), Path(catalog)))
+
+
+@rbac_cmd.command(name="reattest")
+@click.option("--hsr", required=True, type=_HSR)
+@click.option("--expected-lock-sha256", required=True)
+@click.option("--review-reference", required=True)
+@click.option("--apply-reviewed-sha256")
+def reattest_cmd(hsr: str, expected_lock_sha256: str, review_reference: str, apply_reviewed_sha256: str | None) -> None:
+    """Propose a byte-identical history re-attestation; apply an exact reviewed hash."""
+    _run(lambda: reattest(Path(hsr), expected_lock_sha256, review_reference, apply_reviewed_sha256))

@@ -8,9 +8,20 @@ import re
 from pathlib import Path
 from typing import Protocol, cast
 
-from cdc_generator.core.rbac.provenance import COMPILER, LOCK_FORMAT, MIGRATION, emission, implementation, seal, snapshot, verify_history
+from cdc_generator.core.rbac.provenance import (
+    COMPILER,
+    LOCK_FORMAT,
+    MIGRATION,
+    context,
+    emission,
+    environment,
+    implementation,
+    seal,
+    snapshot,
+    verify_history,
+)
 from cdc_generator.core.rbac.rendering import render_migration, select_permissions
-from cdc_generator.core.rbac.validation import Contract, Json, canonical, compile_contract, digest, doctor, load_json, mapping
+from cdc_generator.core.rbac.validation import Contract, Json, canonical, compile_contract, digest, doctor, load_json, mapping, sequence
 from cdc_generator.helpers.yaml_loader import ConfigDict, YAMLLoader, create_yaml_loader, load_yaml_file, yaml
 
 HASURA_CLI_VERSION = 3
@@ -147,9 +158,9 @@ def _project(root: Path) -> None:
         raise ValueError("G4 metadata identity must be public.queries")
 
 
-def verify_state(root: Path, state: dict[str, Json]) -> None:
+def verify_state(root: Path, state: dict[str, Json], *, reattesting: bool = False) -> None:
     """Verify hashes and recompute SQL/SELECT projection, without writing files."""
-    current, _previous = verify_history(state)
+    current, _previous = verify_history(state, reattesting=reattesting)
     if set(mapping(state["files"])) != _owned_files(root):
         raise ValueError("Compiler-owned migration inventory differs from the lock")
     for relative, expected in mapping(state["files"]).items():
@@ -202,6 +213,49 @@ def check(root: Path, source_path: Path, catalog_path: Path) -> dict[str, Json]:
     if state["input_hashes"] != hashes:
         raise ValueError("Source/catalog drift: emit a new immutable migration")
     return state
+
+
+def reattest(root: Path, expected_lock_sha256: str, review_reference: str, apply_reviewed_sha256: str | None = None) -> dict[str, Json]:
+    """Propose a lock-only upgrade; apply only its exact externally reviewed bytes."""
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_lock_sha256) or not review_reference.strip():
+        raise ValueError("Re-attestation requires an exact previous lock SHA256 and review reference")
+    _project(root)
+    state = _load_lock(root)
+    if state is None:
+        raise ValueError("Missing RBAC lock; no provenance can be re-attested")
+    if digest(_path(root, LOCK).read_bytes()) != expected_lock_sha256:
+        raise ValueError("Reviewed previous lock SHA256 mismatch")
+    # Regenerate every old up/down and canonical SELECT under the new code.
+    # Only the implementation/pin comparison is relaxed; all drift gates remain.
+    verify_state(root, state, reattesting=True)
+    previous = context(state)
+    upgraded: dict[str, Json] = {
+        **state,
+        "implementation": implementation(),
+        "pins": cast(dict[str, Json], doctor()),
+        "environment": environment(),
+    }
+    reviews = list(sequence(state.get("reattestations", [])))
+    reviews.append(
+        {
+            "from": previous,
+            "to": context(upgraded),
+            "previous_lock_sha256": expected_lock_sha256,
+            "history_sha256": digest(canonical(state["history"])),
+            "emissions": len(sequence(state["history"])),
+            "review_reference": review_reference,
+        }
+    )
+    upgraded["reattestations"] = reviews
+    candidate = seal(upgraded)
+    verify_state(root, candidate)
+    content = canonical(candidate)
+    candidate_hash = digest(content)
+    if apply_reviewed_sha256 is not None:
+        if apply_reviewed_sha256 != candidate_hash:
+            raise ValueError("Reviewed re-attestation candidate SHA256 mismatch; no writes")
+        _write_set(root, {LOCK: content})
+    return {"candidate": candidate, "candidate_sha256": candidate_hash, "applied": apply_reviewed_sha256 is not None}
 
 
 def _write_set(root: Path, outputs: dict[Path, bytes]) -> None:
@@ -260,6 +314,8 @@ def emit(root: Path, source_path: Path, catalog_path: Path, migration_version: s
             "compiler": COMPILER,
             "lock_format": LOCK_FORMAT,
             "implementation": implementation(),
+            "environment": environment(),
+            "reattestations": list(sequence(state.get("reattestations", []))) if state else [],
             "pins": cast(dict[str, Json], doctor()),
             "source": current.source,
             "catalog": current.catalog,

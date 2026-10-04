@@ -168,12 +168,15 @@ migration byte hashes plus the owned SELECT structural hash in lock format 3
 `rbac/.rbac-lock.json`. Each immutable history entry retains lossless base64
 source/catalog bytes, their byte and canonical JSON SHA256 hashes, the semantic
 contract hash, predecessor hash and regenerated output hashes. The lock pins the
-packaged compiler/helper source hashes and actual validator/YAML dependency
-versions. Checks revalidate every input receipt and regenerate every historical
+four owned RBAC source hashes and the exactly pinned `jsonschema` version.
+Shared CDC helpers and unpinned dependency versions are not fingerprint gates;
+the latter are recorded separately as environment observations. Checks revalidate every input receipt and regenerate every historical
 up/down and SELECT projection, then require the complete owned migration
-inventory and active table include. Deleted history, orphan SQL, changed compiler
-or dependencies, rewritten output hashes, and noncanonical or inconsistent locks
-fail before writes. A canonical payload hash binds the whole lock; the reviewed
+inventory and active table include. Output-identical changes to allowed
+dependencies or shared helpers remain checkable and upgradeable. Genuine SQL
+or canonical SELECT changes, deleted history, orphan SQL, rewritten output
+hashes, and noncanonical or inconsistent locks fail before writes. Owned
+compiler or pinned-validator upgrades require reviewed re-attestation. A canonical payload hash binds the whole lock; the reviewed
 publication SHA256 is the external provenance anchor. This is reproducibility
 and drift evidence, not a signature or protection against replacing an entire
 internally consistent input/output/lock set. No timestamps, host paths or Git
@@ -201,6 +204,30 @@ lock and SQL, reproduce each original input/version in a clean review directory,
 and compare every historical SQL and current SELECT before a separately reviewed
 provenance replacement. Deleting the lock where compiler migrations exist is
 refused. This does not restrict another owner's G4, relationship or format edits.
+
+`cdc rbac reattest` provides a lock-only recovery path for compiler or pinned
+validator upgrades, including the previously reviewed six-file/six-version v3
+receipt. Supply `--hsr`, the exact `--expected-lock-sha256`, and a nonempty
+`--review-reference`. The default command prints a candidate and its
+`candidate_sha256` without writing. It revalidates the original byte receipts,
+regenerates every historical up/down SQL byte hash and canonical SELECT JSON
+byte hash under the new implementation, and checks the actual migration
+inventory, SQL bytes, active SELECT, includes and G4 identity. Any output or
+artifact drift refuses the proposal; this is not a baseline reset for changed
+outputs. SELECT remains structural so other owners' formatting and relationship
+edits remain valid, and G4 never enters the write set.
+
+Review the exact candidate through the owning workflow. To apply, repeat the
+same command with `--apply-reviewed-sha256` set to that candidate's SHA256.
+An old-lock change or a changed candidate (including code or environment
+observations) invalidates the supplied hash and causes zero writes. Successful
+application writes only the lock, retains the old implementation/pins/observations
+verbatim, and appends the prior lock hash, reviewed history-prefix hash/count,
+new implementation and review reference. Checks validate review-chain continuity;
+subsequent migrations preserve reviewed prefixes. No timestamp or host path is
+added. The CLI binds the reviewed bytes; it does not certify who approved the
+external review. This command gives no target installation, activation or
+auto-apply authority. The installation holds below remain unchanged.
 
 The structured merge serializes only the SELECT block in Hasura CLI export
 format, preserving all other table-file bytes, including relationship comments
@@ -232,7 +259,7 @@ local validator authorized by the ROOT disposition; it makes no hosted DDN build
 or full DDN semantic-validation claim.
 
 ```bash
-python -m pytest tests/test_rbac.py tests/test_rbac_repairs.py tests/test_rbac_provenance.py
+python -m pytest tests/test_rbac.py tests/test_rbac_repairs.py tests/test_rbac_provenance.py tests/test_rbac_reattest.py
 # Explicit disposable local PostgreSQL and Hasura only:
 RBAC_TEST_DSN='host=127.0.0.1 port=58350 dbname=postgres user=postgres' \
 RBAC_TEST_HASURA_URL='http://127.0.0.1:58351' \

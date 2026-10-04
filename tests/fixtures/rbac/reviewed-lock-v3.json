@@ -1,0 +1,234 @@
+{
+  "catalog": {
+    "acceptedRoles": [
+      "recipient",
+      "super_user",
+      "therapist"
+    ],
+    "catalogSha256": "8e621840ce96c50a059cc3c40f4a6717e54cddf7e93032517ab03274ddf7cfab",
+    "columns": [
+      {
+        "name": "id",
+        "nullable": false,
+        "type": "uuid"
+      },
+      {
+        "name": "customer_id",
+        "nullable": false,
+        "type": "uuid"
+      },
+      {
+        "name": "lifecycle_status",
+        "nullable": false,
+        "type": "text"
+      },
+      {
+        "name": "user_id",
+        "nullable": true,
+        "type": "uuid"
+      }
+    ],
+    "modelName": "editor_qnrs",
+    "provenance": "Real PostgreSQL 17.11 catalog after all 1177 canonical migrations; minimum four-column compiler admission slice. Full catalog retained in evidence.",
+    "schema": "editor",
+    "source": {
+      "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "path": "migrations/default/1784004000000_create_qnr_v2_instances_and_answers/up.sql",
+      "sha256": "2f343b582b8b3d07bb71dba72d0d9e0ee1a1afc3df8c64a0fe617dab23059505"
+    },
+    "table": "qnrs",
+    "typeName": "editor_qnrs"
+  },
+  "compiler": "cdc-rbac-flat-v2",
+  "files": {
+    "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
+    "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180"
+  },
+  "history": [
+    {
+      "contract_sha256": "e82935869cb6c62cb09e7a93a7e030826dc90732c187c6cedd6e3e17dd5961ad",
+      "files": {
+        "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
+        "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180"
+      },
+      "inputs": {
+        "catalog": {
+          "base64": "ewogICJwcm92ZW5hbmNlIjogIlJlYWwgUG9zdGdyZVNRTCAxNy4xMSBjYXRhbG9nIGFmdGVyIGFsbCAxMTc3IGNhbm9uaWNhbCBtaWdyYXRpb25zOyBtaW5pbXVtIGZvdXItY29sdW1uIGNvbXBpbGVyIGFkbWlzc2lvbiBzbGljZS4gRnVsbCBjYXRhbG9nIHJldGFpbmVkIGluIGV2aWRlbmNlLiIsCiAgInNvdXJjZSI6IHsKICAgICJjb21taXQiOiAiNWI3YmM1ODZhOGEwYWMxZWNmMjgwYTMzZGRiYzJmMTZhODg4MmI0ZSIsCiAgICAicGF0aCI6ICJtaWdyYXRpb25zL2RlZmF1bHQvMTc4NDAwNDAwMDAwMF9jcmVhdGVfcW5yX3YyX2luc3RhbmNlc19hbmRfYW5zd2Vycy91cC5zcWwiLAogICAgInNoYTI1NiI6ICIyZjM0M2I1ODJiOGIzZDA3YmI3MWRiYTcyZDBkOWUwZWUxYTFhZmMzZGY4YzY0YTBmZTYxN2RhYjIzMDU5NTA1IgogIH0sCiAgInNjaGVtYSI6ICJlZGl0b3IiLAogICJ0YWJsZSI6ICJxbnJzIiwKICAiY29sdW1ucyI6IFsKICAgIHsKICAgICAgIm5hbWUiOiAiaWQiLAogICAgICAidHlwZSI6ICJ1dWlkIiwKICAgICAgIm51bGxhYmxlIjogZmFsc2UKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogImN1c3RvbWVyX2lkIiwKICAgICAgInR5cGUiOiAidXVpZCIsCiAgICAgICJudWxsYWJsZSI6IGZhbHNlCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJsaWZlY3ljbGVfc3RhdHVzIiwKICAgICAgInR5cGUiOiAidGV4dCIsCiAgICAgICJudWxsYWJsZSI6IGZhbHNlCiAgICB9LAogICAgewogICAgICAibmFtZSI6ICJ1c2VyX2lkIiwKICAgICAgInR5cGUiOiAidXVpZCIsCiAgICAgICJudWxsYWJsZSI6IHRydWUKICAgIH0KICBdLAogICJhY2NlcHRlZFJvbGVzIjogWwogICAgInJlY2lwaWVudCIsCiAgICAic3VwZXJfdXNlciIsCiAgICAidGhlcmFwaXN0IgogIF0sCiAgIm1vZGVsTmFtZSI6ICJlZGl0b3JfcW5ycyIsCiAgInR5cGVOYW1lIjogImVkaXRvcl9xbnJzIiwKICAiY2F0YWxvZ1NoYTI1NiI6ICI4ZTYyMTg0MGNlOTZjNTBhMDU5Y2MzYzQwZjRhNjcxN2U1NGNkZGY3ZTkzMDMyNTE3YWIwMzI3NGRkZjdjZmFiIgp9Cg==",
+          "canonical_sha256": "bc0304037daf695d8248f0fb20116a60362eca87f2a4aea94767f3b29dbaf343",
+          "sha256": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65"
+        },
+        "source": {
+          "base64": "WwogIHsKICAgICJraW5kIjogIk1vZGVsUGVybWlzc2lvbnMiLAogICAgInZlcnNpb24iOiAidjEiLAogICAgImRlZmluaXRpb24iOiB7CiAgICAgICJtb2RlbE5hbWUiOiAiZWRpdG9yX3FucnMiLAogICAgICAicGVybWlzc2lvbnMiOiBbCiAgICAgICAgewogICAgICAgICAgInJvbGUiOiAicmVjaXBpZW50IiwKICAgICAgICAgICJzZWxlY3QiOiB7CiAgICAgICAgICAgICJmaWx0ZXIiOiB7CiAgICAgICAgICAgICAgImFuZCI6IFsKICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgImZpZWxkQ29tcGFyaXNvbiI6IHsKICAgICAgICAgICAgICAgICAgICAiZmllbGQiOiAiY3VzdG9tZXJfaWQiLAogICAgICAgICAgICAgICAgICAgICJvcGVyYXRvciI6ICJfZXEiLAogICAgICAgICAgICAgICAgICAgICJ2YWx1ZSI6IHsKICAgICAgICAgICAgICAgICAgICAgICJzZXNzaW9uVmFyaWFibGUiOiAieC1oYXN1cmEtY3VzdG9tZXItaWQiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9LAogICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAiZmllbGRDb21wYXJpc29uIjogewogICAgICAgICAgICAgICAgICAgICJmaWVsZCI6ICJ1c2VyX2lkIiwKICAgICAgICAgICAgICAgICAgICAib3BlcmF0b3IiOiAiX2VxIiwKICAgICAgICAgICAgICAgICAgICAidmFsdWUiOiB7CiAgICAgICAgICAgICAgICAgICAgICAic2Vzc2lvblZhcmlhYmxlIjogIngtaGFzdXJhLXVzZXItaWQiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgXQogICAgICAgICAgICB9CiAgICAgICAgICB9CiAgICAgICAgfSwKICAgICAgICB7CiAgICAgICAgICAicm9sZSI6ICJzdXBlcl91c2VyIiwKICAgICAgICAgICJzZWxlY3QiOiB7CiAgICAgICAgICAgICJmaWx0ZXIiOiB7CiAgICAgICAgICAgICAgImFuZCI6IFsKICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgImZpZWxkQ29tcGFyaXNvbiI6IHsKICAgICAgICAgICAgICAgICAgICAiZmllbGQiOiAiY3VzdG9tZXJfaWQiLAogICAgICAgICAgICAgICAgICAgICJvcGVyYXRvciI6ICJfZXEiLAogICAgICAgICAgICAgICAgICAgICJ2YWx1ZSI6IHsKICAgICAgICAgICAgICAgICAgICAgICJzZXNzaW9uVmFyaWFibGUiOiAieC1oYXN1cmEtY3VzdG9tZXItaWQiCiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgXQogICAgICAgICAgICB9CiAgICAgICAgICB9CiAgICAgICAgfSwKICAgICAgICB7CiAgICAgICAgICAicm9sZSI6ICJ0aGVyYXBpc3QiLAogICAgICAgICAgInNlbGVjdCI6IHsKICAgICAgICAgICAgImZpbHRlciI6IHsKICAgICAgICAgICAgICAiYW5kIjogWwogICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAiZmllbGRDb21wYXJpc29uIjogewogICAgICAgICAgICAgICAgICAgICJmaWVsZCI6ICJjdXN0b21lcl9pZCIsCiAgICAgICAgICAgICAgICAgICAgIm9wZXJhdG9yIjogIl9lcSIsCiAgICAgICAgICAgICAgICAgICAgInZhbHVlIjogewogICAgICAgICAgICAgICAgICAgICAgInNlc3Npb25WYXJpYWJsZSI6ICJ4LWhhc3VyYS1jdXN0b21lci1pZCIKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICBdCiAgICAgICAgICAgIH0KICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIF0KICAgIH0KICB9LAogIHsKICAgICJraW5kIjogIlR5cGVQZXJtaXNzaW9ucyIsCiAgICAidmVyc2lvbiI6ICJ2MSIsCiAgICAiZGVmaW5pdGlvbiI6IHsKICAgICAgInR5cGVOYW1lIjogImVkaXRvcl9xbnJzIiwKICAgICAgInBlcm1pc3Npb25zIjogWwogICAgICAgIHsKICAgICAgICAgICJyb2xlIjogInJlY2lwaWVudCIsCiAgICAgICAgICAib3V0cHV0IjogewogICAgICAgICAgICAiYWxsb3dlZEZpZWxkcyI6IFsKICAgICAgICAgICAgICAiaWQiLAogICAgICAgICAgICAgICJjdXN0b21lcl9pZCIsCiAgICAgICAgICAgICAgInVzZXJfaWQiLAogICAgICAgICAgICAgICJsaWZlY3ljbGVfc3RhdHVzIgogICAgICAgICAgICBdCiAgICAgICAgICB9CiAgICAgICAgfSwKICAgICAgICB7CiAgICAgICAgICAicm9sZSI6ICJzdXBlcl91c2VyIiwKICAgICAgICAgICJvdXRwdXQiOiB7CiAgICAgICAgICAgICJhbGxvd2VkRmllbGRzIjogWwogICAgICAgICAgICAgICJpZCIsCiAgICAgICAgICAgICAgImN1c3RvbWVyX2lkIiwKICAgICAgICAgICAgICAidXNlcl9pZCIsCiAgICAgICAgICAgICAgImxpZmVjeWNsZV9zdGF0dXMiCiAgICAgICAgICAgIF0KICAgICAgICAgIH0KICAgICAgICB9LAogICAgICAgIHsKICAgICAgICAgICJyb2xlIjogInRoZXJhcGlzdCIsCiAgICAgICAgICAib3V0cHV0IjogewogICAgICAgICAgICAiYWxsb3dlZEZpZWxkcyI6IFsKICAgICAgICAgICAgICAiaWQiLAogICAgICAgICAgICAgICJjdXN0b21lcl9pZCIsCiAgICAgICAgICAgICAgInVzZXJfaWQiLAogICAgICAgICAgICAgICJsaWZlY3ljbGVfc3RhdHVzIgogICAgICAgICAgICBdCiAgICAgICAgICB9CiAgICAgICAgfQogICAgICBdCiAgICB9CiAgfQpdCg==",
+          "canonical_sha256": "76dcbb69a644b24bf44e1ee3c2a5fcec857aeffa52f39046b297c611d2a9c473",
+          "sha256": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2"
+        }
+      },
+      "migration": "migrations/default/1800000000000_rbac_editor_qnrs",
+      "previous_contract_sha256": null,
+      "select": {
+        "path": "metadata/databases/default/tables/editor_qnrs.yaml",
+        "sha256": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba"
+      }
+    }
+  ],
+  "implementation": {
+    "files": {
+      "core/migration_generator/file_writers.py": "50b9a17dac69705c546c121418e230c2c149f20043ed4328e8efd6dd0200d113",
+      "core/rbac/artifacts.py": "3da01a492aa2e8783834c828a19f1fe9f2a6741e56625648908aad614b7329a6",
+      "core/rbac/provenance.py": "4fee4d75549425501da86a55978b53f9871d16f3a5e072b9533137439301bc93",
+      "core/rbac/rendering.py": "a02dc17f6a4800c5ab1f6f05d7d5da51d1596f6cdf9a8a868a78f0d5188652a6",
+      "core/rbac/validation.py": "3bb80fca6cf6f4ff569003b5bfa133b463946fc6c25d892d0b98e5606a8f851b",
+      "helpers/yaml_loader.py": "e5d3c7e127396184b22a27cee90b80b9c7814f23faf455115457371c10a37295"
+    },
+    "runtime": {
+      "attrs": "26.1.0",
+      "jsonschema": "4.25.1",
+      "jsonschema-specifications": "2025.9.1",
+      "referencing": "0.37.0",
+      "rpds-py": "2026.6.3",
+      "ruamel.yaml": "0.19.1"
+    }
+  },
+  "input_hashes": {
+    "catalog": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65",
+    "source": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2"
+  },
+  "lock_format": 3,
+  "migration": "migrations/default/1800000000000_rbac_editor_qnrs",
+  "pins": {
+    "jsonschema": "4.25.1",
+    "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  },
+  "preserved": {
+    "metadata/databases/default/tables/public_queries.yaml": {
+      "table": {
+        "name": "queries",
+        "schema": "public"
+      }
+    }
+  },
+  "previous": null,
+  "select": {
+    "path": "metadata/databases/default/tables/editor_qnrs.yaml",
+    "sha256": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba"
+  },
+  "sha256": "acd0b9938e5712d70da103256d72a33e85531da7157459662694c43498897f87",
+  "source": [
+    {
+      "definition": {
+        "modelName": "editor_qnrs",
+        "permissions": [
+          {
+            "role": "recipient",
+            "select": {
+              "filter": {
+                "and": [
+                  {
+                    "fieldComparison": {
+                      "field": "customer_id",
+                      "operator": "_eq",
+                      "value": {
+                        "sessionVariable": "x-hasura-customer-id"
+                      }
+                    }
+                  },
+                  {
+                    "fieldComparison": {
+                      "field": "user_id",
+                      "operator": "_eq",
+                      "value": {
+                        "sessionVariable": "x-hasura-user-id"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "role": "super_user",
+            "select": {
+              "filter": {
+                "and": [
+                  {
+                    "fieldComparison": {
+                      "field": "customer_id",
+                      "operator": "_eq",
+                      "value": {
+                        "sessionVariable": "x-hasura-customer-id"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "role": "therapist",
+            "select": {
+              "filter": {
+                "and": [
+                  {
+                    "fieldComparison": {
+                      "field": "customer_id",
+                      "operator": "_eq",
+                      "value": {
+                        "sessionVariable": "x-hasura-customer-id"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "kind": "ModelPermissions",
+      "version": "v1"
+    },
+    {
+      "definition": {
+        "permissions": [
+          {
+            "output": {
+              "allowedFields": [
+                "id",
+                "customer_id",
+                "user_id",
+                "lifecycle_status"
+              ]
+            },
+            "role": "recipient"
+          },
+          {
+            "output": {
+              "allowedFields": [
+                "id",
+                "customer_id",
+                "user_id",
+                "lifecycle_status"
+              ]
+            },
+            "role": "super_user"
+          },
+          {
+            "output": {
+              "allowedFields": [
+                "id",
+                "customer_id",
+                "user_id",
+                "lifecycle_status"
+              ]
+            },
+            "role": "therapist"
+          }
+        ],
+        "typeName": "editor_qnrs"
+      },
+      "kind": "TypePermissions",
+      "version": "v1"
+    }
+  ]
+}
