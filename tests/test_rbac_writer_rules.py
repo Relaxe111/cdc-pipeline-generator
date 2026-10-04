@@ -10,7 +10,7 @@ import pytest
 
 from cdc_generator.core.rbac.composition_models import Policy
 from cdc_generator.core.rbac.policy_semantics import parse, prove_compatible
-from cdc_generator.core.rbac.validation import Contract, Json, compile_contract, load_json, mapping, sequence
+from cdc_generator.core.rbac.validation import ROLES, Contract, Json, compile_contract, load_json, mapping, sequence
 from cdc_generator.core.rbac.writer_rules import policies, policy_bytes, writer_rules
 
 FIXTURES = Path(__file__).parent / "fixtures/rbac"
@@ -136,3 +136,24 @@ def test_restrictive_and_can_prove_net_union_without_erasing_positives() -> None
     owned = generated()
     delete = next(policy for policy in owned if policy.command == "DELETE")
     prove_compatible(owned, (Policy("wider", "DELETE", True, "true", None), replace(delete, name="restrictive", permissive=False)))
+
+
+def test_role_agnostic_tenant_read_refuses_absent_and_unknown_role_states() -> None:
+    """Known-role coverage is insufficient: a tenant-only retained SELECT opens missing/unknown roles."""
+    readers = tuple(
+        Policy(f"reader_{role}", "SELECT", True, f"NULLIF(current_setting('app.role', true), '') = '{role}' AND {TENANT}", None) for role in ROLES
+    )
+    owned = (*readers, *(policy for policy in generated() if policy.command != "SELECT"))
+    tenant_fence = Policy("other_owner_tenant", "SELECT", False, TENANT, None)
+    prove_compatible(owned, (tenant_fence,))  # Every admitted positive still works.
+    widened = replace(tenant_fence, permissive=True)
+    assert parse(widened.using).accepts((None, True, False))
+    assert parse(widened.using).accepts(("unknown", True, False))
+    with pytest.raises(ValueError, match="Retained SELECT using widens generated authorization"):
+        prove_compatible(owned, (widened,))
+
+
+def test_retained_parser_refuses_trailing_tokens_after_a_valid_positive_expression() -> None:
+    assert parse("true").accepts(("therapist", True, True))
+    with pytest.raises(ValueError, match="Unsupported trailing retained predicate syntax"):
+        parse("true false")

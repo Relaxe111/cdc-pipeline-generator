@@ -41,29 +41,58 @@ def isolated(request: pytest.FixtureRequest) -> Iterator[tuple[connection, conne
     admin.autocommit = True
     prefix = "asma8350_unqualified_" if getattr(request, "param", None) == "unqualified" else "asma8350_writer_"
     name = prefix + uuid.uuid4().hex
-    with admin.cursor() as cursor:
-        cursor.execute("ALTER ROLE editor_app LOGIN PASSWORD 'asma8350-fixture-only' NOSUPERUSER NOBYPASSRLS NOINHERIT")
-        cursor.execute("CREATE DATABASE " + name)
-    config = parse_dsn(dsn)
-    config.update({"dbname": name})
-    config.pop("options", None)
-    owner = psycopg2.connect(**config)
-    owner.autocommit = True
-    with owner.cursor() as cursor:
-        cursor.execute(DDL)
-    config.update({"user": "editor_app", "password": "asma8350-fixture-only"})
-    config.pop("options", None)
-    app = psycopg2.connect(**config)
-    app.autocommit = True
+    owned_role = False
+    provisioned_role = False
+    owned_database = False
+    owner: connection | None = None
+    app: connection | None = None
     try:
+        with admin.cursor() as cursor:
+            cursor.execute(
+                "SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit,rolcreatedb,rolcreaterole,rolreplication "
+                "FROM pg_roles WHERE rolname='editor_app'"
+            )
+            existing = cursor.fetchone()
+            if existing is None:
+                cursor.execute(
+                    "CREATE ROLE editor_app LOGIN PASSWORD 'asma8350-fixture-only' "
+                    "NOSUPERUSER NOBYPASSRLS NOINHERIT NOCREATEDB NOCREATEROLE NOREPLICATION"
+                )
+                owned_role = True
+            elif existing != (False,) * 7:
+                raise ValueError("Existing editor_app is not the disposable suite's NOLOGIN fixture role")
+            else:
+                cursor.execute("ALTER ROLE editor_app LOGIN PASSWORD 'asma8350-fixture-only'")
+            provisioned_role = True
+            cursor.execute("CREATE DATABASE " + name)
+            owned_database = True
+        config = parse_dsn(dsn)
+        config.update({"dbname": name})
+        config.pop("options", None)
+        owner = psycopg2.connect(**config)
+        owner.autocommit = True
+        with owner.cursor() as cursor:
+            cursor.execute(DDL)
+        config.update({"user": "editor_app", "password": "asma8350-fixture-only"})
+        app = psycopg2.connect(**config)
+        app.autocommit = True
         yield owner, app
     finally:
-        app.close()
-        owner.close()
+        if app is not None:
+            app.close()
+        if owner is not None:
+            owner.close()
         with admin.cursor() as cursor:
-            cursor.execute("REVOKE postgres FROM editor_app")
-            cursor.execute("ALTER ROLE editor_app LOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT NOCREATEDB")
-            cursor.execute("DROP DATABASE " + name + " WITH (FORCE)")
+            if owned_database:
+                cursor.execute("DROP DATABASE " + name + " WITH (FORCE)")
+            if provisioned_role:
+                cursor.execute("REVOKE postgres FROM editor_app")
+                if owned_role:
+                    cursor.execute("DROP ROLE editor_app")
+                else:
+                    cursor.execute(
+                        "ALTER ROLE editor_app NOLOGIN PASSWORD NULL NOSUPERUSER NOBYPASSRLS NOINHERIT NOCREATEDB NOCREATEROLE NOREPLICATION"
+                    )
         admin.close()
 
 
@@ -141,6 +170,39 @@ def statements(command: str, returning: bool, *, tenant: str = TENANT_A) -> str:
             sql += " WHERE id='00000000-0000-0000-0000-000000000001'"
         sql += " RETURNING id"
     return sql
+
+
+def test_generated_up_takes_relation_lock_before_preflight_and_releases_on_rollback(isolated: tuple[connection, connection]) -> None:
+    """A competing schema change times out while the actual up prefix owns its lock."""
+    db, app = isolated
+    current = contract(db)
+    up = render_migration(current, None)[0].decode()
+    prefix = up.split("DO $rbac$", 1)[0]
+    before = inventory(db), readback(db)
+    config = parse_dsn(os.environ["RBAC_TEST_DSN"])
+    config["dbname"] = db.get_dsn_parameters()["dbname"]
+    contender = psycopg2.connect(**config)
+    try:
+        try:
+            with db.cursor() as cursor:
+                cursor.execute(prefix)
+            with pytest.raises(psycopg2.errors.LockNotAvailable), contender.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout='300ms'")
+                cursor.execute("ALTER TABLE editor.qnrs ADD COLUMN concurrent_marker text")
+        finally:
+            with db.cursor() as cursor:
+                cursor.execute("ROLLBACK")
+            contender.rollback()
+        assert (inventory(db), readback(db)) == before  # The aborted prefix wrote no policy or ACL.
+        with contender.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout='300ms'")
+            cursor.execute("ALTER TABLE editor.qnrs ADD COLUMN concurrent_marker text")
+        contender.rollback()  # The same DDL succeeds after release; do not change the fixture table.
+        apply(db, up.encode())
+        assert_nonowner(app)
+        assert probe(app, statements("UPDATE", False)) == 1
+    finally:
+        contender.close()
 
 
 @pytest.mark.parametrize("upgrade", [False, True])

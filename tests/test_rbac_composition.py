@@ -11,6 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from cdc_generator.cli.commands import _click_cli
+from cdc_generator.core.rbac import composition as composition_module
 from cdc_generator.core.rbac import provenance
 from cdc_generator.core.rbac.artifacts import G4, LOCK, check, emit, reattest
 from cdc_generator.core.rbac.composition import Sources
@@ -287,6 +288,103 @@ def test_self_consistent_forged_review_is_not_authority() -> None:
     receipt_snapshot.update({"reference": copy.deepcopy(receipt_ref), "base64": base64.b64encode(canonical(receipt)).decode()})
     with pytest.raises(ValueError, match="Actual owning declaration/review not admitted"):
         compile_fixture(value)
+
+
+def _replace_bound_snapshot(value: dict[str, Json], reference: dict[str, Json], body: Json) -> None:
+    """Change a source and its exact hash so the next independent guard is reached."""
+    snapshots = sequence(value["sourceSnapshots"])
+    snapshot = next(mapping(item) for item in snapshots if mapping(item)["reference"] == reference)
+    raw = canonical(body)
+    reference["sha256"] = digest(raw)
+    snapshot.update({"reference": copy.deepcopy(reference), "base64": base64.b64encode(raw).decode()})
+
+
+@pytest.mark.parametrize("condition", ["worker-source", "compiler-context", "retained-name"])
+def test_condition_bindings_refuse_before_output_and_keep_positive_control(owner: Path, condition: str) -> None:
+    """Validly rebound hostile receipts must reach each independent source gate."""
+    tenant = "customer_id = NULLIF(current_setting('app.customer_id', true), '')::uuid"
+    retained = {"name": "other_owner_tenant", "command": "SELECT", "roles": ["editor_app"], "permissive": False, "using": tenant, "withCheck": None}
+    good = catalog(retained=[retained]) if condition == "retained-name" else catalog()
+    bad = copy.deepcopy(good)
+    envelope = mapping(bad["ownerEnvelope"])
+    authorization = mapping(envelope["writerAuthorizationSource"])
+    receipt_ref = mapping(authorization["compilerGenerationReceipt"])
+    receipt_snapshot = next(mapping(item) for item in sequence(bad["sourceSnapshots"]) if mapping(item)["reference"] == receipt_ref)
+    receipt = mapping(parse_json(base64.b64decode(str(receipt_snapshot["base64"]))))
+    if condition == "worker-source":
+        worker_ref = mapping(envelope["workerSource"])
+        worker_snapshot = next(mapping(item) for item in sequence(bad["sourceSnapshots"]) if mapping(item)["reference"] == worker_ref)
+        worker = mapping(parse_json(base64.b64decode(str(worker_snapshot["base64"]))))
+        worker["actualWorker"] = "unproved_admin"
+        _replace_bound_snapshot(bad, worker_ref, worker)
+        receipt["sourceBindings"] = {key: envelope[key] for key in ("membershipSource", "creatorDefaultsSource", "workerSource", "retainedPolicies")}
+        refusal = "Unproved worker/context source"
+    elif condition == "compiler-context":
+        context_ref = mapping(authorization["compilerSource"])
+        context_snapshot = next(mapping(item) for item in sequence(bad["sourceSnapshots"]) if mapping(item)["reference"] == context_ref)
+        context = mapping(parse_json(base64.b64decode(str(context_snapshot["base64"]))))
+        context["compiler"] = "unreviewed-compiler-context"
+        _replace_bound_snapshot(bad, context_ref, context)
+        receipt["compilerContext"] = context
+        refusal = "Unreviewed compiler source context"
+    else:
+        entry = mapping(sequence(envelope["retainedPolicies"])[0])
+        entry["name"] = "cdc_rbac_external_tenant"
+        definition = {key: entry[key] for key in ("name", "command", "roles", "permissive", "using", "withCheck")}
+        entry["definitionSha256"] = digest(canonical(definition))
+        _replace_bound_snapshot(bad, mapping(entry["source"]), definition)
+        receipt["sourceBindings"] = {key: envelope[key] for key in ("membershipSource", "creatorDefaultsSource", "workerSource", "retainedPolicies")}
+        refusal = "Retained policy overlaps compiler ownership"
+    _replace_bound_snapshot(bad, receipt_ref, receipt)
+    source, catalog_path = owner / "source.json", owner / "catalog.json"
+    source.write_bytes((FIXTURES / "writer.opendd.json").read_bytes())
+    catalog_path.write_bytes(canonical(bad))
+    before = {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    with pytest.raises(ValueError, match=refusal):
+        emit(owner, source, catalog_path, "1800000000000")
+    assert before == {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    assert not (owner / LOCK).exists()
+    catalog_path.write_bytes(canonical(good))
+    state = emit(owner, source, catalog_path, "1800000000000")
+    assert check(owner, source, catalog_path) == state
+    assert (owner / G4).read_bytes() == (FIXTURES / "public_queries.yaml").read_bytes()
+    assert b"cdc_rbac_therapist_insert" in (owner / "migrations/default/1800000000000_rbac_editor_qnrs/up.sql").read_bytes()
+
+
+def test_unused_well_formed_source_receipt_refuses_before_output(owner: Path) -> None:
+    value = catalog()
+    original = copy.deepcopy(value)
+    raw = canonical({"qualification": "TEST_ONLY_NONOWNER_ISO", "unused": True})
+    sequence(value["sourceSnapshots"]).append(
+        {
+            "reference": {"commit": "2a8cf55de3966d09deb4c07ee6ee91a9c10fddf3", "path": "generated:ISO/unused", "sha256": digest(raw)},
+            "base64": base64.b64encode(raw).decode(),
+        }
+    )
+    source, catalog_path = owner / "source.json", owner / "catalog.json"
+    source.write_bytes((FIXTURES / "writer.opendd.json").read_bytes())
+    catalog_path.write_bytes(canonical(value))
+    before = {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    with pytest.raises(ValueError, match="Unbound source snapshots"):
+        emit(owner, source, catalog_path, "1800000000000")
+    assert before == {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    catalog_path.write_bytes(canonical(original))
+    state = emit(owner, source, catalog_path, "1800000000000")
+    assert check(owner, source, catalog_path) == state
+
+
+def test_reviewed_envelope_schema_byte_pin_refuses_before_output(owner: Path, tmp_path: Path) -> None:
+    source, catalog_path = owner / "source.json", owner / "catalog.json"
+    source.write_bytes((FIXTURES / "writer.opendd.json").read_bytes())
+    catalog_path.write_bytes(canonical(catalog()))
+    source_schema = composition_module.ASSETS / "owner-envelope.schema.json"
+    (tmp_path / source_schema.name).write_bytes(source_schema.read_bytes() + b"\n")
+    before = {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    with patch.object(composition_module, "ASSETS", tmp_path), pytest.raises(ValueError, match="Reviewed owner-envelope schema drift"):
+        emit(owner, source, catalog_path, "1800000000000")
+    assert before == {path: path.read_bytes() for path in owner.rglob("*") if path.is_file()}
+    state = emit(owner, source, catalog_path, "1800000000000")
+    assert check(owner, source, catalog_path) == state
 
 
 def test_output_identical_upgrade_reattests_prior_writer_implementation(owner: Path, tmp_path: Path) -> None:
