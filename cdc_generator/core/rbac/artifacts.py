@@ -8,8 +8,9 @@ import re
 from pathlib import Path
 from typing import Protocol, cast
 
+from cdc_generator.core.rbac.provenance import COMPILER, LOCK_FORMAT, MIGRATION, emission, implementation, seal, snapshot, verify_history
 from cdc_generator.core.rbac.rendering import render_migration, select_permissions
-from cdc_generator.core.rbac.validation import Contract, Json, canonical, compile_contract, digest, doctor, load_json, mapping, string
+from cdc_generator.core.rbac.validation import Contract, Json, canonical, compile_contract, digest, doctor, load_json, mapping
 from cdc_generator.helpers.yaml_loader import ConfigDict, YAMLLoader, create_yaml_loader, load_yaml_file, yaml
 
 HASURA_CLI_VERSION = 3
@@ -99,7 +100,12 @@ def _table_path(contract: Contract) -> Path:
 def _load_lock(root: Path) -> dict[str, Json] | None:
     """Read provenance only from the owning artifact's RBAC working directory."""
     path = _path(root, LOCK)
-    return mapping(load_json(path)) if path.exists() else None
+    if not path.exists():
+        return None
+    state = mapping(load_json(path))
+    if path.read_bytes() != canonical(state):
+        raise ValueError("Compiler-owned lock is not canonical JSON")
+    return state
 
 
 def _contract(state: dict[str, Json]) -> Contract:
@@ -143,31 +149,45 @@ def _project(root: Path) -> None:
 
 def verify_state(root: Path, state: dict[str, Json]) -> None:
     """Verify hashes and recompute SQL/SELECT projection, without writing files."""
-    if state.get("compiler") != "cdc-rbac-flat-v2" or state.get("pins") != doctor():
-        raise ValueError("Compiler/validator provenance drift")
+    current, _previous = verify_history(state)
+    if set(mapping(state["files"])) != _owned_files(root):
+        raise ValueError("Compiler-owned migration inventory differs from the lock")
     for relative, expected in mapping(state["files"]).items():
-        if not re.fullmatch(r"migrations/default/[0-9]{13}_rbac_editor_qnrs/(up|down)\.sql", relative):
-            raise ValueError("Lock may pin only compiler-owned migration files")
         path = _path(root, Path(relative))
         if digest(path.read_bytes()) != expected:
             raise ValueError(f"Artifact drift: {relative}")
     if state["preserved"] != G4_IDENTITY:
         raise ValueError("Separately owned G4 identity provenance mismatch")
-    current = _contract(state)
-    if state["select"] != {"path": str(_table_path(current)), "sha256": digest(canonical(select_permissions(current)))}:
-        raise ValueError("Generated SELECT structural provenance mismatch")
-    prior_value = state["previous"]
-    previous = _contract(mapping(prior_value)) if prior_value is not None else None
-    up, down = render_migration(current, previous)
-    migration = Path(string(state["migration"]))
-    for filename, content in [("up.sql", up), ("down.sql", down)]:
-        if _path(root, migration / filename).read_bytes() != content:
-            raise ValueError(f"Generated SQL/provenance mismatch: {filename}")
+    _table_index(root, current)
     metadata = load_yaml_file(_path(root, _table_path(current)))
     if metadata.get("table") != {"schema": current.schema, "name": current.table} or _metadata_select(metadata) != select_permissions(current):
         raise ValueError("Generated SELECT/provenance mismatch")
     if any(metadata.get(f"{verb}_permissions") for verb in ("insert", "update", "delete")):
         raise ValueError("Generated owner-exclusive Hasura mutations are prohibited")
+
+
+def _owned_files(root: Path) -> set[str]:
+    """Detect deleted locks/history and unrecorded files in the reserved namespace."""
+    directory = _path(root, Path("migrations/default"))
+    result: set[str] = set()
+    if directory.exists():
+        for path in directory.iterdir():
+            if path.name.endswith("_rbac_editor_qnrs"):
+                relative = path.relative_to(root)
+                if not re.fullmatch(MIGRATION, str(relative)) or not _path(root, relative).is_dir():
+                    raise ValueError("Noncanonical compiler-owned migration identity")
+                if {file.name for file in path.iterdir()} != {"up.sql", "down.sql"}:
+                    raise ValueError("Incomplete or extra compiler-owned migration files")
+                result.update(str(_path(root, file.relative_to(root)).relative_to(root)) for file in path.iterdir())
+    return result
+
+
+def _table_index(root: Path, current: Contract) -> None:
+    """Require exactly one active canonical include on both emission and check."""
+    with _path(root, TABLES / "tables.yaml").open() as stream:
+        index = yaml.load(stream)
+    if not isinstance(index, list) or index.count(f"!include {_table_path(current).name}") != 1:
+        raise ValueError("Canonical table metadata is absent from Hasura tables.yaml")
 
 
 def check(root: Path, source_path: Path, catalog_path: Path) -> dict[str, Json]:
@@ -177,12 +197,10 @@ def check(root: Path, source_path: Path, catalog_path: Path) -> dict[str, Json]:
     if state is None:
         raise ValueError("Missing RBAC lock; emit a reviewed migration first")
     verify_state(root, state)
-    hashes: dict[str, Json] = {"source": digest(source_path.read_bytes()), "catalog": digest(catalog_path.read_bytes())}
+    source, catalog = source_path.read_bytes(), catalog_path.read_bytes()
+    hashes: dict[str, Json] = {"source": digest(source), "catalog": digest(catalog)}
     if state["input_hashes"] != hashes:
         raise ValueError("Source/catalog drift: emit a new immutable migration")
-    current = compile_contract(load_json(source_path), load_json(catalog_path))
-    if canonical(current.source) != canonical(state["source"]) or canonical(current.catalog) != canonical(state["catalog"]):
-        raise ValueError("Input/provenance mismatch")
     return state
 
 
@@ -209,7 +227,9 @@ def _write_set(root: Path, outputs: dict[Path, bytes]) -> None:
 def emit(root: Path, source_path: Path, catalog_path: Path, migration_version: str) -> dict[str, Json]:
     """Emit an explicit-version immutable migration and structured SELECT merge."""
     _project(root)
-    current = compile_contract(load_json(source_path), load_json(catalog_path))
+    current, inputs = snapshot(source_path.read_bytes(), catalog_path.read_bytes())
+    if (current.schema, current.table) != ("editor", "qnrs"):
+        raise ValueError("Canonical emission is bounded to editor.qnrs")
     state = _load_lock(root)
     previous = None
     if state:
@@ -217,6 +237,8 @@ def emit(root: Path, source_path: Path, catalog_path: Path, migration_version: s
         previous = _contract(state)
         if canonical({"source": current.source, "catalog": current.catalog}) == canonical({"source": previous.source, "catalog": previous.catalog}):
             return check(root, source_path, catalog_path)
+    elif _owned_files(root):
+        raise ValueError("Missing RBAC lock for existing compiler-owned migrations; deleting provenance is prohibited")
     if not re.fullmatch(r"[0-9]{13}", migration_version):
         raise ValueError("Migration version must be an explicit 13-digit Unix millisecond value")
     directory = Path("migrations/default")
@@ -225,27 +247,31 @@ def emit(root: Path, source_path: Path, catalog_path: Path, migration_version: s
         raise ValueError("Migration version must sort after every existing migration")
     migration = directory / f"{migration_version}_rbac_{current.schema}_{current.table}"
     metadata_path = _table_path(current)
-    with _path(root, TABLES / "tables.yaml").open() as stream:
-        index = yaml.load(stream)
-    if not isinstance(index, list) or index.count(f"!include {metadata_path.name}") != 1:
-        raise ValueError("Canonical table metadata is absent from Hasura tables.yaml")
+    _table_index(root, current)
     merged = _merge(root, current, previous)
     up, down = render_migration(current, previous)
     outputs = {migration / "up.sql": up, migration / "down.sql": down, metadata_path: merged}
     files = dict(mapping(state["files"])) if state else {}
     files.update({str(migration / filename): digest(content) for filename, content in [("up.sql", up), ("down.sql", down)]})
-    manifest: dict[str, Json] = {
-        "compiler": "cdc-rbac-flat-v2",
-        "pins": cast(dict[str, Json], doctor()),
-        "source": current.source,
-        "catalog": current.catalog,
-        "input_hashes": {"source": digest(source_path.read_bytes()), "catalog": digest(catalog_path.read_bytes())},
-        "previous": {"source": previous.source, "catalog": previous.catalog} if previous else None,
-        "migration": str(migration),
-        "files": files,
-        "select": {"path": str(metadata_path), "sha256": digest(canonical(select_permissions(current)))},
-        "preserved": copy.deepcopy(G4_IDENTITY),
-    }
+    history = list(cast(list[Json], state["history"])) if state else []
+    history.append(emission(str(migration), current, inputs, previous))
+    manifest = seal(
+        {
+            "compiler": COMPILER,
+            "lock_format": LOCK_FORMAT,
+            "implementation": implementation(),
+            "pins": cast(dict[str, Json], doctor()),
+            "source": current.source,
+            "catalog": current.catalog,
+            "input_hashes": {name: mapping(value)["sha256"] for name, value in inputs.items()},
+            "history": history,
+            "previous": {"source": previous.source, "catalog": previous.catalog} if previous else None,
+            "migration": str(migration),
+            "files": files,
+            "select": {"path": str(metadata_path), "sha256": digest(canonical(select_permissions(current)))},
+            "preserved": copy.deepcopy(G4_IDENTITY),
+        }
+    )
     outputs[LOCK] = canonical(manifest)
     _write_set(root, outputs)
     return manifest
