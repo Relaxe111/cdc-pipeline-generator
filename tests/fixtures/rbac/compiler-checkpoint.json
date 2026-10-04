@@ -1,0 +1,555 @@
+{
+  "authority": {
+    "id": "QNR-ROOT-8350-SINGLE-WRITER-DISPOSITION-20261004-1",
+    "sha256": "7d215655cb5f82037e3d2c1ac21cd7f8a7bf6938ba676f91fe8fe81b575244bd"
+  },
+  "boundaries": {
+    "G4": "Preserved byte/identity-wise; separately owned",
+    "G5_full_write_transport_install": "Separately owned; compiler unit does not wait",
+    "full_1177_migration_L3_oracles": "NOT_DISCHARGED_BY_THIS_UNIT",
+    "full_DDN_semantic_build": "NOT_CLAIMED",
+    "target_installation": "NOT_ATTEMPTED",
+    "target_requests": 0
+  },
+  "bounded_tests": {
+    "failed": 0,
+    "passed": 112,
+    "skipped": 0,
+    "tests": [
+      {
+        "id": "tests.test_rbac::test_offline_validation_and_both_targets",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_exact_upstream_slice",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[unknown_role]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[internal_role]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[wrong_model]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[wrong_type]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[unknown_field]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[literal]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[or]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[empty_and]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[no_tenant]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[relationship]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[unknown_session]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[wrong_session_field]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[mutation]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[preset]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[different_columns]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[duplicate_role]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[duplicate_kind]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[version]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[unknown_column_type]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[wrong_schema]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_input_fails_closed[wrong_roles]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_schema_enums_and_duplicate_json",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_structured_merge_and_determinism",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[source.json]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[catalog.json]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[rbac/.rbac-lock.json]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[metadata/databases/default/tables/editor_qnrs.yaml]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[metadata/databases/default/tables/public_queries.yaml]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[migrations/default/1800000000000_rbac_editor_qnrs/up.sql]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_drift_detected[migrations/default/1800000000000_rbac_editor_qnrs/down.sql]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_upgrade_preserves_history_and_g4",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[existing_select]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[wrong_identity]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[editor_mutation]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[old_timestamp]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[missing_index]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[symlink]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_emission_failures_leave_owner_unchanged[missing_g4]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_filesystem_failure_restores_write_set",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_real_cdc_cli_registration",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_unknown_kind",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_malformed_source_reports_validation_error[None]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_malformed_source_reports_validation_error[value1]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_malformed_source_reports_validation_error[12]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_malformed_source_reports_validation_error[True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[missing_kind]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[empty_roles]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[mismatched_roles]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[duplicate_column]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[bad_identifier]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[unqualified_column]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_catalog_and_shape_boundaries[deep_filter]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_validator_dependency_and_schema_pins",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_invalid_constants_and_json_types",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_owner_layout_boundaries[config]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_owner_layout_boundaries[g4_identity]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_owner_layout_boundaries[missing_lock]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_owner_layout_boundaries[timestamp]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_owner_layout_boundaries[commented_include]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_forged_hash_cannot_hide_generated_drift[g4_hash]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_forged_hash_cannot_hide_generated_drift[sql_hash]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_forged_hash_cannot_hide_generated_drift[select]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_forged_hash_cannot_hide_generated_drift[mutation]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_forged_hash_cannot_hide_generated_drift[input_state]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_table_identity_upgrade_refused",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac::test_pinned_generation_and_source_hashes",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033-1]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000044-1]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-00000000-0000-0000-0000-000000000022-00000000-0000-0000-0000-000000000033-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-00000000-0000-0000-0000-000000000022-00000000-0000-0000-0000-000000000044-1]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[super_user-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033-2]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[therapist-00000000-0000-0000-0000-000000000022-00000000-0000-0000-0000-000000000044-1]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[therpist-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[qnr_projection_writer-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[None-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-None-00000000-0000-0000-0000-000000000033-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_fresh_two_tenant_session_matrix[recipient-00000000-0000-0000-0000-000000000011-None-0]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[INSERT]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[UPDATE]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[DELETE]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[TRUNCATE]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[unprojected]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_forbidden_privileges[malformed_context]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[bypassrls-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[bypassrls-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[privileged_member-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[privileged_member-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[owner-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[owner-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[broad_select-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[broad_select-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[write-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[write-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[column_write-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[column_write-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[extra_column-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[extra_column-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[unmanaged_policy-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[unmanaged_policy-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[catalog_type-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[catalog_type-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[missing_column-False]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_installation_failure_is_transactional[missing_column-True]",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_missing_role_and_table",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_upgrade_and_rollback_authorization",
+        "result": "PASS"
+      },
+      {
+        "id": "tests.test_rbac_postgres::test_hasura_two_tenants_and_no_mutations",
+        "result": "PASS"
+      }
+    ]
+  },
+  "checks": {
+    "explicit_root_adapter": "PASS",
+    "git_diff_whitespace": "PASS",
+    "new_file_black": "PASS",
+    "registry_baseline_style": "Two existing PLR0917 warnings and existing whole-file Black differences; registry change is two lines only",
+    "scoped_pyright": "0 errors, 0 warnings",
+    "scoped_ruff": "PASS"
+  },
+  "classification": "G1-G3 bounded compiler checkpoint; not full artifact L3 or target acceptance",
+  "coverage": {
+    "covered": 412,
+    "percent": 100.0,
+    "statements": 412
+  },
+  "isolated_images": {
+    "hasura": "hasura/graphql-engine@sha256:5d435a6756de53709bf48c15b822cabab38d57acd22e656cf633cc2df67df150",
+    "hasura_version": "v2.51.0",
+    "postgres": "postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
+  },
+  "issue": "ASMA-8350",
+  "packaging": {
+    "extracted_wheel_doctor": "PASS",
+    "vendored_assets_byte_verified": true,
+    "wheel_built": true
+  },
+  "pins": {
+    "jsonschema": "4.25.1",
+    "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
+    "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
+    "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  },
+  "readiness": [
+    {
+      "item": "1 pinned official OpenDD plus offline validator",
+      "status": "READY"
+    },
+    {
+      "item": "2 deterministic flat RLS plus SELECT-only Hasura",
+      "status": "READY"
+    },
+    {
+      "item": "3 canonical immutable emission and structured merge preserving G4",
+      "status": "READY"
+    },
+    {
+      "item": "4 source/hash/drift checks",
+      "status": "READY"
+    },
+    {
+      "item": "5 fresh-install and upgrade negative tests",
+      "status": "READY"
+    }
+  ],
+  "regression_run": {
+    "base_confirmation": "Same three failures reproduced with pinned base Click registry, unchanged owning tests/implementation; no alternate checkout used",
+    "collected": 1755,
+    "failed": 3,
+    "failures": [
+      {
+        "id": "tests.test_pipeline_generation::test_generate_all_writes_canonical_pipeline_paths",
+        "message": "AssertionError: assert False\n +  where False = is_file()\n +    where is_file = PosixPath('/private/var/folders/t3/0tbx772d571_57t01yb9twx00000gn/T/pytest-of-igor/pytest-2/test_generate_all_writes_canon0/pipelines/generated/sources/default/customera/source-pipeline.yaml').is_file"
+      },
+      {
+        "id": "tests.test_pipeline_generation::test_verify_full_passes_on_minimal_fixture",
+        "message": "assert 1 == 0"
+      },
+      {
+        "id": "tests.test_server_group_handlers.TestHandleSetTargetSinkEnv::test_set_target_sink_env_succeeds",
+        "message": "assert 1 == 0"
+      }
+    ],
+    "passed": 1708,
+    "skipped": 44
+  },
+  "tested_source_hashes": {
+    "MANIFEST.in": "4e43775b4f8af262b1f44fd1f2dd11a8d1156d415f7d3327261bc28e75bf3fac",
+    "cdc_generator/cli/click_commands.py": "6ad13cd7b22a601859f33755f31c8de531ee417fe37fb4fdf3e127b564ef301d",
+    "cdc_generator/cli/rbac.py": "dc9db147a0a4d3552d0123c7aa54033eaad4b0455cf617630535f08501f49439",
+    "cdc_generator/core/rbac/__init__.py": "19ab75c42be8b6dba738c460038dab0804c92b62ebeb09cd24cfa880c617fd31",
+    "cdc_generator/core/rbac/artifacts.py": "881c5cef53665c0ad8e8a11ad205909fafddcae77d2b55971e3071c32794d5f1",
+    "cdc_generator/core/rbac/rendering.py": "e8ad9c1e10ea5e94ee208251666639d7a5e5ba8bf91dae585a27a185e6b80418",
+    "cdc_generator/core/rbac/validation.py": "b50b32cb90b8a15e01972182ca0a578aedada16806aa3fb32404074b96beef34",
+    "pyproject.toml": "828b77e7a304a238e7f3ef93bb1d017e2658bf72eb32d857982d2aa9e7d5b1d9",
+    "tests/test_rbac.py": "ee1eb219345445caec0778017737a00a25c203df0490d074761a078fc1692faa",
+    "tests/test_rbac_postgres.py": "17116cdaf6fc25e00c80bf485d73344c88861448e1d71b5271d51876f565a77a"
+  }
+}

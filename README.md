@@ -136,6 +136,78 @@ cdc generate --all --environment dev
 
 ---
 
+## Bounded editor RBAC compiler
+
+`cdc rbac` compiles the ASMA-8350 admission subset locally: official OpenDD v1
+`ModelPermissions` + `TypePermissions`, real catalog names, and flat `_eq`/`and`
+filters on tenant/actor UUID columns. The platform roles are `recipient`,
+`super_user`, and `therapist`. The prepared four-column `editor.qnrs` inputs are
+pinned from artifact commit `af7fa36775ef994bb66f9f125042ee71e5d26758` in
+`tests/fixtures/rbac/`. This is a SELECT admission slice; full service policy,
+owner writes, transport closure and G5 installation remain separately owned.
+
+```bash
+cdc rbac doctor
+cdc rbac schema --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
+cdc rbac validate --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
+  --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
+cdc rbac generate --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
+  --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
+cdc rbac emit-migration --hsr . --migration-version 1800000000000 \
+  --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
+  --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
+cdc rbac check --hsr . --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
+  --catalog rbac/asma8350/inputs/editor-qnrs.schema.json
+```
+
+`generate` prints reviewable first-install SQL and metadata. `emit-migration`
+requires an explicit 13-digit migration version after the owner's existing
+migrations. It emits `migrations/default/<version>_rbac_editor_qnrs/{up,down}.sql`,
+merges only SELECT into the existing canonical table YAML, and records exact
+input/output hashes in `rbac/.rbac-lock.json`. A changed source requires a new
+migration. Existing history is immutable; unchanged inputs produce no writes.
+Rollback restores the previous generated rules; fresh rollback revokes generated
+SELECT rights and keeps RLS forced to preserve deny-by-default.
+
+The merge preserves relationships and checks the table identity and include
+index. Separately owned `public.queries` G4 metadata is read and hashed, never
+written; changes to its identity or bytes fail the drift check. The compiler
+never emits Hasura mutations, creates roles, changes creator defaults, or grants
+write/table-wide privileges. Missing/privileged/owning `editor_app`, unexpected
+policies, catalog mismatch, and preexisting broad privileges abort generated SQL
+transactionally. The output grants only schema USAGE and column SELECT. This
+four-column slice cannot repair or replace the full owner's write envelope.
+
+Validation uses the vendored official schema at Hasura revision
+`94915fe51d6d21bd7f6d4452dc16221bef8cfefd` (SHA256
+`3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20`) and
+`jsonschema==4.25.1`. Its exact permission slice removes nested `$id` annotations
+so local `#/definitions` references resolve correctly; tests compare every
+validation keyword to upstream. External schema retrieval is disabled. Local
+semantic checks validate role/model/type/column references, session mapping,
+mandatory tenant equality, and equal column envelopes across roles. Relationships,
+OR/NOT, literals, presets, mutations and other versions fail closed. This is the
+local validator authorized by the ROOT disposition; it makes no hosted DDN build
+or full DDN semantic-validation claim.
+
+```bash
+python -m pytest tests/test_rbac.py
+# Explicit disposable local PostgreSQL and Hasura only:
+RBAC_TEST_DSN='host=127.0.0.1 port=58350 dbname=postgres user=postgres' \
+RBAC_TEST_HASURA_URL='http://127.0.0.1:58351' \
+  python -m pytest tests/test_rbac_postgres.py
+```
+
+The integration suite creates disposable databases, uses the canonical
+`editor_app` connection identity, and executes generated SQL plus real Hasura
+queries across two synthetic tenants. It tests fresh and upgrade failures,
+negative ACLs, context reset and rollback. These tests qualify this compiler
+subset; they do not discharge the artifact owner's full 1,177-migration L3
+oracles or prove target installation. Publication is PR-only for independent
+exact-head review.
+
+---
+
 ## Multi-Tenancy Patterns
 
 ### db-per-tenant

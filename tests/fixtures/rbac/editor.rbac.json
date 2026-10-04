@@ -1,0 +1,116 @@
+[
+  {
+    "kind": "ModelPermissions",
+    "version": "v1",
+    "definition": {
+      "modelName": "editor_qnrs",
+      "permissions": [
+        {
+          "role": "recipient",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                },
+                {
+                  "fieldComparison": {
+                    "field": "user_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-user-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "super_user",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "therapist",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "TypePermissions",
+    "version": "v1",
+    "definition": {
+      "typeName": "editor_qnrs",
+      "permissions": [
+        {
+          "role": "recipient",
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          }
+        },
+        {
+          "role": "super_user",
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          }
+        },
+        {
+          "role": "therapist",
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

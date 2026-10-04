@@ -1,0 +1,837 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenDD v1 ModelPermissions and TypePermissions upstream slice",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "definition",
+          "kind",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "TypePermissions"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "enum": [
+              "v1"
+            ]
+          },
+          "definition": {
+            "$ref": "#/definitions/TypePermissionsV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "definition",
+          "kind",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ModelPermissions"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "enum": [
+              "v1"
+            ]
+          },
+          "definition": {
+            "$ref": "#/definitions/ModelPermissionsV1"
+          }
+        },
+        "additionalProperties": false
+      }
+    ]
+  },
+  "definitions": {
+    "ArgumentName": {
+      "title": "ArgumentName",
+      "description": "The name of an argument.",
+      "type": "string",
+      "pattern": "^[_a-zA-Z][_a-zA-Z0-9]*$"
+    },
+    "ArgumentPreset": {
+      "title": "ArgumentPreset",
+      "description": "Preset value for an argument",
+      "type": "object",
+      "required": [
+        "argument",
+        "value"
+      ],
+      "properties": {
+        "argument": {
+          "description": "Argument name for preset",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ArgumentName"
+            }
+          ]
+        },
+        "value": {
+          "description": "Value for preset",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ValueExpressionOrPredicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomTypeName": {
+      "title": "CustomTypeName",
+      "description": "The name of a user-defined type.",
+      "type": "string",
+      "pattern": "^[_a-zA-Z][_a-zA-Z0-9]*$"
+    },
+    "FieldComparisonPredicate": {
+      "title": "FieldComparisonPredicate",
+      "description": "Field comparison predicate filters objects based on a field value.",
+      "type": "object",
+      "required": [
+        "field",
+        "operator",
+        "value"
+      ],
+      "properties": {
+        "field": {
+          "description": "The field name of the object type of the model to compare.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FieldName"
+            }
+          ]
+        },
+        "operator": {
+          "description": "The name of the operator to use for comparison.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OperatorName"
+            }
+          ]
+        },
+        "value": {
+          "description": "The value expression to compare against.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ValueExpression"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FieldIsNullPredicate": {
+      "title": "FieldIsNullPredicate",
+      "description": "Predicate to check if the given field is null.",
+      "type": "object",
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "description": "The name of the field that should be checked for a null value.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FieldName"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FieldName": {
+      "title": "FieldName",
+      "description": "The name of a field in a user-defined object type.",
+      "type": "string",
+      "pattern": "^[_a-zA-Z][_a-zA-Z0-9]*$"
+    },
+    "FieldPreset": {
+      "title": "FieldPreset",
+      "description": "Preset value for a field",
+      "type": "object",
+      "required": [
+        "field",
+        "value"
+      ],
+      "properties": {
+        "field": {
+          "description": "Field name for preset",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FieldName"
+            }
+          ]
+        },
+        "value": {
+          "description": "Value for preset",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ValueExpression"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelName": {
+      "title": "ModelName",
+      "description": "The name of data model.",
+      "type": "string",
+      "pattern": "^[_a-zA-Z][_a-zA-Z0-9]*$"
+    },
+    "ModelPermission": {
+      "title": "ModelPermission",
+      "description": "Defines the permissions for an OpenDD model.",
+      "examples": [
+        {
+          "role": "user",
+          "select": {
+            "filter": {
+              "fieldComparison": {
+                "field": "author_id",
+                "operator": "_eq",
+                "value": {
+                  "sessionVariable": "x-hasura-user-id"
+                }
+              }
+            },
+            "argument_presets": [
+              {
+                "field": "likes_dogs",
+                "value": {
+                  "literal": true
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "type": "object",
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "role": {
+          "description": "The role for which permissions are being defined.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Role"
+            }
+          ]
+        },
+        "select": {
+          "description": "The permissions for selecting from this model for this role. If this is null, the role is not allowed to query the model.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SelectPermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationalInsert": {
+          "description": "The permissions for relational insert operations on this model for this role. If this is null, the role is not allowed to perform relational inserts on this model. This is only applicable for data connectors that support relational operations.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RelationalInsertPermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationalUpdate": {
+          "description": "The permissions for relational update operations on this model for this role. If this is null, the role is not allowed to perform relational updates on this model. This is only applicable for data connectors that support relational operations.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RelationalUpdatePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationalDelete": {
+          "description": "The permissions for relational delete operations on this model for this role. If this is null, the role is not allowed to perform relational deletes on this model. This is only applicable for data connectors that support relational operations.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RelationalDeletePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelPermissionsV1": {
+      "title": "ModelPermissionsV1",
+      "description": "Definition of permissions for an OpenDD model.",
+      "type": "object",
+      "required": [
+        "modelName",
+        "permissions"
+      ],
+      "properties": {
+        "modelName": {
+          "description": "The name of the model for which permissions are being defined.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModelName"
+            }
+          ]
+        },
+        "permissions": {
+          "description": "A list of model permissions, one for each role.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ModelPermission"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelPredicate": {
+      "title": "ModelPredicate",
+      "description": "A predicate that can be used to restrict the objects returned when querying a model.",
+      "examples": [
+        {
+          "fieldComparison": {
+            "field": "author_id",
+            "operator": "_eq",
+            "value": {
+              "sessionVariable": "x-hasura-user-id"
+            }
+          }
+        },
+        {
+          "relationship": {
+            "name": "author",
+            "predicate": {
+              "fieldComparison": {
+                "field": "id",
+                "operator": "_eq",
+                "value": {
+                  "sessionVariable": "x-hasura-user-id"
+                }
+              }
+            }
+          }
+        },
+        {
+          "and": [
+            {
+              "fieldComparison": {
+                "field": "author_id",
+                "operator": "_eq",
+                "value": {
+                  "sessionVariable": "x-hasura-user-id"
+                }
+              }
+            },
+            {
+              "fieldComparison": {
+                "field": "title",
+                "operator": "_eq",
+                "value": {
+                  "literal": "Hello World"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "not": {
+            "fieldComparison": {
+              "field": "author_id",
+              "operator": "_eq",
+              "value": {
+                "sessionVariable": "x-hasura-user-id"
+              }
+            }
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "description": "Filters objects based on a field value.",
+          "type": "object",
+          "required": [
+            "fieldComparison"
+          ],
+          "properties": {
+            "fieldComparison": {
+              "$ref": "#/definitions/FieldComparisonPredicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "fieldIsNull"
+          ],
+          "properties": {
+            "fieldIsNull": {
+              "$ref": "#/definitions/FieldIsNullPredicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Filters objects based on the nested field of a model.",
+          "type": "object",
+          "required": [
+            "nestedField"
+          ],
+          "properties": {
+            "nestedField": {
+              "$ref": "#/definitions/NestedFieldPredicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Filters objects based on the relationship of a model.",
+          "type": "object",
+          "required": [
+            "relationship"
+          ],
+          "properties": {
+            "relationship": {
+              "$ref": "#/definitions/RelationshipPredicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "And",
+          "description": "Evaluates to true if all sub-predicates evaluate to true.",
+          "type": "object",
+          "required": [
+            "and"
+          ],
+          "properties": {
+            "and": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ModelPredicate"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "Or",
+          "description": "Evaluates to true if any of the sub-predicates evaluate to true.",
+          "type": "object",
+          "required": [
+            "or"
+          ],
+          "properties": {
+            "or": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ModelPredicate"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "Not",
+          "description": "Evaluates to true if the sub-predicate evaluates to false.",
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "properties": {
+            "not": {
+              "$ref": "#/definitions/ModelPredicate"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NestedFieldPredicate": {
+      "title": "NestedFieldPredicate",
+      "description": "Nested field predicate filters objects of a source model based on a predicate on the nested field.",
+      "type": "object",
+      "required": [
+        "fieldName",
+        "predicate"
+      ],
+      "properties": {
+        "fieldName": {
+          "description": "The name of the field in the object type of the model to follow.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FieldName"
+            }
+          ]
+        },
+        "predicate": {
+          "description": "The predicate to apply on the related objects.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModelPredicate"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NullableModelPredicate": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/definitions/ModelPredicate"
+        }
+      ]
+    },
+    "OpenDdSessionVariable": {
+      "title": "OpenDdSessionVariable",
+      "description": "Used to represent the name of a session variable, like \"x-hasura-role\".",
+      "type": "string"
+    },
+    "OperatorName": {
+      "title": "OperatorName",
+      "description": "The name of an operator",
+      "type": "string"
+    },
+    "RelationalDeletePermission": {
+      "title": "RelationalDeletePermission",
+      "description": "Defines the permissions for relational delete operations on a model for a role. If null, the role is not allowed to perform relational deletes on this model. This is only applicable for data connectors that support relational operations.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "RelationalInsertPermission": {
+      "title": "RelationalInsertPermission",
+      "description": "Defines the permissions for relational insert operations on a model for a role. If null, the role is not allowed to perform relational inserts on this model. This is only applicable for data connectors that support relational operations.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "RelationalUpdatePermission": {
+      "title": "RelationalUpdatePermission",
+      "description": "Defines the permissions for relational update operations on a model for a role. If null, the role is not allowed to perform relational updates on this model. This is only applicable for data connectors that support relational operations.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "RelationshipName": {
+      "title": "RelationshipName",
+      "description": "The name of the GraphQL relationship field.",
+      "type": "string",
+      "pattern": "^[_a-zA-Z][_a-zA-Z0-9]*$"
+    },
+    "RelationshipPredicate": {
+      "title": "RelationshipPredicate",
+      "description": "Relationship predicate filters objects of a source model based on a predicate on the related model.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "description": "The name of the relationship of the object type of the model to follow.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RelationshipName"
+            }
+          ]
+        },
+        "predicate": {
+          "description": "The predicate to apply on the related objects. If this is null, then the predicate evaluates to true as long as there is at least one related object present.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelPredicate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Role": {
+      "title": "Role",
+      "type": "string"
+    },
+    "SelectPermission": {
+      "title": "SelectPermission",
+      "description": "Defines the permissions for selecting a model for a role.",
+      "type": "object",
+      "required": [
+        "filter"
+      ],
+      "properties": {
+        "filter": {
+          "description": "Filter expression when selecting rows for this model. Null filter implies all rows are selectable.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NullableModelPredicate"
+            }
+          ]
+        },
+        "argumentPresets": {
+          "description": "Preset values for arguments for this role",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ArgumentPreset"
+          }
+        },
+        "allowSubscriptions": {
+          "description": "Whether the role is allowed to subscribe to the root fields of this model.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypeInputPermission": {
+      "title": "TypeInputPermission",
+      "description": "Permissions for a type for a particular role when used in an input context.",
+      "type": "object",
+      "properties": {
+        "fieldPresets": {
+          "description": "Preset values for fields of the type",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FieldPreset"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypeOutputPermission": {
+      "title": "TypeOutputPermission",
+      "description": "Permissions for a type for a particular role when used in an output context.",
+      "type": "object",
+      "required": [
+        "allowedFields"
+      ],
+      "properties": {
+        "allowedFields": {
+          "description": "Fields of the type that are accessible for a role",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FieldName"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypePermission": {
+      "title": "TypePermission",
+      "description": "Defines permissions for a particular role for a type.",
+      "examples": [
+        {
+          "role": "user",
+          "output": {
+            "allowedFields": [
+              "article_id",
+              "author_id"
+            ]
+          },
+          "input": {
+            "fieldPresets": [
+              {
+                "field": "author_id",
+                "value": {
+                  "sessionVariable": "x-hasura-user-id"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "type": "object",
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "role": {
+          "description": "The role for which permissions are being defined.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Role"
+            }
+          ]
+        },
+        "output": {
+          "description": "Permissions for this role when this type is used in an output context. If null, this type is inaccessible for this role in an output context.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TypeOutputPermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "description": "Permissions for this role when this type is used in an input context. If null, this type is accessible for this role in an input context.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TypeInputPermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TypePermissionsV1": {
+      "title": "TypePermissionsV1",
+      "description": "Definition of permissions for an OpenDD type.",
+      "type": "object",
+      "required": [
+        "permissions",
+        "typeName"
+      ],
+      "properties": {
+        "typeName": {
+          "description": "The name of the type for which permissions are being defined. Must be an object type.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CustomTypeName"
+            }
+          ]
+        },
+        "permissions": {
+          "description": "A list of type permissions, one for each role.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TypePermission"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ValueExpression": {
+      "title": "ValueExpression",
+      "description": "An expression which evaluates to a value that can be used in permissions and various presets.",
+      "oneOf": [
+        {
+          "title": "Literal",
+          "type": "object",
+          "required": [
+            "literal"
+          ],
+          "properties": {
+            "literal": true
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "SessionVariable",
+          "type": "object",
+          "required": [
+            "sessionVariable"
+          ],
+          "properties": {
+            "sessionVariable": {
+              "$ref": "#/definitions/OpenDdSessionVariable"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "ValueFromEnv",
+          "type": "object",
+          "required": [
+            "valueFromEnv"
+          ],
+          "properties": {
+            "valueFromEnv": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ValueExpressionOrPredicate": {
+      "title": "ValueExpressionOrPredicate",
+      "description": "An expression which evaluates to a value that can be used in permissions and various presets.",
+      "oneOf": [
+        {
+          "title": "Literal",
+          "type": "object",
+          "required": [
+            "literal"
+          ],
+          "properties": {
+            "literal": true
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "SessionVariable",
+          "type": "object",
+          "required": [
+            "sessionVariable"
+          ],
+          "properties": {
+            "sessionVariable": {
+              "$ref": "#/definitions/OpenDdSessionVariable"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "BooleanExpression",
+          "type": "object",
+          "required": [
+            "booleanExpression"
+          ],
+          "properties": {
+            "booleanExpression": {
+              "$ref": "#/definitions/ModelPredicate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "title": "ValueFromEnv",
+          "type": "object",
+          "required": [
+            "valueFromEnv"
+          ],
+          "properties": {
+            "valueFromEnv": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

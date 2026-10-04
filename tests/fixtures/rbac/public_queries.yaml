@@ -1,0 +1,564 @@
+table:
+  name: queries
+  schema: public
+object_relationships:
+  # ASMA-8350 / ADR-0002 IMP-006: existing legacy Hasura owner surface.
+  # Preparation only; installation is held by rbac/asma8350/install-contract.json.
+  - name: qnr_instance_sync_link
+    using:
+      manual_configuration:
+        column_mapping:
+          id: legacy_query_id
+        insertion_order: null
+        remote_table:
+          name: qnr_instance_sync_links
+          schema: editor
+  - name: artifact_package
+    using:
+      foreign_key_constraint_on: artifact_package_id
+  - name: customers
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: id
+        insertion_order: null
+        remote_table:
+          name: directory_customers
+          schema: public
+  - name: directory_user_name_patient_id
+    using:
+      manual_configuration:
+        column_mapping:
+          patient_id: user_id
+        insertion_order: null
+        remote_table:
+          name: directory_user_name
+          schema: public
+  - name: directory_user_name_updated_by
+    using:
+      manual_configuration:
+        column_mapping:
+          updated_by: user_id
+        insertion_order: null
+        remote_table:
+          name: directory_user_name
+          schema: public
+  - name: documents
+    using:
+      manual_configuration:
+        column_mapping:
+          document_id: id
+        insertion_order: null
+        remote_table:
+          name: documents
+          schema: public
+  - name: initiatorByInitiator
+    using:
+      foreign_key_constraint_on: initiator
+  - name: qnr_template
+    using:
+      manual_configuration:
+        column_mapping:
+          template_id: id
+        insertion_order: null
+        remote_table:
+          name: templates
+          schema: public
+  - name: queries_cache
+    using:
+      foreign_key_constraint_on:
+        column: query_id
+        table:
+          name: queries_cache
+          schema: public
+  - name: queries_queries_templates
+    using:
+      manual_configuration:
+        column_mapping:
+          query_uuid: query_uuid
+        insertion_order: null
+        remote_table:
+          name: queries_templates
+          schema: public
+  - name: statusByStatus
+    using:
+      foreign_key_constraint_on: status
+  - name: templates
+    using:
+      manual_configuration:
+        column_mapping:
+          template_id: id
+        insertion_order: null
+        remote_table:
+          name: templates
+          schema: public
+array_relationships:
+  - name: DocKladd_questions
+    using:
+      foreign_key_constraint_on:
+        column: query_id
+        table:
+          name: DocKladd_questions
+          schema: public
+  - name: adopus_AdgangLinjer
+    using:
+      manual_configuration:
+        column_mapping:
+          customer_id: customer_id
+          soknad_id: SoknadId
+        insertion_order: null
+        remote_table:
+          name: adopus_AdgangLinjer
+          schema: public
+  - name: consents
+    using:
+      foreign_key_constraint_on:
+        column: query_id
+        table:
+          name: consents
+          schema: public
+  - name: organization_qnr_widgets
+    using:
+      manual_configuration:
+        column_mapping:
+          query_uuid: qnr_id
+        insertion_order: null
+        remote_table:
+          name: organization_qnr_widget
+          schema: public
+  - name: queries_cache_archiveds
+    using:
+      foreign_key_constraint_on:
+        column: query_id
+        table:
+          name: queries_cache_archived
+          schema: public
+  - name: queries_error
+    using:
+      manual_configuration:
+        column_mapping:
+          query_uuid: query_uuid
+        insertion_order: null
+        remote_table:
+          name: queries_error
+          schema: public
+  - name: queries_external_stilling_id
+    using:
+      foreign_key_constraint_on:
+        column: query_uuid
+        table:
+          name: queries_external_stilling_id
+          schema: public
+  - name: queries_log
+    using:
+      manual_configuration:
+        column_mapping:
+          query_uuid: query_uuid
+        insertion_order: null
+        remote_table:
+          name: queries_log
+          schema: public
+  - name: queries_read
+    using:
+      foreign_key_constraint_on:
+        column: query_uuid
+        table:
+          name: queries_read
+          schema: public
+  - name: sms
+    using:
+      foreign_key_constraint_on:
+        column: query_id
+        table:
+          name: sms
+          schema: public
+insert_permissions:
+  - role: super_user
+    permission:
+      check:
+        customer_id:
+          _eq: X-Hasura-Customer-Id
+      set:
+        customer_id: x-hasura-customer-id
+        updated_by: x-hasura-user-id
+      columns:
+        - allow_multiple
+        - archived
+        - artifact_package_id
+        - cache
+        - deleted_at
+        - document_id
+        - hide_for_patient
+        - id
+        - initiator
+        - patient_id
+        - properties
+        - query_uuid
+        - region
+        - rejected
+        - security_level
+        - seen_by_therapist
+        - share_with_recipient
+        - soknad_id
+        - status
+        - template_id
+        - title
+        - token
+        - valid_from
+        - valid_to
+  - role: therapist
+    permission:
+      check:
+        customer_id:
+          _eq: X-Hasura-Customer-Id
+      set:
+        customer_id: x-hasura-customer-id
+        updated_by: x-hasura-user-id
+      columns:
+        - allow_multiple
+        - archived
+        - artifact_package_id
+        - cache
+        - deleted_at
+        - document_id
+        - hide_for_patient
+        - id
+        - initiator
+        - patient_id
+        - properties
+        - query_uuid
+        - region
+        - rejected
+        - security_level
+        - seen_by_therapist
+        - share_with_recipient
+        - soknad_id
+        - status
+        - template_id
+        - title
+        - token
+        - valid_from
+        - valid_to
+select_permissions:
+  - role: qnr_projection_writer
+    permission:
+      columns:
+        - id
+        - customer_id
+      filter:
+        _and:
+          - customer_id:
+              _eq: X-Hasura-Customer-Id
+          - qnr_instance_sync_link:
+              customer_id:
+                _eq: X-Hasura-Customer-Id
+              mastering:
+                _eq: v2
+      limit: 1
+      allow_aggregations: false
+  - role: recipient
+    permission:
+      columns:
+        - allow_multiple
+        - archived
+        - artifact_package_id
+        - cache
+        - created_at
+        - customer_id
+        - deleted_at
+        - document_id
+        - hide_for_patient
+        - id
+        - initiator
+        - patient_id
+        - properties
+        - query_uuid
+        - region
+        - rejected
+        - security_level
+        - seen_by_therapist
+        - share_with_recipient
+        - soknad_id
+        - status
+        - template_id
+        - title
+        - updated_at
+        - updated_by
+        - valid_from
+        - valid_to
+      filter:
+        _and:
+          - patient_id:
+              _eq: X-Hasura-User-Id
+          - hide_for_patient:
+              _eq: false
+          - deleted_at:
+              _is_null: true
+          - customer_id:
+              _eq: x-hasura-customer-id
+      allow_aggregations: true
+  - role: super_user
+    permission:
+      columns:
+        - allow_multiple
+        - archived
+        - artifact_package_id
+        - cache
+        - created_at
+        - customer_id
+        - deleted_at
+        - document_id
+        - hide_for_patient
+        - id
+        - initiator
+        - patient_id
+        - properties
+        - query_uuid
+        - region
+        - rejected
+        - security_level
+        - seen_by_therapist
+        - share_with_recipient
+        - soknad_id
+        - status
+        - template_id
+        - title
+        - updated_at
+        - updated_by
+        - valid_from
+        - valid_to
+      filter:
+        _and:
+          - customer_id:
+              _eq: x-hasura-customer-id
+          - deleted_at:
+              _is_null: true
+          - _or:
+              - soknad_id:
+                  _is_null: true
+              - soknad_id:
+                  _eq: ME
+              - _and:
+                  - customers:
+                      connector:
+                        _eq: ADOPUS
+                  - adopus_AdgangLinjer:
+                      _and:
+                        - Adgangkode:
+                            _gt: 0
+                        - BrukerNavn:
+                            _eq: x-hasura-bruker-navn
+                        - _or:
+                            - Fradato:
+                                _is_null: true
+                            - Fradato:
+                                _lte: now
+                        - _or:
+                            - Tildato:
+                                _is_null: true
+                            - Tildato:
+                                _gte: now
+              - customers:
+                  connector:
+                    _neq: ADOPUS
+      allow_aggregations: true
+  - role: therapist
+    permission:
+      columns:
+        - allow_multiple
+        - archived
+        - artifact_package_id
+        - cache
+        - created_at
+        - customer_id
+        - deleted_at
+        - document_id
+        - hide_for_patient
+        - id
+        - initiator
+        - patient_id
+        - properties
+        - query_uuid
+        - region
+        - rejected
+        - security_level
+        - seen_by_therapist
+        - share_with_recipient
+        - soknad_id
+        - status
+        - template_id
+        - title
+        - updated_at
+        - updated_by
+        - valid_from
+        - valid_to
+      filter:
+        _and:
+          - customer_id:
+              _eq: x-hasura-customer-id
+          - deleted_at:
+              _is_null: true
+          - _or:
+              - soknad_id:
+                  _is_null: true
+              - soknad_id:
+                  _eq: ME
+              - _and:
+                  - customers:
+                      connector:
+                        _eq: ADOPUS
+                  - adopus_AdgangLinjer:
+                      _and:
+                        - Adgangkode:
+                            _gt: 0
+                        - BrukerNavn:
+                            _eq: x-hasura-bruker-navn
+                        - _or:
+                            - Fradato:
+                                _is_null: true
+                            - Fradato:
+                                _lte: now
+                        - _or:
+                            - Tildato:
+                                _is_null: true
+                            - Tildato:
+                                _gte: now
+              - customers:
+                  connector:
+                    _neq: ADOPUS
+      allow_aggregations: true
+update_permissions:
+  # Canonical manual legacy exception; never emitted by the editor SELECT generator.
+  # The consumer must omit _set.updated_by; this preset derives it from the executor header.
+  - role: qnr_projection_writer
+    permission:
+      columns:
+        - properties
+        - status
+        - seen_by_therapist
+        - share_with_recipient
+        - document_id
+        - valid_from
+        - valid_to
+        - rejected
+      filter:
+        _and:
+          - customer_id:
+              _eq: X-Hasura-Customer-Id
+          - qnr_instance_sync_link:
+              customer_id:
+                _eq: X-Hasura-Customer-Id
+              mastering:
+                _eq: v2
+      check:
+        _and:
+          - customer_id:
+              _eq: X-Hasura-Customer-Id
+          - qnr_instance_sync_link:
+              customer_id:
+                _eq: X-Hasura-Customer-Id
+              mastering:
+                _eq: v2
+      set:
+        updated_by: x-hasura-user-id
+  - role: recipient
+    permission:
+      columns:
+        - archived
+        - cache
+        - deleted_at
+        - hide_for_patient
+        - properties
+        - share_with_recipient
+        - status
+        - title
+        - updated_by
+      filter:
+        customer_id:
+          _eq: X-Hasura-Customer-Id
+      check: null
+      set:
+        updated_by: x-hasura-user-id
+  - role: super_user
+    permission:
+      columns:
+        - archived
+        - artifact_package_id
+        - cache
+        - created_at
+        - deleted_at
+        - properties
+        - seen_by_therapist
+        - share_with_recipient
+        - status
+        - title
+        - updated_by
+      filter:
+        customer_id:
+          _eq: X-Hasura-Customer-Id
+      check: null
+      set:
+        updated_by: x-hasura-user-id
+  - role: therapist
+    permission:
+      columns:
+        - archived
+        - artifact_package_id
+        - cache
+        - created_at
+        - deleted_at
+        - properties
+        - seen_by_therapist
+        - share_with_recipient
+        - status
+        - title
+        - updated_by
+      filter:
+        customer_id:
+          _eq: X-Hasura-Customer-Id
+      check: null
+      set:
+        updated_by: x-hasura-user-id
+event_triggers:
+  - name: queries
+    definition:
+      delete:
+        columns: '*'
+      enable_manual: false
+      insert:
+        columns: '*'
+      update:
+        columns: '*'
+    retry_conf:
+      interval_sec: 10
+      num_retries: 10
+      timeout_sec: 60
+    webhook: '{{ACTION_HELPER}}/triggers/proxy/queries'
+    cleanup_config:
+      batch_size: 10000
+      clean_invocation_logs: false
+      clear_older_than: 168
+      paused: true
+      schedule: 0 0 * * *
+      timeout: 60
+  - name: queries_pathway_status
+    definition:
+      enable_manual: false
+      update:
+        columns:
+          - status
+          - archived
+          - rejected
+          - valid_to
+    retry_conf:
+      interval_sec: 10
+      num_retries: 10
+      timeout_sec: 60
+    webhook: '{{BUNJS_EDITOR}}/pathways/triggers/proxy/queries'
+    cleanup_config:
+      batch_size: 10000
+      clean_invocation_logs: false
+      clear_older_than: 168
+      paused: true
+      schedule: 0 0 * * *
+      timeout: 60
