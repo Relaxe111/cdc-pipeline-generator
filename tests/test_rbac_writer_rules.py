@@ -85,6 +85,13 @@ def test_semantic_compatible_retained_policies_preserve_positives() -> None:
     prove_compatible(owned, (Policy("tenant_fence", "ALL", False, TENANT, TENANT), replace(owned[1], name="other_owner")))
 
 
+def test_retained_writer_cannot_supply_missing_generated_command() -> None:
+    """C1 command witnesses come only from the complete generated owner declaration."""
+    owned = tuple(policy for policy in generated() if policy.command != "DELETE")
+    with pytest.raises(ValueError, match="Missing generated command witness: DELETE"):
+        prove_compatible(owned, (Policy("other_writer", "DELETE", True, "true", None),))
+
+
 @pytest.mark.parametrize(
     "sql", ["id IS NOT NULL", "true OR evil()", "NOT false", "customer_id = 'uuid'", "NULLIF(current_setting('hasura.user', true), '') = 'therapist'"]
 )
@@ -106,3 +113,13 @@ def test_pg_get_expr_text_casts_and_boolean_precedence() -> None:
     assert not parsed.accepts((None, True, True))
     assert parse(f"false OR {ROLE} AND {TENANT}").accepts(("therapist", True, False))
     assert not parse(f"false OR {ROLE} AND {TENANT}").accepts(("therapist", False, True))
+
+
+@pytest.mark.parametrize(
+    "sql",
+    ["NULLIF(current_setting('app.role',true),'') = 'THERAPIST'", "customer_id::text = NULLIF(current_setting('app.customer_id',true),'')::uuid"],
+)
+def test_literal_case_and_field_types_are_not_normalized_to_safe_policy(sql: str) -> None:
+    """Case-changing a literal or erasing a UUID field cast cannot forge compatibility."""
+    with pytest.raises(ValueError, match="Unsupported retained equality/context/type"):
+        parse(sql)

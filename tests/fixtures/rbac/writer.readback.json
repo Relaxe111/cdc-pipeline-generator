@@ -1,0 +1,116 @@
+{
+  "acl": {
+    "columnAcl": [],
+    "owner": "postgres",
+    "schemaAcl": [
+      {
+        "grantOption": false,
+        "grantee": "editor_app",
+        "grantor": "postgres",
+        "privilege": "USAGE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "CREATE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "USAGE"
+      }
+    ],
+    "tableAcl": [
+      {
+        "grantOption": false,
+        "grantee": "editor_app",
+        "grantor": "postgres",
+        "privilege": "DELETE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "editor_app",
+        "grantor": "postgres",
+        "privilege": "INSERT"
+      },
+      {
+        "grantOption": false,
+        "grantee": "editor_app",
+        "grantor": "postgres",
+        "privilege": "SELECT"
+      },
+      {
+        "grantOption": false,
+        "grantee": "editor_app",
+        "grantor": "postgres",
+        "privilege": "UPDATE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "DELETE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "INSERT"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "MAINTAIN"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "REFERENCES"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "SELECT"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "TRIGGER"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "TRUNCATE"
+      },
+      {
+        "grantOption": false,
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "privilege": "UPDATE"
+      }
+    ]
+  },
+  "defaults": [],
+  "membership": {
+    "memberships": [],
+    "roles": [
+      {
+        "bypassrls": false,
+        "createDb": false,
+        "createRole": false,
+        "inherit": false,
+        "login": true,
+        "name": "editor_app",
+        "replication": false,
+        "superuser": false
+      }
+    ]
+  }
+}

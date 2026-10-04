@@ -1,0 +1,115 @@
+{
+  "acceptedRoles": [
+    "recipient",
+    "super_user",
+    "therapist"
+  ],
+  "catalogSha256": "8e621840ce96c50a059cc3c40f4a6717e54cddf7e93032517ab03274ddf7cfab",
+  "columns": [
+    {
+      "name": "id",
+      "nullable": false,
+      "type": "uuid"
+    },
+    {
+      "name": "customer_id",
+      "nullable": false,
+      "type": "uuid"
+    },
+    {
+      "name": "qnr_template_id",
+      "nullable": false,
+      "type": "uuid"
+    },
+    {
+      "name": "template_version",
+      "nullable": false,
+      "type": "int4"
+    },
+    {
+      "name": "lifecycle_status",
+      "nullable": false,
+      "type": "text"
+    },
+    {
+      "name": "user_id",
+      "nullable": true,
+      "type": "uuid"
+    },
+    {
+      "name": "offer_id",
+      "nullable": true,
+      "type": "text"
+    },
+    {
+      "name": "activity_id",
+      "nullable": true,
+      "type": "text"
+    },
+    {
+      "name": "valid_from",
+      "nullable": true,
+      "type": "date"
+    },
+    {
+      "name": "valid_to",
+      "nullable": true,
+      "type": "date"
+    },
+    {
+      "name": "artifact_package_id",
+      "nullable": true,
+      "type": "uuid"
+    },
+    {
+      "name": "journal",
+      "nullable": false,
+      "type": "text"
+    },
+    {
+      "name": "archived_at",
+      "nullable": true,
+      "type": "timestamptz"
+    },
+    {
+      "name": "deleted_at",
+      "nullable": true,
+      "type": "timestamptz"
+    },
+    {
+      "name": "created_at",
+      "nullable": false,
+      "type": "timestamptz"
+    },
+    {
+      "name": "changed_at",
+      "nullable": false,
+      "type": "timestamptz"
+    },
+    {
+      "name": "created_by",
+      "nullable": true,
+      "type": "uuid"
+    },
+    {
+      "name": "changed_by",
+      "nullable": true,
+      "type": "uuid"
+    },
+    {
+      "name": "changed_by_kind",
+      "nullable": false,
+      "type": "text"
+    }
+  ],
+  "modelName": "editor_qnrs",
+  "provenance": "TEST_ONLY_NONOWNER_ISO full 19-column shape from dc3006c5/qnrs-catalog.json; no actual owner/worker authority.",
+  "schema": "editor",
+  "source": {
+    "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+    "path": "migrations/default/1784004000000_create_qnr_v2_instances_and_answers/up.sql",
+    "sha256": "2f343b582b8b3d07bb71dba72d0d9e0ee1a1afc3df8c64a0fe617dab23059505"
+  },
+  "table": "qnrs",
+  "typeName": "editor_qnrs"
+}

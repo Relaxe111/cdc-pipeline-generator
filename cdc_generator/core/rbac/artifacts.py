@@ -21,7 +21,7 @@ from cdc_generator.core.rbac.provenance import (
     verify_history,
 )
 from cdc_generator.core.rbac.rendering import render_migration, select_permissions
-from cdc_generator.core.rbac.validation import Contract, Json, canonical, compile_contract, digest, doctor, load_json, mapping, sequence
+from cdc_generator.core.rbac.validation import Contract, Json, canonical, digest, doctor, load_json, mapping, sequence
 from cdc_generator.helpers.yaml_loader import ConfigDict, YAMLLoader, create_yaml_loader, load_yaml_file, yaml
 
 HASURA_CLI_VERSION = 3
@@ -121,7 +121,7 @@ def _load_lock(root: Path) -> dict[str, Json] | None:
 
 def _contract(state: dict[str, Json]) -> Contract:
     """Revalidate stored compiler inputs instead of trusting compiled predicates."""
-    return compile_contract(state["source"], state["catalog"])
+    return verify_history(state)[0]
 
 
 def _merge(root: Path, current: Contract, previous: Contract | None) -> bytes:

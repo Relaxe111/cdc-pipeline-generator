@@ -37,5 +37,4 @@ class Composition:
     membership: str
     defaults: str
     acl: str
-    owner: str
-    schema_acl: str
+    creators: tuple[str, ...]

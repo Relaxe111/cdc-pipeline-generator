@@ -54,7 +54,10 @@ class Parser:
 
     def peek(self) -> str:
         """Return the next token without consuming an absent value."""
-        return self.tokens[self.pos].lower() if self.pos < len(self.tokens) else ""
+        if self.pos >= len(self.tokens):
+            return ""
+        token = self.tokens[self.pos]
+        return token if token.startswith(("'", '"')) else token.lower()
 
     def take(self, token: str) -> None:
         """Require exact syntax rather than normalizing unknown SQL."""
@@ -102,6 +105,7 @@ class Parser:
 
     def value(self) -> Value:
         """Parse safe scalar syntax, accepting pg_get_expr's explicit text casts."""
+        value: Value
         token = self.peek()
         if token == "(":
             self.pos += 1
@@ -126,8 +130,14 @@ class Parser:
             self.pos += 1
             if cast not in {"text", "uuid"}:
                 raise ValueError("Unsupported retained cast")
-            if cast != "text":
-                value = (cast, (value,))
+            # PostgreSQL text casts on string literals/context text are redundant.
+            # A UUID field cast changes the comparison type and is not this profile.
+            text_value = (isinstance(value, str) and value.startswith("'")) or (
+                isinstance(value, tuple) and value[0] in {"nullif", "current_setting"}
+            )
+            if cast != "text" or not text_value:
+                arguments: tuple[Value, ...] = (value,)
+                value = (cast, arguments)
         return value
 
 
