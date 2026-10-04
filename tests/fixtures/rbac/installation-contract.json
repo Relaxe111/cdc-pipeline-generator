@@ -1,0 +1,725 @@
+{
+  "authority": {
+    "id": "QNR-ROOT-8350-SINGLE-WRITER-DISPOSITION-20261004-1",
+    "sha256": "7d215655cb5f82037e3d2c1ac21cd7f8a7bf6938ba676f91fe8fe81b575244bd"
+  },
+  "compilerBase": {
+    "commit": "c3469aec19b02984326b4865f7d1550cad0a8914",
+    "repository": "https://github.com/Relaxe111/cdc-pipeline-generator.git"
+  },
+  "exactGuardEnvelope": {
+    "delete": [],
+    "execute": [
+      "public.qnr_presented_projection_permit()",
+      "public.qnr_legacy_write_fingerprint(text,date,date,boolean,bigint,boolean)",
+      "editor.qnr_transition_authority_matches(uuid)"
+    ],
+    "grantOption": false,
+    "insert": [],
+    "revokePermit": false,
+    "schemaUsage": [
+      "public",
+      "editor"
+    ],
+    "selectColumns": {
+      "editor.collab_documents": [
+        "id",
+        "customer_id",
+        "kind",
+        "revision"
+      ],
+      "editor.qnr_instance_mastering_operations": [
+        "operation_id",
+        "status",
+        "fence_authority_digest"
+      ],
+      "editor.qnr_instance_sync_links": [
+        "qnr_id",
+        "customer_id",
+        "legacy_query_id",
+        "mastering",
+        "mastering_epoch",
+        "mastering_transition_id"
+      ],
+      "editor.qnr_legacy_projection_permits": [
+        "capability_digest",
+        "consumed_at",
+        "revoked_at",
+        "expires_at",
+        "qnr_id",
+        "customer_id",
+        "legacy_query_id",
+        "expected_epoch",
+        "expected_source_revision",
+        "write_fingerprint",
+        "expected_properties_digest",
+        "operation_id",
+        "permit_id"
+      ],
+      "public.queries": [
+        "id",
+        "query_uuid"
+      ]
+    },
+    "tableOwnership": false,
+    "updateColumns": {
+      "editor.collab_documents": [
+        "id"
+      ],
+      "editor.qnr_instance_sync_links": [
+        "qnr_id"
+      ],
+      "editor.qnr_legacy_projection_permits": [
+        "consumed_at",
+        "consumed_properties_digest",
+        "changed_by_kind"
+      ]
+    }
+  },
+  "existingGateMap": {
+    "G1": [
+      "G1-REQ001-UPGRADE-NEG",
+      "canonical emission history receipts/hashes, complete SQL inventory and SELECT structural drift checks"
+    ],
+    "G2": [
+      "G2-WORKER-NEG",
+      "G2-ACTIVATION-GRANT-NEG"
+    ],
+    "G3": [
+      "canonical SELECT-only Hasura format; identity/never-write G4 invariant; real CLI round trip"
+    ],
+    "G4": [
+      "G5-LEGACY-TRANSPORT-NEG",
+      "G5-FUNCTION-READ-NEG",
+      "manual legacy metadata remains separately owned under ADR-0002 IMP-006 / REQ-003"
+    ],
+    "G5": [
+      "G5-IDENTITY-NEG",
+      "G5-OWNER-NEG",
+      "G5-SEARCHPATH-NEG",
+      "G5-FOR-SHARE-NEG",
+      "G5-GUARD-ACL-NEG",
+      "G5-FUNCTION-ACL-NEG",
+      "G5-CREATOR-NEG",
+      "G5-CREATOR-ATOMIC-NEG",
+      "G5-TRIGGER-NEG",
+      "G5-SINGLE-WRITER-NEG",
+      "G5-LEGACY-TRANSPORT-NEG",
+      "G5-FUNCTION-READ-NEG",
+      "G5-PERMIT-NEG",
+      "G5-UPGRADE-PRESERVE-NEG",
+      "G5-ROLLBACK-NEG"
+    ],
+    "L3-T01": "Merged local/offline compiler admission only; pinned old fact-packet DDN/absence observations are historical, not full service qualification.",
+    "L3-T02": [
+      "G5-CREATOR-NEG",
+      "G5-CREATOR-ATOMIC-NEG",
+      "G5-UPGRADE-PRESERVE-NEG"
+    ],
+    "L3-T03": [
+      "G5-OWNER-NEG",
+      "G5-FOR-SHARE-NEG",
+      "G5-FUNCTION-ACL-NEG",
+      "G5-TRIGGER-NEG"
+    ],
+    "L3-T04": [
+      "G5-LEGACY-TRANSPORT-NEG",
+      "G5-FUNCTION-READ-NEG"
+    ],
+    "L3-T05": [
+      "G5-PERMIT-NEG"
+    ],
+    "L3-T06": [
+      "G2-WORKER-NEG",
+      "G2-ACTIVATION-GRANT-NEG"
+    ],
+    "L3-T07": "Full combined service/cache/capture/logger/A6 matrix remains outside this compiler continuation and unqualified.",
+    "L3-T08": [
+      "G5-IDENTITY-NEG",
+      "G5-SINGLE-WRITER-NEG",
+      "G5-ROLLBACK-NEG"
+    ]
+  },
+  "installationAdmission": {
+    "atomicOrder": [
+      "Resolve all unknown identities and source/installed heads; require separately authorized staged execution.",
+      "Qualify complete owner-write, worker, Hasura connection, transport, revocation and function-read closure; do not substitute local fixtures.",
+      "Snapshot scoped and unrelated owners/ACLs/defaults/triggers/policies/metadata; reconcile through a new bounded migration, never rewrite accepted history.",
+      "Under each actual creator, set global and relevant schema defaults before creating objects, revoke existing effective PUBLIC helper/guard EXECUTE, assign exact nonowner guard owner and explicit column/helper rights in one installation transaction.",
+      "Remove any temporary schema CREATE in that transaction; qualify and attach both ALWAYS triggers, with effective memberships and helper closures checked.",
+      "Any separately owned SELECT grants require activation before or atomically with exposure; this compiler emits neither. Canonical G4 install also waits for transport and get_non_read_queries qualification.",
+      "Execute the same pinned fresh and upgrade package through all mandatory negative and positive controls; missing evidence blocks admission."
+    ],
+    "compilerRole": "editor_app is the compiled policy recipient, not evidence of the Bun/Hasura/guard/creator target mapping.",
+    "creatorDefaultCommandSemantics": "For every actual creator, global FOR ROLE creator REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC; per-schema-only REVOKE cannot undo global defaults. Exact scoped table/sequence grants only at object creation, none emitted here.",
+    "noPrincipalProvisioning": "Absent mapped roles fail admission; provisioning, if needed, requires a separate owning unit/authorization.",
+    "oracleEvidence": "Every oracle records actual database/engine/version, observer and effective nonowner caller, creator, exact artifact/consumer/metadata/lock/output heads and hashes, setup variant, SQLSTATE/request result and before/after scoped + unrelated snapshots, with no secrets.",
+    "positiveControls": [
+      "Qualified same-tenant valid permit succeeds only through existing Hasura legacy funnel and consumes once; ordinary legacy behavior and editor_sync mirrors preserved.",
+      "Exact nonowner guard can lock needed link/document rows and consume only three permitted columns; no extra writes.",
+      "Each actual creator creates a probe with scoped explicit rights and no effective PUBLIC EXECUTE or broad table/sequence defaults.",
+      "Future complete generated activation closes real owner-write, worker and Hasura-connection contexts with tenant isolation; this slice supplies no activation proof."
+    ],
+    "state": "BLOCKED"
+  },
+  "issue": "ASMA-8350",
+  "kind": "compiler-owned contract supplement; specification only",
+  "oracles": [
+    {
+      "evidence": "Missing-field disposition and unchanged before/after catalog + metadata snapshot.",
+      "given": "At least one exact target, caller, guard owner, creator or staging input is absent or mismatches catalog readback.",
+      "id": "G5-IDENTITY-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/targetInputs",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Refuse before any DDL/ACL/metadata write; do not skip grants, infer identity, or provision a principal.",
+      "when": "Attempt installation admission, including an absent connection on a fresh chain."
+    },
+    {
+      "evidence": "pg_roles, pg_auth_members recursive closure/options, pg_proc/pg_class owners and denied SET ROLE result.",
+      "given": "Owner has LOGIN, SUPERUSER, BYPASSRLS, CREATEDB, CREATEROLE or REPLICATION; owns a data table; or product caller can transitively assume/inherit/administer it.",
+      "id": "G5-OWNER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/guardOwnerContract",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Refuse before changes; application SET ROLE owner is denied; owner is a nonowner for guard data relations.",
+      "when": "Attempt owner-contract admission for each individual defect and direct/transitive membership option."
+    },
+    {
+      "evidence": "proconfig/definition hashes, effective schema ACL/membership and denied CREATE outcome; no secrets.",
+      "given": "One guard lacks fixed pg_catalog,public,editor search_path or an untrusted caller retains CREATE on a searched schema.",
+      "id": "G5-SEARCHPATH-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/guardOwnerContract/searchPath",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Reject unsafe definition/ACL; no successful shadowed helper or altered permit disposition.",
+      "when": "Attempt admission; exercise same-name helper shadowing under untrusted nonowner."
+    },
+    {
+      "evidence": "Actual mapped nonowner identity, SQLSTATE (42501 for ACL absence), RLS flags/policies and unchanged row/permit snapshots.",
+      "given": "Actual nonowner guard has exact SELECT closure but lacks UPDATE(qnr_id) on sync_links or UPDATE(id) on collab_documents, or lacks schema USAGE, or RLS denies its required lookup.",
+      "id": "G5-FOR-SHARE-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/guardRights/lockRequirement",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Permission/lookup failure prevents the guarded write and permit consumption atomically; never compensate with table-wide UPDATE or ownership.",
+      "when": "Invoke each pinned guard through its real trigger path under each missing right."
+    },
+    {
+      "evidence": "Effective column/table/helper ACL closure and denied operations under nonowner; unchanged ledgers.",
+      "given": "Guard owner has exact positive closure on every guard/helper dependency.",
+      "id": "G5-GUARD-ACL-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/guardRights",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "All excess access denied; only enumerated SELECT, locking UPDATE and three consumption UPDATE columns remain effective.",
+      "when": "Attempt permit INSERT/DELETE, UPDATE revoked_at or non-consumption columns, forbidden table writes and unrelated function calls."
+    },
+    {
+      "evidence": "Function identity, proacl, effective EXECUTE and membership closure; helper deny plus trigger-positive evidence distinguished.",
+      "given": "PUBLIC or an unlisted caller has direct/inherited EXECUTE on either guard or a named helper.",
+      "id": "G5-FUNCTION-ACL-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/functionAclContract",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Admission rejects effective excess EXECUTE; denied ordinary helper call leaves permit/write state unchanged. Product callers receive no CREATE/TRIGGER bootstrap rights.",
+      "when": "Attempt installation admission and invoke helpers as ordinary callers without an explicit allowed helper right."
+    },
+    {
+      "evidence": "Per-creator pg_default_acl incl defaclnamespace=0, current_user/current_role and probe ACLs; effective PUBLIC/inherited rights, probe rollback.",
+      "given": "A primary or alternate actual creator is missing from the mapping; its global PUBLIC EXECUTE remains; or only IN SCHEMA REVOKE is present.",
+      "id": "G5-CREATOR-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/creatorDefaultContract",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Reject missing/inconsistent defaults; no PUBLIC EXECUTE on newly created functions, no broad application table/sequence grants. Creator inheritance never substitutes for current_role defaults.",
+      "when": "Admit defaults and create reviewed probe objects under each actual creator in a separately authorized disposable replay."
+    },
+    {
+      "evidence": "Before/after canonical owner/ACL/default/trigger snapshots per injection point and SQLSTATE/transaction outcome.",
+      "given": "Objects and exact ACLs/defaults/owner/trigger changes are in the same proposed installation transaction.",
+      "id": "G5-CREATOR-ATOMIC-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/creatorDefaultContract",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Whole transaction rolls back: no object exposure window, stale PUBLIC EXECUTE or surviving temporary CREATE; prior scoped and unrelated objects/ACLs unchanged.",
+      "when": "Inject a failure after each owner/default/ACL/trigger stage, including after temporary CREATE for ALTER OWNER."
+    },
+    {
+      "evidence": "pg_trigger tgenabled= A, pg_get_triggerdef, routine SHA, event matrix and unchanged data/permit snapshots.",
+      "given": "One trigger is absent/disabled, wrong owner/function, missing event, wrong relation or not ALWAYS.",
+      "id": "G5-TRIGGER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/triggerAttachments",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Refuse defective installation; qualified ALWAYS ROW BEFORE guard path must deny unauthorized writes for all three events.",
+      "when": "Attempt admission; try INSERT/UPDATE/DELETE on linked v2 rows and queries_cache with trigger configuration poisoned individually."
+    },
+    {
+      "evidence": "Effective table/column/function/view/membership closure plus exported Hasura actions/remotes/functions/role schema; failed writes.",
+      "given": "Bun has direct/inherited public.queries write through table/column ACL, writable view/routine or role assumption; Hasura exposes an editor mutation/action/remote write beyond the owner.",
+      "id": "G5-SINGLE-WRITER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/singleWriterReadback",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Admission rejects every second writer; existing editor_sync mirror exception is preserved and supplies no new ASMA-8350 authority.",
+      "when": "Attempt cross-owner writes through every reachable surface and admit connection/metadata rights."
+    },
+    {
+      "evidence": "Redacted actual Hasura session equality/presence assertions, input schema/preset check, row counts and same-head data snapshots; no raw permit/session export.",
+      "given": "Actual Hasura connection uses the canonical G4 role, but tenant/executor/permit header is missing or request supplies _set.updated_by; selectors/headers carry tenant B against operation tenant A.",
+      "id": "G5-LEGACY-TRANSPORT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/reviewConditions/condition2",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Fail closed with no legacy/cache/permit side effect; pinned consumer 18a2d8f is not a positive qualification because all projection writes error.",
+      "when": "Call existing saveLegacyQueryCore/updateLegacyQuery funnel with each defective request using reviewed consumer head."
+    },
+    {
+      "evidence": "Actual role introspection/schema, metadata digest and request results; direct PG EXECUTE evidence alone cannot pass.",
+      "given": "Actual Hasura nonowner connection and current engine/infer_function_permissions setting; two tenants and unread/read, unlinked/legacy/v2-linked rows.",
+      "id": "G5-FUNCTION-READ-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/legacyFunctionReadSurfaceContract",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Same id/customer_id, limit-one, no-aggregation and tenant/link/v2 envelope as G4 SELECT; hasura_session absent from client args; no mutation root or inferred access for a role without table SELECT.",
+      "when": "Query get_non_read_queries and every exposed read/subscription root with missing/foreign tenant, adversarial selectors, forbidden columns/aggregation, already-read current-user row and a role without queries SELECT."
+    },
+    {
+      "evidence": "Redacted permit identifiers/digests and equality assertions, transactional before/after ledger/legacy rows and concurrent results, never capability secrets.",
+      "given": "Mapped issuer/revoker and guard, real Hasura session, scoped link/document/epoch/revision and an issued operation permit.",
+      "id": "G5-PERMIT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/guardRights",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Deny invalid/revoked replay with no write; concurrent use commits at most once; transaction rollback restores consumption consistently. Revocation facts remain unknown until this execution.",
+      "when": "Attempt absent/expired/revoked/consumed/wrong-tenant/wrong-qnr/wrong-legacy-id/wrong-epoch/wrong-revision/wrong-fingerprint/wrong-properties/wrong-operation permit and concurrent double use; inject post-consumption rollback."
+    },
+    {
+      "evidence": "Real service/queue/connection trace and role/membership/GUC reset proof; this SELECT-only compiler and superuser fixture cannot qualify worker coverage.",
+      "given": "Actual separately qualified worker/bootstrap connection and durable claimed job; tenant A/B, payload mismatch, drain sentinel, stale lease and reused pool connection.",
+      "id": "G2-WORKER-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/singleWriterReadback",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "No source/ledger read or projection before authoritative job/link/qnr tenant agreement; no cross-tenant leak after transaction/connection reuse; audit executor stamp grants no rights.",
+      "when": "Perform authorized-selector bootstrap then protected reads under forged/missing/stale/mismatched tenant or app.role=admin alone; reset/reuse connection across tenants."
+    },
+    {
+      "evidence": "Ordering/atomicity review, nonowner contextless/cross-tenant read oracle when future activation is authorized, unchanged current compiler ACL/RLS snapshot.",
+      "given": "Prepared policies with RLS inactive; separately owned grants/activation/owner-write/worker/Hasura connection closure are not qualified.",
+      "id": "G2-ACTIVATION-GRANT-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/installOrder",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Reject package before grants or exposure; inactive RLS plus SELECT permits un-isolated reads even without app.*. Activation stays deferred in this compiler; current up/down change neither ACLs nor flags.",
+      "when": "Admit an installation package that grants SELECT before activation or claims inert policies enforce isolation."
+    },
+    {
+      "evidence": "Exact source/lock/SQL pins, exception, rollback snapshots; install remains BLOCKED for owner-write/worker/Hasura connection work.",
+      "given": "Real editor_app REQ-001 SELECT/INSERT/UPDATE/DELETE table grants exist.",
+      "id": "G1-REQ001-UPGRADE-NEG",
+      "modes": [
+        "upgrade"
+      ],
+      "sourceClause": "/creatorDefaultContract/freshAndUpgrade",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Generated SQL refuses with unexpected broad or write privileges and transaction leaves ACLs, policies and RLS flags unchanged; no removal/reinterpretation of owner rights.",
+      "when": "Run compiler preparation preflight in a disposable canonical upgrade replay using exact prior state."
+    },
+    {
+      "evidence": "Before/after migration bytes, scoped/unrelated ACL and owner snapshots, G4 bytes; approved new migration identity only.",
+      "given": "Canonical applied migration chain has skipped absent-role grants or historical excess permit DELETE/receipt UPDATE; unrelated grants/mirrors and G4 are snapshot-pinned.",
+      "id": "G5-UPGRADE-PRESERVE-NEG",
+      "modes": [
+        "upgrade"
+      ],
+      "sourceClause": "/creatorDefaultContract/freshAndUpgrade",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Refuse excess/missing rights or scope escape; never rewrite history, silently skip absent roles or alter unrelated/mirror/G4 metadata through this generator; failure restores prior state.",
+      "when": "Admit scoped new owner/ACL repair, poison one reviewed right or an unrelated mirror change and inject failure during reconciliation."
+    },
+    {
+      "evidence": "Before/after guard/ACL/default/owner/policy snapshots and failed-write oracle; no target rollback executed.",
+      "given": "Reviewed scoped owner/ACL/default snapshots and guards are present.",
+      "id": "G5-ROLLBACK-NEG",
+      "modes": [
+        "fresh",
+        "upgrade"
+      ],
+      "sourceClause": "/rollback",
+      "status": "BLOCKED_NOT_EXECUTED",
+      "then": "Abort opening rollback; preserve writer fences. Only a separately reviewed scoped repair can restore captured rights; compiler fresh down removes prepared policies only and upgrade down restores prior policies.",
+      "when": "Inject preparation/install failure or request rollback that disables writer guards/opens writes."
+    }
+  ],
+  "owningArtifact": {
+    "commit": "af7fa36775ef994bb66f9f125042ee71e5d26758",
+    "contracts": {
+      "factPacket": {
+        "path": "rbac/asma8350/fact-packet.json",
+        "sha256": "d6b86b7c5801ceb68c3bbba24bc4004c82c3a47413bb0031117101e0a0d42cb5"
+      },
+      "install": {
+        "localReference": "owning-install-contract.json",
+        "path": "rbac/asma8350/install-contract.json",
+        "sha256": "378be16cc26356670f5c40e09955cc0bf669ae1978fdf7269b29225edc3402cd"
+      },
+      "readback": {
+        "path": "rbac/asma8350/readback.sql",
+        "sha256": "1fb8dd76aa2518d346237ea7e68ac2ee5b05f1a2520bddf0002f092ed1c743e3"
+      },
+      "spec": {
+        "path": "_docs/editor/specs/spec-qnr-legacy-projection-authorization.md",
+        "sha256": "ff8dd1536c05766070669763bc79c024390deafe05f4f963e33dc76a8bd5acd6"
+      }
+    },
+    "repository": "https://github.com/Carasent-ASMA/asma-hsr-artifact.git"
+  },
+  "pinnedSources": {
+    "ADR": {
+      "commit": "9e6d4e1705ce3cf933d4cc6c49b598f3a534f96e",
+      "path": "_docs/adr/adr-g-0002-platform-rbac-distribution.md",
+      "repository": ".",
+      "sha256": "f511ed44cd1c6ea9b68f7ddaf3f3d22c9d15593e60778da9b79e16b241ad25d4"
+    },
+    "CORE": {
+      "commit": "18a2d8fdecd4d922352c649aaa9d7cd9aabe29e3",
+      "path": "src/legacy-proxy-qnr/libs/proxy/legacyWebQueryCompat.ts",
+      "repository": "editor/asma-bunjs-editor",
+      "sha256": "79b8d339b1660cae2f9449f713ce7c1d0b1c64f247c9ef100b13df222b6a556b"
+    },
+    "FENCES": {
+      "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "path": "migrations/default/1790969580000_qnr_instance_mastering_fences/up.sql",
+      "repository": "artifact/asma-hsr-artifact",
+      "sha256": "b5bd549d4d11f184f545d885523c2bf6fc61c40a95ac5ccdc20eccad984f280e"
+    },
+    "GRANTS": {
+      "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "path": "migrations/default/1786691280000_grant_editor_app_schema_editor/up.sql",
+      "repository": "artifact/asma-hsr-artifact",
+      "sha256": "7a511c72676fe958a71334a25c412039def15d0a3bd0c00af5b84427713b96a5"
+    },
+    "GUARDS": {
+      "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "path": "migrations/default/1790969580001_qnr_legacy_instance_writer_guards/up.sql",
+      "repository": "artifact/asma-hsr-artifact",
+      "sha256": "3213a76b746cc6a1016570c84fd858c6b111c7be8e16ef478472dfd575accd20"
+    },
+    "INSTALL": {
+      "commit": "396369b98eea5c3e776562a06d0e4788faa88131",
+      "path": ".github/workflows/reusable-backend-hasura-migration.yml",
+      "repository": "infrastructure/asma-infrastructure",
+      "sha256": "ee7fb3c114b9697d3441dc4991af6c4fd1ae875422cf62dd39b23c7dc1f7d04f"
+    },
+    "LEGACY_GRANTS": {
+      "commit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "path": "migrations/default/1787236082837_regrant_editor_app_legacy_qnr_read/up.sql",
+      "repository": "artifact/asma-hsr-artifact",
+      "sha256": "cb83623191611cab1f21801e4cb97c7d119e3e3c529d27c88178ceec7a4f588b"
+    },
+    "SPEC": {
+      "commit": "9e6d4e1705ce3cf933d4cc6c49b598f3a534f96e",
+      "path": "_docs/editor/pathways/backend/specs/spec-modular-rehab-rbac.md",
+      "repository": ".",
+      "sha256": "9693f944fbdf84706fd1e1fc95094875cdb57af40fbc727c07e0423b490277f5"
+    }
+  },
+  "publication": "Compiler PR only; no target install, artifact emission/auto-apply, principal provisioning, worker authority or epic completion.",
+  "references": {
+    "creatorDefaults": "https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html",
+    "nonownerRowLocks": "https://www.postgresql.org/docs/17/sql-select.html",
+    "securityDefiner": "https://www.postgresql.org/docs/17/sql-createfunction.html"
+  },
+  "requirements": {
+    "creatorDefaultContract": {
+      "applicationAbsent": "Provision declared connection identities before scoped grant installation; fail closed if absent rather than silently skipping",
+      "expectedNewObjects": {
+        "editor.qnr_instance_legacy_receipts": [
+          "owning Bun SELECT/INSERT under qualified closure"
+        ],
+        "editor.qnr_instance_mastering_operations": [
+          "owning Bun SELECT/INSERT/UPDATE under generated authorization closure"
+        ],
+        "editor.qnr_legacy_projection_permits": [
+          "owning Bun SELECT/INSERT/UPDATE for issuer/revoke under qualified closure",
+          "guardOwner exact SELECT and three-column UPDATE only"
+        ]
+      },
+      "freshAndUpgrade": "New bounded migration; do not edit accepted/applied historical grant migrations. Reconcile only reviewed object ACLs, preserve unrelated objects and accepted mirror contracts",
+      "functionPublicDefault": "Global FOR ROLE creator default REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC is needed; an IN SCHEMA-only revocation does not undo global defaults",
+      "newSequences": [],
+      "noAssumedInheritance": "Defaults apply to the creator, not schema owner or a prior migration creator",
+      "requiredInput": "Every actual object-creator PG role, including alternate deployment creator; enumerate pg_default_acl and actual owners",
+      "tableSequenceDefaults": "No broad table/sequence/function grants promoted from current package or harness. Missing/contradictory creator defaults block admission; new objects get exact explicit grants in creation transaction"
+    },
+    "functionAclContract": {
+      "editorInvokerClosure": "Existing editor write triggers execute their helpers on owning Bun connection; verify this closure and generated policies rather than granting all functions",
+      "explicitHelperCallers": {
+        "editor.qnr_transition_authority_matches(uuid)": [
+          "guardOwner",
+          "owningBunConnection"
+        ],
+        "public.qnr_legacy_write_fingerprint(text,date,date,boolean,bigint,boolean)": [
+          "guardOwner",
+          "owningBunConnection"
+        ],
+        "public.qnr_presented_projection_permit()": [
+          "guardOwner"
+        ]
+      },
+      "publicExecute": "Revoke PUBLIC EXECUTE on both guard functions and named helpers; audit direct and inherited EXECUTE",
+      "triggerInvocation": "Runtime trigger invocation is distinct from permission to create/attach triggers; product callers receive no CREATE/TRIGGER for bootstrap"
+    },
+    "guardOwnerContract": {
+      "attributes": {
+        "BYPASSRLS": false,
+        "CREATEDB": false,
+        "CREATEROLE": false,
+        "LOGIN": false,
+        "REPLICATION": false,
+        "SUPERUSER": false
+      },
+      "identitySource": "Operator-supplied exact nonprod mapping; no fixture principal admitted",
+      "memberships": "No product caller may SET ROLE or inherit this owner; verify transitive membership, including admin/set/inherit options",
+      "ownsFunctions": [
+        "public.qnr_enforce_legacy_instance_writer_rule()",
+        "public.qnr_enforce_legacy_cache_writer_rule()"
+      ],
+      "schemaCreate": "No ongoing CREATE; no untrusted CREATE on either schema. If ALTER OWNER requires temporary CREATE, revoke in same installation transaction.",
+      "schemaUsage": [
+        "public",
+        "editor"
+      ],
+      "searchPath": [
+        "pg_catalog",
+        "public",
+        "editor"
+      ]
+    },
+    "guardRights": {
+      "EXECUTE": [
+        "public.qnr_presented_projection_permit()",
+        "public.qnr_legacy_write_fingerprint(text,date,date,boolean,bigint,boolean)",
+        "editor.qnr_transition_authority_matches(uuid)"
+      ],
+      "SELECT": {
+        "editor.collab_documents": "id,customer_id,kind,revision",
+        "editor.qnr_instance_mastering_operations": "operation_id,status,fence_authority_digest",
+        "editor.qnr_instance_sync_links": "All columns read by exact source: qnr_id,customer_id,legacy_query_id,mastering,mastering_epoch,mastering_transition_id",
+        "editor.qnr_legacy_projection_permits": "capability_digest,consumed_at,revoked_at,expires_at,qnr_id,customer_id,legacy_query_id,expected_epoch,expected_source_revision,write_fingerprint,expected_properties_digest,operation_id,permit_id",
+        "public.queries": "id,query_uuid"
+      },
+      "UPDATE": {
+        "editor.collab_documents": [
+          "id"
+        ],
+        "editor.qnr_instance_sync_links": [
+          "qnr_id"
+        ],
+        "editor.qnr_legacy_projection_permits": [
+          "consumed_at",
+          "consumed_properties_digest",
+          "changed_by_kind"
+        ]
+      },
+      "lockRequirement": "SELECT plus UPDATE on at least one column for FOR SHARE; execute nonowner lock-negative tests, including schema/RLS interactions",
+      "noLedgerInsertDeleteOrRevocation": true,
+      "noTableOwnershipRequired": true
+    },
+    "legacyFunctionReadSurfaceContract": {
+      "actualHasuraReadback": {
+        "checks": [
+          "Eligible unread same-tenant v2-linked row: returns only id,customer_id; omit or enlarge request limit and still return at most one row",
+          "Same otherwise eligible row already present in queries_read for verified session user: absent; other user's marker does not replace the current user's unread predicate",
+          "Foreign tenant, foreign link customer, unlinked or legacy-mastered row: no returned row or protected identifiers; repeat with matching/adversarial activity, customer_id and patient selectors",
+          "Authenticated caller with no queries SELECT and no inherited SELECT: function root unavailable/validation denied; it must not gain read access from function tracking or EXECUTE alone",
+          "Missing tenant session field: denied with no rows or protected data; valid tenant A session with body/function customer_id B cannot claim B",
+          "Request properties or any column/relationship outside declared envelope, or function aggregation root: validation denied; result type exposes only intended columns",
+          "hasura_session is absent from client function args; tenant/role/user arrive from server session and actual hasura.user equality/presence is proved without printing permit values",
+          "Function is absent from mutation schema and has no new write rights; repeat envelope checks for any exposed subscription read root"
+        ],
+        "connection": "Exact existing Hasura PG login: nonowner of function and returned table, nonsuperuser/non-BYPASSRLS; verify inherited/SET ROLE paths too. Hasura role is internal qnr_projection_writer, not admin.",
+        "engineAndMetadata": "Pin actual engine/version and infer_function_permissions; export function configuration and role schema at exact package/metadata hashes. Require no inconsistent metadata; inspect every exposed query/subscription root.",
+        "failureGate": "Any missing, broadened or unproven read-surface result blocks G4 installation; direct PG EXECUTE/SELECT evidence cannot substitute for role-scoped Hasura checks",
+        "status": "BLOCKED; prepared checks, not executed"
+      },
+      "allowedEnvelope": "Function results use exactly the G4 queries SELECT columns id,customer_id, limit 1, no aggregations, row and link customer equal X-Hasura-Customer-Id, link mastering=v2; unread filtering may only narrow this envelope",
+      "expectedDeclaration": "STABLE; SECURITY INVOKER; SETOF public.queries; session_argument hasura_session; no explicit function role list",
+      "functionMetadataChanged": false,
+      "hasuraReference": "https://hasura.io/docs/2.0/schema/postgres/custom-functions/#permissions-for-custom-functions",
+      "newGrants": [],
+      "readbackSql": "rbac/asma8350/readback.sql; exact-signature owner/volatility/return/ACL/EXECUTE evidence, no grants",
+      "routine": "public.get_non_read_queries(text[],uuid,text[],text,text[],text,json,text,uuid)",
+      "sourceCommit": "5b7bc586a8a0ac1ecf280a33ddbc2f16a8882b4e",
+      "sourceInputs": [
+        {
+          "path": "metadata/databases/default/functions/public_get_non_read_queries.yaml",
+          "sha256": "9e3e1e4014e65308b1ebe3964442e9187ce62c4e2441078b6ac7b9832f8ffc5f"
+        },
+        {
+          "path": "migrations/default/1783692052311_run_sql_migration/up.sql",
+          "sha256": "4f9fbab6f6c036acf40ce9df52538980091491a9333a466c197a2569a9b73844"
+        }
+      ],
+      "sourceUnchangedAtCheckoutBase": "25cdabf73d113f6d6e9a9cc4286298efde76ea26"
+    },
+    "reviewConditions": {
+      "condition2": {
+        "actualHasuraOracleExecuted": false,
+        "behaviorAgainstG4": "Every projection write errors: missing tenant header and updated_by is not in this role's queries_set_input. Fails closed but breaks projections.",
+        "consumerCommit": "18a2d8fdecd4d922352c649aaa9d7cd9aabe29e3",
+        "hardInstallCorequisite": "Reviewed transport implementation must derive tenant/executor per operation, omit _set.updated_by, and qualify actual hasura.user plus all authorization/negative/fence checks before any install",
+        "sourceEvidence": "Line 414 always sends updated_by; lines 728-731 send only role and permit headers, with no customer or user header",
+        "sourcePath": "src/legacy-proxy-qnr/libs/proxy/legacyWebQueryCompat.ts",
+        "sourceSha256": "79b8d339b1660cae2f9449f713ce7c1d0b1c64f247c9ef100b13df222b6a556b"
+      },
+      "condition3Choice": "(a) Extend readback/install contract for get_non_read_queries; leave existing function metadata unchanged",
+      "condition3Reason": "Same returned-table read envelope; preserves existing human-role behavior. An explicit function role list alone does not exclude inferred query access when function-permission inference is enabled.",
+      "condition5": {
+        "adrAmended": false,
+        "glossary": "ADR-0002's referenced asma_role glossary lists super_user/therapist/recipient/admin/anonymous",
+        "rootDecision": "Do not amend the ADR; internal qnr_projection_writer is deliberately not reflected there",
+        "staleAfterG4Install": "Stale as a complete inventory of Hasura session permission names; platform/JWT role vocabulary remains unchanged"
+      },
+      "conditions1And2": "Merge and installation remain HELD. Transport is a hard co-requisite, not a follow-up after installing G4.",
+      "verdict": "Opus5.5 APPROVE-WITH-CONDITIONS; contract only"
+    },
+    "rollback": "Prepared only: retain reviewed ACL/owner/default snapshots, restore only scoped changes through a reviewed new migration; never remove writer guards to permit a blocked write.",
+    "singleWriterReadback": [
+      "All direct and inherited Bun public.queries writes must be absent, including column ACLs, writable routines/views and role assumption",
+      "All Hasura editor.* mutations beside Bun must be absent across all roles/actions/functions/remotes; check connection rights too",
+      "Existing accepted editor_sync mirror exception remains separately constrained, never repurposed",
+      "Ordinary legacy clients invoke the existing Hasura owner; no independent new legacy connection writer",
+      "Hasura internal role has no editor permit/ledger SELECT/INSERT/UPDATE and no SET ROLE guardOwner",
+      "Legacy get_non_read_queries read surface must qualify every legacyFunctionReadSurfaceContract check on the same nonowner Hasura installation"
+    ],
+    "triggerAttachments": [
+      {
+        "enabled": "ALWAYS",
+        "events": [
+          "INSERT",
+          "UPDATE",
+          "DELETE"
+        ],
+        "function": "public.qnr_enforce_legacy_instance_writer_rule()",
+        "name": "qnr_legacy_instance_writer_guard",
+        "relation": "public.queries",
+        "row": true,
+        "timing": "BEFORE"
+      },
+      {
+        "enabled": "ALWAYS",
+        "events": [
+          "INSERT",
+          "UPDATE",
+          "DELETE"
+        ],
+        "function": "public.qnr_enforce_legacy_cache_writer_rule()",
+        "name": "qnr_legacy_cache_writer_guard",
+        "relation": "public.queries_cache",
+        "row": true,
+        "timing": "BEFORE"
+      }
+    ]
+  },
+  "status": {
+    "A6": "NOT_DISCHARGED",
+    "activation": "DEFERRED",
+    "canonicalProvenance": "READY_FOR_REVIEW",
+    "freshUpgradeGuardOracles": "BLOCKED_NOT_EXECUTED",
+    "installationSpecification": "READY_FOR_REVIEW",
+    "targetAdmission": "BLOCKED",
+    "workerAndRevocation": "BLOCKED_UNKNOWN"
+  },
+  "targetInputs": {
+    "bootstrapConnection": null,
+    "bunConnectionLogin": null,
+    "existingHasuraConnectionLogin": null,
+    "guardOwner": null,
+    "installedArtifactHead": null,
+    "installedConsumerHead": null,
+    "installedMetadataSha256": null,
+    "nonprodIdentity": null,
+    "objectCreators": null,
+    "stagingControls": null
+  },
+  "unknownFacts": {
+    "guardOwner": {
+      "evidenceRequired": "Approved existing NOLOGIN owner identity; exact attributes and SET/INHERIT/ADMIN membership closure; no target principal created by this unit.",
+      "status": "BLOCKED",
+      "value": null
+    },
+    "objectCreators": {
+      "evidenceRequired": "Every actual current_role used to create package objects, including alternate deployment creator; global and schema defaults, object owners and deployment SQL provenance.",
+      "status": "BLOCKED",
+      "value": null
+    },
+    "revocationFacts": {
+      "evidenceRequired": "Actual permit issuer/revoker connection rights, expiry/revocation semantics, revoked/consumed state and concurrent rollback evidence; source clauses are requirements, not live facts.",
+      "status": "BLOCKED",
+      "value": null
+    },
+    "stagingAndHeads": {
+      "evidenceRequired": "Nonprod identity, installed artifact/consumer heads and metadata digest, Hasura engine/connection and infer_function_permissions readback, auto-apply containment and separately authorized execution.",
+      "status": "BLOCKED",
+      "value": null
+    },
+    "targetConnections": {
+      "evidenceRequired": "Exact nonprod Bun and existing Hasura logins, owners, effective ACLs and transitive membership/options; not editor_app inferred from a fixture.",
+      "status": "BLOCKED",
+      "value": null
+    },
+    "workerAuthority": {
+      "evidenceRequired": "Existing bootstrap connection/routine identity, job lease/selector authority, tenant agreement and read-only lookup exposure; app.role=admin and nil executor stamp supply no authority.",
+      "status": "BLOCKED",
+      "value": null
+    }
+  }
+}

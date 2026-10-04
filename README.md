@@ -164,9 +164,24 @@ cdc rbac check --hsr . --source rbac/asma8350/inputs/editor-qnrs.opendd.json \
 requires an explicit 13-digit migration version after the owner's existing
 migrations. It emits `migrations/default/<version>_rbac_editor_qnrs/{up,down}.sql`,
 merges only SELECT into the existing canonical table YAML, and records input and
-migration byte hashes plus the owned SELECT structural hash in the version-2
-`rbac/.rbac-lock.json`. A changed source requires a new
-migration. Existing history is immutable; unchanged inputs produce no writes.
+migration byte hashes plus the owned SELECT structural hash in lock format 3
+`rbac/.rbac-lock.json`. Each immutable history entry retains lossless base64
+source/catalog bytes, their byte and canonical JSON SHA256 hashes, the semantic
+contract hash, predecessor hash and regenerated output hashes. The lock pins the
+four owned RBAC source hashes and the exactly pinned `jsonschema` version.
+Shared CDC helpers and unpinned dependency versions are not fingerprint gates;
+the latter are recorded separately as environment observations. Checks revalidate every input receipt and regenerate every historical
+up/down and SELECT projection, then require the complete owned migration
+inventory and active table include. Output-identical changes to allowed
+dependencies or shared helpers remain checkable and upgradeable. Genuine SQL
+or canonical SELECT changes, deleted history, orphan SQL, rewritten output
+hashes, and noncanonical or inconsistent locks fail before writes. Owned
+compiler or pinned-validator upgrades require reviewed re-attestation. A canonical payload hash binds the whole lock; the reviewed
+publication SHA256 is the external provenance anchor. This is reproducibility
+and drift evidence, not a signature or protection against replacing an entire
+internally consistent input/output/lock set. No timestamps, host paths or Git
+checkout are required at runtime. A changed source requires a new migration.
+Existing history is immutable; unchanged inputs produce no writes.
 Rollback restores the previous generated policies; fresh rollback drops only
 those policies. This subset emits no GRANT or REVOKE statements: schema, table
 and column ACLs remain unchanged in either direction. Neither direction changes
@@ -181,6 +196,38 @@ grant-bearing output must not be committed to the artifact's master migration
 chain (which auto-applies it), or applied anywhere, until that ordering and the
 activation coverage are satisfied. Current policy-only output gives `editor_app`
 no new access.
+
+Lock format 2 lacks exact input receipts for complete historical regeneration.
+It is refused with an explicit format diagnostic; no missing history is inferred.
+No artifact lock or installation has been admitted. Retain any earlier review
+lock and SQL, reproduce each original input/version in a clean review directory,
+and compare every historical SQL and current SELECT before a separately reviewed
+provenance replacement. Deleting the lock where compiler migrations exist is
+refused. This does not restrict another owner's G4, relationship or format edits.
+
+`cdc rbac reattest` provides a lock-only recovery path for compiler or pinned
+validator upgrades, including the previously reviewed six-file/six-version v3
+receipt. Supply `--hsr`, the exact `--expected-lock-sha256`, and a nonempty
+`--review-reference`. The default command prints a candidate and its
+`candidate_sha256` without writing. It revalidates the original byte receipts,
+regenerates every historical up/down SQL byte hash and canonical SELECT JSON
+byte hash under the new implementation, and checks the actual migration
+inventory, SQL bytes, active SELECT, includes and G4 identity. Any output or
+artifact drift refuses the proposal; this is not a baseline reset for changed
+outputs. SELECT remains structural so other owners' formatting and relationship
+edits remain valid, and G4 never enters the write set.
+
+Review the exact candidate through the owning workflow. To apply, repeat the
+same command with `--apply-reviewed-sha256` set to that candidate's SHA256.
+An old-lock change or a changed candidate (including code or environment
+observations) invalidates the supplied hash and causes zero writes. Successful
+application writes only the lock, retains the old implementation/pins/observations
+verbatim, and appends the prior lock hash, reviewed history-prefix hash/count,
+new implementation and review reference. Checks validate review-chain continuity;
+subsequent migrations preserve reviewed prefixes. No timestamp or host path is
+added. The CLI binds the reviewed bytes; it does not certify who approved the
+external review. This command gives no target installation, activation or
+auto-apply authority. The installation holds below remain unchanged.
 
 The structured merge serializes only the SELECT block in Hasura CLI export
 format, preserving all other table-file bytes, including relationship comments
@@ -212,7 +259,7 @@ local validator authorized by the ROOT disposition; it makes no hosted DDN build
 or full DDN semantic-validation claim.
 
 ```bash
-python -m pytest tests/test_rbac.py tests/test_rbac_repairs.py
+python -m pytest tests/test_rbac.py tests/test_rbac_repairs.py tests/test_rbac_provenance.py tests/test_rbac_reattest.py
 # Explicit disposable local PostgreSQL and Hasura only:
 RBAC_TEST_DSN='host=127.0.0.1 port=58350 dbname=postgres user=postgres' \
 RBAC_TEST_HASURA_URL='http://127.0.0.1:58351' \
@@ -234,6 +281,68 @@ in another repository. These tests qualify this compiler
 subset; they do not discharge the artifact owner's full 1,177-migration L3
 oracles or prove target installation. Publication is PR-only for independent
 exact-head review.
+
+### Guard-owner and installation contract supplement
+
+The compiler-owned [installation contract](tests/fixtures/rbac/installation-contract.json)
+is a review specification, not an installer. It maps to artifact
+`af7fa36775ef994bb66f9f125042ee71e5d26758`:
+`rbac/asma8350/install-contract.json` (SHA256
+`378be16cc26356670f5c40e09955cc0bf669ae1978fdf7269b29225edc3402cd`),
+its read-only `readback.sql`, the legacy projection spec and L3 fact packet.
+The [exact owning contract reference](tests/fixtures/rbac/owning-install-contract.json)
+is retained without changing that separately owned source. The historical
+artifact statements about the missing compiler/hosted DDN qualification remain
+historical: merged compiler `c3469aec19b02984326b4865f7d1550cad0a8914` now supplies
+the authorized local admission slice, not full service/worker closure.
+
+Guard owner means the exact existing PostgreSQL owner of both
+`public.qnr_enforce_legacy_instance_writer_rule()` and
+`public.qnr_enforce_legacy_cache_writer_rule()`. Creator means the actual
+`current_role` creating each object, including alternate deploy creators.
+Connection identities and Hasura session permission names are distinct.
+`editor_app` in generated policies supplies no evidence of the target Bun,
+Hasura, creator, bootstrap or guard-owner mapping.
+
+| Contract requirement | Required evidence / installation boundary |
+| --- | --- |
+| Guard owner | NOLOGIN, NOSUPERUSER, NOBYPASSRLS, NOCREATEDB, NOCREATEROLE, NOREPLICATION; only two guard functions owned, no data-table ownership; no product SET/INHERIT/ADMIN path to owner, including transitive membership. |
+| Guard data and helper ACLs | Exact SELECT columns, locking UPDATE(qnr_id) on sync links, UPDATE(id) on collab documents, and UPDATE(consumed_at,consumed_properties_digest,changed_by_kind) on permits, as enumerated in the supplement. Only its three named helper EXECUTEs; no permit INSERT/DELETE/revocation, table-wide writes or grant option. |
+| Search path and triggers | Fixed pg_catalog,public,editor; schema USAGE and no untrusted/ongoing CREATE; any temporary CREATE for ALTER OWNER revoked in the same transaction. Both canonical BEFORE ROW INSERT/UPDATE/DELETE triggers must be ALWAYS and attached to the exact guard. |
+| Function ACLs | Revoke effective PUBLIC EXECUTE on guards and named helpers; enumerate explicit helper callers and inherited rights. Trigger execution is distinct from bootstrap CREATE/TRIGGER rights. Qualify Bun's invoker-helper closure. |
+| Creator defaults | Enumerate every actual creator, global and schema defaults, plus effective rights. Global creator REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC is required; schema-only revocation cannot undo it. Objects, scoped ACLs/defaults and owner changes must be atomic; no inherited creator assumption or broad table/sequence grants. |
+| Fresh and upgrade | Absent mapped roles fail before writes. A future separately authorized unit supplies a new scoped migration; accepted history and unrelated mirror rights remain intact. Failure restores reviewed snapshots and never removes writer fences to open a write. |
+| Grant/activation ordering | Policies are inert while RLS is off; granting SELECT then opens un-isolated reads with no context. Require complete owner-write, worker and Hasura connection coverage, then activation before or atomically with exposure. This compiler changes neither grants nor activation. |
+
+PostgreSQL requires an UPDATE right on at least one column for row-locking
+SELECT, and applies default privileges for the actual creator. See the
+[SELECT contract](https://www.postgresql.org/docs/17/sql-select.html) and
+[creator-default contract](https://www.postgresql.org/docs/17/sql-alterdefaultprivileges.html).
+These requirements are checked under an actual nonowner; the superuser setup
+fixture cannot substitute for guard, creator or target proof.
+
+The supplement defines 18 negative oracles with setup, action, expected outcome,
+required redacted evidence, fresh/upgrade applicability and exact owning JSON
+clause. Its gate map covers G1-G5 and existing L3-T01 through L3-T08. Acceptance
+requires both the negative oracles and their declared positive controls on the
+same pinned package: guard locking and consumption, creator/default failures,
+atomic rollback, memberships, excess ACLs, trigger defects, second writers,
+actual Hasura transport and get_non_read_queries, invalid/revoked/concurrent
+permits, worker bootstrap and connection reset, activation ordering, REQ-001
+upgrade refusal, and preservation of unrelated rights. Offline tests check
+source pins, clause mappings, exact envelopes and the absence of qualification
+claims; they do not execute these guard-owner installation oracles.
+
+All actual target/connection/owner/creator/default-privilege inputs remain
+unknown, including alternate creators, bootstrap exposure, worker authority and
+issuer/revoker facts. Every installation oracle is BLOCKED_NOT_EXECUTED.
+The compiler still refuses existing REQ-001 SELECT/INSERT/UPDATE/DELETE grants;
+it does not repair the owner's write envelope. The consumer transport co-requisite,
+actual Hasura function-read qualification, worker/revocation facts and staging
+controls remain installation gates. Preparation is READY for exact-head review;
+target admission, activation and A6/ASMA-8350 completion remain held. Publication
+of this continuation is compiler PR only: no artifact migration emission or
+auto-apply, target install, new principal or worker authority.
 
 ---
 

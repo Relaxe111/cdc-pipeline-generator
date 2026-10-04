@@ -54,7 +54,7 @@ def digest(data: bytes) -> str:
 
 def canonical(value: object) -> bytes:
     """Encode compiler state reproducibly, without timestamps or host paths."""
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
 
 
 def mapping(value: Json) -> dict[str, Json]:
@@ -98,11 +98,16 @@ def _unique_pairs(pairs: list[tuple[str, Json]]) -> dict[str, Json]:
 
 def load_json(path: Path) -> Json:
     """Load a JSON input without duplicate keys or nonfinite constants."""
+    return parse_json(path.read_bytes())
+
+
+def parse_json(data: bytes) -> Json:
+    """Validate exact input bytes, including snapshots retained in the lock."""
 
     def reject_constant(value: str) -> None:
         raise ValueError(f"Invalid JSON constant: {value}")
 
-    return cast(Json, json.loads(path.read_bytes(), object_pairs_hook=_unique_pairs, parse_constant=reject_constant))
+    return cast(Json, json.loads(data, object_pairs_hook=_unique_pairs, parse_constant=reject_constant))
 
 
 def _offline_resource(uri: str) -> NoReturn:

@@ -4,8 +4,32 @@
     "id": "QNR-ROOT-8350-SINGLE-WRITER-DISPOSITION-20261004-1",
     "sha256": "7d215655cb5f82037e3d2c1ac21cd7f8a7bf6938ba676f91fe8fe81b575244bd"
   },
+  "canonical_emission": {
+    "environment": {
+      "attrs": "26.1.0",
+      "jsonschema": "4.25.1",
+      "jsonschema-specifications": "2025.9.1",
+      "referencing": "0.37.0",
+      "rpds-py": "2026.6.3",
+      "ruamel.yaml": "0.19.1"
+    },
+    "implementation": {
+      "files": {
+        "core/rbac/artifacts.py": "9d7090280e96cfed6261c8add39a663fc8f44299a2a7212600200b064f7bccd5",
+        "core/rbac/provenance.py": "2bf35c6f1255641f451e2df43e8c02d16981887ad3f603426769861afd31cb2b",
+        "core/rbac/rendering.py": "a02dc17f6a4800c5ab1f6f05d7d5da51d1596f6cdf9a8a868a78f0d5188652a6",
+        "core/rbac/validation.py": "3bb80fca6cf6f4ff569003b5bfa133b463946fc6c25d892d0b98e5606a8f851b"
+      },
+      "runtime": {
+        "jsonschema": "4.25.1"
+      }
+    },
+    "lockByteIdentical": true,
+    "lockFileSha256": "d19c89c33c396f165e32831926d5ae4ffac748d68b102de0314f9cc8a9e6856c",
+    "lockPayloadSha256": "7635a9937554adb5ddb6a5722a1c9e78de101b6d272ecd2e3f3105f2630bb27c"
+  },
   "compiler_base": {
-    "head": "539a76bb8822837602a39ea42e18e7554223eab4",
+    "head": "c3469aec19b02984326b4865f7d1550cad0a8914",
     "origin_freshly_verified": true,
     "remote": "https://github.com/Relaxe111/cdc-pipeline-generator.git"
   },
@@ -15,18 +39,53 @@
     "editor.rbac.json": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2",
     "editor_qnrs.yaml": "e5b55a75e6485b5b5bbf9f09f9a3e88ffa964e67c58c1d638ac8eac03a27a8f0",
     "expected-generation.json": "e249723f326b851dc22a128d17d2000a598798a6fbdef8490bee6b9e17de7370",
-    "public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f"
+    "installation-contract.json": "d42f7c4b37ac16ca5381948ca6dbb3a6d89846b9a7f4dbff269224c41cd5c2f3",
+    "owning-install-contract.json": "378be16cc26356670f5c40e09955cc0bf669ae1978fdf7269b29225edc3402cd",
+    "public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f",
+    "reviewed-lock-v3.json": "f649cfcd7120e3e60dc7d31e6d91ff6a2a6ecae25abae62870a02a63c40048d7"
   },
   "generated": {
     "down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
     "select_permissions": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba",
     "up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180"
   },
+  "lock_format": 3,
+  "merged_admission": {
+    "contributor_head": "4f0e03667cc26df9055905359ec46601ed03e7d2",
+    "installation_admitted": false,
+    "pull_request": 2,
+    "squash": "c3469aec19b02984326b4865f7d1550cad0a8914"
+  },
   "pins": {
     "jsonschema": "4.25.1",
     "opendd_commit": "94915fe51d6d21bd7f6d4452dc16221bef8cfefd",
     "slice_sha256": "162bcba04f5e01580f0067a4e2f74b47c1fade2db46cd97a570c4a77fc8fa7d3",
     "upstream_sha256": "3ff0d2a5680d57c8a042c0c577b7dd68aab7f71ab1b6dd9b81e6569702cf7b20"
+  },
+  "reviewed_previous_emission": {
+    "fixture": "reviewed-lock-v3.json",
+    "implementation": {
+      "files": {
+        "core/migration_generator/file_writers.py": "50b9a17dac69705c546c121418e230c2c149f20043ed4328e8efd6dd0200d113",
+        "core/rbac/artifacts.py": "3da01a492aa2e8783834c828a19f1fe9f2a6741e56625648908aad614b7329a6",
+        "core/rbac/provenance.py": "4fee4d75549425501da86a55978b53f9871d16f3a5e072b9533137439301bc93",
+        "core/rbac/rendering.py": "a02dc17f6a4800c5ab1f6f05d7d5da51d1596f6cdf9a8a868a78f0d5188652a6",
+        "core/rbac/validation.py": "3bb80fca6cf6f4ff569003b5bfa133b463946fc6c25d892d0b98e5606a8f851b",
+        "helpers/yaml_loader.py": "e5d3c7e127396184b22a27cee90b80b9c7814f23faf455115457371c10a37295"
+      },
+      "runtime": {
+        "attrs": "26.1.0",
+        "jsonschema": "4.25.1",
+        "jsonschema-specifications": "2025.9.1",
+        "referencing": "0.37.0",
+        "rpds-py": "2026.6.3",
+        "ruamel.yaml": "0.19.1"
+      }
+    },
+    "lockByteIdentical": true,
+    "lockFileSha256": "f649cfcd7120e3e60dc7d31e6d91ff6a2a6ecae25abae62870a02a63c40048d7",
+    "lockPayloadSha256": "acd0b9938e5712d70da103256d72a33e85531da7157459662694c43498897f87",
+    "reviewed_head": "e886238a54d83d6d9aa7652bd9e38e2b2a0401b3"
   },
   "runtime": {
     "attrs": "26.1.0",
@@ -36,6 +95,7 @@
     "rpds-py": "2026.6.3",
     "ruamel.yaml": "0.19.1"
   },
+  "runtime_observations_are_fingerprint_gates": false,
   "scope": "Compiler admission subset only; no target installation or full L3 discharge",
   "validator_wheel": {
     "name": "jsonschema-4.25.1-py3-none-any.whl",
