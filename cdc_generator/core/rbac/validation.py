@@ -180,6 +180,11 @@ def _comparisons(predicate: Json, depth: int = 0) -> tuple[tuple[str, str], ...]
     return ((string(comparison["field"]), variable),)
 
 
+def compile_comparisons(predicate: Json) -> tuple[tuple[str, str], ...]:
+    """Share the existing flat predicate compiler with explicit owning writer rules."""
+    return _comparisons(predicate)
+
+
 def compile_contract(source: Json, catalog_value: Json) -> Contract:
     """Validate pinned catalog names and local OpenDD semantics before emission."""
     definitions = _permissions(source)

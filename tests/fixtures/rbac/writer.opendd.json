@@ -1,0 +1,119 @@
+[
+  {
+    "definition": {
+      "modelName": "editor_qnrs",
+      "permissions": [
+        {
+          "role": "recipient",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                },
+                {
+                  "fieldComparison": {
+                    "field": "user_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-user-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "role": "super_user",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "relationalDelete": {},
+          "relationalInsert": {},
+          "relationalUpdate": {},
+          "role": "therapist",
+          "select": {
+            "filter": {
+              "and": [
+                {
+                  "fieldComparison": {
+                    "field": "customer_id",
+                    "operator": "_eq",
+                    "value": {
+                      "sessionVariable": "x-hasura-customer-id"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "kind": "ModelPermissions",
+    "version": "v1"
+  },
+  {
+    "definition": {
+      "permissions": [
+        {
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          },
+          "role": "recipient"
+        },
+        {
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          },
+          "role": "super_user"
+        },
+        {
+          "output": {
+            "allowedFields": [
+              "id",
+              "customer_id",
+              "user_id",
+              "lifecycle_status"
+            ]
+          },
+          "role": "therapist"
+        }
+      ],
+      "typeName": "editor_qnrs"
+    },
+    "kind": "TypePermissions",
+    "version": "v1"
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "authority": "6badca45f5659342616b1232466bf088fbedaa9fc994f65ce87fc60233b69be1",
+  "declarationSha256": "0c78d73237c183488b0a6aca183194cee9d67423d68eb8be25654086c554878e",
+  "qualification": "TEST_ONLY_NONOWNER_ISO",
+  "scope": "Disposable compiler fixture only; no actual owning rights or target admission."
+}
