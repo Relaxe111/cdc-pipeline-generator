@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from cdc_generator.core.rbac.composition_models import Policy, WriterRule
-from cdc_generator.core.rbac.validation import ROLES, SESSION, Contract, Json, compile_comparisons, mapping, sequence, string
+from cdc_generator.core.rbac.validation import MAX_FILTER_DEPTH, ROLES, SESSION, Contract, Json, compile_comparisons, mapping, sequence, string
 
 COMMANDS = {"INSERT": "relationalInsert", "UPDATE": "relationalUpdate", "DELETE": "relationalDelete"}
 CONTEXT: dict[str, Json] = {"app.role": list(ROLES), "app.customer_id": "transaction-local UUID", "app.user_id": "transaction-local UUID"}
@@ -54,6 +54,16 @@ def writer_rules(contract: Contract, value: Json) -> tuple[WriterRule, ...]:
 
 def _predicate(contract: Contract, value: Json) -> tuple[tuple[str, str], ...]:
     """Reuse the existing flat OpenDD tenant/actor comparison compiler."""
+    pending = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if depth > MAX_FILTER_DEPTH:
+            raise ValueError("Writer filter exceeds flat depth limit")
+        obj = mapping(item)
+        if set(obj) == {"and"}:
+            pending.extend((term, depth + 1) for term in sequence(obj["and"]))
+        elif set(obj) != {"fieldComparison"} or set(mapping(obj["fieldComparison"])) != {"field", "operator", "value"}:
+            raise ValueError("Unsupported owning writer predicate definition")
     pairs = compile_comparisons(value)
     if ("customer_id", "x-hasura-customer-id") not in pairs or any(dict(contract.column_types).get(field) != "uuid" for field, _ in pairs):
         raise ValueError("Writer predicate requires qualified UUID tenant equality")

@@ -371,7 +371,8 @@ row readback, transaction-local context reset and final-row trigger mutation
 are exercised. The invoker test trigger is not the real guard/definer contract.
 The original **18 oracles / 34 variants** remain unexecuted as complete canonical
 cases; the **22 runtime spec IDs** retain distinct per-case fixture/blocked status
-in the source evidence ledger. No source test or partial fixture result becomes
+in the [source evidence ledger](tests/fixtures/rbac/writer-composition-cases.json).
+No source test or partial fixture result becomes
 a guard/permit/worker/revocation/Hasura-connection qualification.
 
 All ten `targetInputs` remain null. Actual connection/owner/default creators,

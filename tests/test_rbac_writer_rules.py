@@ -43,7 +43,9 @@ def test_explicit_declaration_controls_command_roles_columns_rows() -> None:
     assert b"recipient_insert" not in sql and b"super_user_update" not in sql
 
 
-@pytest.mark.parametrize("mutation", ["missing-command", "duplicate", "columns", "tenant", "context", "reader-only", "unknown-role"])
+@pytest.mark.parametrize(
+    "mutation", ["missing-command", "duplicate", "columns", "tenant", "context", "reader-only", "unknown-role", "ignored-definition"]
+)
 def test_writer_declaration_refuses_missing_or_guessed_authority(mutation: str) -> None:
     """Each trust boundary is exercised with a syntactically valid changed source."""
     contract, source = inputs()
@@ -56,11 +58,15 @@ def test_writer_declaration_refuses_missing_or_guessed_authority(mutation: str) 
     elif mutation == "columns":
         mapping(rules[1])["columns"] = ["id"]
     elif mutation == "tenant":
-        mapping(rules[1])["withCheck"] = {"and": []}
+        predicate = mapping(mapping(rules[1])["withCheck"])
+        sequence(predicate["and"]).pop(0)
     elif mutation == "context":
         mapping(obj["context"])["app.role"] = ["admin"]
     elif mutation == "unknown-role":
         mapping(rules[0])["role"] = "admin"
+    elif mutation == "ignored-definition":
+        comparison = mapping(sequence(mapping(mapping(rules[1])["withCheck"])["and"])[0])
+        mapping(comparison["fieldComparison"])["additionalRestriction"] = {"deny": True}
     else:
         contract = replace(contract, source=load_json(FIXTURES / "editor.rbac.json"))
     with pytest.raises(ValueError):
@@ -123,3 +129,10 @@ def test_literal_case_and_field_types_are_not_normalized_to_safe_policy(sql: str
     """Case-changing a literal or erasing a UUID field cast cannot forge compatibility."""
     with pytest.raises(ValueError, match="Unsupported retained equality/context/type"):
         parse(sql)
+
+
+def test_restrictive_and_can_prove_net_union_without_erasing_positives() -> None:
+    """A wider permissive DELETE is compatible only with the exact restrictive fence."""
+    owned = generated()
+    delete = next(policy for policy in owned if policy.command == "DELETE")
+    prove_compatible(owned, (Policy("wider", "DELETE", True, "true", None), replace(delete, name="restrictive", permissive=False)))

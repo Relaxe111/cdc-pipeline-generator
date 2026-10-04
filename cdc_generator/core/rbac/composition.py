@@ -22,6 +22,9 @@ FIXTURE_REVIEW = "26d056f7bc44d51e0d5913db50eb367f7dde1fc14a5584424be835cfe7222d
 QUALIFICATION = "TEST_ONLY_NONOWNER_ISO"
 ENVELOPE_SCHEMA_SHA256 = "e0254d2536357090b90189045859a334056718b3c476b0b3c6082470f6f5e4f8"
 FIXTURE_SOURCE_COMMIT = "cc3aa1c9ab0606a22749eab109699614c6dda145"
+FULL_FIXTURE_SOURCE_COMMIT = "2a8cf55de3966d09deb4c07ee6ee91a9c10fddf3"
+FULL_FIXTURE_DECLARATION = "7a8da29dc25bf98c9a0984673e43cafe72150e19e0725f3425014bb8d59e4a99"
+FULL_FIXTURE_REVIEW = "262d79d29df873b602fd532f95bbfdfeeb61e74cc8600e2ed20b0515ec146422"
 
 
 class Sources:
@@ -88,9 +91,15 @@ def _writer_binding(contract: Contract, envelope: dict[str, Json], sources: Sour
     authorization = mapping(envelope["writerAuthorizationSource"])
     declaration_ref, review_ref = authorization["ownerDeclarativeSource"], authorization["ownerSourceReview"]
     declaration, review = mapping(sources.resolve(declaration_ref)), mapping(sources.resolve(review_ref))
-    expected_declaration = {"commit": FIXTURE_SOURCE_COMMIT, "path": "tests/fixtures/rbac/writer.declaration.json", "sha256": FIXTURE_DECLARATION}
-    expected_review = {"commit": FIXTURE_SOURCE_COMMIT, "path": "tests/fixtures/rbac/writer.review.json", "sha256": FIXTURE_REVIEW}
-    if declaration_ref != expected_declaration or review_ref != expected_review:
+    admitted = False
+    for commit, prefix, declaration_hash, review_hash in [
+        (FIXTURE_SOURCE_COMMIT, "writer", FIXTURE_DECLARATION, FIXTURE_REVIEW),
+        (FULL_FIXTURE_SOURCE_COMMIT, "writer-full", FULL_FIXTURE_DECLARATION, FULL_FIXTURE_REVIEW),
+    ]:
+        expected_declaration = {"commit": commit, "path": f"tests/fixtures/rbac/{prefix}.declaration.json", "sha256": declaration_hash}
+        expected_review = {"commit": commit, "path": f"tests/fixtures/rbac/{prefix}.review.json", "sha256": review_hash}
+        admitted |= declaration_ref == expected_declaration and review_ref == expected_review
+    if not admitted:
         raise ValueError("Actual owning declaration/review not admitted; arbitrary references never establish writer authority")
     if declaration.get("qualification") != QUALIFICATION or review.get("qualification") != QUALIFICATION:
         raise ValueError("Fixture admission cannot qualify actual owner/worker rights")

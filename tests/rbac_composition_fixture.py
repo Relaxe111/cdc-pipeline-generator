@@ -7,28 +7,30 @@ import copy
 from dataclasses import replace
 from pathlib import Path
 
-from cdc_generator.core.rbac.composition import FIXTURE_SOURCE_COMMIT, QUALIFICATION, compiler_context, generation_receipt
-from cdc_generator.core.rbac.validation import Json, canonical, compile_contract, digest, load_json, mapping, parse_json
+from cdc_generator.core.rbac.composition import FIXTURE_SOURCE_COMMIT, FULL_FIXTURE_SOURCE_COMMIT, QUALIFICATION, compiler_context, generation_receipt
+from cdc_generator.core.rbac.validation import Json, canonical, compile_contract, digest, load_json, mapping, parse_json, sequence
 from cdc_generator.core.rbac.writer_rules import CONTEXT, writer_rules
 
 FIXTURES = Path(__file__).parent / "fixtures/rbac"
 
 
-def catalog(readback: Json | None = None, retained: list[Json] | None = None) -> dict[str, Json]:
+def catalog(readback: Json | None = None, retained: list[Json] | None = None, *, full: bool = False) -> dict[str, Json]:
     """Embed deterministic receipt bytes; generated: paths denote fixture snapshots, not Git files."""
     values = mapping(load_json(FIXTURES / "writer.readback.json") if readback is None else readback)
-    result = mapping(load_json(FIXTURES / "editor.catalog.json"))
+    prefix = "writer-full" if full else "writer"
+    commit = FULL_FIXTURE_SOURCE_COMMIT if full else FIXTURE_SOURCE_COMMIT
+    result = mapping(load_json(FIXTURES / ("writer-full.catalog.json" if full else "editor.catalog.json")))
     bodies: list[Json] = []
 
     def snapshot(path: str, body: Json) -> dict[str, Json]:
         raw = canonical(body)
-        ref: dict[str, Json] = {"commit": FIXTURE_SOURCE_COMMIT, "path": path, "sha256": digest(raw)}
+        ref: dict[str, Json] = {"commit": commit, "path": path, "sha256": digest(raw)}
         bodies.append({"reference": ref, "base64": base64.b64encode(raw).decode("ascii")})
         return ref
 
-    declaration = load_json(FIXTURES / "writer.declaration.json")
-    declaration_ref = snapshot("tests/fixtures/rbac/writer.declaration.json", declaration)
-    review_ref = snapshot("tests/fixtures/rbac/writer.review.json", load_json(FIXTURES / "writer.review.json"))
+    declaration = load_json(FIXTURES / f"{prefix}.declaration.json")
+    declaration_ref = snapshot(f"tests/fixtures/rbac/{prefix}.declaration.json", declaration)
+    review_ref = snapshot(f"tests/fixtures/rbac/{prefix}.review.json", load_json(FIXTURES / f"{prefix}.review.json"))
     membership_ref = snapshot("generated:ISO/membership", {"qualification": QUALIFICATION, "readback": values["membership"]})
     defaults_ref = snapshot(
         "generated:ISO/creator-defaults-acl",
@@ -59,9 +61,10 @@ def catalog(readback: Json | None = None, retained: list[Json] | None = None) ->
         "workerSource": worker_ref,
         "retainedPolicies": definitions,
     }
-    source = load_json(FIXTURES / "writer.opendd.json")
-    reader = compile_contract(load_json(FIXTURES / "editor.rbac.json"), result)
-    rules = writer_rules(replace(reader, source=source), declaration)
+    source = load_json(FIXTURES / f"{prefix}.opendd.json")
+    reader = compile_contract(load_json(FIXTURES / "editor.rbac.json"), load_json(FIXTURES / "editor.catalog.json"))
+    column_types = tuple(sorted((str(mapping(column)["name"]), str(mapping(column)["type"])) for column in sequence(result["columns"])))
+    rules = writer_rules(replace(reader, source=source, column_types=column_types), declaration)
     bindings: dict[str, Json] = {key: envelope[key] for key in ("membershipSource", "creatorDefaultsSource", "workerSource", "retainedPolicies")}
     receipt = generation_receipt(rules, source, declaration_ref, review_ref, bindings)
     envelope["writerAuthorizationSource"] = {

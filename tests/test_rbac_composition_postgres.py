@@ -13,7 +13,7 @@ from psycopg2.extensions import connection, parse_dsn
 
 from cdc_generator.core.rbac.composition_readback import ACL_SQL, MEMBERSHIP_SQL, defaults_sql
 from cdc_generator.core.rbac.rendering import render_migration
-from cdc_generator.core.rbac.validation import Contract, Json, compile_contract, load_json
+from cdc_generator.core.rbac.validation import Contract, Json, compile_contract, load_json, mapping, sequence
 from tests.rbac_composition_fixture import FIXTURES, catalog
 from tests.test_rbac_postgres import ACTOR_A, ACTOR_B, TENANT_A, TENANT_B
 
@@ -32,14 +32,15 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON editor.qnrs TO editor_app;
 
 
 @pytest.fixture()
-def isolated() -> Iterator[tuple[connection, connection]]:
+def isolated(request: pytest.FixtureRequest) -> Iterator[tuple[connection, connection]]:
     """Create/drop only owned disposable databases; independently authenticate editor_app."""
     dsn = os.environ.get("RBAC_TEST_DSN")
     if not dsn:
         pytest.skip("Set RBAC_TEST_DSN to the explicitly owned disposable fixture")
     admin = psycopg2.connect(dsn)
     admin.autocommit = True
-    name = "asma8350_writer_" + uuid.uuid4().hex
+    prefix = "asma8350_unqualified_" if getattr(request, "param", None) == "unqualified" else "asma8350_writer_"
+    name = prefix + uuid.uuid4().hex
     with admin.cursor() as cursor:
         cursor.execute("ALTER ROLE editor_app LOGIN PASSWORD 'asma8350-fixture-only' NOSUPERUSER NOBYPASSRLS NOINHERIT")
         cursor.execute("CREATE DATABASE " + name)
@@ -104,6 +105,15 @@ def inventory(db: connection) -> list[tuple[object, ...]]:
         return [tuple(row) for row in cursor.fetchall()]
 
 
+def assert_nonowner(app: connection) -> None:
+    """Positive evidence requires the effective/session caller and active RLS, not bootstrap."""
+    with app.cursor() as cursor:
+        cursor.execute("""SELECT session_user,current_user,r.rolsuper,r.rolbypassrls,pg_has_role(current_user,c.relowner,'MEMBER'),
+        c.relrowsecurity,c.relforcerowsecurity FROM pg_roles r CROSS JOIN pg_class c
+        WHERE r.rolname=current_user AND c.oid='editor.qnrs'::regclass""")
+        assert cursor.fetchone() == ("editor_app", "editor_app", False, False, False, True, True)
+
+
 def probe(app: connection, query: str, *, role: str | None = "therapist", tenant: str | None = TENANT_A, actor: str | None = ACTOR_A) -> int:
     """Run real unfiltered/filtered commands with transaction-local context and rollback."""
     with app.cursor() as cursor:
@@ -120,7 +130,8 @@ def probe(app: connection, query: str, *, role: str | None = "therapist", tenant
 def statements(command: str, returning: bool, *, tenant: str = TENANT_A) -> str:
     """Include statements without WHERE/RETURNING; filtered probes are separate cases."""
     if command == "INSERT":
-        sql = f"INSERT INTO editor.qnrs VALUES ('00000000-0000-0000-0000-000000000099','{tenant}','{ACTOR_A}','new')"
+        sql = f"""INSERT INTO editor.qnrs(id,customer_id,user_id,lifecycle_status)
+        VALUES ('00000000-0000-0000-0000-000000000099','{tenant}','{ACTOR_A}','new')"""
     elif command == "UPDATE":
         sql = "UPDATE editor.qnrs SET lifecycle_status='written'"
     else:
@@ -145,11 +156,7 @@ def test_nonowner_active_rls_positive_and_foreign_denial(
     if upgrade:
         apply(db, render_migration(contract(db, upgrade=True), baseline)[0])
     assert readback(db) == before
-    with app.cursor() as cursor:
-        cursor.execute("""SELECT session_user,current_user,r.rolsuper,r.rolbypassrls,pg_has_role(current_user,c.relowner,'MEMBER'),
-            c.relrowsecurity,c.relforcerowsecurity FROM pg_roles r CROSS JOIN pg_class c
-            WHERE r.rolname=current_user AND c.oid='editor.qnrs'::regclass""")
-        assert cursor.fetchone() == ("editor_app", "editor_app", False, False, False, True, True)
+    assert_nonowner(app)
     assert probe(app, statements(command, returning)) == 1
     if command == "INSERT":
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):
@@ -159,20 +166,39 @@ def test_nonowner_active_rls_positive_and_foreign_denial(
 
 
 @pytest.mark.parametrize("command", ["INSERT", "UPDATE", "DELETE"])
-@pytest.mark.parametrize("context", ["missing", "unknown-worker", "reader-role", "malformed"])
+@pytest.mark.parametrize(
+    "context",
+    [
+        "missing",
+        "missing-role",
+        "missing-tenant",
+        "missing-actor",
+        "foreign-actor",
+        "unknown-worker",
+        "reader-role",
+        "super-user-reader",
+        "malformed",
+        "malformed-actor",
+    ],
+)
 def test_missing_malformed_and_unqualified_context_denials(isolated: tuple[connection, connection], command: str, context: str) -> None:
     db, app = isolated
     apply(db, render_migration(contract(db), None)[0])
-    role = None if context == "missing" else "admin" if context == "unknown-worker" else "recipient" if context == "reader-role" else "therapist"
-    tenant = None if context == "missing" else "malformed" if context == "malformed" else TENANT_A
-    if context == "malformed":
+    roles = {"missing": None, "missing-role": None, "unknown-worker": "admin", "reader-role": "recipient", "super-user-reader": "super_user"}
+    role = roles.get(context, "therapist")
+    tenant = None if context in {"missing", "missing-tenant"} else "malformed" if context == "malformed" else TENANT_A
+    actor = (
+        None if context == "missing-actor" else "malformed" if context == "malformed-actor" else ACTOR_B if context == "foreign-actor" else ACTOR_A
+    )
+    query = statements(command, context == "foreign-actor")
+    if context in {"malformed", "malformed-actor"}:
         with pytest.raises(psycopg2.errors.InvalidTextRepresentation):
-            probe(app, statements(command, False), role=role, tenant=tenant)
+            probe(app, query, role=role, tenant=tenant, actor=actor)
     elif command == "INSERT":
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):
-            probe(app, statements(command, False), role=role, tenant=tenant)
+            probe(app, query, role=role, tenant=tenant, actor=actor)
     else:
-        assert probe(app, statements(command, False), role=role, tenant=tenant) == 0
+        assert probe(app, query, role=role, tenant=tenant, actor=actor) == 0
 
 
 @pytest.mark.parametrize("upgrade", [False, True])
@@ -195,6 +221,8 @@ def test_missing_malformed_and_unqualified_context_denials(isolated: tuple[conne
         "owner",
         "role-inherit",
         "role-createdb",
+        "schema-usage",
+        "schema-create",
     ],
 )
 def test_exact_acl_creator_membership_refusal_before_writes(isolated: tuple[connection, connection], upgrade: bool, mutation: str) -> None:
@@ -223,6 +251,10 @@ def test_exact_acl_creator_membership_refusal_before_writes(isolated: tuple[conn
             cursor.execute("ALTER ROLE editor_app INHERIT")
         elif mutation == "role-createdb":
             cursor.execute("ALTER ROLE editor_app CREATEDB")
+        elif mutation == "schema-usage":
+            cursor.execute("REVOKE USAGE ON SCHEMA editor FROM editor_app")
+        elif mutation == "schema-create":
+            cursor.execute("GRANT CREATE ON SCHEMA editor TO editor_app")
         else:
             cursor.execute("ALTER TABLE editor.qnrs OWNER TO editor_app")
     before = inventory(db), readback(db)
@@ -388,3 +420,85 @@ def test_owned_policy_changed_definitions_refuse_upgrade(isolated: tuple[connect
     with pytest.raises(psycopg2.Error, match="exact generated/retained policy definition drift"):
         apply(db, render_migration(current, previous)[0])
     assert (inventory(db), readback(db)) == before
+
+
+def full_table(db: connection) -> None:
+    """Test-only 19-column catalog shape; not the 1177-migration guard/constraint chain."""
+    columns = sequence(mapping(load_json(FIXTURES / "writer-full.catalog.json"))["columns"])
+    defaults = {"uuid": f"'{ACTOR_A}'", "text": "''", "int4": "1", "date": "'2026-10-04'", "timestamptz": "'2026-10-04 00:00:00+00'"}
+    declarations: list[str] = []
+    for item in columns:
+        column = mapping(item)
+        name, sql_type = str(column["name"]), str(column["type"])
+        definition = f'"{name}" {sql_type}'
+        if column["nullable"] is False:
+            definition += " NOT NULL"
+        if name not in {"id", "customer_id", "user_id"}:
+            definition += " DEFAULT " + defaults[sql_type]
+        if name == "id":
+            definition += " PRIMARY KEY"
+        declarations.append(definition)
+    with db.cursor() as cursor:
+        cursor.execute('DROP TABLE "editor"."qnrs"')
+        cursor.execute('CREATE TABLE "editor"."qnrs" (' + ",".join(declarations) + ")")
+        cursor.execute(f"""INSERT INTO editor.qnrs(id,customer_id,user_id,lifecycle_status) VALUES
+        ('00000000-0000-0000-0000-000000000001','{TENANT_A}','{ACTOR_A}','draft'),
+        ('00000000-0000-0000-0000-000000000002','{TENANT_A}','{ACTOR_B}','draft'),
+        ('00000000-0000-0000-0000-000000000003','{TENANT_B}','{ACTOR_B}','draft');
+        ALTER TABLE editor.qnrs ENABLE ROW LEVEL SECURITY; ALTER TABLE editor.qnrs FORCE ROW LEVEL SECURITY;
+        GRANT SELECT,INSERT,UPDATE,DELETE ON editor.qnrs TO editor_app;""")
+
+
+@pytest.mark.parametrize("upgrade", [False, True])
+@pytest.mark.parametrize("command", ["INSERT", "UPDATE", "DELETE"])
+@pytest.mark.parametrize("returning", [False, True])
+def test_full_19_column_source_nonowner_positive_and_negative(
+    isolated: tuple[connection, connection], upgrade: bool, command: str, returning: bool
+) -> None:
+    db, app = isolated
+    full_table(db)
+    source = load_json(FIXTURES / "writer-full.opendd.json")
+    value = catalog(readback(db), full=True)
+    baseline = compile_contract(source, value)
+    assert len(baseline.column_types) == 19
+    before = readback(db)
+    apply(db, render_migration(baseline, None)[0])
+    if upgrade:
+        value["provenance"] = "TEST ONLY full-table upgrade"
+        apply(db, render_migration(compile_contract(source, value), baseline)[0])
+    assert before == readback(db)
+    assert_nonowner(app)
+    assert probe(app, "SELECT template_version,valid_from,created_at FROM editor.qnrs") == 2
+    assert probe(app, statements(command, returning)) == 1
+    if command == "INSERT":
+        with pytest.raises(psycopg2.errors.InsufficientPrivilege):
+            probe(app, statements(command, returning, tenant=TENANT_B))
+    else:
+        assert probe(app, statements(command, returning), tenant=TENANT_B) == 0
+
+
+@pytest.mark.parametrize("column", ["customer_id", "user_id"])
+@pytest.mark.parametrize("returning", [False, True])
+def test_direct_tenant_actor_change_denied_without_select_mask(isolated: tuple[connection, connection], column: str, returning: bool) -> None:
+    db, app = isolated
+    apply(db, render_migration(contract(db), None)[0])
+    changed = TENANT_B if column == "customer_id" else ACTOR_B
+    sql = f"UPDATE editor.qnrs SET {column}='{changed}'"
+    if returning:
+        sql += " WHERE id='00000000-0000-0000-0000-000000000001' RETURNING id"
+    with pytest.raises(psycopg2.errors.InsufficientPrivilege):
+        probe(app, sql)
+    assert probe(app, statements("UPDATE", returning)) == 1
+
+
+@pytest.mark.parametrize("isolated", ["unqualified"], indirect=True)
+def test_test_only_source_never_admits_other_database_installation(isolated: tuple[connection, connection]) -> None:
+    """Exercise the refusal in another owned disposable database, never an actual target."""
+    db, app = isolated
+    current = contract(db)
+    before = inventory(db), readback(db)
+    with pytest.raises(psycopg2.Error, match="no actual target installation admission"):
+        apply(db, render_migration(current, None)[0])
+    assert (inventory(db), readback(db)) == before
+    assert_nonowner(app)
+    assert probe(app, "SELECT * FROM editor.qnrs") == 0

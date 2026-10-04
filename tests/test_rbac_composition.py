@@ -228,6 +228,45 @@ def test_source_acl_membership_defaults_cannot_bless_unknown_or_broad_rights(mut
         compile_fixture(catalog(readback))
 
 
+def test_exact_source_bytes_refuse_even_output_identical_format_tampering() -> None:
+    """Original source identity must not collapse to canonical meaning under a stale hash."""
+    value = catalog()
+    snapshot = mapping(sequence(value["sourceSnapshots"])[0])
+    raw = base64.b64decode(str(snapshot["base64"]))
+    snapshot["base64"] = base64.b64encode(raw + b" ").decode()
+    with pytest.raises(ValueError, match="changed source snapshot bytes"):
+        compile_fixture(value)
+
+
+@pytest.mark.parametrize("mutation", ["definition-hash", "source-body", "null-fallback"])
+def test_retained_source_identity_is_not_semantic_normalization(mutation: str) -> None:
+    """A semantically similar tuple still needs its exact reviewed definition/source bytes."""
+    tenant = "customer_id = NULLIF(current_setting('app.customer_id',true),'')::uuid"
+    value = catalog(
+        retained=[{"name": "other_owner", "command": "ALL", "roles": ["editor_app"], "permissive": False, "using": tenant, "withCheck": tenant}]
+    )
+    envelope = mapping(value["ownerEnvelope"])
+    entry = mapping(sequence(envelope["retainedPolicies"])[0])
+    if mutation == "definition-hash":
+        entry["definitionSha256"] = "0" * 64
+    elif mutation == "source-body":
+        entry["using"] = "(" + tenant + ")"
+        definition = {key: entry[key] for key in ("name", "command", "roles", "permissive", "using", "withCheck")}
+        entry["definitionSha256"] = digest(canonical(definition))
+    else:
+        entry["withCheck"] = None
+    # Rebind the compiler receipt; this mutation must reach the retained-source
+    # boundary rather than fail only because the surrounding receipt is stale.
+    ref = mapping(mapping(envelope["writerAuthorizationSource"])["compilerGenerationReceipt"])
+    snapshot = next(mapping(item) for item in sequence(value["sourceSnapshots"]) if mapping(item)["reference"] == ref)
+    receipt = mapping(parse_json(base64.b64decode(str(snapshot["base64"]))))
+    receipt["sourceBindings"] = {key: envelope[key] for key in ("membershipSource", "creatorDefaultsSource", "workerSource", "retainedPolicies")}
+    ref["sha256"] = digest(canonical(receipt))
+    snapshot.update({"reference": copy.deepcopy(ref), "base64": base64.b64encode(canonical(receipt)).decode()})
+    with pytest.raises(ValueError, match=r"Retained policy definition/source mismatch|Owner envelope schema clause"):
+        compile_fixture(value)
+
+
 def test_self_consistent_forged_review_is_not_authority() -> None:
     """Arbitrary review bytes + valid compiler regeneration still cannot qualify a source."""
     value = catalog()

@@ -77,14 +77,14 @@ def validate_snapshots(membership: Json, acl: Json, creators: tuple[str, ...]) -
     if owner not in creators or any(role["name"] == owner for role in roles):
         raise ValueError("Unqualified creator or owner membership")
     applicable = {"editor_app", "PUBLIC", *(string(role["name"]) for role in roles)}
-    own_rights = [mapping(right) for right in sequence(rights["tableAcl"]) if mapping(right).get("grantee") in applicable]
+    own_rights = [mapping(right) for right in sequence(rights["tableAcl"]) if string(mapping(right).get("grantee")) in applicable]
     if len(own_rights) != len(PRIVILEGES) or {string(right.get("privilege")) for right in own_rights} != PRIVILEGES:
         raise ValueError("Owner envelope requires exactly independently originated table CRUD")
     if any(right.get("grantOption") is not False or right.get("grantee") != "editor_app" for right in own_rights):
         raise ValueError("Unsupported grant option or ACL origin")
-    if any(mapping(right).get("grantee") in applicable for right in sequence(rights["columnAcl"])):
+    if any(string(mapping(right).get("grantee")) in applicable for right in sequence(rights["columnAcl"])):
         raise ValueError("Unexpected originated column privileges")
-    schema = [mapping(right) for right in sequence(rights["schemaAcl"]) if mapping(right).get("grantee") in applicable]
+    schema = [mapping(right) for right in sequence(rights["schemaAcl"]) if string(mapping(right).get("grantee")) in applicable]
     if (
         len(schema) != 1
         or schema[0].get("grantee") != "editor_app"
@@ -101,5 +101,5 @@ def validate_defaults(value: Json, membership: Json, creators: tuple[str, ...]) 
         entry = mapping(item)
         if set(entry) != {"creator", "schema", "kind", "grantor", "grantee", "privilege", "grantOption"}:
             raise ValueError("Unproved global/schema default privilege definition")
-        if entry["creator"] not in creators or entry["grantee"] in roles:
+        if string(entry["creator"]) not in creators or string(entry["grantee"]) in roles:
             raise ValueError("Unqualified creator or broad app/PUBLIC/inherited default privileges")
