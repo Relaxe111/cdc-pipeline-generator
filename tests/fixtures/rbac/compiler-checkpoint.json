@@ -8,17 +8,20 @@
     "G4": "Identity verified; bytes preserved per operation; never in compiler write set. Owner evolution is permitted.",
     "G5_full_write_transport_install": "Separately owned; compiler unit does not wait",
     "RLS_activation": "BLOCKED_OUTSIDE_THIS_SUBSET pending separately owned owner-write, worker and Hasura-connection coverage",
+    "SQL_grants": "NOT_EMITTED; no GRANT or REVOKE in fresh/upgrade/down output",
+    "earlier_grant_bearing_output": "HOLD outside auto-applied artifact chain and any application pending activation before/with grants and required coverage",
     "full_1177_migration_L3_oracles": "NOT_DISCHARGED_BY_THIS_UNIT",
     "full_DDN_semantic_build": "NOT_CLAIMED",
     "merge": "NOT_ATTEMPTED",
     "target_installation": "NOT_ATTEMPTED",
+    "target_installation_hold": "BLOCKED: REQ-001 owner grants still refused; owner-write, worker and Hasura-connection work required",
     "target_requests": 0
   },
   "bounded_tests": {
-    "collected": 140,
+    "collected": 146,
     "failed": 0,
-    "junit_sha256": "665a56230d95b91bfa58c286dad3417eade84f700fc4a74775b00a71cbff200e",
-    "passed": 140,
+    "junit_sha256": "c075185f854f0799f4bba2de9a671047a38a6cd69ce28fddcb8df35bcd9260d7",
+    "passed": 146,
     "skipped": 0,
     "tests": {
       "tests.test_rbac::test_catalog_and_shape_boundaries[bad_identifier]": "PASS",
@@ -124,6 +127,8 @@
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[privileged_member-True]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-False]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-True]": "PASS",
+      "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-False]": "PASS",
+      "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-True]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-False]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-True]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[unmanaged_policy-False]": "PASS",
@@ -131,6 +136,10 @@
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[write-False]": "PASS",
       "tests.test_rbac_postgres::test_installation_failure_is_transactional[write-True]": "PASS",
       "tests.test_rbac_postgres::test_missing_role_and_table": "PASS",
+      "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[None-None-None]": "PASS",
+      "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[admin-None-None]": "PASS",
+      "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[recipient-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033]": "PASS",
+      "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[recipient-00000000-0000-0000-0000-000000000022-00000000-0000-0000-0000-000000000044]": "PASS",
       "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[False-False]": "PASS",
       "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[False-True]": "PASS",
       "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[True-False]": "PASS",
@@ -172,17 +181,48 @@
     "scoped_pyright": "0 errors, 0 warnings in RBAC, shared YAML loader and bounded tests",
     "scoped_ruff": "PASS"
   },
-  "classification": "Bounded D1-D3 compiler repair checkpoint; PR only",
+  "classification": "Policy-only compiler checkpoint resolving un-isolated read residual; conditions recorded; PR only",
   "compiler_base": {
     "head": "539a76bb8822837602a39ea42e18e7554223eab4",
     "origin_freshly_verified": true,
     "remote": "https://github.com/Relaxe111/cdc-pipeline-generator.git"
   },
   "compiler_format": "cdc-rbac-flat-v2",
+  "conditions": {
+    "C1": {
+      "behavior": "Neither direction changes schema/table/column ACLs or activation. No-context, admin, tenant A and tenant B editor_app reads remain permission-denied before preparation, after fresh up, after upgrade and after both downs.",
+      "evidence": [
+        "tests.test_rbac::test_offline_validation_and_both_targets",
+        "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[False-False]",
+        "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[True-False]",
+        "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[True-True]",
+        "tests.test_rbac_postgres::test_preparation_and_rollbacks_preserve_activation_flags[False-True]",
+        "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[None-None-None]",
+        "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[admin-None-None]",
+        "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[recipient-00000000-0000-0000-0000-000000000011-00000000-0000-0000-0000-000000000033]",
+        "tests.test_rbac_postgres::test_policy_preparation_never_opens_editor_app_reads[recipient-00000000-0000-0000-0000-000000000022-00000000-0000-0000-0000-000000000044]",
+        "tests.test_rbac_postgres::test_inactive_preparation_preserves_owner_writes_and_admin_worker_reads"
+      ],
+      "ordering_hazard": "With RLS inactive, schema USAGE plus column SELECT would open un-isolated reads across both tenants even without app.* context. Earlier grant-bearing output must stay out of the auto-applied artifact chain and must not be applied anywhere until activation ships before or atomically with grants and required coverage is satisfied.",
+      "selected_option": "Emit policies without grants",
+      "status": "READY"
+    },
+    "C2": {
+      "behavior": "Unchanged preflight refuses a real editor_app with REQ-001 SELECT/INSERT/UPDATE/DELETE grants. Target installation remains held for separately owned owner-write, worker and Hasura-connection work.",
+      "evidence": [
+        "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-False]",
+        "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-True]"
+      ],
+      "installation_status": "BLOCKED",
+      "preflight_sha256": "5769feaa7c2a0f7e314f5ae4a191a4eb3a69d8ecf216e241542fdb47e007bbd8",
+      "preflight_unchanged_since_review": true,
+      "status": "READY"
+    }
+  },
   "coverage": {
-    "covered": 454,
+    "covered": 451,
     "percent": 100.0,
-    "statements": 454
+    "statements": 451
   },
   "determinism": {
     "file_hashes": {
@@ -191,27 +231,28 @@
       "metadata/databases/default/tables/editor_qnrs.yaml": "57c1dcbe472e0199be8f3f2b0c65d8d602baaf53c8b2547c7766857d77cc2960",
       "metadata/databases/default/tables/public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f",
       "metadata/databases/default/tables/tables.yaml": "2f4e303fa9eb9d580b4df9a44fa736a510d9f3db74fb40881e99e73aa160263c",
-      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "148405fba1e6b20ea65746254c38c833ce842338fd0133296e1b64e4d19c4df2",
-      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "cc2ebeaf2405cb9584df7f6f358e35497e415403b7cfe285fb256dffc62dd1e7",
-      "rbac/.rbac-lock.json": "f9dc7531b03e45e1b12851ec3df2418043472a8b5351587f97eb5bf97e422c37",
+      "migrations/default/1800000000000_rbac_editor_qnrs/down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
+      "migrations/default/1800000000000_rbac_editor_qnrs/up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180",
+      "rbac/.rbac-lock.json": "f2a1a1de68bfc60e8d6b60dca515d8d6ef52af3eeaad2136ad8fdb5d78bb08b2",
       "source.json": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2"
     },
+    "fresh_upgrade_downs_without_acl_or_activation_changes": true,
     "idempotent_emit_and_check_no_writes": true,
     "identical_artifact_bytes": true,
     "independent_emissions": 2,
     "network_denied": true
   },
   "generated": {
-    "down.sql": "148405fba1e6b20ea65746254c38c833ce842338fd0133296e1b64e4d19c4df2",
+    "down.sql": "8cdb6b87b26c7316097db5a5628b5642aeb86833fe5682d27b912c8697db6092",
     "select_permissions": "6fb4cabb273d227fccfccd82d0cfe13d0d6299385d9a4a762238647743c7f1ba",
-    "up.sql": "cc2ebeaf2405cb9584df7f6f358e35497e415403b7cfe285fb256dffc62dd1e7"
+    "up.sql": "f3f372a87a66265693d851734d31bf9f5963fb7700ba1ce1520a9ee73c383180"
   },
   "inputs": {
     "compiler-input-contract.json": "027ba9707ef63dbda7a5811c18811f3ab2dc619b800a23ba14a10eafd738ebab",
     "editor.catalog.json": "c44ff78b86de6605d9d5e8258347d3ddbf8d52ec48baaeb820b76ab07e8fdf65",
     "editor.rbac.json": "e2dbdbea8cd8db04b92d012a6add98e959ddd7628e144ed23246dae4c57d34b2",
     "editor_qnrs.yaml": "e5b55a75e6485b5b5bbf9f09f9a3e88ffa964e67c58c1d638ac8eac03a27a8f0",
-    "expected-generation.json": "6db78c573ae7997ee21b4e9199abafa3b83f83f07ec8ed60a6d34ffc130e8439",
+    "expected-generation.json": "e249723f326b851dc22a128d17d2000a598798a6fbdef8490bee6b9e17de7370",
     "public_queries.yaml": "a4a96e86bbe569b876d640346adc8f2e75d46db9c7f45fa4e2948f26d4f22e5f"
   },
   "isolated_images": {
@@ -226,7 +267,7 @@
     "extracted_wheel_doctor": "PASS",
     "vendored_assets_byte_verified": true,
     "wheel_built": true,
-    "wheel_sha256": "4477918b5d97bf63628b068792739afd01a7557637dadeb4eeaba5908cc403ca"
+    "wheel_sha256": "954019c93072314dc570d7c971eadb23a2cdaffe7d585a28c8450e1b5a7dbee9"
   },
   "pins": {
     "jsonschema": "4.25.1",
@@ -277,8 +318,10 @@
     "junit_sha256": "24af877499160097d8304001d9982d728975f5c0d964339f467f3db073017548",
     "new_failures": 0,
     "passed": 1805,
+    "run_scope": "Historical full-suite run from reviewed head; this condition response reran all bounded tests and real-CLI checks as requested, not the broader suite.",
     "skipped": 0,
-    "status": "BLOCKED_BY_THREE_CONFIRMED_BASE_FAILURES"
+    "status": "BLOCKED_BY_THREE_CONFIRMED_BASE_FAILURES",
+    "tested_head": "bca89f58c137ba74eb69c59c67ffe5d50341b768"
   },
   "repairs": {
     "D1": {
@@ -319,7 +362,7 @@
       "status": "READY"
     },
     "D3": {
-      "behavior": "No ENABLE/FORCE/DISABLE/NO FORCE in generated up or down. Prepare policies/column SELECT only. Enforcement activation exists only in disposable test setup.",
+      "behavior": "No ENABLE/FORCE/DISABLE/NO FORCE in generated up or down. Prepare policies only, without grants or revokes. Test enforcement activates RLS before provisioning SELECT in disposable fixtures.",
       "evidence": [
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-False]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[superuser-True]",
@@ -339,6 +382,8 @@
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[extra_column-True]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-False]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[public_grant-True]",
+        "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-False]",
+        "tests.test_rbac_postgres::test_installation_failure_is_transactional[req001-True]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[unmanaged_policy-False]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[unmanaged_policy-True]",
         "tests.test_rbac_postgres::test_installation_failure_is_transactional[catalog_type-False]",
@@ -365,23 +410,24 @@
       "status": "READY"
     }
   },
-  "reviewed_head": "1347bb8759728f1e97a38522e8a8ae7b543b40b6",
+  "review_disposition": "APPROVE-WITH-CONDITIONS from Opus5.5; D1/D2 satisfied and D3 activation satisfied",
+  "reviewed_head": "bca89f58c137ba74eb69c59c67ffe5d50341b768",
   "tested_source_hashes": {
     "MANIFEST.in": "4e43775b4f8af262b1f44fd1f2dd11a8d1156d415f7d3327261bc28e75bf3fac",
-    "README.md": "87e200af4e75b4d2d45c029fef4e10715b8c423e2c1352c4bfff0a940cab9929",
+    "README.md": "a48257ca8f0f6b59b3d9d1ac0b43b0bff9930db34c8b122ad7a64a9ac343f258",
     "cdc_generator/cli/click_commands.py": "6ad13cd7b22a601859f33755f31c8de531ee417fe37fb4fdf3e127b564ef301d",
     "cdc_generator/cli/commands.py": "8e8e406bd9d1c365c7c21d5e6b292d739bfc749c11810530b61fa02f12a32df3",
     "cdc_generator/cli/rbac.py": "d6b5e1a8d84ac3429a28a75622cd237e1c9fc0e1c2824f512c77dea413b0da55",
     "cdc_generator/core/rbac/__init__.py": "19ab75c42be8b6dba738c460038dab0804c92b62ebeb09cd24cfa880c617fd31",
     "cdc_generator/core/rbac/artifacts.py": "73499e738891583e60f11c02888b380dabc86716b0349697498885d2879cf9be",
-    "cdc_generator/core/rbac/rendering.py": "3ef549301696e8f4c8aecdb31d54f9988da490920af2e2668b35393aa66b524d",
+    "cdc_generator/core/rbac/rendering.py": "a02dc17f6a4800c5ab1f6f05d7d5da51d1596f6cdf9a8a868a78f0d5188652a6",
     "cdc_generator/core/rbac/validation.py": "b50b32cb90b8a15e01972182ca0a578aedada16806aa3fb32404074b96beef34",
     "cdc_generator/helpers/yaml_loader.py": "e5d3c7e127396184b22a27cee90b80b9c7814f23faf455115457371c10a37295",
     "pyproject.toml": "828b77e7a304a238e7f3ef93bb1d017e2658bf72eb32d857982d2aa9e7d5b1d9",
-    "tests/fixtures/rbac/expected-generation.json": "6db78c573ae7997ee21b4e9199abafa3b83f83f07ec8ed60a6d34ffc130e8439",
-    "tests/fixtures/rbac/provenance.json": "42c668dcd458e2bcaafbf3e8b5257a0dd5d78390921f9fa82e2526edeb15913c",
-    "tests/test_rbac.py": "7595d63f7f24e92f40c716dc1452f89bb2b5c2b9e3c269b0aba0bbf7dc309271",
-    "tests/test_rbac_postgres.py": "6aa3a6c0a7ef655164c5a0adc82a160e18b500469ef4812df143679b7c62ab3a",
+    "tests/fixtures/rbac/expected-generation.json": "e249723f326b851dc22a128d17d2000a598798a6fbdef8490bee6b9e17de7370",
+    "tests/fixtures/rbac/provenance.json": "25d4030b79645ac2c8c55a8b19a2f0bbbd429c075aabfe36e8a9964bb4cbea83",
+    "tests/test_rbac.py": "0fb8e571c3ee4ce7a22b53d76a4a4a4ec4fc85d27b6fa383298544027e5c6062",
+    "tests/test_rbac_postgres.py": "f11b1d8315a30560ba3baf2e8d2b5b9afe2d629c55b065a4d5d7ad45163ed1cd",
     "tests/test_rbac_repairs.py": "360c139f84daf9c5020f3ca4bb8a56168e6ec8ff52e2f2460e524a72ac2331fa"
   }
 }

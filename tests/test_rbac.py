@@ -63,7 +63,8 @@ def test_offline_validation_and_both_targets(contract: Contract) -> None:
         assert compile_contract(contract.source, contract.catalog) == contract
         up, down = render_migration(contract, None)
     assert b'FOR SELECT TO "editor_app"' in up
-    assert b"GRANT SELECT (" in up
+    assert b"GRANT " not in up + down
+    assert b"REVOKE " not in up + down
     assert b"ENABLE ROW LEVEL SECURITY" not in up
     assert b"FORCE ROW LEVEL SECURITY" not in up
     assert b"CREATE ROLE" not in up and b"GRANT ALL" not in up

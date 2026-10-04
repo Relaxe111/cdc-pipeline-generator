@@ -33,16 +33,13 @@ def select_permissions(contract: Contract) -> list[Json]:
 
 
 def _drop(contract: Contract) -> list[str]:
-    """Remove only compiler-owned policies and column-level SELECT grants."""
+    """Remove only compiler-owned policies; leave separately owned ACLs intact."""
     relation = _relation(contract)
-    columns = ", ".join(f'"{col}"' for col in contract.rules[0].columns)
-    return [f'DROP POLICY "{policy_name(rule)}" ON {relation};' for rule in contract.rules] + [
-        f'REVOKE SELECT ({columns}) ON TABLE {relation} FROM "{CONNECTION_ROLE}";'
-    ]
+    return [f'DROP POLICY "{policy_name(rule)}" ON {relation};' for rule in contract.rules]
 
 
 def _install(contract: Contract) -> list[str]:
-    """Render least-privilege SELECT policies; never grant table writes."""
+    """Prepare SELECT policies without changing ACLs or RLS activation."""
     relation = _relation(contract)
     sql: list[str] = []
     types = dict(contract.column_types)
@@ -53,13 +50,6 @@ def _install(contract: Contract) -> list[str]:
             terms.append(f"\"{field}\" = NULLIF(current_setting('{guc}', true), '')::{types[field]}")
         predicate = " AND ".join(terms)
         sql.append(f'CREATE POLICY "{policy_name(rule)}" ON {relation} FOR SELECT TO "{CONNECTION_ROLE}" USING ({predicate});')
-    columns = ", ".join(f'"{col}"' for col in contract.rules[0].columns)
-    sql.extend(
-        [
-            f'GRANT USAGE ON SCHEMA "{contract.schema}" TO "{CONNECTION_ROLE}";',
-            f'GRANT SELECT ({columns}) ON TABLE {relation} TO "{CONNECTION_ROLE}";',
-        ]
-    )
     return sql
 
 

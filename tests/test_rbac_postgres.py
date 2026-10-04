@@ -101,10 +101,28 @@ def _read(db: connection, role: str | None, tenant: str | None, actor: str | Non
             cursor.execute("ROLLBACK")
 
 
-def _activate_test_rls(db: connection) -> None:
-    """Activate only disposable test tables; activation is outside compiler scope."""
+def _provision_test_access(db: connection) -> None:
+    """Activate RLS before granting SELECT, exclusively in disposable fixtures."""
     with db.cursor() as cursor:
         cursor.execute("ALTER TABLE editor.qnrs ENABLE ROW LEVEL SECURITY; ALTER TABLE editor.qnrs FORCE ROW LEVEL SECURITY")
+        cursor.execute(
+            "GRANT USAGE ON SCHEMA editor TO editor_app; GRANT SELECT(customer_id,id,lifecycle_status,user_id) ON editor.qnrs TO editor_app"
+        )
+
+
+def _access_state(db: connection) -> tuple[object, ...]:
+    """Capture schema/table/column ACLs, effective SELECT and both RLS flags."""
+    with db.cursor() as cursor:
+        cursor.execute("""SELECT n.nspacl::text,c.relacl::text,
+          ARRAY(SELECT a.attacl::text FROM pg_attribute a WHERE a.attrelid=c.oid
+            AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum),
+          has_schema_privilege('editor_app',n.oid,'USAGE'),
+          has_table_privilege('editor_app',c.oid,'SELECT'),
+          has_any_column_privilege('editor_app',c.oid,'SELECT'),c.relrowsecurity,c.relforcerowsecurity
+          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.oid='editor.qnrs'::regclass""")
+        row = cursor.fetchone()
+        assert row is not None
+        return tuple(row)
 
 
 @pytest.mark.parametrize(
@@ -126,7 +144,7 @@ def _activate_test_rls(db: connection) -> None:
 def test_fresh_two_tenant_session_matrix(database: connection, role: str | None, tenant: str | None, actor: str | None, count: int) -> None:
     """Tenant, actor, platform role and missing-context negatives run on real RLS."""
     _apply(database, render_migration(_baseline(), None)[0])
-    _activate_test_rls(database)
+    _provision_test_access(database)
     assert len(_read(database, role, tenant, actor)) == count
     assert _read(database, None, None, None) == []  # reused connection never inherits prior transaction context
 
@@ -135,7 +153,7 @@ def test_fresh_two_tenant_session_matrix(database: connection, role: str | None,
 def test_forbidden_privileges(database: connection, operation: str) -> None:
     """No writes, unprojected columns, or malformed tenant can bypass the subset."""
     _apply(database, render_migration(_baseline(), None)[0])
-    _activate_test_rls(database)
+    _provision_test_access(database)
     statements = {
         "INSERT": "INSERT INTO editor.qnrs(id) VALUES (gen_random_uuid())",
         "UPDATE": "UPDATE editor.qnrs SET lifecycle_status='active'",
@@ -163,6 +181,7 @@ def test_forbidden_privileges(database: connection, operation: str) -> None:
         "column_write",
         "extra_column",
         "public_grant",
+        "req001",
         "unmanaged_policy",
         "catalog_type",
         "missing_column",
@@ -183,6 +202,7 @@ def test_installation_failure_is_transactional(database: connection, upgrade: bo
         "column_write": "GRANT UPDATE(lifecycle_status) ON editor.qnrs TO editor_app",
         "extra_column": "GRANT SELECT(unprojected) ON editor.qnrs TO editor_app",
         "public_grant": "GRANT SELECT ON editor.qnrs TO PUBLIC",
+        "req001": "GRANT USAGE ON SCHEMA editor TO editor_app; GRANT SELECT,INSERT,UPDATE,DELETE ON editor.qnrs TO editor_app",
         "unmanaged_policy": "CREATE POLICY surprise ON editor.qnrs USING (true)",
         "catalog_type": "ALTER TABLE editor.qnrs ALTER COLUMN id TYPE text",
         "missing_column": "ALTER TABLE editor.qnrs DROP COLUMN lifecycle_status",
@@ -191,15 +211,17 @@ def test_installation_failure_is_transactional(database: connection, upgrade: bo
         cursor.execute(poison[failure])
         cursor.execute("SELECT polname,pg_get_expr(polqual,polrelid) FROM pg_policy ORDER BY polname")
         prior = cursor.fetchall()
+    prior_access = _access_state(database)
     with pytest.raises(psycopg2.Error, match="RBAC"):
         _apply(database, render_migration(baseline, baseline if upgrade else None)[0])
     with database.cursor() as cursor:
         cursor.execute("SELECT polname,pg_get_expr(polqual,polrelid) FROM pg_policy ORDER BY polname")
         assert cursor.fetchall() == prior
+    assert _access_state(database) == prior_access
 
 
 def test_missing_role_and_table(database: connection) -> None:
-    """Missing installation prerequisites report an exact failure before grants."""
+    """Missing installation prerequisites fail before policy preparation."""
     with database.cursor() as cursor:
         cursor.execute("DROP ROLE editor_app")
     with pytest.raises(psycopg2.Error, match="role missing"):
@@ -218,7 +240,7 @@ def test_upgrade_and_rollback_authorization(database: connection) -> None:
     mapping(permissions[2])["select"] = copy.deepcopy(mapping(permissions[0])["select"])
     current = compile_contract(source, baseline.catalog)
     _apply(database, render_migration(baseline, None)[0])
-    _activate_test_rls(database)
+    _provision_test_access(database)
     assert len(_read(database, "therapist", TENANT_A, ACTOR_A)) == 2
     up, down = render_migration(current, baseline)
     _apply(database, up)
@@ -226,9 +248,10 @@ def test_upgrade_and_rollback_authorization(database: connection) -> None:
     assert len(_read(database, "therapist", TENANT_B, ACTOR_A)) == 0
     _apply(database, down)
     assert len(_read(database, "therapist", TENANT_A, ACTOR_A)) == 2
+    prior_access = _access_state(database)
     _apply(database, render_migration(baseline, None)[1])
-    with pytest.raises(psycopg2.Error, match="permission denied"):
-        _read(database, "therapist", TENANT_A, ACTOR_A)
+    assert _read(database, "therapist", TENANT_A, ACTOR_A) == []
+    assert _access_state(database) == prior_access  # separately provisioned grants survive policy rollback
 
 
 @pytest.mark.parametrize(("enabled", "forced"), [(False, False), (True, False), (True, True), (False, True)])
@@ -244,13 +267,39 @@ def test_preparation_and_rollbacks_preserve_activation_flags(database: connectio
     current = compile_contract(source, baseline.catalog)
     fresh_up, fresh_down = render_migration(baseline, None)
     up, down = render_migration(current, baseline)
+    prior_access = _access_state(database)
     for sql, policy_count in [(fresh_up, 3), (up, 3), (down, 3), (fresh_down, 0)]:
         _apply(database, sql)
+        assert _access_state(database) == prior_access
         with database.cursor() as cursor:
             cursor.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='editor.qnrs'::regclass")
             assert cursor.fetchone() == (enabled, forced)
             cursor.execute("SELECT count(*) FROM pg_policy WHERE polrelid='editor.qnrs'::regclass")
             assert cursor.fetchone() == (policy_count,)
+
+
+@pytest.mark.parametrize(
+    ("role", "tenant", "actor"),
+    [(None, None, None), ("admin", None, None), ("recipient", TENANT_A, ACTOR_A), ("recipient", TENANT_B, ACTOR_B)],
+)
+def test_policy_preparation_never_opens_editor_app_reads(database: connection, role: str | None, tenant: str | None, actor: str | None) -> None:
+    """A role without access stays denied before/up/upgrade/both downs, even without GUCs."""
+    prior_access = _access_state(database)
+    assert prior_access[3:] == (False, False, False, False, False)
+    with pytest.raises(psycopg2.Error, match="permission denied"):
+        _read(database, role, tenant, actor)
+    baseline = _baseline()
+    source = sequence(copy.deepcopy(baseline.source))
+    permissions = sequence(mapping(mapping(source[0])["definition"])["permissions"])
+    mapping(permissions[2])["select"] = copy.deepcopy(mapping(permissions[0])["select"])
+    current = compile_contract(source, baseline.catalog)
+    fresh_up, fresh_down = render_migration(baseline, None)
+    up, down = render_migration(current, baseline)
+    for sql in [fresh_up, up, down, fresh_down]:
+        _apply(database, sql)
+        assert _access_state(database) == prior_access
+        with pytest.raises(psycopg2.Error, match="permission denied"):
+            _read(database, role, tenant, actor)
 
 
 def test_inactive_preparation_preserves_owner_writes_and_admin_worker_reads(database: connection) -> None:
@@ -269,10 +318,10 @@ def test_inactive_preparation_preserves_owner_writes_and_admin_worker_reads(data
     fresh_up, fresh_down = render_migration(baseline, None)
     up, down = render_migration(current, baseline)
     try:
-        for sql, app_select in [(fresh_up, True), (up, True), (down, True), (fresh_down, False)]:
+        for sql in [fresh_up, up, down, fresh_down]:
             _apply(database, sql)
-            if app_select:
-                assert len(_read(database, "admin", None, None)) == 3
+            with pytest.raises(psycopg2.Error, match="permission denied"):
+                _read(database, "admin", None, None)
             with database.cursor() as cursor:
                 cursor.execute(f"BEGIN; SET LOCAL ROLE \"{worker}\"; SET LOCAL app.role = 'admin'")
                 cursor.execute("SELECT id FROM editor.qnrs")
@@ -337,7 +386,7 @@ def test_hasura_two_tenants_and_no_mutations() -> None:
         if not cursor.fetchone():
             cursor.execute("CREATE ROLE editor_app NOLOGIN NOSUPERUSER NOBYPASSRLS")
     _apply(db, render_migration(_baseline(), None)[0])
-    _activate_test_rls(db)
+    _provision_test_access(db)
     try:
         _http(
             "/v1/metadata",

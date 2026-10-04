@@ -167,11 +167,20 @@ merges only SELECT into the existing canonical table YAML, and records input and
 migration byte hashes plus the owned SELECT structural hash in the version-2
 `rbac/.rbac-lock.json`. A changed source requires a new
 migration. Existing history is immutable; unchanged inputs produce no writes.
-Rollback restores the previous generated rules; fresh rollback revokes generated
-SELECT rights. Neither direction changes RLS enable/force flags. Activation is
+Rollback restores the previous generated policies; fresh rollback drops only
+those policies. This subset emits no GRANT or REVOKE statements: schema, table
+and column ACLs remain unchanged in either direction. Neither direction changes
+RLS enable/force flags. Activation is
 outside this admission subset and requires separately owned owner-write, worker
-and Hasura-connection coverage first. Prepared policies do not enforce row
-filters while RLS remains disabled.
+and Hasura-connection coverage first.
+
+Granting schema USAGE and column SELECT while RLS is disabled opens un-isolated
+reads across both tenants, even with no `app.*` context: prepared policies are
+inert. Activation must ship before, or atomically with, any such grants. Earlier
+grant-bearing output must not be committed to the artifact's master migration
+chain (which auto-applies it), or applied anywhere, until that ordering and the
+activation coverage are satisfied. Current policy-only output gives `editor_app`
+no new access.
 
 The structured merge serializes only the SELECT block in Hasura CLI export
 format, preserving all other table-file bytes, including relationship comments
@@ -184,8 +193,11 @@ write permissions without re-baselining the compiler lock. The compiler
 never emits Hasura mutations, creates roles, changes creator defaults, or grants
 write/table-wide privileges. Missing/privileged/owning `editor_app`, unexpected
 policies, catalog mismatch, and preexisting broad privileges abort generated SQL
-transactionally. The output grants only schema USAGE and column SELECT. This
-four-column slice cannot repair or replace the full owner's write envelope.
+transactionally. In particular, the preflight still rejects a real target where
+`editor_app` holds its REQ-001 table SELECT/INSERT/UPDATE/DELETE grants. Target
+installation remains held for owner-write, worker and Hasura-connection work;
+merging the compiler does not release that hold. This four-column slice cannot
+repair or replace the full owner's write envelope.
 
 Validation uses the vendored official schema at Hasura revision
 `94915fe51d6d21bd7f6d4452dc16221bef8cfefd` (SHA256
@@ -211,9 +223,11 @@ RBAC_TEST_HASURA_CLI='/opt/homebrew/bin/hasura' \
 The integration suite creates disposable databases, uses the canonical
 `editor_app` connection identity, and executes generated SQL plus real Hasura
 queries across two synthetic tenants. It tests fresh and upgrade failures,
-negative ACLs, context reset and rollback. Enforcement tests activate RLS only
-inside disposable fixtures; preparation/rollback tests verify all enable/force
-states remain unchanged and existing inactive owner/worker contexts still work.
+negative ACLs, context reset and rollback. Enforcement tests activate RLS before
+provisioning column SELECT, only inside disposable fixtures. Preparation/rollback
+tests verify ACLs and all enable/force states remain unchanged, `editor_app` gets
+no reads with absent or supplied context, and preexisting inactive owner/worker
+contexts still work. Fresh and upgrade REQ-001 ACL refusals leave state intact.
 A real Hasura CLI fresh/upgrade export round trip checks canonical byte output.
 RBAC commands skip workdir usage statistics so they do not create `_docs/_stats`
 in another repository. These tests qualify this compiler
